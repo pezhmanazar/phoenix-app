@@ -8,14 +8,12 @@
     "scheme": "phoenixapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
         "UIBackgroundModes": ["audio"]
       }
     },
-
     "android": {
       "package": "com.pezhman.phoenix",
       "versionCode": 1,
@@ -34,46 +32,41 @@
         "POST_NOTIFICATIONS"
       ]
     },
-
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-
     "plugins": [
-  "expo-router",
-  [
-    "expo-splash-screen",
-    {
-      "image": "./assets/images/splash-icon.png",
-      "imageWidth": 200,
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff",
-      "dark": { "backgroundColor": "#000000" }
-    }
-  ],
-  "expo-web-browser",
-  "expo-font",
-  [
-    "expo-build-properties",
-    {
-      "ios": { "useFrameworks": "static" },
-      "android": { "kotlinVersion": "1.9.24" }
-    }
-  ],
-  "./app.plugin.js"
-],
-
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "dark": { "backgroundColor": "#000000" }
+        }
+      ],
+      "expo-web-browser",
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "ios": { "useFrameworks": "static" },
+          "android": { "kotlinVersion": "2.1.20" }
+        }
+      ],
+      "./app.plugin.js"
+    ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
-
     "extra": {
       "router": {},
       "eas": { "projectId": "70668c38-b154-40e2-9f81-923a43b27850" }
     },
-
     "owner": "pezhman_azar"
   }
 }
