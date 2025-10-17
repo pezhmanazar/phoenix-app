@@ -1,0 +1,115 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Sender {
+  user
+  admin
+}
+
+enum TicketStatus {
+  open
+  pending
+  closed
+}
+
+// ⬅️ جدید: نوع تیکت
+enum TicketType {
+  tech     // پشتیبانی فنی
+  therapy  // ارتباط با درمانگر
+}
+
+model Ticket {
+  id          String       @id @default(uuid())
+  title       String
+  description String
+  contact     String?
+  status      TicketStatus @default(open)
+  type        TicketType   @default(tech)
+
+  // ⬇️ جدید برای پنل ادمین
+  pinned Boolean @default(false)
+  unread Boolean @default(false)
+
+  // ⬇️ جدید: ذخیره‌ی اطلاعات سازنده/اولین فرستنده
+  openedById   String?     // شناسه کاربر از پروفایل اپ
+  openedByName String?     // نام کاربر هنگام ایجاد/اولین پیام
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // رابطه یک‌به‌چند با Message (طرف مقابل در مدل Message تعریف شده)
+  messages Message[]
+}
+
+// فقط افزوده‌ها
+enum MessageType {
+  text
+  voice
+  image
+  file
+}
+
+model Message {
+  id String @id @default(uuid())
+
+  // ⬇️ رابطه‌ی لازم با Ticket + کلید خارجی (رفع خطای P1012)
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  // ⬇️ استفاده از enum Sender به‌جای String
+  sender Sender
+
+  type        MessageType @default(text)
+  text        String?     // برای متن‌ها
+  fileUrl     String?     // برای ویس/عکس/فایل
+  mime        String?     // mimetype ذخیره فایل
+  size        Int?        // سایز بایت
+  durationSec Int?        // برای ویس (اختیاری)
+  createdAt   DateTime    @default(now())
+
+  @@index([ticketId])
+}
+
+enum AdminRole {
+  owner
+  manager
+  agent
+}
+
+model Admin {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  name         String
+  apiKey       String    @unique
+  passwordHash String?
+  role         AdminRole @default(agent) // ⬅️ جدید
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  sessions AdminSession[]
+}
+
+model AdminSession {
+  id        String    @id @default(uuid())
+  adminId   String
+  admin     Admin     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  token     String    @unique
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+}
+
+model AiMemory {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  summary   String   @default("")
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}

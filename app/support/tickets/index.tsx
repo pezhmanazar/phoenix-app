@@ -1,0 +1,274 @@
+// app/support/tickets/index.tsx
+
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "@react-navigation/native";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  I18nManager,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import BACKEND_URL from "../../../constants/backend";
+
+type Ticket = {
+  id: string;
+  title: string;
+  description: string;
+  contact?: string | null;
+  status: "open" | "pending" | "closed";
+  type: "tech" | "therapy"; // ⬅️ اضافه شد
+  createdAt: string;
+  updatedAt: string;
+};
+
+export default function TicketList() {
+  const { colors } = useTheme();
+  const router = useRouter();
+  const rtl = I18nManager.isRTL;
+
+  const [data, setData] = useState<Ticket[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/tickets`);
+      const json = await res.json();
+      if (json?.ok) {
+        const sorted: Ticket[] = (json.tickets || [])
+          .slice()
+          .sort(
+            (a: Ticket, b: Ticket) =>
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+        setData(sorted);
+      }
+    } catch (e) {
+      // silent
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      fetchData();
+    }, [fetchData])
+  );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchData();
+  };
+
+  const renderItem = ({ item }: { item: Ticket }) => {
+    const statusColor =
+      item.status === "closed"
+        ? "#22C55E"
+        : item.status === "pending"
+        ? "#F59E0B"
+        : colors.primary;
+
+    const typeLabel = item.type === "therapy" ? "درمانگر" : "فنی";
+    const typeColor = item.type === "therapy" ? "#A855F7" : "#3B82F6";
+
+    return (
+      <TouchableOpacity
+        onPress={() => router.push(`/support/tickets/${item.id}`)}
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+            flexDirection: rtl ? "row-reverse" : "row",
+          },
+        ]}
+        activeOpacity={0.85}
+      >
+        <View
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 10,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: colors.background,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
+          <Ionicons name="pricetags-outline" size={18} color={colors.text} />
+        </View>
+
+        <View style={{ flex: 1 }}>
+          <Text
+            style={{ color: colors.text, fontWeight: "800" }}
+            numberOfLines={1}
+          >
+            {item.title}
+          </Text>
+          <Text style={{ color: "#8E8E93", fontSize: 12 }} numberOfLines={1}>
+            {item.description}
+          </Text>
+        </View>
+
+        <View
+          style={{
+            alignItems: rtl ? "flex-start" : "flex-end",
+            gap: 6,
+          }}
+        >
+          {/* وضعیت */}
+          <View
+            style={{
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 999,
+              backgroundColor: statusColor + "22",
+            }}
+          >
+            <Text
+              style={{ color: statusColor, fontSize: 11, fontWeight: "800" }}
+            >
+              {item.status === "open"
+                ? "باز"
+                : item.status === "pending"
+                ? "در انتظار"
+                : "بسته"}
+            </Text>
+          </View>
+
+          {/* نوع تیکت */}
+          <View
+            style={{
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 999,
+              backgroundColor: typeColor + "22",
+            }}
+          >
+            <Text
+              style={{ color: typeColor, fontSize: 11, fontWeight: "800" }}
+            >
+              {typeLabel}
+            </Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  // ⬇️ فقط اضافه شده: دکمه‌های شروع چت که تیکت نمی‌سازند و صرفاً Route را باز می‌کنند
+  const HeaderActions = () => (
+    <View style={[styles.actionsRow, { direction: rtl ? "rtl" : "ltr" }]}>
+      <TouchableOpacity
+        onPress={() => router.push("/support/tickets/tech")}
+        style={[
+          styles.actionChip,
+          { borderColor: "#2563EB33", backgroundColor: "#2563EB22" },
+        ]}
+        activeOpacity={0.9}
+      >
+        <Ionicons name="hardware-chip-outline" size={16} color="#93C5FD" />
+        <Text style={styles.actionText}>پشتیبانی فنی</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={() => router.push("/support/tickets/therapy")}
+        style={[
+          styles.actionChip,
+          { borderColor: "#7C3AED33", backgroundColor: "#7C3AED22" },
+        ]}
+        activeOpacity={0.9}
+      >
+        <Ionicons name="heart-circle-outline" size={16} color="#D8B4FE" />
+        <Text style={styles.actionText}>ارتباط با درمانگر</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      {loading ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator />
+          <Text style={{ color: "#8E8E93", marginTop: 8 }}>
+            در حال بارگذاری…
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          contentContainerStyle={{
+            padding: 16,
+            gap: 10,
+            direction: rtl ? "rtl" : "ltr",
+          }}
+          ListHeaderComponent={<HeaderActions />}
+          data={data}
+          keyExtractor={(it) => it.id}
+          renderItem={renderItem}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          ListEmptyComponent={
+            <View
+              style={[
+                styles.empty,
+                { borderColor: colors.border, backgroundColor: colors.card },
+              ]}
+            >
+              <Ionicons name="mail-unread-outline" size={22} color="#8E8E93" />
+              <Text style={{ color: "#8E8E93", marginTop: 6 }}>
+                هنوز تیکتی ثبت نشده.
+              </Text>
+            </View>
+          }
+        />
+      )}
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    gap: 12,
+    alignItems: "center",
+  },
+  empty: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // ⬇️ افزوده‌ها
+  actionsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8,
+    gap: 10,
+  },
+  actionChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    flex: 1,
+  },
+  actionText: { color: "#E5E7EB", fontWeight: "800", fontSize: 13 },
+});
