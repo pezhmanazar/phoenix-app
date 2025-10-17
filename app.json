@@ -41,29 +41,28 @@
     },
 
     "plugins": [
-      "expo-router",
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
-          "dark": {
-            "backgroundColor": "#000000"
-          }
-        }
-      ],
-      "expo-web-browser",
-      "expo-font",
-      [
-        "expo-build-properties",
-        {
-          "ios": { "useFrameworks": "static" }
-        }
-      ],
-      "./app.plugin.js"
-    ],
+  "expo-router",
+  [
+    "expo-splash-screen",
+    {
+      "image": "./assets/images/splash-icon.png",
+      "imageWidth": 200,
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff",
+      "dark": { "backgroundColor": "#000000" }
+    }
+  ],
+  "expo-web-browser",
+  "expo-font",
+  [
+    "expo-build-properties",
+    {
+      "ios": { "useFrameworks": "static" },
+      "android": { "kotlinVersion": "1.9.24" }
+    }
+  ],
+  "./app.plugin.js"
+],
 
     "experiments": {
       "typedRoutes": true,
