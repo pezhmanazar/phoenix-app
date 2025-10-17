@@ -2,16 +2,18 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"],
+      "react-native-track-player": ["./lib/trackPlayerShim"]
     }
   },
   "include": [
     "**/*.ts",
     "**/*.tsx",
     ".expo/types/**/*.ts",
-    "expo-env.d.ts"
-, "lib/storage"  ]
+    "expo-env.d.ts",
+    "lib/storage",
+    "lib/trackPlayerShim.ts"
+  ]
 }
