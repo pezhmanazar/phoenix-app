@@ -8,13 +8,13 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 // ⬇️ اضافه‌ها برای رجیستر سرویس
 import { Platform } from "react-native";
-import TrackPlayer from "react-native-track-player";
+//import TrackPlayer from "react-native-track-player";
 
 // ⚠️ رجیستر باید در اسکوپ ماژول و فقط روی native انجام شود
 if (Platform.OS !== "web") {
   // اگر service.js در ریشهٔ پروژه است و این فایل داخل /app است، مسیر زیر درسته:
   // @ts-ignore - service.js ما CommonJS است و تایپ ندارد
-  TrackPlayer.registerPlaybackService(() => require("../service"));
+  //TrackPlayer.registerPlaybackService(() => require("../service"));
 }
 
 function RootStack() {
