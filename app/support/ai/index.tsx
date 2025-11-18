@@ -14,18 +14,24 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   Alert,
-  Modal, // ⬅️ اضافه شد
+  Modal,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context"; // ✅ SafeAreaView درست
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import "react-native-get-random-values";
 import { v4 as uuidv4 } from "uuid";
 import BACKEND_URL from "../../../constants/backend";
+import { useUser } from "../../../hooks/useUser";
+import { useRouter } from "expo-router";
 
 type Msg = { id: string; role: "user" | "assistant"; content: string; ts: number };
+
 const K_AI_HISTORY = "phoenix.ai.history.v1";
+const K_AI_MOOD = "phoenix.ai.mood.v1";
+const K_AI_DAILY_LIMIT = "phoenix.ai.dailyLimit.v1";
+const PRO_FLAG_KEY = "phoenix_is_pro";
 
 const bubble = (mine: boolean) => ({
   alignSelf: mine ? ("flex-end" as const) : ("flex-start" as const),
@@ -35,9 +41,11 @@ const bubble = (mine: boolean) => ({
 
 const toFaDigits = (s: string) => s.replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[+d]);
 const hhmm = (ts: number) =>
-  toFaDigits(new Date(ts).toLocaleTimeString("fa-IR", { hour: "2-digit", minute: "2-digit" }));
+  toFaDigits(
+    new Date(ts).toLocaleTimeString("fa-IR", { hour: "2-digit", minute: "2-digit" })
+  );
 
-/* ────────────── تایپینگ داتس (سه‌نقطه متحرک) ────────────── */
+/* تایپینگ داتس */
 function TypingDots() {
   const [dots, setDots] = useState(".");
   useEffect(() => {
@@ -49,10 +57,33 @@ function TypingDots() {
   return <Text style={{ color: "#8E8E93" }}>در حال نوشتن پاسخ{dots}</Text>;
 }
 
-/* ────────────── امتیاز احساس (خیلی ساده) ────────────── */
+/* امتیاز احساس */
 function scoreSentiment(text: string) {
-  const pos = ["امید", "بهتر", "خوب", "آرام", "آرامش", "کمک", "بهبود", "قوی", "قدرت", "رشد", "پیشرفت"];
-  const neg = ["استرس", "اضطراب", "نگران", "غم", "غمگین", "ترس", "عصبانی", "خشم", "ناامید", "بد"];
+  const pos = [
+    "امید",
+    "بهتر",
+    "خوب",
+    "آرام",
+    "آرامش",
+    "کمک",
+    "بهبود",
+    "قوی",
+    "قدرت",
+    "رشد",
+    "پیشرفت",
+  ];
+  const neg = [
+    "استرس",
+    "اضطراب",
+    "نگران",
+    "غم",
+    "غمگین",
+    "ترس",
+    "عصبانی",
+    "خشم",
+    "ناامید",
+    "بد",
+  ];
   const t = text.toLowerCase();
   let s = 0;
   pos.forEach((w) => (t.includes(w) ? (s += 1) : null));
@@ -62,24 +93,53 @@ function scoreSentiment(text: string) {
   return s;
 }
 
-/* نمودار ستونی کوچک (بدون کتابخانه) برای آخرین 8 امتیاز */
 function MoodMiniChart({ values }: { values: number[] }) {
   const data = values.slice(-8);
   return (
-    <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 4, height: 36 }}>
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "flex-end",
+        gap: 3,
+        height: 24,
+      }}
+    >
       {data.map((v, i) => {
-        const h = Math.round(((v + 2) / 4) * 32) + 4; // map -2..+2 → 4..36
+        const h = Math.round(((v + 2) / 4) * 18) + 4;
         const color = v > 0 ? "#22c55e" : v < 0 ? "#ef4444" : "#9ca3af";
-        return <View key={i} style={{ width: 10, height: h, borderRadius: 4, backgroundColor: color, opacity: 0.9 }} />;
+        return (
+          <View
+            key={i}
+            style={{
+              width: 8,
+              height: h,
+              borderRadius: 3,
+              backgroundColor: color,
+              opacity: 0.9,
+            }}
+          />
+        );
       })}
     </View>
   );
 }
 
+/* شناسه امروز */
+function todayId() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+type DailyUsage = { date: string; count: number };
+
 export default function AIChatSupport() {
   const rtl = I18nManager.isRTL;
+  const router = useRouter();
 
-  // 🆔 شناسه یکتا برای کاربر
+  // id یکتا
   const [userId, setUserId] = useState<string | null>(null);
   useEffect(() => {
     (async () => {
@@ -96,12 +156,33 @@ export default function AIChatSupport() {
     })();
   }, []);
 
-  // state
+  // وضعیت پرو
+  const { me } = useUser();
+  const [isProLocal, setIsProLocal] = useState(false);
+  const [loadingPro, setLoadingPro] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
+        const flagIsPro = flag === "1";
+        const serverIsPro = me?.plan === "pro" || me?.plan === "vip";
+        setIsProLocal(flagIsPro || serverIsPro);
+      } catch {
+        setIsProLocal(false);
+      } finally {
+        setLoadingPro(false);
+      }
+    })();
+  }, [me?.plan]);
+
+  // پیام‌ها
   const [messages, setMessages] = useState<Msg[]>([
     {
       id: "sys-hello",
       role: "assistant",
-      content: "سلام 🌿 من پشتیبان هوشمند ققنوس هستم. بنویس چی ذهنت رو درگیر کرده، تا با هم بررسیش کنیم… 💬",
+      content:
+        "سلام 🌿 من پشتیبان هوشمند ققنوس هستم. بنویس چی ذهنت رو درگیر کرده، تا با هم بررسیش کنیم… 💬",
       ts: Date.now(),
     },
   ]);
@@ -116,38 +197,85 @@ export default function AIChatSupport() {
   // نمودار احساس
   const [moodHistory, setMoodHistory] = useState<number[]>([]);
 
-  // 🔐 نمایش مودال حریم خصوصی
+  // مودال حریم خصوصی
   const [showPrivacy, setShowPrivacy] = useState(false);
 
-  const canSend = useMemo(() => text.trim().length > 0 && !loading, [text, loading]);
+  // محدودیت روزانه
+  const [dailyUsage, setDailyUsage] = useState<DailyUsage | null>(null);
 
-  // ---------- Persist: load on mount ----------
+  const reachedLimit =
+    !isProLocal &&
+    dailyUsage != null &&
+    dailyUsage.date === todayId() &&
+    dailyUsage.count >= 3;
+
+  const canSend = useMemo(
+    () => text.trim().length > 0 && !loading && !reachedLimit,
+    [text, loading, reachedLimit]
+  );
+
+  // load history / mood / limit
   useEffect(() => {
     (async () => {
       try {
-        const raw = await AsyncStorage.getItem(K_AI_HISTORY);
-        if (raw) {
-          const arr = JSON.parse(raw);
+        const [rawHistory, rawMood, rawLimit] = await Promise.all([
+          AsyncStorage.getItem(K_AI_HISTORY),
+          AsyncStorage.getItem(K_AI_MOOD),
+          AsyncStorage.getItem(K_AI_DAILY_LIMIT),
+        ]);
+
+        if (rawHistory) {
+          const arr = JSON.parse(rawHistory);
           if (Array.isArray(arr) && arr.length) setMessages(arr);
         }
-        const rawMood = await AsyncStorage.getItem("phoenix.ai.mood.v1");
+
         if (rawMood) {
           const mv = JSON.parse(rawMood);
           if (Array.isArray(mv)) setMoodHistory(mv);
+        }
+
+        if (rawLimit) {
+          const parsed: DailyUsage | null = JSON.parse(rawLimit);
+          if (parsed && parsed.date === todayId()) {
+            setDailyUsage(parsed);
+          } else {
+            const fresh = { date: todayId(), count: 0 };
+            setDailyUsage(fresh);
+            AsyncStorage.setItem(K_AI_DAILY_LIMIT, JSON.stringify(fresh)).catch(() => {});
+          }
+        } else {
+          const fresh = { date: todayId(), count: 0 };
+          setDailyUsage(fresh);
+          AsyncStorage.setItem(K_AI_DAILY_LIMIT, JSON.stringify(fresh)).catch(() => {});
         }
       } catch {}
     })();
   }, []);
 
-  // Save history whenever messages or mood change
   useEffect(() => {
     AsyncStorage.setItem(K_AI_HISTORY, JSON.stringify(messages)).catch(() => {});
   }, [messages]);
   useEffect(() => {
-    AsyncStorage.setItem("phoenix.ai.mood.v1", JSON.stringify(moodHistory)).catch(() => {});
+    AsyncStorage.setItem(K_AI_MOOD, JSON.stringify(moodHistory)).catch(() => {});
   }, [moodHistory]);
 
-  // ---------- نمایش تدریجی پاسخ (pseudo-stream) ----------
+  // افزایش شمارش روزانه
+  const bumpDailyUsage = () => {
+    if (isProLocal) return;
+    const today = todayId();
+    setDailyUsage((prev) => {
+      let next: DailyUsage;
+      if (!prev || prev.date !== today) {
+        next = { date: today, count: 1 };
+      } else {
+        next = { date: today, count: prev.count + 1 };
+      }
+      AsyncStorage.setItem(K_AI_DAILY_LIMIT, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  };
+
+  // نمایش تدریجی پاسخ
   const typeOut = (fullText: string) =>
     new Promise<void>((resolve) => {
       const id = uuidv4();
@@ -155,12 +283,14 @@ export default function AIChatSupport() {
       setMessages((prev) => [...prev, start]);
 
       let i = 0;
-      const speed = 10; // ms per tick
-      const step = Math.max(1, Math.floor(fullText.length / 200)); // سرعت تطبیقی
+      const speed = 10;
+      const step = Math.max(1, Math.floor(fullText.length / 200));
       const timer = setInterval(() => {
         i += step;
         const slice = fullText.slice(0, i);
-        setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, content: slice } : m)));
+        setMessages((prev) =>
+          prev.map((m) => (m.id === id ? { ...m, content: slice } : m))
+        );
         scrollRef.current?.scrollToEnd({ animated: false });
         if (i >= fullText.length) {
           clearInterval(timer);
@@ -169,10 +299,19 @@ export default function AIChatSupport() {
       }, speed);
     });
 
-  // ---------- Networking ----------
+  // ارسال
   const send = async () => {
     const t = text.trim();
     if (!t || loading) return;
+
+    if (reachedLimit) {
+      Alert.alert(
+        "محدودیت امروز",
+        "امروز حداکثر سه پیام به پشتیبان هوشمند فرستادی.\nفردا دوباره امتحان کن، یا با فعال‌کردن اشتراک PRO این محدودیت برداشته می‌شود."
+      );
+      return;
+    }
+
     setText("");
 
     const myMsg: Msg = { id: uuidv4(), role: "user", content: t, ts: Date.now() };
@@ -180,11 +319,14 @@ export default function AIChatSupport() {
     setMessages(nextMessages);
     setLoading(true);
 
-    // auto scroll
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
 
-    const compact = nextMessages.slice(-10).map(({ role, content }) => ({ role, content }));
-    const payload = { messages: compact, userId }; // ⬅️ ارسال userId
+    const compact = nextMessages
+      .slice(-10)
+      .map(({ role, content }) => ({ role, content }));
+    const payload = { messages: compact, userId };
+
+    bumpDailyUsage();
 
     try {
       const ctrl = new AbortController();
@@ -201,20 +343,18 @@ export default function AIChatSupport() {
         json?.reply ||
         "متأسفم، الان نمی‌تونم پاسخ بدم. لطفاً دوباره تلاش کن.";
 
-      // ⬅️ نمایش تدریجی پاسخ
       await typeOut(reply);
 
-      // پس از تکمیل پاسخ، امتیاز احساس را به نمودار اضافه کن
       const s = scoreSentiment(reply);
       setMoodHistory((prev) => [...prev, s].slice(-20));
     } catch {
-      // در حالت خطا، پیام خطا را به‌صورت عادی اضافه کن (بدون تایپ تدریجی)
       setMessages((prev) => [
         ...prev,
         {
           id: uuidv4(),
           role: "assistant",
-          content: "خطا در اتصال به سرور. دوباره تلاش کن یا اینترنت را بررسی کن.",
+          content:
+            "خطا در اتصال به سرور. دوباره تلاش کن یا اینترنت را بررسی کن.",
           ts: Date.now(),
         },
       ]);
@@ -224,12 +364,13 @@ export default function AIChatSupport() {
     }
   };
 
-  // ---------- Scroll helpers ----------
+  // Scroll helpers
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
     const paddingToBottom = 24;
     const atBottom =
-      contentOffset.y + layoutMeasurement.height + paddingToBottom >= contentSize.height;
+      contentOffset.y + layoutMeasurement.height + paddingToBottom >=
+      contentSize.height;
     atBottomRef.current = atBottom;
     setShowJump(!atBottom);
   };
@@ -238,76 +379,212 @@ export default function AIChatSupport() {
     setShowJump(false);
   };
 
-  // ---------- Copy / Share ----------
+  // Copy / Share
   const onLongPressMsg = (m: Msg) => {
     Alert.alert("پیام", "می‌خواهی با این پیام چه‌کار کنی؟", [
       { text: "کپی متن", onPress: () => Clipboard.setStringAsync(m.content) },
-      { text: "اشتراک‌گذاری", onPress: () => Share.share({ message: m.content }).catch(() => {}) },
+      {
+        text: "اشتراک‌گذاری",
+        onPress: () =>
+          Share.share({ message: m.content }).catch(() => {}),
+      },
       { text: "بستن", style: "cancel" },
     ]);
   };
 
-  /* ✅ دکمه پاک‌کردن تاریخچه + تأیید */
+  // پاک‌کردن تاریخچه
   const clearHistory = async () => {
-    await AsyncStorage.multiRemove([K_AI_HISTORY, "phoenix.ai.mood.v1"]);
+    await AsyncStorage.multiRemove([K_AI_HISTORY, K_AI_MOOD]);
     setMoodHistory([]);
     setMessages([
       {
         id: "sys-hello",
         role: "assistant",
-        content: "سلام 🌿 من پشتیبان هوشمند ققنوس هستم. بنویس چی ذهنت رو درگیر کرده، تا با هم بررسیش کنیم… 💬",
+        content:
+          "سلام 🌿 من پشتیبان هوشمند ققنوس هستم. بنویس چی ذهنت رو درگیر کرده، تا با هم بررسیش کنیم… 💬",
         ts: Date.now(),
       },
     ]);
   };
   const confirmClear = () => {
-    Alert.alert(
-      "حذف تاریخچه؟",
-      "همه پیام‌های گفتگو پاک می‌شود.",
-      [
-        { text: "انصراف", style: "cancel" },
-        { text: "پاک کن", style: "destructive", onPress: clearHistory },
-      ]
-    );
+    Alert.alert("حذف تاریخچه؟", "همه پیام‌های گفتگو پاک می‌شود.", [
+      { text: "انصراف", style: "cancel" },
+      { text: "پاک کن", style: "destructive", onPress: clearHistory },
+    ]);
   };
 
+  const limitLabel =
+    isProLocal
+      ? "اشتراک PRO فعال است؛ محدودیتی برای تعداد پیام‌ها نداری."
+      : "در نسخه رایگان، روزی حداکثر ۳ پیام می‌تونی به پشتیبان هوشمند بفرستی.";
+
+  const limitStateLabel =
+    !isProLocal && dailyUsage?.count != null
+      ? `پیام‌های استفاده‌شده امروز: ${toFaDigits(
+          String(Math.min(dailyUsage.count, 3))
+        )} / ۳`
+      : "";
+
   return (
-    <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1, backgroundColor: "#000" }}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+    <SafeAreaView
+      edges={["top", "bottom"]}
+      style={{ flex: 1, backgroundColor: "#000" }}
+    >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
+      >
         {/* Header */}
-        <View style={{ paddingTop: 8, paddingHorizontal: 16, paddingBottom: 12 }}>
-          {/* 🗑️ دکمه پاک‌کردن تاریخچه (گوشه راست بالا) */}
-          <TouchableOpacity
-            onPress={confirmClear}
-            style={{ position: "absolute", right: 16, top: 8, padding: 6, zIndex: 10 }}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        <View
+          style={{
+            paddingTop: 8,
+            paddingHorizontal: 16,
+            paddingBottom: 8,
+          }}
+        >
+          {/* ردیف اول: سه ستون برای وسط‌شدن واقعی تیتر */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+            }}
           >
-            <Ionicons name="trash-outline" size={18} color="#ff6666" />
-          </TouchableOpacity>
+            {/* ستون چپ: فلش برگشت */}
+            <View style={{ flex: 1, alignItems: "flex-start" }}>
+              <TouchableOpacity
+                onPress={() => router.back()}
+                style={{ padding: 6, borderRadius: 999 }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons
+                  name={rtl ? "arrow-forward" : "arrow-back"}
+                  size={20}
+                  color="#ffffff"
+                />
+              </TouchableOpacity>
+            </View>
 
-          {/* 🛡️ دکمه حریم خصوصی (گوشه چپ بالا) */}
-          <TouchableOpacity
-            onPress={() => setShowPrivacy(true)}
-            style={{ position: "absolute", left: 16, top: 8, padding: 6, zIndex: 10 }}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="shield-checkmark-outline" size={18} color="#A3E635" />
-          </TouchableOpacity>
+            {/* ستون وسط: عنوان کاملاً وسط */}
+            <View style={{ flex: 2, alignItems: "center" }}>
+              <Text
+                style={{
+                  color: "#fff",
+                  fontSize: 16,
+                  fontWeight: "900",
+                }}
+                numberOfLines={1}
+              >
+                پشتیبان هوشمند
+              </Text>
+            </View>
 
-          <Text
-            style={{ color: "#fff", fontSize: 26, fontWeight: "900", textAlign: "center", marginTop: 6 }}
-          >
-            پشتیبان هوشمند
-          </Text>
-          <Text style={{ color: "#8E8E93", fontSize: 12, marginTop: 6, textAlign: "center" }}>
-            ✨ بنویس تا مثل یه درمانگرِ واقعی راهنماییت کنم
-          </Text>
+            {/* ستون راست: سپر + بج (PRO/FREE) + سطل آشغال */}
+            <View
+              style={{
+                flex: 1,
+                alignItems: "flex-end",
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  columnGap: 6,
+                  justifyContent: "flex-end",
+                }}
+              >
+                {/* سپر حریم خصوصی */}
+                <TouchableOpacity
+                  onPress={() => setShowPrivacy(true)}
+                  style={{ padding: 6 }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons
+                    name="shield-checkmark-outline"
+                    size={18}
+                    color="#A3E635"
+                  />
+                </TouchableOpacity>
 
-          {/* ✅ نمودار احساسی کوچک */}
+                {/* بج همیشه هست: PRO یا FREE */}
+                <View
+                  style={{
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 999,
+                    backgroundColor: isProLocal ? "#f97316" : "#111827",
+                    borderWidth: isProLocal ? 0 : 1,
+                    borderColor: isProLocal ? "transparent" : "#4b5563",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: isProLocal ? "#000" : "#e5e7eb",
+                      fontWeight: "900",
+                      fontSize: 10,
+                    }}
+                  >
+                    {isProLocal ? "PRO" : "FREE"}
+                  </Text>
+                </View>
+
+                {/* سطل آشغال */}
+                <TouchableOpacity
+                  onPress={confirmClear}
+                  style={{ padding: 6 }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons
+                    name="trash-outline"
+                    size={18}
+                    color="#ff6666"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          {/* نمودار احساسی چسبیده به هدر */}
           {moodHistory.length > 0 && (
-            <View style={{ marginTop: 10, alignItems: "center", gap: 6 }}>
+            <View
+              style={{
+                marginTop: 6,
+                alignItems: "center",
+                gap: 2,
+              }}
+            >
               <MoodMiniChart values={moodHistory} />
-              <Text style={{ color: "#9ca3af", fontSize: 11 }}>روند احساسی پاسخ‌های اخیر</Text>
+              <Text style={{ color: "#9ca3af", fontSize: 10 }}>
+                روند احساسی پاسخ‌های اخیر
+              </Text>
+            </View>
+          )}
+
+          {/* متن محدودیت / وضعیت پرو فقط برای غیرپرو */}
+          {!isProLocal && (
+            <View style={{ marginTop: 6 }}>
+              <Text
+                style={{
+                  color: "#9ca3af",
+                  fontSize: 11,
+                  textAlign: "center",
+                }}
+              >
+                {limitLabel}
+              </Text>
+              {!!limitStateLabel && (
+                <Text
+                  style={{
+                    color: "#e5e7eb",
+                    fontSize: 11,
+                    textAlign: "center",
+                    marginTop: 2,
+                  }}
+                >
+                  {limitStateLabel}
+                </Text>
+              )}
             </View>
           )}
         </View>
@@ -315,9 +592,14 @@ export default function AIChatSupport() {
         {/* Messages */}
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20, gap: 10 }}
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingBottom: 20,
+            gap: 10,
+          }}
           onContentSizeChange={() => {
-            if (atBottomRef.current) scrollRef.current?.scrollToEnd({ animated: true });
+            if (atBottomRef.current)
+              scrollRef.current?.scrollToEnd({ animated: true });
           }}
           onScroll={onScroll}
           scrollEventThrottle={16}
@@ -342,7 +624,13 @@ export default function AIChatSupport() {
                   maxWidth: "85%",
                 }}
               >
-                <Text style={{ color: "#fff", textAlign: rtl ? "right" : "left", lineHeight: 22 }}>
+                <Text
+                  style={{
+                    color: "#fff",
+                    textAlign: rtl ? "right" : "left",
+                    lineHeight: 22,
+                  }}
+                >
                   {m.content}
                 </Text>
                 <Text
@@ -359,7 +647,6 @@ export default function AIChatSupport() {
             );
           })}
 
-          {/* typing indicator (زمانی که منتظریم) */}
           {loading && (
             <View
               style={{
@@ -399,19 +686,28 @@ export default function AIChatSupport() {
             style={{
               flex: 1,
               borderWidth: 1,
-              borderColor: "#333",
+              borderColor: reachedLimit ? "#f97316" : "#333",
               borderRadius: 12,
               height: 44,
               justifyContent: "center",
               paddingHorizontal: 12,
+              opacity: reachedLimit ? 0.6 : 1,
             }}
           >
             <TextInput
               value={text}
               onChangeText={setText}
-              placeholder="بنويس"
-              placeholderTextColor="#777"
-              style={{ color: "#fff", textAlign: rtl ? "left" : "right" }}
+              placeholder={
+                reachedLimit
+                  ? "امروز به سقف سه پیام رسیدی؛ فردا دوباره امتحان کن."
+                  : "بنویس…"
+              }
+              placeholderTextColor={reachedLimit ? "#f97316" : "#777"}
+              style={{
+                color: "#fff",
+                textAlign: rtl ? "left" : "right",
+              }}
+              editable={!reachedLimit}
               onSubmitEditing={send}
               returnKeyType="send"
             />
@@ -428,28 +724,61 @@ export default function AIChatSupport() {
               backgroundColor: canSend ? "#FF6B00" : "#333",
             }}
           >
-            {/* جهت نوک فلش به سمت راست */}
-            <Ionicons name="send" size={20} color="#fff" style={{ transform: [{ scaleX: 1 }] }} />
+            <Ionicons name="send" size={20} color="#fff" />
           </TouchableOpacity>
         </View>
 
-        {/* ⬇️⬇️⬇️  فقط این بخش جدید اضافه شد: متن ریز هشدار زیر باکس ورودی */}
-        <View style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 10, backgroundColor: "#000" }}>
-          <Text style={{ color: "#6b7280", fontSize: 11, textAlign: "center", lineHeight: 16 }}>
-            ⚠️ پشتیبان هوشمند ققنوس ممکنه گاهی اشتباه کنه؛{"\n"} برای تصمیم‌های مهم با درمانگر واقعی مشورت کن.
+        {/* هشدار ریز زیر باکس ورودی */}
+        <View
+          style={{
+            paddingHorizontal: 16,
+            paddingTop: 6,
+            paddingBottom: 10,
+            backgroundColor: "#000",
+          }}
+        >
+          <Text
+            style={{
+              color: "#6b7280",
+              fontSize: 11,
+              textAlign: "center",
+              lineHeight: 16,
+            }}
+          >
+            ⚠️ پشتیبان هوشمند ققنوس ممکنه گاهی اشتباه کنه؛{"\n"} برای
+            تصمیم‌های مهم با درمانگر واقعی مشورت کن.
           </Text>
+          {reachedLimit && !isProLocal && (
+            <Text
+              style={{
+                color: "#f97316",
+                fontSize: 11,
+                textAlign: "center",
+                marginTop: 4,
+              }}
+            >
+              امروز سقف سه پیام پر شده. برای برداشتن این محدودیت می‌تونی اشتراک
+              PRO ققنوس رو از تب پرداخت فعال کنی.
+            </Text>
+          )}
         </View>
-        {/* ⬆️⬆️⬆️  پایان بخش جدید */}
       </KeyboardAvoidingView>
 
-      {/* 🔐 مودال راهنمای حریم خصوصی */}
+      {/* مودال حریم خصوصی */}
       <Modal
         visible={showPrivacy}
         transparent
         animationType="fade"
         onRequestClose={() => setShowPrivacy(false)}
       >
-        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,.5)", justifyContent: "center", alignItems: "center" }}>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,.5)",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
           <View
             style={{
               width: "90%",
@@ -460,18 +789,36 @@ export default function AIChatSupport() {
               padding: 16,
             }}
           >
-            <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <View
+              style={{
+                flexDirection: "row-reverse",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 8,
+              }}
+            >
               <Ionicons name="shield-checkmark" size={18} color="#A3E635" />
-              <Text style={{ color: "#fff", fontWeight: "900", fontSize: 16 }}>توصیه‌های حریم خصوصی</Text>
+              <Text
+                style={{ color: "#fff", fontWeight: "900", fontSize: 16 }}
+              >
+                توصیه‌های حریم خصوصی
+              </Text>
             </View>
-            <Text style={{ color: "#cbd5e1", lineHeight: 22, textAlign: "right" }}>
-               • از وارد کردن اطلاعات شناسایی حساس، خودداری کن (کد ملی، شماره کارت، آدرس دقیق).{"\n"}
-              • این بخش جایگزین رواندرمانی یا پشتیبانی واقعی نیست. در شرایط خطر ياخودآسیبی، با شماره‌های امدادی تماس بگیر يا به پشتيبان واقعی ققنوس پیام بفرست.{"\n"}
-              • گفتگوها برای بهبود تجربه کاربری، روی دستگاه تو نگه داشته میشن ولی میتونی هر زمان نیاز داشتی از دکمهٔ
-              «سطل زباله» برای پاک‌کردن تاریخچه استفاده کنی.{"\n"}
-              • برای پاسخ‌گویی، متن پرسش به سرور ققنوس ارسال میشه تا مدل هوش مصنوعی پاسخ بسازه.{"\n"}
+            <Text
+              style={{ color: "#cbd5e1", lineHeight: 22, textAlign: "right" }}
+            >
+              • از وارد کردن اطلاعات شناسایی حساس، خودداری کن (کد ملی، شماره
+              کارت، آدرس دقیق).{"\n"}
+              • این بخش جایگزین رواندرمانی یا پشتیبانی واقعی نیست. در شرایط خطر
+              يا خودآسیبی، با شماره‌های امدادی تماس بگیر يا به پشتيبان واقعی
+              ققنوس پیام بفرست.{"\n"}
+              • گفتگوها برای بهبود تجربه کاربری، روی دستگاه تو نگه داشته میشن
+              ولی میتونی هر زمان نیاز داشتی از دکمهٔ «سطل زباله» برای پاک‌کردن
+              تاریخچه استفاده کنی.{"\n"}
+              • برای پاسخ‌گویی، متن پرسش به سرور ققنوس ارسال میشه تا مدل هوش
+              مصنوعی پاسخ بسازه.{"\n"}
               • از فرستادن فایل تصویری که اطلاعات خصوصی داره خودداری کن.{"\n"}
-              • اگر  زیر ۱۸ سالی، حتماً از والدین خودت کمک بگیر.{"\n"}
+              • اگر زیر ۱۸ سالی، حتماً از والدین خودت کمک بگیر.{"\n"}
             </Text>
             <TouchableOpacity
               onPress={() => setShowPrivacy(false)}

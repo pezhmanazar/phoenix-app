@@ -1,5 +1,4 @@
 // server.js
-
 import cors from "cors";
 import "dotenv/config";
 import express from "express";
@@ -12,13 +11,14 @@ import mime from "mime-types";
 import adminAuth from "./middleware/adminAuth.js";
 import adminRouter from "./routes/admin.js";
 import ticketsRouter from "./routes/tickets.js";
-import publicRouter from "./routes/public.js"; // روتر عمومی که /tickets هم دارد
-import aiRouter from "./routes/ai.js"; // ⬅️ اضافه شد: روتر پشتیبانی هوش مصنوعی
+import publicRouter from "./routes/public.js";   // روتر عمومی که /tickets هم دارد
+import aiRouter from "./routes/ai.js";           // روتر پشتیبانی هوش مصنوعی
 
 // ---------- App ----------
 const app = express();
 const PORT = process.env.PORT || 4000;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*";
+
 app.set("trust proxy", true);
 
 // ---------- CORS & Logger ----------
@@ -34,13 +34,10 @@ app.options("*", cors());
 app.use(morgan("dev"));
 
 // ---------- Static uploads ----------
-const ROOT_UPLOAD_DIR =
-  process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
+const ROOT_UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
 if (!fs.existsSync(ROOT_UPLOAD_DIR)) fs.mkdirSync(ROOT_UPLOAD_DIR, { recursive: true });
-app.use(
-  "/uploads",
-  express.static(ROOT_UPLOAD_DIR, { maxAge: "1y", index: false })
-);
+
+app.use("/uploads", express.static(ROOT_UPLOAD_DIR, { maxAge: "1y", index: false }));
 
 // ---------- Multer (store in /uploads/<YYYY>) ----------
 const storage = multer.diskStorage({
@@ -73,9 +70,7 @@ const jsonUnlessMultipart = (req, res, next) => {
   return express.json({ limit: "1mb" })(req, res, next);
 };
 app.use(jsonUnlessMultipart);
-
-// optional: urlencoded برای پنل ادمین/فرم‌ها
-app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" })); // برای فرم‌های پنل
 
 // ---------- Upload helpers ----------
 const withUploadAny = (req, res, next) => {
@@ -88,7 +83,6 @@ const withUploadAny = (req, res, next) => {
         .status(400)
         .json({ ok: false, error: err.code || "upload_error", message: err.message });
     }
-    // اگر چند فایل باشد، یکی را به req.file نگه داریم
     if (Array.isArray(req.files) && req.files.length && !req.file) {
       req.file =
         req.files.find((f) => f.fieldname === "file") ||
@@ -105,7 +99,6 @@ const maybeUpload = (req, res, next) => {
   return next();
 };
 
-// بعد از پارسِ مولتر، content-type را تغییر بده تا دوباره پردازش نشود
 const markParsed = (req, _res, next) => {
   const ct = String(req.headers["content-type"] || "").toLowerCase();
   if (ct.includes("multipart/form-data")) {
@@ -114,7 +107,6 @@ const markParsed = (req, _res, next) => {
   next();
 };
 
-// برای ردگیری مشکلات نام/شناسه هنگام ویس/عکس
 const logUploadDebug = (req, _res, next) => {
   try {
     console.log("⬇️ UPLOAD DEBUG", req.method, req.originalUrl);
@@ -145,26 +137,25 @@ const logUploadDebug = (req, _res, next) => {
   next();
 };
 
-// اگر نه فایل داریم نه متن، 400 بده
 const guardNoContent = (req, res, next) => {
   const hasFile = (Array.isArray(req.files) && req.files.length) || !!req.file;
-  const hasText =
-    typeof req.body?.text === "string" && req.body.text.trim().length > 0;
-  if (!hasFile && !hasText)
-    return res.status(400).json({ ok: false, error: "no_content" });
+  const hasText = typeof req.body?.text === "string" && req.body.text.trim().length > 0;
+  if (!hasFile && !hasText) return res.status(400).json({ ok: false, error: "no_content" });
   next();
 };
 
-// ---------- Routes ----------
-app.get("/", (_req, res) =>
-  res.json({ ok: true, service: "phoenix-backend" })
-);
+// ---------- Root ----------
+app.get("/", (_req, res) => res.json({ ok: true, service: "phoenix-backend" }));
 
-// روتر تیکت داخلی (ادمین/مدیر)
+// ---------- ✅ PING (اضافه شد) ----------
+app.get("/api/ping", (req, res) => {
+  res.json({ ok: true, service: "phoenix-backend", time: Date.now() });
+});
+
+// ---------- Routes ----------
 app.use("/api/tickets", ticketsRouter);
 
 // فقط برای مسیرهای public که آپلود می‌فرستند، میدل‌ویر آپلود را اعمال کن
-// ترتیب مهم است: withUploadAny → markParsed → log → guard → publicRouter
 app.use(
   "/api/public/tickets/:id/reply-upload",
   withUploadAny,
@@ -172,30 +163,22 @@ app.use(
   logUploadDebug,
   guardNoContent
 );
-app.use(
-  "/api/public/tickets/:id/reply",
-  maybeUpload,
-  markParsed,
-  logUploadDebug
-);
+app.use("/api/public/tickets/:id/reply", maybeUpload, markParsed, logUploadDebug);
 
-// ⬅️ اضافه شد: مسیر پشتیبانی هوش مصنوعی (پروکسی امن به OpenAI)
+// پشتیبانی هوش مصنوعی
 app.use("/api/public/ai", aiRouter);
 
-// تمام مسیرهای عمومی (از جمله /api/public/tickets/*)
+// تمام مسیرهای عمومی
 app.use("/api/public", publicRouter);
 
 // پنل ادمین
 app.use("/api/admin", adminRouter);
-app.get("/api/admin/me", adminAuth, (req, res) =>
-  res.json({ ok: true, admin: req.admin })
-);
+app.get("/api/admin/me", adminAuth, (req, res) => res.json({ ok: true, admin: req.admin }));
 
-// 404
+// ---------- 404 ----------
 app.use((req, res) => res.status(404).json({ ok: false, error: "not_found" }));
 
-// Error handler
-// eslint-disable-next-line no-unused-vars
+// ---------- Error handler ----------
 app.use((err, _req, res, _next) => {
   console.error("Unhandled error:", err);
   res.status(500).json({ ok: false, error: "internal_error" });
