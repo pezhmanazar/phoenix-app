@@ -74,7 +74,7 @@ export default function Panah() {
     >
       {/* Header */}
       <View style={[styles.header, { borderColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>پناه</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>پنــــــــاه</Text>
 
         {/* بج وضعیت اشتراک قبل از ورود به پشتیبان‌ها */}
         <View style={styles.badgeRow}>

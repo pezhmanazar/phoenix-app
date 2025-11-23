@@ -1523,126 +1523,154 @@ return (
         </Text>
       </View>
     </View>
+    
     {/* کارت پروفایل */}
     <View
       style={{
-        flexDirection: "row",
-        alignItems: "center",
         backgroundColor: colors.card,
         borderRadius: 16,
         padding: 12,
         borderWidth: 1,
         borderColor: colors.border,
-        gap: 12,
+        gap: 10,
       }}
     >
-      {renderProfileAvatar()}
-      <View style={{ flex: 1 }}>
-        <View
-          style={{
-            flexDirection: "row-reverse",
-            alignItems: "center",
-            justifyContent: "flex-start",
-            gap: 8,
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: "700",
-              color: colors.text,
-            }}
-          >
-            {profileName}
-          </Text>
-          {effectivePlan === "pro" && (
-            <PlanBadge plan="pro" loading={refreshing} />
-          )}
-        </View>
-        {/* نمایش وضعیت کاربر از سرور / کانتکست */}
-        <Text
-          style={{
-            fontSize: 12,
-            color: "#8E8E93",
-            marginTop: 4,
-          }}
-        >
-          پروفایل: {me?.profileCompleted ? "تکمیل" : "ناقص"}
-        </Text>
-        <Text
-          style={{
-            fontSize: 12,
-            color: "#8E8E93",
-            marginTop: 4,
-          }}
-        >
-          استریک تکنیک‌ها: {toPersianDigits(streakDays)} روز • امتیاز:{" "}
-          {toPersianDigits(points)}
-        </Text>
-        {isAuthenticated && (
-          <Text
-            style={{
-              fontSize: 11,
-              color: "#8E8E93",
-              marginTop: 2,
-            }}
-          >
-            ورود با: {phone ?? "-"}
-          </Text>
-        )}
-      </View>
-      {effectivePlan === "free" && (
-  <TouchableOpacity
-    onPress={() => router.push("/(tabs)/Subscription")}
-    activeOpacity={0.8}
-    style={{
-      backgroundColor: "#10b981",
-      paddingVertical: 8,
-      paddingHorizontal: 12,
-      borderRadius: 12,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-    }}
-  >
-    <Ionicons name="card" size={16} color="#fff" />
-    <Text
-      style={{
-        color: "#FFFFFF",
-        fontWeight: "700",
-        fontSize: 13,
-      }}
-    >
-      ارتقا به PRO
-    </Text>
-  </TouchableOpacity>
-)}
-      <TouchableOpacity
-        onPress={() => setEditVisible(true)}
-        activeOpacity={0.8}
+      {/* ردیف اول: آواتار + نام + Badge */}
+      <View
         style={{
-          backgroundColor: colors.primary,
-          paddingVertical: 8,
-          paddingHorizontal: 12,
-          borderRadius: 12,
           flexDirection: "row",
           alignItems: "center",
-          gap: 6,
-          marginLeft: 8,
+          gap: 12,
         }}
       >
-        <Ionicons name="create" size={16} color="#fff" />
-        <Text
+        {renderProfileAvatar()}
+
+        <View style={{ flex: 1 }}>
+          <View
+            style={{
+              flexDirection: "row-reverse",
+              alignItems: "center",
+              justifyContent: "flex-start",
+              gap: 8,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: "700",
+                color: colors.text,
+              }}
+            >
+              {profileName}
+            </Text>
+
+            {/* Badge پلن PRO */}
+            {effectivePlan === "pro" && (
+              <PlanBadge plan="pro" loading={refreshing} />
+            )}
+          </View>
+
+          {/* وضعیت پروفایل و استریک/امتیاز */}
+          <Text
+            style={{
+              fontSize: 12,
+              color: "#8E8E93",
+              marginTop: 4,
+            }}
+          >
+            پروفایل: {me?.profileCompleted ? "تکمیل" : "ناقص"}
+          </Text>
+          <Text
+            style={{
+              fontSize: 12,
+              color: "#8E8E93",
+              marginTop: 4,
+            }}
+          >
+            استریک تکنیک‌ها: {toPersianDigits(streakDays)} روز • امتیاز:{" "}
+            {toPersianDigits(points)}
+          </Text>
+          {isAuthenticated && (
+            <Text
+              style={{
+                fontSize: 11,
+                color: "#8E8E93",
+                marginTop: 2,
+              }}
+            >
+              ورود با: {phone ?? "-"}
+            </Text>
+          )}
+        </View>
+      </View>
+
+      {/* ردیف دوم: دکمه‌ها */}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "flex-end",
+          alignItems: "center",
+          gap: 8,
+          marginTop: 4,
+        }}
+      >
+        {/* دکمه اشتراک – همیشه نمایش داده شود */}
+        <TouchableOpacity
+          onPress={() => router.push("/(tabs)/Subscription")}
+          activeOpacity={0.8}
           style={{
-            color: "#FFFFFF",
-            fontWeight: "700",
-            fontSize: 13,
+            backgroundColor:
+              effectivePlan === "pro" ? "#0f766e" : "#10b981",
+            paddingVertical: 8,
+            paddingHorizontal: 12,
+            borderRadius: 12,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
           }}
         >
-          ویرایش
-        </Text>
-      </TouchableOpacity>
+          <Ionicons name="card" size={16} color="#fff" />
+          <Text
+            style={{
+              color: "#FFFFFF",
+              fontWeight: "700",
+              fontSize: 13,
+            }}
+          >
+            {effectivePlan === "pro"
+              ? "مدیریت / تمدید اشتراک"
+              : "ارتقا به PRO"}
+          </Text>
+        </TouchableOpacity>
+
+        {/* دکمه ویرایش پروفایل */}
+        <TouchableOpacity
+          onPress={() => setEditVisible(true)}
+          activeOpacity={0.8}
+          style={{
+            backgroundColor: colors.primary,
+            paddingVertical: 8,
+            paddingHorizontal: 12,
+            borderRadius: 12,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <Ionicons name="create" size={16} color="#fff" />
+          <Text
+            style={{
+              color: "#FFFFFF",
+              fontWeight: "700",
+              fontSize: 13,
+            }}
+          >
+            ویرایش
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
+    
     {/* نمودار پیشرفت */}
     <View
       style={{

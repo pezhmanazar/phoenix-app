@@ -1,5 +1,5 @@
 // app/(tabs)/Subscription.tsx
-import React, { useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -8,8 +8,11 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTheme } from "@react-navigation/native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import { useTheme, useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../hooks/useAuth";
@@ -18,9 +21,9 @@ import { useUser } from "../../hooks/useUser";
 // پرداخت
 import { startPay, verifyPay } from "../../api/pay";
 import * as WebBrowser from "expo-web-browser";
-import * as LinkingExpo from "expo-linking";
-import { makeRedirectUri } from "expo-auth-session";
+// دیگه LinkingExpo و makeRedirectUri لازم نداریم
 import { toJalaali } from "jalaali-js";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type PlanKey = "trial15" | "p30" | "p90" | "p180";
 
@@ -96,6 +99,8 @@ function formatJalaliDate(iso?: string | null): string | null {
   return `${toFa(jd)} ${months[jm - 1]} ${toFa(jy)}`;
 }
 
+const PRO_FLAG_KEY = "phoenix_is_pro";
+
 export default function SubscriptionScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -103,23 +108,59 @@ export default function SubscriptionScreen() {
   const { phone, isAuthenticated } = useAuth();
   const { me, refresh, refreshing } = useUser() as any;
 
+  // تبدیل عدد به رقم فارسی برای نمایش روزهای باقیمانده
+  const toFaNum = (n: number) =>
+    String(n).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[Number(d)]);
+
   const [payingKey, setPayingKey] = useState<PlanKey | null>(null);
   const payingRef = useRef(false);
+  const [proFlag, setProFlag] = useState(false);
 
-  // وضعیت فعلی اشتراک از سمت سرور
+  // هر بار تب سابسکریپشن فوکوس می‌گیرد، فلگ لوکال PRO و اطلاعات کاربر را تازه کن
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        try {
+          const v = await AsyncStorage.getItem(PRO_FLAG_KEY);
+          const isPro = v === "1";
+          setProFlag(isPro);
+          console.log("[SUB] focus -> local PRO flag =", v, "=>", isPro);
+        } catch {
+          setProFlag(false);
+        }
+      })();
+
+      refresh().catch(() => {});
+      return () => {};
+    }, [refresh])
+  );
+
+  // وضعیت فعلی اشتراک از سمت سرور + فلگ لوکال
   const now = new Date();
   const rawPlan: string = (me?.plan as string) || "free";
-  const planExpiresAt: string | undefined = me?.planExpiresAt as string | undefined;
+  const planExpiresAt: string | undefined = me?.planExpiresAt as
+    | string
+    | undefined;
 
+  // ابتدا فقط pro/free را از سرور و فلگ لوکال جمع می‌کنیم
+  let baseStatus: "free" | "pro" = "free";
+  if (rawPlan === "pro" || rawPlan === "vip") baseStatus = "pro";
+  if (proFlag) baseStatus = "pro";
+
+  // چک انقضا فقط اگر فعلاً pro هستیم
   const isExpired =
     !!planExpiresAt && new Date(planExpiresAt).getTime() < now.getTime();
 
-  const effectivePlan =
-    rawPlan === "pro" || rawPlan === "vip"
-      ? isExpired
-        ? "expired"
-        : "pro"
-      : "free";
+  const effectivePlan: "free" | "pro" | "expired" =
+    baseStatus === "pro" ? (isExpired ? "expired" : "pro") : "free";
+
+  // تعداد روزِ تقریبی باقی‌مانده تا پایان اشتراک
+  const daysRemaining = useMemo(() => {
+    if (!planExpiresAt) return null;
+    const diffMs = new Date(planExpiresAt).getTime() - Date.now();
+    if (diffMs <= 0) return 0;
+    return Math.ceil(diffMs / (1000 * 60 * 60 * 24)); // به روز
+  }, [planExpiresAt]);
 
   const niceExpireText = useMemo(() => {
     if (!planExpiresAt) return null;
@@ -138,84 +179,101 @@ export default function SubscriptionScreen() {
     }
     if (payingRef.current) return;
 
-    try {
-      payingRef.current = true;
-      setPayingKey(option.key);
+    payingRef.current = true;
+    setPayingKey(option.key);
 
-      // شروع پرداخت
+    try {
+      // ۱) شروع پرداخت
+      console.log("[SUB] startPay request", { phone, amount: option.amount });
+
       const start = await startPay({
         phone: phone!,
         amount: option.amount,
-      } as any);
+      });
 
-      if (!(start as any)?.gatewayUrl) {
-        Alert.alert("خطا", "آدرس درگاه پرداخت دریافت نشد.");
+      console.log("[SUB] startPay response", start);
+
+      if (!start.ok || !start.data) {
+        Alert.alert(
+          "خطا",
+          start.error || "در اتصال به سرور مشکلی پیش آمد."
+        );
         return;
       }
 
-      const gatewayUrl = (start as any).gatewayUrl as string;
-      const redirectUrl = makeRedirectUri({ path: "pay" });
+      const { gatewayUrl, authority } = start.data;
+      if (!gatewayUrl || !authority) {
+        Alert.alert("خطا", "اطلاعات درگاه پرداخت ناقص است.");
+        return;
+      }
 
-      const sub = LinkingExpo.addEventListener("url", async (ev) => {
-        try {
-          const u = LinkingExpo.parse(ev.url);
-          const qAuthority = String(
-            (u.queryParams as any)?.Authority ||
-              (u.queryParams as any)?.authority ||
-              ""
-          );
-          const qStatus = String(
-            (u.queryParams as any)?.Status ||
-              (u.queryParams as any)?.status ||
-              ""
-          );
-          if (!qAuthority) return;
+      // ۲) باز کردن درگاه (بدون دیپ‌لینک، کاربر خودش برمی‌گرده)
+      const result = await WebBrowser.openBrowserAsync(gatewayUrl);
+      console.log("[SUB] WebBrowser result", result);
 
-          const ver = await verifyPay({
-            authority: qAuthority,
-            status: (qStatus || "NOK") as any,
-            phone: phone!,
-            amount: option.amount!,
-          } as any);
+      if (result.type === "cancel") {
+        Alert.alert(
+          "لغو پرداخت",
+          "پرداخت توسط شما لغو شد. هر زمان خواستی می‌توانی دوباره امتحان کنی."
+        );
+        return;
+      }
 
-          if (!(ver as any)?.ok) {
-            Alert.alert(
-              "پرداخت ناموفق",
-              String((ver as any).error || "VERIFY_FAILED")
-            );
-            return;
-          }
-
-          const refId =
-            (ver as any).refId || (ver as any).data?.refId || "—";
-          // بک‌اند الان خودش plan و planExpiresAt را در /api/user ست می‌کند
-          await refresh().catch(() => {});
-
-          Alert.alert(
-            "پرداخت موفق",
-            `کد رهگیری:\n${refId}`,
-            [
-              {
-                text: "ادامه",
-                onPress: () => {
-                  router.replace("/(tabs)/Phoenix");
-                },
-              },
-            ]
-          );
-        } finally {
-          sub.remove();
-          payingRef.current = false;
-          setPayingKey(null);
-        }
+      // ۳) بعد از برگشت به اپ، مستقیماً verifyPay با همون Authority
+      console.log("[SUB] verifyPay request", {
+        authority,
+        amount: option.amount,
+        phone,
       });
 
-      await WebBrowser.openBrowserAsync(
-        `${gatewayUrl}?cb=${encodeURIComponent(redirectUrl)}`
-      );
+      const ver = await verifyPay({
+        authority,
+        status: "OK", // اگر واقعا پرداخت نشده باشد، زرین‌پال / بک‌اند خطا می‌دهد
+        phone: phone!,
+        amount: option.amount!,
+      });
+
+      console.log("[SUB] verifyPay response", ver);
+
+      if (!ver.ok || !ver.data) {
+        Alert.alert(
+          "لغو یا نامشخص",
+          ver.error ||
+            "وضعیت پرداخت مشخص نشد. اگر مبلغ از حسابت کم شد، چند دقیقه بعد وضعیت اشتراک را دوباره چک کن."
+        );
+        return;
+      }
+
+      const data = ver.data;
+      const refId = data.refId ?? "—";
+
+      // ✅ مثل paytest: فلگ محلی PRO را تنظیم کن
+      if (data.plan === "pro" || data.plan === "vip") {
+        await AsyncStorage.setItem(PRO_FLAG_KEY, "1");
+        console.log("[SUB] set local PRO flag -> phoenix_is_pro = 1");
+      } else {
+        await AsyncStorage.removeItem(PRO_FLAG_KEY);
+        console.log("[SUB] clear local PRO flag");
+      }
+
+      // ✅ اطلاعات کاربر و پلن را از سرور تازه کن
+      await refresh().catch(() => {});
+
+      Alert.alert("پرداخت موفق", `کد رهگیری:\n${refId}`, [
+        {
+          text: "ادامه",
+          onPress: () => {
+            router.replace("/(tabs)/Phoenix");
+          },
+        },
+      ]);
     } catch (e: any) {
-      console.log("[Subscription][pay][ERR]", e?.message || e);
-      Alert.alert("خطا", "در اتصال به درگاه مشکلی پیش آمد. دوباره امتحان کن.");
+      console.log("[SUB] handleBuy error", e?.message || e);
+      Alert.alert(
+        "خطا",
+        e?.message || "در اتصال به درگاه مشکلی پیش آمد. دوباره امتحان کن."
+      );
+    } finally {
       payingRef.current = false;
       setPayingKey(null);
     }
@@ -291,7 +349,9 @@ export default function SubscriptionScreen() {
                 وضعیت اشتراک فعلی
               </Text>
               {refreshing ? (
-                <Text style={{ color: "#9CA3AF", fontSize: 12, marginTop: 4 }}>
+                <Text
+                  style={{ color: "#9CA3AF", fontSize: 12, marginTop: 4 }}
+                >
                   در حال به‌روزرسانی…
                 </Text>
               ) : effectivePlan === "pro" ? (
@@ -301,10 +361,24 @@ export default function SubscriptionScreen() {
                       color: "#6EE7B7",
                       fontSize: 12,
                       marginTop: 4,
+                      fontWeight: "800",
                     }}
                   >
                     اشتراک فعال (PRO)
                   </Text>
+
+                  {/* نوع اشتراک */}
+                  <Text
+                    style={{
+                      color: "#D1D5DB",
+                      fontSize: 11,
+                      marginTop: 2,
+                    }}
+                  >
+                    نوع اشتراک: اشتراک ققنوس (PRO)
+                  </Text>
+
+                  {/* تاریخ پایان اشتراک به شمسی */}
                   {niceExpireText && (
                     <Text
                       style={{
@@ -313,20 +387,59 @@ export default function SubscriptionScreen() {
                         marginTop: 2,
                       }}
                     >
-                      {niceExpireText}
+                      تاریخ پایان: {niceExpireText}
                     </Text>
                   )}
+
+                  {/* تعداد روزهای باقیمانده */}
+                  {typeof daysRemaining === "number" &&
+                    daysRemaining > 0 && (
+                      <Text
+                        style={{
+                          color: "#D1FAE5",
+                          fontSize: 11,
+                          marginTop: 2,
+                        }}
+                      >
+                        حدود {toFaNum(daysRemaining)} روز از اشتراکت باقی
+                        مانده.
+                      </Text>
+                    )}
                 </>
               ) : effectivePlan === "expired" ? (
-                <Text
-                  style={{
-                    color: "#F97373",
-                    fontSize: 12,
-                    marginTop: 4,
-                  }}
-                >
-                  اشتراک قبلی منقضی شده؛ می‌توانی تمدید کنی.
-                </Text>
+                <>
+                  <Text
+                    style={{
+                      color: "#F97373",
+                      fontSize: 12,
+                      marginTop: 4,
+                      fontWeight: "800",
+                    }}
+                  >
+                    اشتراک منقضی شده
+                  </Text>
+                  {niceExpireText && (
+                    <Text
+                      style={{
+                        color: "#FCA5A5",
+                        fontSize: 11,
+                        marginTop: 2,
+                      }}
+                    >
+                      تاریخ پایان قبلی: {niceExpireText}
+                    </Text>
+                  )}
+                  <Text
+                    style={{
+                      color: "#FBBF24",
+                      fontSize: 11,
+                      marginTop: 2,
+                    }}
+                  >
+                    برای دسترسی دوباره به همهٔ دوره‌ها، یکی از پلن‌ها را تمدید
+                    کن.
+                  </Text>
+                </>
               ) : (
                 <Text
                   style={{
@@ -335,7 +448,8 @@ export default function SubscriptionScreen() {
                     marginTop: 4,
                   }}
                 >
-                  در حال حاضر روی پلن رایگان هستی.
+                  در حال حاضر روی پلن رایگان هستی. با فعال‌کردن اشتراک به همهٔ
+                  دوره‌ها، پاکسازی‌ها و برنامه‌های روزانه دسترسی پیدا می‌کنی.
                 </Text>
               )}
             </View>
@@ -453,6 +567,19 @@ export default function SubscriptionScreen() {
                 ? "#022C22"
                 : cardBg;
 
+            let ctaLabel = "شروع اشتراک";
+            if (p.amount) {
+              if (effectivePlan === "pro") {
+                ctaLabel = "تغییر / تمدید اشتراک";
+              } else if (effectivePlan === "expired") {
+                ctaLabel = "تمدید اشتراک";
+              } else {
+                ctaLabel = "شروع اشتراک";
+              }
+            } else {
+              ctaLabel = "به‌زودی";
+            }
+
             return (
               <View
                 key={p.key}
@@ -561,11 +688,7 @@ export default function SubscriptionScreen() {
                             fontWeight: "800",
                           }}
                         >
-                          {p.amount
-                            ? effectivePlan === "pro"
-                              ? "تغییر / تمدید پلن"
-                              : "شروع اشتراک"
-                            : "به‌زودی"}
+                          {ctaLabel}
                         </Text>
                       </>
                     )}

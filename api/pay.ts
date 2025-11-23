@@ -1,3 +1,4 @@
+// api/pay.ts
 import { BACKEND_URL } from "../constants/env";
 
 // همون تیپ‌های user.ts
@@ -5,13 +6,13 @@ type ApiOk<T> = { ok: true; data: T };
 type ApiErr = { ok: false; error: string };
 export type ApiResp<T> = ApiOk<T> | ApiErr;
 
-type StartReq = {
+export type StartReq = {
   phone: string;
   amount: number;
   description?: string;
 };
 
-type StartResp = {
+export type StartResp = {
   code: number;
   message?: string;
   authority: string;
@@ -19,14 +20,14 @@ type StartResp = {
   description: string;
 };
 
-type VerifyReq = {
+export type VerifyReq = {
   authority: string;
   status: "OK" | "NOK";
   amount: number;
   phone: string;
 };
 
-type VerifyResp = {
+export type VerifyResp = {
   authority: string;
   status: "OK" | "NOK";
   amount: number;
@@ -36,8 +37,17 @@ type VerifyResp = {
   verifyCode: number;
 };
 
+// ---------- helpers ----------
+function toUrl(path: string) {
+  const base = BACKEND_URL.replace(/\/+$/, "");
+  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
 // 🔧 این تابع را کامل همینطوری بگذار
-async function doJson<T>(input: RequestInfo, init?: RequestInit): Promise<ApiResp<T>> {
+async function doJson<T>(
+  input: RequestInfo,
+  init?: RequestInit
+): Promise<ApiResp<T>> {
   try {
     const res = await fetch(input, {
       ...init,
@@ -49,6 +59,7 @@ async function doJson<T>(input: RequestInfo, init?: RequestInit): Promise<ApiRes
 
     const text = await res.text();
     let json: any = null;
+
     try {
       json = text ? JSON.parse(text) : null;
     } catch {
@@ -75,8 +86,10 @@ async function doJson<T>(input: RequestInfo, init?: RequestInit): Promise<ApiRes
 }
 
 // ---------- شروع پرداخت ----------
-export async function startPay(body: StartReq): Promise<ApiResp<StartResp>> {
-  const url = `${BACKEND_URL.replace(/\/+$/, "")}/api/pay/start`;
+export async function startPay(
+  body: StartReq
+): Promise<ApiResp<StartResp>> {
+  const url = toUrl("/api/pay/start");
   return doJson<StartResp>(url, {
     method: "POST",
     body: JSON.stringify(body),
@@ -84,13 +97,29 @@ export async function startPay(body: StartReq): Promise<ApiResp<StartResp>> {
 }
 
 // ---------- وریفای پرداخت ----------
-export async function verifyPay(q: VerifyReq): Promise<ApiResp<VerifyResp>> {
-  const base = `${BACKEND_URL.replace(/\/+$/, "")}/api/pay/verify`;
-  const url = new URL(base);
+export async function verifyPay(
+  q: VerifyReq
+): Promise<ApiResp<VerifyResp>> {
+  const url = new URL(toUrl("/api/pay/verify"));
   url.searchParams.set("authority", q.authority);
   url.searchParams.set("status", q.status);
   url.searchParams.set("amount", String(q.amount));
   url.searchParams.set("phone", q.phone);
-
   return doJson<VerifyResp>(url.toString());
+}
+
+/**
+ * ⛏ نسخه کمکی: خطا را throw می‌کند و مستقیم data را برمی‌گرداند.
+ * اگر دوست داشتی می‌تونی در تب‌ها از این استفاده کنی.
+ */
+export async function startPayOrThrow(body: StartReq): Promise<StartResp> {
+  const r = await startPay(body);
+  if (!r.ok) throw new Error(r.error);
+  return r.data;
+}
+
+export async function verifyPayOrThrow(q: VerifyReq): Promise<VerifyResp> {
+  const r = await verifyPay(q);
+  if (!r.ok) throw new Error(r.error);
+  return r.data;
 }
