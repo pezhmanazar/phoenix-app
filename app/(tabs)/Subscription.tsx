@@ -549,14 +549,13 @@ export default function SubscriptionScreen() {
                     )}
                     <Text
                       style={{
-                        color: "#FBBF24",
+                        color: "#ff5100ff",
                         fontSize: 11,
                         marginTop: 2,
                         textAlign: "right",
                       }}
                     >
-                      برای دسترسی دوباره به همهٔ بخش‌های اپ، یکی از پلن‌ها را
-                      تمدید کن.
+                     همه بخش‌های حالت پرو الان از دسترس تو خارج شده
                     </Text>
                   </>
                 ) : (
