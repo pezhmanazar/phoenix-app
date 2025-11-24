@@ -1,5 +1,11 @@
 // app/(tabs)/Pelekan.tsx
-import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+  useRef,
+} from "react";
 import {
   View,
   Text,
@@ -11,12 +17,16 @@ import {
   Easing,
   Alert,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { useTheme, useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
 import { useUser } from "../../hooks/useUser";
+import { getPlanStatus } from "../../lib/plan";
 
 /* --------------------------- مدل و دادهٔ اولیه --------------------------- */
 type StepDef = { id: string; title: string; days: number };
@@ -34,6 +44,9 @@ type Progress = {
   streak: number;
   isPro: boolean;
 };
+
+type PlanView = "free" | "pro" | "expired";
+type DebugState = "real" | "force-pro" | "force-free" | "force-expired";
 
 const PROGRESS_KEY = "Pelekan.progress.v1";
 /** فلگ مستقل برای پرو شدن از طرف paytest / پرداخت */
@@ -58,7 +71,13 @@ const NODE_X_RIGHT = PATH_W - 70;
 const NODE_R = 28;
 
 /* --------------------- کمک‌کامپوننت: پالس برای روز فعال --------------------- */
-function Pulsing({ children, playing = false }: { children: React.ReactNode; playing?: boolean }) {
+function Pulsing({
+  children,
+  playing = false,
+}: {
+  children: React.ReactNode;
+  playing?: boolean;
+}) {
   const scale = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     if (!playing) {
@@ -67,8 +86,18 @@ function Pulsing({ children, playing = false }: { children: React.ReactNode; pla
     }
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(scale, { toValue: 1.08, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(scale, { toValue: 1.0, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(scale, {
+          toValue: 1.08,
+          duration: 700,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scale, {
+          toValue: 1.0,
+          duration: 700,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
       ])
     );
     loop.start();
@@ -85,56 +114,90 @@ export default function PelekanScreen() {
 
   const [progress, setProgress] = useState<Progress>(defaultProgress);
   const [loading, setLoading] = useState(true);
-  const [isProPlan, setIsProPlan] = useState(false);
 
-  // بارگذاری اولیه از AsyncStorage + سینک با me.plan و phoenix_is_pro
+  const [planView, setPlanView] = useState<PlanView>("free");
+  const [debugState, setDebugState] = useState<DebugState>("real");
+
+  // مودال قشنگ برای FREE / EXPIRED
+  const [planInfoModal, setPlanInfoModal] = useState<null | "free" | "expired">(
+    null
+  );
+
+  const isProPlan = planView === "pro";
+
+  // بارگذاری اولیه از AsyncStorage + محاسبه وضعیت پلن با getPlanStatus
   useEffect(() => {
     (async () => {
       try {
-        const [raw, flag] = await Promise.all([
+        const [rawProgress, flag] = await Promise.all([
           AsyncStorage.getItem(PROGRESS_KEY),
           AsyncStorage.getItem(PRO_FLAG_KEY),
         ]);
 
+        // ۱) گرفتن پروگرس ذخیره‌شده (اگر خراب بود → default)
         let base: Progress = defaultProgress;
-        if (raw) {
+        if (rawProgress) {
           try {
-            base = { ...defaultProgress, ...JSON.parse(raw) };
+            base = { ...defaultProgress, ...JSON.parse(rawProgress) };
           } catch {
             base = defaultProgress;
           }
         }
 
+        // ۲) وضعیت پلن از سمت سرور (با درنظر گرفتن انقضا)
+        const status = getPlanStatus(me);
         const flagIsPro = flag === "1";
-        const serverIsPro = me?.plan === "pro" || me?.plan === "vip";
-        const isPro = flagIsPro || serverIsPro || base.isPro;
+
+        // ۳) تبدیل به PlanView قبل از دیباگ
+        let view: PlanView = "free";
+        if (status.rawExpiresAt) {
+          // پلنی با تاریخ داریم
+          if (status.isExpired) {
+            view = "expired";
+          } else if (status.isPro || flagIsPro) {
+            view = "pro";
+          } else {
+            view = "free";
+          }
+        } else {
+          // بدون تاریخ انقضا → فقط پرو/وی‌آی‌پی فعال = pro
+          view = status.isPro || flagIsPro ? "pro" : "free";
+        }
+
+        // ۴) اوورراید دیباگ
+        if (debugState === "force-pro") view = "pro";
+        else if (debugState === "force-free") view = "free";
+        else if (debugState === "force-expired") view = "expired";
+
+        const finalIsPro = view === "pro";
 
         const merged: Progress = {
           ...base,
-          isPro,
+          isPro: finalIsPro,
         };
 
         setProgress(merged);
-        setIsProPlan(!!isPro);
-        console.log(
-          "PELEKAN INIT plan =",
-          me?.plan,
-          "flag =",
+        setPlanView(view);
+
+        console.log("PELEKAN INIT", {
+          plan: status.rawPlan,
+          rawExpiresAt: status.rawExpiresAt,
+          isExpired: status.isExpired,
           flag,
-          "isPro =",
-          isPro
-        );
+          debugState,
+          planView: view,
+        });
       } catch (e) {
         console.log("PELEKAN INIT ERR", e);
         setProgress(defaultProgress);
-        setIsProPlan(false);
+        setPlanView("free");
       } finally {
         setLoading(false);
       }
     })();
-  }, [me?.plan]);
+  }, [me, debugState]);
 
-  // هر بار تب پلکان فوکوس شد، PRO_FLAG_KEY + me.plan را دوباره بخوان
+  // هر بار تب پلکان فوکوس شد، وضعیت پلن را دوباره از سرور + فلگ لوکال محاسبه کن
   useFocusEffect(
     React.useCallback(() => {
       let cancelled = false;
@@ -142,20 +205,36 @@ export default function PelekanScreen() {
       (async () => {
         try {
           const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
+          const status = getPlanStatus(me);
           const flagIsPro = flag === "1";
-          const serverIsPro = me?.plan === "pro" || me?.plan === "vip";
-          const final = flagIsPro || serverIsPro;
+
+          let view: PlanView = "free";
+          if (status.rawExpiresAt) {
+            if (status.isExpired) {
+              view = "expired";
+            } else if (status.isPro || flagIsPro) {
+              view = "pro";
+            } else {
+              view = "free";
+            }
+          } else {
+            view = status.isPro || flagIsPro ? "pro" : "free";
+          }
+
+          if (debugState === "force-pro") view = "pro";
+          else if (debugState === "force-free") view = "free";
+          else if (debugState === "force-expired") view = "expired";
 
           if (!cancelled) {
-            setIsProPlan(final);
-            console.log(
-              "PELEKAN FOCUS plan =",
-              me?.plan,
-              "flag =",
+            setPlanView(view);
+            console.log("PELEKAN FOCUS", {
+              plan: status.rawPlan,
+              rawExpiresAt: status.rawExpiresAt,
+              isExpired: status.isExpired,
               flag,
-              "isProPlan =",
-              final
-            );
+              debugState,
+              planView: view,
+            });
           }
         } catch (e) {
           console.log("PELEKAN FOCUS ERR", e);
@@ -165,7 +244,7 @@ export default function PelekanScreen() {
       return () => {
         cancelled = true;
       };
-    }, [me?.plan])
+    }, [me, debugState])
   );
 
   const persist = useCallback(async (p: Progress) => {
@@ -173,7 +252,14 @@ export default function PelekanScreen() {
     await AsyncStorage.setItem(PROGRESS_KEY, JSON.stringify(p));
   }, []);
 
-  console.log("PELEKAN RENDER plan =", me?.plan, "isProPlan =", isProPlan);
+  console.log(
+    "PELEKAN RENDER plan =",
+    me?.plan,
+    "planView =",
+    planView,
+    "debugState =",
+    debugState
+  );
 
   // پالت تطبیقی روشن/تاریک
   const palette = {
@@ -199,14 +285,50 @@ export default function PelekanScreen() {
     },
     // هدر پله‌ها
     step1: dark
-      ? { bg: "#3B2A1D", border: "#6B4E2E", text: "#FDE68A", icon: "flame" as const, iconColor: "#FBBF24" }
-      : { bg: "#FFEAD5", border: "#FDBA74", text: "#7C2D12", icon: "flame" as const, iconColor: "#EA580C" },
+      ? {
+          bg: "#3B2A1D",
+          border: "#6B4E2E",
+          text: "#FDE68A",
+          icon: "flame" as const,
+          iconColor: "#FBBF24",
+        }
+      : {
+          bg: "#FFEAD5",
+          border: "#FDBA74",
+          text: "#7C2D12",
+          icon: "flame" as const,
+          iconColor: "#EA580C",
+        },
     step2: dark
-      ? { bg: "#102A17", border: "#14532D", text: "#BBF7D0", icon: "leaf" as const, iconColor: "#22C55E" }
-      : { bg: "#DCFCE7", border: "#86EFAC", text: "#065F46", icon: "leaf" as const, iconColor: "#16A34A" },
+      ? {
+          bg: "#102A17",
+          border: "#14532D",
+          text: "#BBF7D0",
+          icon: "leaf" as const,
+          iconColor: "#22C55E",
+        }
+      : {
+          bg: "#DCFCE7",
+          border: "#86EFAC",
+          text: "#065F46",
+          icon: "leaf" as const,
+          iconColor: "#16A34A",
+        },
     step3: dark
-      ? { bg: "#0F223A", border: "#1E3A8A", text: "#BFDBFE", icon: "cloud" as const, iconColor: "#60A5FA" }
-      : { bg: "#DBEAFE", border: "#93C5FD", text: "#1E3A8A", icon: "cloud" as const, iconColor: "#2563EB" },
+      ? {
+          bg: "#0F223A",
+          border: "#1E3A8A",
+          text: "#BFDBFE",
+          icon: "cloud" as const,
+          iconColor: "#60A5FA",
+        }
+      : {
+          bg: "#DBEAFE",
+          border: "#93C5FD",
+          text: "#1E3A8A",
+          icon: "cloud" as const,
+          iconColor: "#2563EB",
+        },
     startFlag: dark
       ? { bg: "#3F2D1C", border: "#F59E0B55", text: "#FDE68A", icon: "#FBBF24" }
       : { bg: "#FEF3C7", border: "#FCD34D", text: "#92400E", icon: "#F59E0B" },
@@ -215,9 +337,12 @@ export default function PelekanScreen() {
   // سبک گرافیکی برای هدر هر پله
   const stepStyle = (stepId: string) => {
     switch (stepId) {
-      case "step1": return palette.step1;
-      case "step2": return palette.step2;
-      case "step3": return palette.step3;
+      case "step1":
+        return palette.step1;
+      case "step2":
+        return palette.step2;
+      case "step3":
+        return palette.step3;
       default:
         return {
           bg: palette.card,
@@ -234,7 +359,13 @@ export default function PelekanScreen() {
     const items: Array<
       | { kind: "start"; id: string }
       | { kind: "header"; id: string; title: string; stepId: string }
-      | { kind: "day"; id: string; stepIdx: number; dayIdx: number; zig: "L" | "R" }
+      | {
+          kind: "day";
+          id: string;
+          stepIdx: number;
+          dayIdx: number;
+          zig: "L" | "R";
+        }
       | { kind: "spacer"; id: string }
     > = [];
 
@@ -243,10 +374,21 @@ export default function PelekanScreen() {
 
     let counter = 0;
     for (let s = 1; s < STEPS.length; s++) {
-      items.push({ kind: "header", id: `${STEPS[s].id}-h`, title: STEPS[s].title, stepId: STEPS[s].id });
+      items.push({
+        kind: "header",
+        id: `${STEPS[s].id}-h`,
+        title: STEPS[s].title,
+        stepId: STEPS[s].id,
+      });
       for (let d = 0; d < STEPS[s].days; d++) {
-        const zig = (counter++ % 2 === 0) ? "L" : "R";
-        items.push({ kind: "day", id: `${STEPS[s].id}-${d}`, stepIdx: s, dayIdx: d, zig });
+        const zig = counter++ % 2 === 0 ? "L" : "R";
+        items.push({
+          kind: "day",
+          id: `${STEPS[s].id}-${d}`,
+          stepIdx: s,
+          dayIdx: d,
+          zig,
+        });
       }
       items.push({ kind: "spacer", id: `sp-${s}` });
     }
@@ -258,7 +400,8 @@ export default function PelekanScreen() {
     if (s > progress.stepIndex) return false;
     return d < progress.dayIndex;
   };
-  const isAvailable = (s: number, d: number) => s === progress.stepIndex && d === progress.dayIndex;
+  const isAvailable = (s: number, d: number) =>
+    s === progress.stepIndex && d === progress.dayIndex;
 
   const handleCompleteToday = async () => {
     let { stepIndex, dayIndex, gems, streak, isPro } = progress;
@@ -272,18 +415,21 @@ export default function PelekanScreen() {
       dayIndex = nextDay;
     }
 
-    // 👇 طبق خواسته: هر روز ۳ الماس، استریک +۱
+    // هر روز ۳ الماس، استریک +۱
     gems += 3;
     streak = Math.min(999, streak + 1);
     await persist({ stepIndex, dayIndex, gems, streak, isPro });
   };
 
-  const onTapDay = async (s: number, d: number, done: boolean, available: boolean) => {
+  const onTapDay = async (
+    s: number,
+    d: number,
+    done: boolean,
+    available: boolean
+  ) => {
     if (!isProPlan) {
-      Alert.alert(
-        "برای باز شدن پله‌ها",
-        "باید پلن PRO را فعال کنی تا بتوانی روزها را تیک بزنی و امتیاز بگیری."
-      );
+      // مودال داخلی، نه Alert سفید
+      setPlanInfoModal(planView === "expired" ? "expired" : "free");
       return;
     }
     // در حالت PRO روی هر روز که تپ کند، فقط یک قدم جلو می‌رویم و امتیاز می‌گیرد
@@ -294,16 +440,21 @@ export default function PelekanScreen() {
     switch (item.kind) {
       case "start":
         return (
-          <View style={{ height: CELL_H * 0.8, width: PATH_W, alignSelf: "center", justifyContent: "center" }}>
+          <View
+            style={{
+              height: CELL_H * 0.8,
+              width: PATH_W,
+              alignSelf: "center",
+              justifyContent: "center",
+            }}
+          >
             <TouchableOpacity
               activeOpacity={0.9}
               onPress={() => {
-                if (!isProPlan) {
-                  Alert.alert(
-                    "شروع پلکان",
-                    "در حال حاضر روی نسخه رایگان هستی. برای باز شدن پله‌ها و تمرین‌ها، پلن PRO را فعال کن."
-                  );
-                } else {
+                if (planView !== "pro") {
+  setPlanInfoModal(planView === "expired" ? "expired" : "free");
+  return;
+} else {
                   Alert.alert("تبریک ✨", "پلکان برای تو باز است؛ از روزها شروع کن.");
                 }
               }}
@@ -325,8 +476,14 @@ export default function PelekanScreen() {
               }}
             >
               <Ionicons name="flag" size={20} color={palette.startFlag.icon} />
-              <Text style={{ fontWeight: "900", color: palette.startFlag.text }}>
-                {isProPlan ? "شروع شد" : "شروع (نسخه رایگان)"}
+              <Text
+                style={{ fontWeight: "900", color: palette.startFlag.text }}
+              >
+                {planView === "expired"
+                  ? "اشتراک منقضی شده"
+                  : isProPlan
+                  ? "شروع شد"
+                  : "شروع (نسخه رایگان)"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -335,15 +492,28 @@ export default function PelekanScreen() {
       case "header": {
         const s = stepStyle(item.stepId);
         return (
-          <View style={{ alignItems: "center", alignSelf: "center", width: PATH_W }}>
+          <View
+            style={{
+              alignItems: "center",
+              alignSelf: "center",
+              width: PATH_W,
+            }}
+          >
             <View
               style={[
                 styles.stepHeaderCard,
                 { backgroundColor: s.bg, borderColor: s.border },
               ]}
             >
-              <Ionicons name={s.icon} size={18} color={s.iconColor} style={{ marginLeft: 6 }} />
-              <Text style={[styles.stepHeaderText, { color: s.text }]}>{item.title}</Text>
+              <Ionicons
+                name={s.icon}
+                size={18}
+                color={s.iconColor}
+                style={{ marginLeft: 6 }}
+              />
+              <Text style={[styles.stepHeaderText, { color: s.text }]}>
+                {item.title}
+              </Text>
             </View>
             <View
               style={{
@@ -375,26 +545,50 @@ export default function PelekanScreen() {
         const nodeX = item.zig === "L" ? NODE_X_LEFT : NODE_X_RIGHT;
 
         // رنگ‌های نود
-        const bg      = done ? palette.node.doneBg : available ? palette.node.availableBg : palette.node.lockedBg;
-        const border  = done ? palette.node.doneBorder : available ? palette.node.availableBorder : palette.node.lockedBorder;
-        const iconCol = done ? palette.node.doneIcon : available ? palette.node.availableIcon : palette.node.lockedIcon;
-        const label   = done ? palette.node.doneLabel : available ? palette.node.availableLabel : palette.node.lockedLabel;
+        const bg = done
+          ? palette.node.doneBg
+          : available
+          ? palette.node.availableBg
+          : palette.node.lockedBg;
+        const border = done
+          ? palette.node.doneBorder
+          : available
+          ? palette.node.availableBorder
+          : palette.node.lockedBorder;
+        const iconCol = done
+          ? palette.node.doneIcon
+          : available
+          ? palette.node.availableIcon
+          : palette.node.lockedIcon;
+        const label = done
+          ? palette.node.doneLabel
+          : available
+          ? palette.node.availableLabel
+          : palette.node.lockedLabel;
 
         // مسیر «از پایین به بالا»
         const bottomY = CELL_H;
         const topY = 0;
         const pathD = `
           M ${MID_X} ${bottomY}
-          C ${MID_X} ${bottomY - 30}, ${nodeX} ${CELL_H * 0.65}, ${nodeX} ${CELL_H * 0.5}
+          C ${MID_X} ${bottomY - 30}, ${nodeX} ${CELL_H * 0.65}, ${nodeX} ${
+          CELL_H * 0.5
+        }
           C ${nodeX} ${CELL_H * 0.35}, ${MID_X} ${topY + 30}, ${MID_X} ${topY}
         `;
 
         const NodeWrapper = available ? Pulsing : React.Fragment;
 
         return (
-          <View style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}>
+          <View
+            style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}
+          >
             {/* منحنی پس‌زمینه */}
-            <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
+            <Svg
+              width={PATH_W}
+              height={CELL_H}
+              style={{ position: "absolute" }}
+            >
               <Path
                 d={pathD}
                 stroke={done ? palette.pathDone : palette.pathIdle}
@@ -433,7 +627,9 @@ export default function PelekanScreen() {
                   size={22}
                   color={iconCol}
                 />
-                <Text style={[styles.nodeText, { color: label }]}>روز {d + 1}</Text>
+                <Text style={[styles.nodeText, { color: label }]}>
+                  روز {d + 1}
+                </Text>
               </TouchableOpacity>
             </NodeWrapper>
           </View>
@@ -458,7 +654,81 @@ export default function PelekanScreen() {
       style={[styles.root, { backgroundColor: palette.bg }]}
       edges={["top", "left", "right", "bottom"]}
     >
-      <Header isPro={isProPlan} gems={progress.gems} streak={progress.streak} />
+      {/* پنل دیباگ حالت پلن در خود تب پلکان */}
+      <View
+        style={{
+          paddingHorizontal: 12,
+          paddingTop: 8,
+          paddingBottom: 4,
+        }}
+      >
+        <View
+          style={{
+            padding: 8,
+            borderRadius: 10,
+            backgroundColor: "#020617",
+            borderWidth: 1,
+            borderColor: "#1F2937",
+          }}
+        >
+          <Text
+            style={{
+              color: "#9CA3AF",
+              fontSize: 11,
+              marginBottom: 6,
+              textAlign: "right",
+            }}
+          >
+            حالت نمایش پلن (دیباگ پلکان):
+          </Text>
+          <View
+            style={{
+              flexDirection: "row-reverse",
+              justifyContent: "space-between",
+              gap: 6,
+            }}
+          >
+            {(
+              [
+                { key: "real", label: "داده واقعی" },
+                { key: "force-pro", label: "PRO فیک" },
+                { key: "force-free", label: "FREE فیک" },
+                { key: "force-expired", label: "EXPIRED فیک" },
+              ] as { key: DebugState; label: string }[]
+            ).map((opt) => {
+              const active = debugState === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  onPress={() => setDebugState(opt.key)}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 5,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: active ? "#2563EB" : "#4B5563",
+                    backgroundColor: active ? "#1D4ED8" : "#020617",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: active ? "#E5E7EB" : "#9CA3AF",
+                      fontSize: 10,
+                      textAlign: "center",
+                      fontWeight: active ? "800" : "500",
+                    }}
+                  >
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      </View>
+
+      <Header planView={planView} gems={progress.gems} streak={progress.streak} />
+
       <FlatList
         data={pathItems}
         keyExtractor={(it) => it.id}
@@ -470,13 +740,88 @@ export default function PelekanScreen() {
         }}
         showsVerticalScrollIndicator={false}
       />
+
+      {/* مودال شیک برای حالت FREE / EXPIRED */}
+      {planInfoModal && (
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalCard,
+              planInfoModal === "expired"
+                ? styles.modalCardExpired
+                : styles.modalCardFree,
+            ]}
+          >
+            <View
+              style={{
+                flexDirection: "row-reverse",
+                alignItems: "center",
+                marginBottom: 8,
+              }}
+            >
+              <Ionicons
+                name={
+                  planInfoModal === "expired"
+                    ? "time-outline"
+                    : "lock-closed-outline"
+                }
+                size={22}
+                color={planInfoModal === "expired" ? "#F97373" : "#FBBF24"}
+                style={{ marginLeft: 6 }}
+              />
+              <Text style={styles.modalTitle}>
+                {planInfoModal === "expired"
+                  ? "اشتراک منقضی شده"
+                  : "محدودیت دسترسی"}
+              </Text>
+            </View>
+
+            <Text style={styles.modalBody}>
+  {planInfoModal === "expired"
+    ? "اشتراک ققنوس تو منقضی شده.\nبرای باز شدن پله‌ها و ادامهٔ مسیر، پلن رو تمدید کن."
+    : "در حال حاضر روی نسخهٔ رایگان هستی.\nبرای باز شدن پله‌ها و تمرین‌ها، پلن PRO را فعال کن."}
+</Text>
+
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => setPlanInfoModal(null)}
+              style={styles.modalButton}
+            >
+              <Text style={styles.modalButtonText}>باشه</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
 
 /* ------------------------------- هدر بالایی ------------------------------ */
-function Header({ isPro, gems, streak }: { isPro: boolean; gems: number; streak: number }) {
+function Header({
+  planView,
+  gems,
+  streak,
+}: {
+  planView: PlanView;
+  gems: number;
+  streak: number;
+}) {
   const { colors } = useTheme();
+
+  const badgeBg =
+    planView === "pro"
+      ? "#F59E0B"
+      : planView === "expired"
+      ? "#DC2626"
+      : "#9CA3AF";
+
+  const badgeLabel =
+    planView === "pro"
+      ? "PRO"
+      : planView === "expired"
+      ? "EXPIRED"
+      : "FREE";
+
   return (
     <View
       style={[
@@ -485,13 +830,8 @@ function Header({ isPro, gems, streak }: { isPro: boolean; gems: number; streak:
       ]}
     >
       <View style={styles.topItem}>
-        <View
-          style={[
-            styles.badge,
-            { backgroundColor: isPro ? "#F59E0B" : "#9CA3AF" },
-          ]}
-        >
-          <Text style={styles.badgeText}>{isPro ? "PRO" : "FREE"}</Text>
+        <View style={[styles.badge, { backgroundColor: badgeBg }]}>
+          <Text style={styles.badgeText}>{badgeLabel}</Text>
         </View>
       </View>
       <View style={styles.topItem}>
@@ -500,7 +840,7 @@ function Header({ isPro, gems, streak }: { isPro: boolean; gems: number; streak:
       </View>
       <View style={styles.topItem}>
         <Ionicons name="flame" size={18} color="#F97316" />
-        <Text style={[styles.topText, { color: colors.text }]}> {streak}</Text>
+        <Text style={[styles.topText, { color: colors.text }]}>{streak}</Text>
       </View>
     </View>
   );
@@ -522,7 +862,7 @@ const styles = StyleSheet.create({
   topItem: { flexDirection: "row-reverse", alignItems: "center", gap: 6 },
   topText: { fontWeight: "900" },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  badgeText: { color: "#111", fontWeight: "900", fontSize: 12 },
+  badgeText: { color: "#ffffff", fontWeight: "900", fontSize: 12 },
 
   // هدر هر پله
   stepHeaderCard: {
@@ -560,5 +900,59 @@ const styles = StyleSheet.create({
     bottom: -22,
     fontSize: 12,
     fontWeight: "900",
+  },
+
+  // مودال داخلی
+  modalOverlay: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalCard: {
+    width: "82%",
+    borderRadius: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    borderWidth: 1,
+  },
+  modalCardFree: {
+    backgroundColor: "#020617",
+    borderColor: "#1F2937",
+  },
+  modalCardExpired: {
+    backgroundColor: "#111827",
+    borderColor: "#7F1D1D",
+  },
+  modalTitle: {
+    color: "#F9FAFB",
+    fontSize: 16,
+    fontWeight: "900",
+    textAlign: "right",
+    flex: 1,
+  },
+  modalBody: {
+    color: "#E5E7EB",
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "right",
+    marginTop: 4,
+  },
+  modalButton: {
+    alignSelf: "flex-start",
+    marginTop: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#2563EB",
+  },
+  modalButtonText: {
+    color: "#E5E7EB",
+    fontSize: 13,
+    fontWeight: "800",
   },
 });

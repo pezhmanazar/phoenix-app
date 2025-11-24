@@ -8,6 +8,7 @@ import {
   FlatList,
   TextInput,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme, useFocusEffect } from "@react-navigation/native";
@@ -16,6 +17,10 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { allScenarios } from "@/lib/panahgah/registry";
 import { useUser } from "../../hooks/useUser";
+import { getPlanStatus } from "../../lib/plan";
+
+type PlanView = "free" | "pro" | "expired";
+type DebugState = "real" | "force-pro" | "force-free" | "force-expired";
 
 const PRO_FLAG_KEY = "phoenix_is_pro";
 
@@ -26,60 +31,85 @@ export default function Panahgah() {
   const { me } = useUser();
 
   const [q, setQ] = useState("");
-  const [isProLocal, setIsProLocal] = useState(false);
-  const [loadingPro, setLoadingPro] = useState(true);
+  const [planView, setPlanView] = useState<PlanView>("free");
+  const [debugState, setDebugState] = useState<DebugState>("real");
+  const [loading, setLoading] = useState(true);
 
-  // لود اولیه وضعیت پرو/رایگان
+  const isProPlan = planView === "pro";
+
+  /** بارگذاری اولیه + محاسبه وضعیت پلن */
   useEffect(() => {
     (async () => {
       try {
         const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
+        const status = getPlanStatus(me);
         const flagIsPro = flag === "1";
-        const serverIsPro = me?.plan === "pro" || me?.plan === "vip";
-        const final = flagIsPro || serverIsPro;
-        setIsProLocal(final);
-        console.log("PANAHGAH INIT plan =", me?.plan, "flag =", flag, "isProLocal =", final);
+
+        let view: PlanView = "free";
+
+        if (status.rawExpiresAt) {
+          if (status.isExpired) view = "expired";
+          else if (status.isPro || flagIsPro) view = "pro";
+          else view = "free";
+        } else {
+          view = status.isPro || flagIsPro ? "pro" : "free";
+        }
+
+        // Debug override
+        if (debugState === "force-pro") view = "pro";
+        else if (debugState === "force-free") view = "free";
+        else if (debugState === "force-expired") view = "expired";
+
+        setPlanView(view);
+
+        console.log("PANAH INIT", {
+          rawPlan: status.rawPlan,
+          rawExpiresAt: status.rawExpiresAt,
+          isExpired: status.isExpired,
+          flag,
+          debugState,
+          planView: view,
+        });
       } catch (e) {
-        console.log("PANAHGAH INIT ERR", e);
-        setIsProLocal(false);
+        console.log("PANAH INIT ERR", e);
+        setPlanView("free");
       } finally {
-        setLoadingPro(false);
+        setLoading(false);
       }
     })();
-  }, [me?.plan]);
+  }, [me, debugState]);
 
-  // هر بار تب پناهگاه فوکوس می‌گیرد، دوباره فلگ را بخوان
+  /** هر بار فوکوس → دوباره محاسبه */
   useFocusEffect(
     React.useCallback(() => {
       let cancelled = false;
-
       (async () => {
-        try {
-          const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
-          const flagIsPro = flag === "1";
-          const serverIsPro = me?.plan === "pro" || me?.plan === "vip";
-          const final = flagIsPro || serverIsPro;
+        const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
+        const status = getPlanStatus(me);
+        const flagIsPro = flag === "1";
 
-          if (!cancelled) {
-            setIsProLocal(final);
-            console.log(
-              "PANAHGAH FOCUS plan =",
-              me?.plan,
-              "flag =",
-              flag,
-              "isProLocal =",
-              final
-            );
-          }
-        } catch (e) {
-          console.log("PANAHGAH FOCUS ERR", e);
+        let view: PlanView = "free";
+        if (status.rawExpiresAt) {
+          if (status.isExpired) view = "expired";
+          else if (status.isPro || flagIsPro) view = "pro";
+          else view = "free";
+        } else {
+          view = status.isPro || flagIsPro ? "pro" : "free";
+        }
+
+        if (debugState === "force-pro") view = "pro";
+        else if (debugState === "force-free") view = "free";
+        else if (debugState === "force-expired") view = "expired";
+
+        if (!cancelled) {
+          setPlanView(view);
+          console.log("PANAH FOCUS", { flag, debugState, planView: view });
         }
       })();
-
       return () => {
         cancelled = true;
       };
-    }, [me?.plan])
+    }, [me, debugState])
   );
 
   const data = useMemo(() => {
@@ -93,10 +123,31 @@ export default function Panahgah() {
     );
   }, [q]);
 
+  /** هنگام تپ روی سناریو */
+  const onTapScenario = (id: string) => {
+    if (planView === "expired") {
+      Alert.alert(
+        "اشتراک منقضی شده",
+        "اشتراکت منقضی شده و پناهگاه فعلاً برات قفله.\n\n" +
+          "پناهگاه جاییه برای وقتی که یهو حالت بد میشه یا وسوسه‌ می‌شی پیام بدی، یا احساساتت بهت هجوم میارن.\n\n" +
+          "برای اینکه دوباره به همه‌ی سناریوهای اورژانسی و مسیرهای نجات دسترسی داشته باشی، پلن ققنوس رو تمدید کن."
+      );
+      return;
+    }
+    if (!isProPlan) {
+      Alert.alert(
+        "نسخه رایگان",
+        "برای باز شدن کامل پناهگاه و استفاده از سناریوهای اورژانسی باید پلن PRO را فعال کنی."
+      );
+      return;
+    }
+    router.push(`/panahgah/${id}`);
+  };
+
   const renderItem = ({ item }: any) => (
     <TouchableOpacity
       activeOpacity={0.9}
-      onPress={() => router.push(`/panahgah/${item.id}`)}
+      onPress={() => onTapScenario(item.id)}
       style={[
         styles.card,
         { borderColor: colors.border, backgroundColor: colors.card },
@@ -115,12 +166,9 @@ export default function Panahgah() {
     </TouchableOpacity>
   );
 
-  if (loadingPro) {
+  if (loading) {
     return (
-      <SafeAreaView
-        style={[styles.root, { backgroundColor: colors.background }]}
-        edges={["top", "left", "right", "bottom"]}
-      >
+      <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]}>
         <View style={[styles.center, { paddingBottom: insets.bottom }]}>
           <ActivityIndicator color={colors.primary} />
           <Text style={{ color: colors.text, marginTop: 8, fontSize: 12 }}>
@@ -131,11 +179,89 @@ export default function Panahgah() {
     );
   }
 
+  const badgeBg =
+    planView === "pro"
+      ? "#F59E0B"
+      : planView === "expired"
+      ? "#DC2626"
+      : "#9CA3AF";
+
+  const badgeLabel =
+    planView === "pro"
+      ? "PRO"
+      : planView === "expired"
+      ? "EXPIRED"
+      : "FREE";
+
   return (
     <SafeAreaView
       style={[styles.root, { backgroundColor: colors.background }]}
       edges={["top", "left", "right", "bottom"]}
     >
+
+      {/* پنل دیباگ */}
+      <View style={{ paddingHorizontal: 12, paddingTop: 8 }}>
+        <View
+          style={{
+            padding: 8,
+            borderRadius: 10,
+            backgroundColor: "#020617",
+            borderWidth: 1,
+            borderColor: "#1F2937",
+            marginBottom: 8,
+          }}
+        >
+          <Text
+            style={{
+              color: "#9CA3AF",
+              fontSize: 11,
+              marginBottom: 6,
+              textAlign: "right",
+            }}
+          >
+            حالت نمایش پلن (دیباگ):
+          </Text>
+
+          <View style={{ flexDirection: "row-reverse", gap: 6 }}>
+            {(
+              [
+                { key: "real", label: "واقعی" },
+                { key: "force-pro", label: "PRO فیک" },
+                { key: "force-free", label: "FREE فیک" },
+                { key: "force-expired", label: "منقضی فیک" },
+              ] as { key: DebugState; label: string }[]
+            ).map((opt) => {
+              const active = debugState === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  onPress={() => setDebugState(opt.key)}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 5,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: active ? "#2563EB" : "#4B5563",
+                    backgroundColor: active ? "#1D4ED8" : "#020617",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: active ? "#E5E7EB" : "#9CA3AF",
+                      fontSize: 10,
+                      textAlign: "center",
+                      fontWeight: active ? "800" : "500",
+                    }}
+                  >
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      </View>
+
       {/* Header */}
       <View style={[styles.header, { borderColor: colors.border }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>پناهگاه</Text>
@@ -143,18 +269,16 @@ export default function Panahgah() {
           <View
             style={[
               styles.headerBadge,
-              { backgroundColor: isProLocal ? "#F59E0B" : "#9CA3AF" },
+              { backgroundColor: badgeBg },
             ]}
           >
-            <Text style={styles.headerBadgeText}>
-              {isProLocal ? "PRO" : "FREE"}
-            </Text>
+            <Text style={styles.headerBadgeText}>{badgeLabel}</Text>
           </View>
         </View>
       </View>
 
-      {/* اگر پرو نیست → فقط صفحه معرفی قفل‌شده */}
-      {!isProLocal ? (
+      {/* صفحه قفل‌شده → FREE یا EXPIRED */}
+      {planView !== "pro" ? (
         <View
           style={{
             flex: 1,
@@ -169,78 +293,78 @@ export default function Panahgah() {
               { backgroundColor: colors.card, borderColor: colors.border },
             ]}
           >
-            <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
-              <Ionicons name="shield-checkmark" size={22} color={colors.primary} />
-              <Text
-                style={{
-                  color: colors.text,
-                  fontWeight: "900",
-                  fontSize: 15,
-                  textAlign: "right",
-                }}
-              >
-                پناهگاه مخصوص لحظه‌های اورژانسی بعد از جداییه
-              </Text>
-            </View>
-
-            <Text
-              style={{
-                color: colors.text,
-                opacity: 0.8,
-                marginTop: 10,
-                fontSize: 13,
-                textAlign: "right",
-                lineHeight: 20,
-              }}
-            >
-              هر موقع ناگهان وسوسه‌ی پیام دادن، چک کردن، گریه‌های شدید یا حملهٔ
-              تنهایی سراغت میاد، اینجا دقیقاً همون‌جاست که باید بیای. سناریوهای
-              مختلفی برات آماده شده که قدم‌به‌قدم راهت بندازه.
-            </Text>
-
-            <View style={{ marginTop: 14, gap: 6 }}>
-              <View style={styles.bulletRow}>
-                <Ionicons name="alert-circle-outline" size={16} color={colors.primary} />
-                <Text style={[styles.bulletText, { color: colors.text }]}>
-                  وقتی می‌خوای بهش پیام بدی
+            {planView === "expired" ? (
+              <>
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontSize: 15,
+                    fontWeight: "900",
+                    textAlign: "right",
+                    lineHeight: 24,
+                  }}
+                >
+                  اشتراکت منقضی شده و پناهگاه فعلاً برات قفله.
                 </Text>
-              </View>
-              <View style={styles.bulletRow}>
-                <Ionicons name="alert-circle-outline" size={16} color={colors.primary} />
-                <Text style={[styles.bulletText, { color: colors.text }]}>
-                  وقتی عکس‌ها و خاطره‌ها دوباره خفه‌ات می‌کنن
-                </Text>
-              </View>
-              <View style={styles.bulletRow}>
-                <Ionicons name="alert-circle-outline" size={16} color={colors.primary} />
-                <Text style={[styles.bulletText, { color: colors.text }]}>
-                  وقتی حس می‌کنی الان می‌لغزی و همه‌چی رو خراب می‌کنی
-                </Text>
-              </View>
-            </View>
 
-            <View
-              style={{
-                marginTop: 16,
-                padding: 10,
-                borderRadius: 10,
-                backgroundColor: colors.background,
-                borderWidth: 1,
-                borderColor: colors.border,
-              }}
-            >
-              <Text
-                style={{
-                  color: colors.text,
-                  fontSize: 12,
-                  textAlign: "right",
-                  lineHeight: 18,
-                }}
-              >
-                برای باز شدن کامل «پناهگاه» و دسترسی به همه‌ی سناریوها،
-                باید پلن PRO را از تب پرداخت فعال کنی.
-              </Text>
-            </View>
+                <Text
+                  style={{
+                    color: colors.text,
+                    opacity: 0.8,
+                    fontSize: 13,
+                    textAlign: "right",
+                    marginTop: 12,
+                    lineHeight: 22,
+                  }}
+                >
+                  پناهگاه جاییه برای وقتی که یهو حالت بد میشه، یا وسوسه می‌شی پیام
+                  بدی، یا احساساتت ناگهانی بهت هجوم میارن.
+                  {"\n\n"}
+                  برای اینکه دوباره به همه‌ی سناریوهای اورژانسی و مسیرهای نجات
+                  دسترسی داشته باشی، پلن ققنوس رو تمدید کن.
+                </Text>
+              </>
+            ) : (
+              <>
+                <View
+                  style={{
+                    flexDirection: "row-reverse",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Ionicons
+                    name="shield-checkmark"
+                    size={22}
+                    color={colors.primary}
+                  />
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontWeight: "900",
+                      fontSize: 15,
+                      textAlign: "right",
+                    }}
+                  >
+                    پناهگاه مخصوص لحظه‌های اورژانسی بعد از جداییه
+                  </Text>
+                </View>
+
+                <Text
+                  style={{
+                    color: colors.text,
+                    opacity: 0.8,
+                    marginTop: 10,
+                    fontSize: 13,
+                    textAlign: "right",
+                    lineHeight: 20,
+                  }}
+                >
+                  هر موقع ناگهانی وسوسه پیام دادن، چک کردن، گریه‌های شدید یا
+                  تنهایی سنگین میاد سراغت… اینجا دقیقاً همون‌جاست که باید بیای.
+                </Text>
+              </>
+            )}
           </View>
         </View>
       ) : (
@@ -268,7 +392,8 @@ export default function Panahgah() {
               />
             </View>
           </View>
-          {/* List */}
+
+          {/* لیست */}
           <FlatList
             data={data}
             keyExtractor={(it) => it.id}
@@ -300,6 +425,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 18, fontWeight: "900" },
   headerBadgeRow: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
+
   headerBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -320,8 +446,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
+
   card: { borderWidth: 1, borderRadius: 16, padding: 14 },
+
   row: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
+
   title: { flex: 1, textAlign: "right", fontWeight: "900" },
 
   lockCard: {
@@ -330,6 +459,7 @@ const styles = StyleSheet.create({
     padding: 16,
     flex: 1,
   },
+
   bulletRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
