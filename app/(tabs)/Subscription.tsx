@@ -19,6 +19,7 @@ import { startPay, verifyPay } from "../../api/pay";
 import * as WebBrowser from "expo-web-browser";
 import { toJalaali } from "jalaali-js";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getPlanStatus } from "../../lib/plan";
 
 type PlanKey = "trial15" | "p30" | "p90" | "p180";
 
@@ -41,6 +42,10 @@ type PayResultState = {
 
 // 🔧 حالت‌های تست UI اشتراک
 type DebugState = "real" | "pro-almost" | "pro-expired";
+
+// نمای نمایش پلن برای UI (هم‌راستا با تب پلکان / ققنوس)
+type PlanView = "free" | "pro" | "expiring" | "expired";
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const plans: PlanOption[] = [
@@ -114,7 +119,6 @@ export default function SubscriptionScreen() {
   const [payingKey, setPayingKey] = useState<PlanKey | null>(null);
   const payingRef = useRef(false);
   const [proFlag, setProFlag] = useState(false);
-  const [localExpire, setLocalExpire] = useState<string | null>(null);
 
   const [payResult, setPayResult] = useState<PayResultState>({
     visible: false,
@@ -144,78 +148,74 @@ export default function SubscriptionScreen() {
     }, [refresh])
   );
 
-  const now = new Date();
-  const rawPlan: string = (me?.plan as string) || "free";
+  // 🔍 منبع واحد وضعیت پلن: getPlanStatus + فلگ لوکال
+  const status = getPlanStatus(me);
+  const flagIsPro = proFlag;
 
-  const serverExpire =
-    (me?.planExpiresAt ??
-      me?.planExpireAt ??
-      me?.planExpire ??
-      me?.proUntil ??
-      me?.expiresAt ??
-      null) as string | null;
+  let planView: PlanView = "free";
+  let daysRemaining: number | null = null;
+  let expireAt: string | null = status.rawExpiresAt ?? null;
 
-  const planExpiresRaw: string | null = localExpire || serverExpire;
-  // باید let باشد تا برای حالت تست اوورراید کنیم
-  let planExpiresAt: string | undefined = planExpiresRaw || undefined;
+  if (status.rawExpiresAt) {
+    if (status.isExpired) {
+      planView = "expired";
+      daysRemaining = 0;
+    } else if (status.isPro || flagIsPro) {
+      const d =
+        typeof status.daysLeft === "number" ? status.daysLeft : null;
+      if (d != null && d > 0 && d <= 7) {
+        planView = "expiring";
+        daysRemaining = d;
+      } else {
+        planView = "pro";
+        daysRemaining = d;
+      }
+    } else {
+      planView = "free";
+    }
+  } else {
+    if (status.isPro || flagIsPro) {
+      planView = "pro";
+    } else {
+      planView = "free";
+    }
+  }
 
-  console.log(
-    "[SUB] plan =",
-    rawPlan,
-    "serverExpire =",
-    serverExpire,
-    "localExpire =",
-    localExpire
-  );
-
-  let baseStatus: "free" | "pro" = "free";
-  if (rawPlan === "pro" || rawPlan === "vip") baseStatus = "pro";
-  if (proFlag) baseStatus = "pro";
-
-  // 🔧 اوورراید برای تست UI
+  // 🔧 اوورراید برای تست UI در همین تب
   if (debugState !== "real") {
-    baseStatus = "pro";
     const nowTs = Date.now();
-
     if (debugState === "pro-almost") {
-      // دو روز تا انقضا
-      planExpiresAt = new Date(nowTs + 2 * DAY_MS).toISOString();
+      planView = "expiring";
+      daysRemaining = 2;
+      expireAt = new Date(nowTs + 2 * DAY_MS).toISOString();
     } else if (debugState === "pro-expired") {
-      // دیروز منقضی شده
-      planExpiresAt = new Date(nowTs - 1 * DAY_MS).toISOString();
+      planView = "expired";
+      daysRemaining = 0;
+      expireAt = new Date(nowTs - 1 * DAY_MS).toISOString();
     }
 
     console.log("[SUB][DEBUG] override status", {
       debugState,
-      planExpiresAt,
+      planView,
+      daysRemaining,
+      expireAt,
     });
   }
 
-  const isExpired =
-    !!planExpiresAt && new Date(planExpiresAt).getTime() < now.getTime();
-
-  const effectivePlan: "free" | "pro" | "expired" =
-    baseStatus === "pro" ? (isExpired ? "expired" : "pro") : "free";
-
-  const daysRemaining = useMemo(() => {
-    if (!planExpiresAt) return null;
-    const diffMs = new Date(planExpiresAt).getTime() - Date.now();
-    if (diffMs <= 0) return 0;
-    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-  }, [planExpiresAt]);
-
-  // حالت نزدیک به انقضا (۱ تا ۷ روز باقی‌مانده)
-  const isAlmostExpired =
-    effectivePlan === "pro" &&
-    typeof daysRemaining === "number" &&
-    daysRemaining > 0 &&
-    daysRemaining <= 7;
-
   const niceExpireText = useMemo(() => {
-    if (!planExpiresAt) return null;
-    const j = formatJalaliDate(planExpiresAt);
-    return j || null;
-  }, [planExpiresAt]);
+    if (!expireAt) return null;
+    return formatJalaliDate(expireAt);
+  }, [expireAt]);
+
+  const isAlmostExpired = planView === "expiring";
+  const isProActive = planView === "pro" || planView === "expiring";
+
+  console.log("[SUB] planView =", planView, {
+    status,
+    flagIsPro,
+    expireAt,
+    daysRemaining,
+  });
 
   async function handleBuy(option: PlanOption) {
     if (!option.amount) {
@@ -304,19 +304,6 @@ export default function SubscriptionScreen() {
         console.log("[SUB] clear local PRO flag");
       }
 
-      const respExpire =
-        data.planExpiresAt ??
-        data.planExpireAt ??
-        data.planExpire ??
-        data.proUntil ??
-        data.expiresAt ??
-        null;
-
-      if (respExpire) {
-        setLocalExpire(respExpire);
-        console.log("[SUB] got expire from verify =", respExpire);
-      }
-
       await refresh().catch(() => {});
 
       setPayResult({
@@ -344,6 +331,32 @@ export default function SubscriptionScreen() {
   const headerBg = "#0B0C10";
   const cardBg = "#111216";
   const border = "#20242C";
+
+  // رنگ و متن بج وضعیت بالا
+  const badgeBg =
+    planView === "expired"
+      ? "#7f1d1d55"
+      : planView === "expiring"
+      ? "#fbbf2455"
+      : planView === "pro"
+      ? "#16a34a33"
+      : "#4B556333";
+
+  const badgeTextColor =
+    planView === "expired"
+      ? "#F87171"
+      : planView === "expiring"
+      ? "#FBBF24"
+      : planView === "pro"
+      ? "#4ADE80"
+      : "#E5E7EB";
+
+  const badgeLabel =
+    planView === "expired"
+      ? "EXPIRED"
+      : planView === "pro" || planView === "expiring"
+      ? "PRO"
+      : "FREE";
 
   return (
     <SafeAreaView
@@ -482,7 +495,7 @@ export default function SubscriptionScreen() {
                   >
                     در حال به‌روزرسانی…
                   </Text>
-                ) : effectivePlan === "pro" ? (
+                ) : isProActive ? (
                   <>
                     <Text
                       style={{
@@ -522,7 +535,7 @@ export default function SubscriptionScreen() {
                         </Text>
                       )}
                   </>
-                ) : effectivePlan === "expired" ? (
+                ) : planView === "expired" ? (
                   <>
                     <Text
                       style={{
@@ -555,7 +568,7 @@ export default function SubscriptionScreen() {
                         textAlign: "right",
                       }}
                     >
-                     همه بخش‌های حالت پرو الان از دسترس تو خارج شده
+                      همه بخش‌های حالت پرو الان از دسترس تو خارج شده
                     </Text>
                   </>
                 ) : (
@@ -580,33 +593,17 @@ export default function SubscriptionScreen() {
                   paddingHorizontal: 18,
                   paddingVertical: 8,
                   borderRadius: 999,
-                  backgroundColor: isAlmostExpired
-                    ? "#fbbf2455" // زرد شفاف وقتی نزدیک انقضاست
-                    : effectivePlan === "pro"
-                    ? "#16a34a33" // سبز شفاف
-                    : effectivePlan === "expired"
-                    ? "#7f1d1d55" // قرمز شفاف
-                    : "#4B556333", // خاکستری برای free
+                  backgroundColor: badgeBg,
                 }}
               >
                 <Text
                   style={{
-                    color: isAlmostExpired
-                      ? "#FBBF24" // زرد
-                      : effectivePlan === "pro"
-                      ? "#4ADE80" // سبز
-                      : effectivePlan === "expired"
-                      ? "#F87171" // قرمز روشن
-                      : "#E5E7EB", // free
+                    color: badgeTextColor,
                     fontSize: 13,
                     fontWeight: "900",
                   }}
                 >
-                  {effectivePlan === "pro"
-                    ? "PRO"
-                    : effectivePlan === "expired"
-                    ? "EXPIRED"
-                    : "FREE"}
+                  {badgeLabel}
                 </Text>
               </View>
             </View>
@@ -709,9 +706,9 @@ export default function SubscriptionScreen() {
 
               let ctaLabel = "شروع اشتراک";
               if (p.amount) {
-                if (effectivePlan === "pro") {
+                if (planView === "pro" || planView === "expiring") {
                   ctaLabel = "تغییر / تمدید اشتراک";
-                } else if (effectivePlan === "expired") {
+                } else if (planView === "expired") {
                   ctaLabel = "تمدید اشتراک";
                 } else {
                   ctaLabel = "شروع اشتراک";
