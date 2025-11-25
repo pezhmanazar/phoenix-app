@@ -8,13 +8,14 @@ export type PlanStatus = {
   rawPlan: EffectivePlan;
   /** تاریخ انقضای خام (ممکن است null باشد) */
   rawExpiresAt: string | null;
-
   /** پلن نهایی بعد از درنظر گرفتن انقضا */
   effectivePlan: EffectivePlan;
   /** آیا عملاً پرو (یا VIP) است؟ */
   isPro: boolean;
   /** آیا پلن منقضی شده است؟ */
   isExpired: boolean;
+  /** تعداد روز باقیمانده تا انقضا؛ اگر تاریخ نداشته باشیم → null */
+  daysLeft: number | null;
 };
 
 /** پلن خام را از یوزر بگیر (اگر undefined بود → free) */
@@ -32,27 +33,37 @@ function safeDate(input?: string | null): Date | null {
 
 /**
  * محاسبه وضعیت پلن از روی رکورد یوزر
- * - اگر planExpiresAt نداشته باشد → فرض می‌کنیم پلن فعلی آزاد است (free) مگر این‌که بعداً قواعد جدید بگذاریم
+ * - اگر planExpiresAt نداشته باشد → پلن می‌تواند دائمی باشد (مثلاً PRO دائمی) یا free
  * - اگر planExpiresAt در گذشته باشد → پلن موثر free
  */
-export function getPlanStatus(user?: UserRecord | null, now: Date = new Date()): PlanStatus {
+export function getPlanStatus(
+  user?: UserRecord | null,
+  now: Date = new Date()
+): PlanStatus {
   const rawPlan = getRawPlan(user);
   const rawExpiresAt = user?.planExpiresAt ?? null;
-
   const exp = safeDate(rawExpiresAt);
   const hasExpiry = !!exp;
 
   let isExpired = false;
+  let daysLeft: number | null = null;
+
   if (hasExpiry && exp) {
-    isExpired = exp.getTime() <= now.getTime();
+    const diffMs = exp.getTime() - now.getTime();
+    const d = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    // اگر گذشته باشد، روز باقیمانده را ۰ درنظر می‌گیریم
+    daysLeft = d >= 0 ? d : 0;
+    isExpired = diffMs <= 0;
   }
 
   let effectivePlan: EffectivePlan = "free";
+
   if (!hasExpiry) {
-    // اگر هیچ تاریخ انقضایی نداریم، فعلاً فقط free را معتبر می‌گیریم
+    // بدون تاریخ انقضا → پلن می‌تواند واقعاً PRO/VIP دائمی باشد
     effectivePlan = rawPlan === "pro" || rawPlan === "vip" ? rawPlan : "free";
+    // در این حالت daysLeft = null می‌ماند
   } else {
-    // اگر تاریخ داریم و منقضی نشده:
+    // اگر تاریخ داریم:
     if (!isExpired) {
       effectivePlan = rawPlan;
     } else {
@@ -68,6 +79,7 @@ export function getPlanStatus(user?: UserRecord | null, now: Date = new Date()):
     effectivePlan,
     isPro,
     isExpired,
+    daysLeft,
   };
 }
 

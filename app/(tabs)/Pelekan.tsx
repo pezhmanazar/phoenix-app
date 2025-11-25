@@ -45,8 +45,13 @@ type Progress = {
   isPro: boolean;
 };
 
-type PlanView = "free" | "pro" | "expired";
-type DebugState = "real" | "force-pro" | "force-free" | "force-expired";
+type PlanView = "free" | "pro" | "expired" | "expiring";
+type DebugState =
+  | "real"
+  | "force-pro"
+  | "force-free"
+  | "force-expired"
+  | "force-expiring";
 
 const PROGRESS_KEY = "Pelekan.progress.v1";
 /** فلگ مستقل برای پرو شدن از طرف paytest / پرداخت */
@@ -117,13 +122,14 @@ export default function PelekanScreen() {
 
   const [planView, setPlanView] = useState<PlanView>("free");
   const [debugState, setDebugState] = useState<DebugState>("real");
+  const [expiringDaysLeft, setExpiringDaysLeft] = useState<number | null>(null);
 
   // مودال قشنگ برای FREE / EXPIRED
   const [planInfoModal, setPlanInfoModal] = useState<null | "free" | "expired">(
     null
   );
 
-  const isProPlan = planView === "pro";
+  const isProPlan = planView === "pro" || planView === "expiring";
 
   // بارگذاری اولیه از AsyncStorage + محاسبه وضعیت پلن با getPlanStatus
   useEffect(() => {
@@ -148,28 +154,51 @@ export default function PelekanScreen() {
         const status = getPlanStatus(me);
         const flagIsPro = flag === "1";
 
-        // ۳) تبدیل به PlanView قبل از دیباگ
         let view: PlanView = "free";
+        let expDays: number | null = null;
+
         if (status.rawExpiresAt) {
-          // پلنی با تاریخ داریم
           if (status.isExpired) {
             view = "expired";
+            expDays = 0;
           } else if (status.isPro || flagIsPro) {
-            view = "pro";
+            // پلن فعّال داریم، ببین چند روز مانده
+            const d = typeof status.daysLeft === "number" ? status.daysLeft : null;
+            if (d != null && d > 0 && d <= 7) {
+              view = "expiring";
+              expDays = d;
+            } else {
+              view = "pro";
+              expDays = d;
+            }
           } else {
             view = "free";
           }
         } else {
           // بدون تاریخ انقضا → فقط پرو/وی‌آی‌پی فعال = pro
-          view = status.isPro || flagIsPro ? "pro" : "free";
+          if (status.isPro || flagIsPro) {
+            view = "pro";
+          } else {
+            view = "free";
+          }
         }
 
         // ۴) اوورراید دیباگ
-        if (debugState === "force-pro") view = "pro";
-        else if (debugState === "force-free") view = "free";
-        else if (debugState === "force-expired") view = "expired";
+        if (debugState === "force-pro") {
+          view = "pro";
+          expDays = null;
+        } else if (debugState === "force-free") {
+          view = "free";
+          expDays = null;
+        } else if (debugState === "force-expired") {
+          view = "expired";
+          expDays = 0;
+        } else if (debugState === "force-expiring") {
+          view = "expiring";
+          expDays = 4; // عدد نمایشی برای تست
+        }
 
-        const finalIsPro = view === "pro";
+        const finalIsPro = view === "pro" || view === "expiring";
 
         const merged: Progress = {
           ...base,
@@ -178,19 +207,23 @@ export default function PelekanScreen() {
 
         setProgress(merged);
         setPlanView(view);
+        setExpiringDaysLeft(expDays);
 
         console.log("PELEKAN INIT", {
           plan: status.rawPlan,
           rawExpiresAt: status.rawExpiresAt,
           isExpired: status.isExpired,
+          daysLeft: status.daysLeft,
           flag,
           debugState,
           planView: view,
+          expiringDaysLeft: expDays,
         });
       } catch (e) {
         console.log("PELEKAN INIT ERR", e);
         setProgress(defaultProgress);
         setPlanView("free");
+        setExpiringDaysLeft(null);
       } finally {
         setLoading(false);
       }
@@ -209,31 +242,58 @@ export default function PelekanScreen() {
           const flagIsPro = flag === "1";
 
           let view: PlanView = "free";
+          let expDays: number | null = null;
+
           if (status.rawExpiresAt) {
             if (status.isExpired) {
               view = "expired";
+              expDays = 0;
             } else if (status.isPro || flagIsPro) {
-              view = "pro";
+              const d = typeof status.daysLeft === "number" ? status.daysLeft : null;
+              if (d != null && d > 0 && d <= 7) {
+                view = "expiring";
+                expDays = d;
+              } else {
+                view = "pro";
+                expDays = d;
+              }
             } else {
               view = "free";
             }
           } else {
-            view = status.isPro || flagIsPro ? "pro" : "free";
+            if (status.isPro || flagIsPro) {
+              view = "pro";
+            } else {
+              view = "free";
+            }
           }
 
-          if (debugState === "force-pro") view = "pro";
-          else if (debugState === "force-free") view = "free";
-          else if (debugState === "force-expired") view = "expired";
+          if (debugState === "force-pro") {
+            view = "pro";
+            expDays = null;
+          } else if (debugState === "force-free") {
+            view = "free";
+            expDays = null;
+          } else if (debugState === "force-expired") {
+            view = "expired";
+            expDays = 0;
+          } else if (debugState === "force-expiring") {
+            view = "expiring";
+            expDays = 4;
+          }
 
           if (!cancelled) {
             setPlanView(view);
+            setExpiringDaysLeft(expDays);
             console.log("PELEKAN FOCUS", {
               plan: status.rawPlan,
               rawExpiresAt: status.rawExpiresAt,
               isExpired: status.isExpired,
+              daysLeft: status.daysLeft,
               flag,
               debugState,
               planView: view,
+              expiringDaysLeft: expDays,
             });
           }
         } catch (e) {
@@ -258,7 +318,9 @@ export default function PelekanScreen() {
     "planView =",
     planView,
     "debugState =",
-    debugState
+    debugState,
+    "expiringDaysLeft =",
+    expiringDaysLeft
   );
 
   // پالت تطبیقی روشن/تاریک
@@ -451,10 +513,10 @@ export default function PelekanScreen() {
             <TouchableOpacity
               activeOpacity={0.9}
               onPress={() => {
-                if (planView !== "pro") {
-  setPlanInfoModal(planView === "expired" ? "expired" : "free");
-  return;
-} else {
+                if (!isProPlan) {
+                  setPlanInfoModal(planView === "expired" ? "expired" : "free");
+                  return;
+                } else {
                   Alert.alert("تبریک ✨", "پلکان برای تو باز است؛ از روزها شروع کن.");
                 }
               }}
@@ -691,9 +753,10 @@ export default function PelekanScreen() {
             {(
               [
                 { key: "real", label: "داده واقعی" },
-                { key: "force-pro", label: "PRO فیک" },
                 { key: "force-free", label: "FREE فیک" },
+                { key: "force-pro", label: "PRO فیک" },
                 { key: "force-expired", label: "EXPIRED فیک" },
+                { key: "force-expiring", label: "PRO (در حال انقضا) فیک" },
               ] as { key: DebugState; label: string }[]
             ).map((opt) => {
               const active = debugState === opt.key;
@@ -727,7 +790,12 @@ export default function PelekanScreen() {
         </View>
       </View>
 
-      <Header planView={planView} gems={progress.gems} streak={progress.streak} />
+      <Header
+        planView={planView}
+        gems={progress.gems}
+        streak={progress.streak}
+        expiringDaysLeft={expiringDaysLeft}
+      />
 
       <FlatList
         data={pathItems}
@@ -777,10 +845,10 @@ export default function PelekanScreen() {
             </View>
 
             <Text style={styles.modalBody}>
-  {planInfoModal === "expired"
-    ? "اشتراک ققنوس تو منقضی شده.\nبرای باز شدن پله‌ها و ادامهٔ مسیر، پلن رو تمدید کن."
-    : "در حال حاضر روی نسخهٔ رایگان هستی.\nبرای باز شدن پله‌ها و تمرین‌ها، پلن PRO را فعال کن."}
-</Text>
+              {planInfoModal === "expired"
+                ? "اشتراک ققنوس تو منقضی شده.\nبرای باز شدن پله‌ها و ادامهٔ مسیر، پلن رو تمدید کن."
+                : "در حال حاضر روی نسخهٔ رایگان هستی.\nبرای باز شدن پله‌ها و تمرین‌ها، پلن PRO را فعال کن."}
+            </Text>
 
             <TouchableOpacity
               activeOpacity={0.85}
@@ -801,26 +869,35 @@ function Header({
   planView,
   gems,
   streak,
+  expiringDaysLeft,
 }: {
   planView: PlanView;
   gems: number;
   streak: number;
+  expiringDaysLeft: number | null;
 }) {
   const { colors } = useTheme();
 
   const badgeBg =
     planView === "pro"
       ? "#F59E0B"
+      : planView === "expiring"
+      ? "#F97316"
       : planView === "expired"
       ? "#DC2626"
       : "#9CA3AF";
 
   const badgeLabel =
-    planView === "pro"
+    planView === "pro" || planView === "expiring"
       ? "PRO"
       : planView === "expired"
       ? "EXPIRED"
       : "FREE";
+
+  const showExpiring =
+    planView === "expiring" &&
+    expiringDaysLeft != null &&
+    expiringDaysLeft > 0;
 
   return (
     <View
@@ -833,6 +910,11 @@ function Header({
         <View style={[styles.badge, { backgroundColor: badgeBg }]}>
           <Text style={styles.badgeText}>{badgeLabel}</Text>
         </View>
+        {showExpiring && (
+          <Text style={styles.expiringText}>
+            {expiringDaysLeft} روز تا پایان اشتراک
+          </Text>
+        )}
       </View>
       <View style={styles.topItem}>
         <Ionicons name="diamond" size={18} color="#60A5FA" />
@@ -863,6 +945,11 @@ const styles = StyleSheet.create({
   topText: { fontWeight: "900" },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   badgeText: { color: "#ffffff", fontWeight: "900", fontSize: 12 },
+  expiringText: {
+    color: "#F97316",
+    fontWeight: "900",
+    fontSize: 11,
+  },
 
   // هدر هر پله
   stepHeaderCard: {

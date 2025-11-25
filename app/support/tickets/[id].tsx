@@ -1,12 +1,12 @@
 // app/support/tickets/[id].tsx
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "@react-navigation/native";
+import { useTheme, useFocusEffect } from "@react-navigation/native";
 import {
   useLocalSearchParams,
   useRouter,
   useNavigation,
   Stack,
-} from "expo-router"; // ← Stack اضافه شد
+} from "expo-router";
 import React, {
   useCallback,
   useEffect,
@@ -42,6 +42,7 @@ import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import BACKEND_URL from "../../../constants/backend";
 import { useUser } from "../../../hooks/useUser";
+import { getPlanStatus } from "../../../lib/plan";
 
 /* ===== انواع ===== */
 type MessageType = "text" | "voice" | "image" | "file";
@@ -69,6 +70,11 @@ type Ticket = {
   messages: Message[];
 };
 
+type PlanView = "free" | "pro" | "expiring" | "expired";
+
+const PRO_FLAG_KEY = "phoenix_is_pro";
+const PLAN_DEBUG_KEY = "phoenix_plan_debug";
+
 function detectType(m?: string | null, url?: string | null): MessageType {
   const mime = (m || "").toLowerCase();
   if (mime.startsWith("image/")) return "image";
@@ -93,7 +99,7 @@ function detectType(m?: string | null, url?: string | null): MessageType {
   return "text";
 }
 
-/* ====== ⬇️ جدید: گرفتن نام/شناسه کاربر از استوریج ====== */
+/* گرفتن نام/شناسه کاربر از استوریج */
 async function getUserIdentity() {
   try {
     const keys = ["user_profile", "profile", "me", "phoenix_profile"];
@@ -116,7 +122,7 @@ async function getUserIdentity() {
   }
 }
 
-/* ⬇️ تابع کمکی برای خواندن پیام خطا؛ جلوگیری از [object Object] */
+/* خواندن پیام خطا */
 function extractErrorMessage(err: any, fallback: string): string {
   if (!err) return fallback;
   if (typeof err === "string") return err;
@@ -445,15 +451,15 @@ function VoicePlayer({
 /* ================= Composer ================= */
 const MAX_VOICE_MS = 5 * 60 * 1000;
 
-// ⬇️ کمک‌تابع: آیا شناسه در URL در واقع نوع تیکت است؟
+// آیا شناسه در URL در واقع نوع تیکت است؟
 const parseTicketType = (idLike?: string): "tech" | "therapy" | null =>
   idLike === "tech" || idLike === "therapy" ? idLike : null;
 
 function Composer({
   ticketId,
-  ticketType, // ← اگر مقدار داشته باشد یعنی هنوز تیکتی ساخته نشده
-  isPro, // ← جدید
-  onTicketCreated, // ← بعد از ساخت، آیدی جدید را برگردان
+  ticketType,
+  isPro,
+  onTicketCreated,
   onSent,
   onMeasureHeight,
 }: {
@@ -483,7 +489,6 @@ function Composer({
   const isTherapy = ticketType === "therapy";
   const lockedForPlan = isTherapy && !isPro;
 
-  // ⬇️ گارد پلن؛ اگر قفل باشه، Alert می‌دهد و ارسال را قطع می‌کند
   const planGuard = () => {
     if (!lockedForPlan) return false;
     Alert.alert(
@@ -566,9 +571,8 @@ function Composer({
     setRecMs(0);
   };
 
-  // ⬇️ ساخت تیکت در اولین ارسال (اگر ticketType داده شده باشد)
   const createTicketIfNeeded = async (textFallback: string) => {
-    if (!ticketType) return ticketId; // تیکت داریم
+    if (!ticketType) return ticketId;
     const { openedById, openedByName } = await getUserIdentity();
     const res = await fetch(`${BACKEND_URL}/api/public/tickets/send`, {
       method: "POST",
@@ -578,7 +582,6 @@ function Composer({
       },
       body: JSON.stringify({
         type: ticketType,
-        // اگر متن نداریم، یک متن جایگزین غیرخالی بفرست تا بک‌اند رد نکند
         text:
           textFallback && textFallback.trim()
             ? textFallback.trim()
@@ -606,7 +609,6 @@ function Composer({
       setSending(true);
       const textPayload = text.trim();
 
-      // اگر هنوز تیکتی نداریم، همین پیامِ متنی اولین پیام باشد
       let targetId = ticketId;
       if (ticketType) {
         targetId = await createTicketIfNeeded(textPayload);
@@ -694,7 +696,6 @@ function Composer({
     try {
       setSending(true);
 
-      // اگر تیکت نداریم، اول بسازیم (با یک متن کوتاه یا متن موجود)
       let targetId = ticketId;
       if (ticketType) {
         const firstText = hasText ? text.trim() : "ضمیمه";
@@ -702,13 +703,11 @@ function Composer({
       }
 
       const fd = await buildForm();
-      // بک‌اند public: reply-upload
       let { res, json } = await tryPost(
         `${BACKEND_URL}/api/public/tickets/${targetId}/reply-upload`,
         fd
       );
       if (res.status === 404 || json?.error === "not_found") {
-        // تلاش دوم: fallback به reply ساده
         const fd2 = await buildForm();
         ({ res, json } = await tryPost(
           `${BACKEND_URL}/api/public/tickets/${targetId}/reply`,
@@ -914,9 +913,7 @@ async function savePins(ticketId: string, ids: string[]) {
   } catch {}
 }
 
-const PRO_FLAG_KEY = "phoenix_is_pro";
-
-/* ===== تاریخ جلالی خیلی ریز ===== */
+/* تاریخ جلالی */
 function prettyTsJalali(input?: string) {
   if (!input) return null;
   const d = new Date(input);
@@ -945,10 +942,11 @@ export default function TicketDetail() {
   const insets = useSafeAreaInsets();
 
   const { me } = useUser();
-  const [isProLocal, setIsProLocal] = useState(false);
-  const [proLoaded, setProLoaded] = useState(false); // ⬅️ برای اینکه قبل از لود پرو، تصمیم نگیریم
 
-  // ⬇️ اگر کاربر از مسیر نوع وارد شده باشد (tech/therapy)
+  const [planView, setPlanView] = useState<PlanView>("free");
+  const [planLoaded, setPlanLoaded] = useState(false);
+  const [debugMode, setDebugMode] = useState<"auto" | PlanView>("auto");
+
   const typeFromParam = parseTicketType(id);
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
@@ -977,34 +975,80 @@ export default function TicketDetail() {
     };
   }, []);
 
-  // ⬅️ تشخیص پرو بودن
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
+  // سنک وضعیت پلن
+  const syncPlanView = useCallback(async () => {
+    try {
+      const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
+      const flagIsPro = flag === "1";
+      const status = getPlanStatus(me);
+
+      let view: PlanView = "free";
+
+      const expIso = status.rawExpiresAt;
+      let isExpSoon = false;
+      if (expIso) {
+        const exp = new Date(expIso);
+        if (!isNaN(exp.getTime())) {
+          const diff = exp.getTime() - Date.now();
+          const oneDay = 24 * 60 * 60 * 1000;
+          isExpSoon = diff > 0 && diff <= 3 * oneDay;
+        }
+      }
+
+      if (status.rawExpiresAt) {
+        if (status.isExpired) {
+          view = "expired";
+        } else if (status.isPro || flagIsPro) {
+          view = isExpSoon ? "expiring" : "pro";
+        } else {
+          view = "free";
+        }
+      } else {
+        view = status.isPro || flagIsPro ? "pro" : "free";
+      }
+
+      let dbgMode: "auto" | PlanView = "auto";
       try {
-        const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
-        const flagIsPro = flag === "1";
-        const serverIsPro = me?.plan === "pro" || me?.plan === "vip";
-        if (!cancelled) {
-          setIsProLocal(flagIsPro || serverIsPro);
+        const dbgRaw = await AsyncStorage.getItem(PLAN_DEBUG_KEY);
+        if (
+          dbgRaw === "free" ||
+          dbgRaw === "pro" ||
+          dbgRaw === "expiring" ||
+          dbgRaw === "expired"
+        ) {
+          dbgMode = dbgRaw;
+          view = dbgMode;
+        } else {
+          dbgMode = "auto";
         }
       } catch {
-        if (!cancelled) {
-          setIsProLocal(false);
-        }
-      } finally {
-        if (!cancelled) setProLoaded(true);
+        dbgMode = "auto";
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [me?.plan]);
+
+      setDebugMode(dbgMode);
+      setPlanView(view);
+    } catch (e) {
+      console.log("TICKET PLAN ERR", e);
+      setPlanView("free");
+      setDebugMode("auto");
+    } finally {
+      setPlanLoaded(true);
+    }
+  }, [me]);
+
+  useEffect(() => {
+    syncPlanView();
+  }, [syncPlanView]);
+
+  useFocusEffect(
+    useCallback(() => {
+      syncPlanView();
+    }, [syncPlanView])
+  );
 
   const fetchTicket = useCallback(
     async (silent: boolean = false) => {
       if (typeFromParam) {
-        // وقتی هنوز تیکتی وجود ندارد چیزی برای گرفتن نداریم
         if (!silent) setLoading(false);
         return;
       }
@@ -1060,7 +1104,7 @@ export default function TicketDetail() {
   }, [id, typeFromParam]);
 
   const togglePin = async (mid: string) => {
-    if (typeFromParam || !id) return; // هنوز آی‌دی واقعی نداریم
+    if (typeFromParam || !id) return;
     const exist = pins.includes(mid);
     const next = exist ? pins.filter((x) => x !== mid) : [...pins, mid];
     setPins(next);
@@ -1147,8 +1191,104 @@ export default function TicketDetail() {
   const chatType = (ticket?.type || typeFromParam) as "tech" | "therapy" | null;
   const isTherapyChat = chatType === "therapy";
 
-  // 🔒 اگر چت درمانگر است و پرو نیست، هیچ‌وقت وارد محتوای چت نشو
-  if (proLoaded && isTherapyChat && !isProLocal) {
+  const isProPlan = planView === "pro" || planView === "expiring";
+
+  // رنگ بج
+  const badgeBg =
+    planView === "pro"
+      ? "#22C55E"
+      : planView === "expiring"
+      ? "#F97316"
+      : planView === "expired"
+      ? "#DC2626"
+      : "#4B5563";
+
+  const badgeLabel =
+    planView === "free"
+      ? "FREE"
+      : planView === "expired"
+      ? "EXPIRED"
+      : "PRO";
+
+  const headerTitle =
+    chatType === "therapy"
+      ? "چت با درمانگر ققنوس"
+      : "چت با پشتیبانی فنی ققنوس";
+
+  const changeDebugMode = useCallback(
+    async (mode: "auto" | PlanView) => {
+      try {
+        await AsyncStorage.setItem(PLAN_DEBUG_KEY, mode);
+      } catch {}
+      await syncPlanView();
+    },
+    [syncPlanView]
+  );
+
+  const DebugLine =
+    __DEV__ && (
+      <View style={{ paddingHorizontal: 12, paddingBottom: 4 }}>
+        <Text
+          style={{
+            color: "#6b7280",
+            fontSize: 10,
+            textAlign: "center",
+            marginBottom: 4,
+          }}
+        >
+          {`planView=${planView} | serverPlan=${me?.plan ?? "none"} | debug=${debugMode}`}
+        </Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{
+            justifyContent: "center",
+            alignItems: "center",
+            columnGap: 6,
+            paddingBottom: 2,
+          }}
+        >
+          {[
+            { key: "auto" as const, label: "AUTO" },
+            { key: "free" as const, label: "FREE" },
+            { key: "pro" as const, label: "PRO" },
+            { key: "expiring" as const, label: "EXPIRING" },
+            { key: "expired" as const, label: "EXPIRED" },
+          ].map((opt) => {
+            const active = debugMode === opt.key;
+            return (
+              <TouchableOpacity
+                key={opt.key}
+                onPress={() => changeDebugMode(opt.key)}
+                style={{
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: active ? "#2563eb" : "#d1d5db",
+                  backgroundColor: active ? "#dbeafe" : "#f9fafb",
+                }}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={{
+                    fontSize: 10,
+                    fontWeight: "800",
+                    color: active ? "#1d4ed8" : "#4b5563",
+                  }}
+                >
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+    );
+
+  // حالت قفلِ چت درمانگر
+  if (planLoaded && isTherapyChat && !isProPlan) {
+    const isExpiredView = planView === "expired";
     return (
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -1158,6 +1298,7 @@ export default function TicketDetail() {
         <Stack.Screen options={{ headerShown: false }} />
 
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+          {/* Header: عنوان راست، بج چپ عنوان */}
           <View
             style={[styles.customHeader, { borderBottomColor: colors.border }]}
           >
@@ -1172,14 +1313,33 @@ export default function TicketDetail() {
                 color={colors.text}
               />
             </TouchableOpacity>
-            <Text
-              style={[styles.headerText, { color: colors.text }]}
-              numberOfLines={1}
+
+            <View
+              style={{
+                flex: 1,
+                flexDirection: "row-reverse",
+                alignItems: "center",
+                justifyContent: "flex-start",
+                columnGap: 8,
+              }}
             >
-              چت با درمانگر ققنوس
-            </Text>
-            <View style={styles.headerBack} />
+              <Text
+                style={[styles.headerText, { color: colors.text }]}
+                numberOfLines={1}
+              >
+                چت با درمانگر ققنوس
+              </Text>
+              <View
+                style={[styles.planBadge, { backgroundColor: badgeBg }]}
+              >
+                <Text style={styles.planBadgeText}>{badgeLabel}</Text>
+              </View>
+            </View>
+
+            <View style={{ width: 32 }} />
           </View>
+
+          {DebugLine}
 
           <View
             style={{
@@ -1198,11 +1358,9 @@ export default function TicketDetail() {
                 marginBottom: 16,
               }}
             >
-              دسترسی به چت مستقیم با درمانگر ققنوس فقط برای کاربرانی فعاله که
-              اشتراک PRO را از تب «پرداخت» فعال کرده‌اند.
-              {"\n\n"}
-              اگر فعلاً اشتراک نداری، می‌تونی از «پشتیبان هوشمند» یا «پشتیبانی
-              فنی» کمک بگیری.
+              {isExpiredView
+                ? "اشتراک PRO ققنوس منقضی شده و فعلاً دسترسی به چت مستقیم با درمانگر برایت قفله.\n\nبرای باز شدن دوباره این بخش، اشتراک را از تب «پرداخت» تمدید کن. در این فاصله می‌توانی از «پشتیبان هوشمند» یا «پشتیبانی فنی» استفاده کنی."
+                : "دسترسی به چت مستقیم با درمانگر ققنوس فقط برای کاربرانی فعاله که اشتراک PRO را از تب «پرداخت» فعال کرده‌اند.\n\nاگر فعلاً اشتراک نداری، می‌تونی از «پشتیبان هوشمند» یا «پشتیبانی فنی» کمک بگیری."}
             </Text>
 
             <TouchableOpacity
@@ -1227,8 +1385,7 @@ export default function TicketDetail() {
     );
   }
 
-  // تا وقتی وضعیت پرو لود نشده، یه لودینگ ساده
-  if (!proLoaded) {
+  if (!planLoaded) {
     return (
       <>
         <Stack.Screen options={{ headerShown: false }} />
@@ -1408,10 +1565,6 @@ export default function TicketDetail() {
   };
 
   const hasMessages = !!ticket?.messages?.length;
-  const headerTitle =
-    chatType === "therapy"
-      ? "چت با درمانگر ققنوس"
-      : "چت با پشتیبانی فنی ققنوس";
 
   return (
     <KeyboardAvoidingView
@@ -1422,6 +1575,7 @@ export default function TicketDetail() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+        {/* Header مشترک: عنوان راست، بج چپ عنوان */}
         <View
           style={[styles.customHeader, { borderBottomColor: colors.border }]}
         >
@@ -1436,14 +1590,36 @@ export default function TicketDetail() {
               color={colors.text}
             />
           </TouchableOpacity>
-          <Text
-            style={[styles.headerText, { color: colors.text }]}
-            numberOfLines={1}
+
+          <View
+            style={{
+              flex: 1,
+              flexDirection: "row-reverse",
+              alignItems: "center",
+              justifyContent: "flex-start",
+              columnGap: 8,
+            }}
           >
-            {headerTitle}
-          </Text>
-          <View style={styles.headerBack} />
+            <Text
+              style={[styles.headerText, { color: colors.text }]}
+              numberOfLines={1}
+            >
+              {headerTitle}
+            </Text>
+
+            {isTherapyChat && (
+              <View
+                style={[styles.planBadge, { backgroundColor: badgeBg }]}
+              >
+                <Text style={styles.planBadgeText}>{badgeLabel}</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={{ width: 32 }} />
         </View>
+
+        {DebugLine}
 
         {pinnedList.length ? (
           <ScrollView
@@ -1531,7 +1707,7 @@ export default function TicketDetail() {
           ]}
           pointerEvents="box-none"
         >
-          {chatType === "therapy" && !isProLocal && (
+          {chatType === "therapy" && !isProPlan && (
             <View
               style={{
                 marginBottom: 8,
@@ -1561,11 +1737,9 @@ export default function TicketDetail() {
           <Composer
             ticketId={String(id)}
             ticketType={typeFromParam}
-            isPro={isProLocal}
+            isPro={isProPlan}
             onTicketCreated={(newId) => {
-              // مسیر را به آیدی واقعی تیکت عوض کن
               router.replace(`/support/tickets/${newId}`);
-              // پین‌ها را برای آیدی جدید لود کن
               loadPins(newId).then(setPins);
             }}
             onSent={() => {
@@ -1598,8 +1772,27 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderBottomWidth: 1,
   },
-  headerBack: { width: 40, alignItems: "center", justifyContent: "center", padding: 6 },
-  headerText: { fontSize: 17, fontWeight: "900", flex: 1, textAlign: "center" },
+  headerBack: {
+    width: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 6,
+  },
+  headerText: {
+    fontSize: 17,
+    fontWeight: "900",
+  },
+
+  planBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  planBadgeText: {
+    color: "#111827",
+    fontWeight: "900",
+    fontSize: 10,
+  },
 
   pinBar: {
     borderBottomWidth: StyleSheet.hairlineWidth,

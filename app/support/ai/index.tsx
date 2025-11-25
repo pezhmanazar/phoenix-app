@@ -25,6 +25,7 @@ import { v4 as uuidv4 } from "uuid";
 import BACKEND_URL from "../../../constants/backend";
 import { useUser } from "../../../hooks/useUser";
 import { useRouter } from "expo-router";
+import { getPlanStatus } from "../../../lib/plan";
 
 type Msg = { id: string; role: "user" | "assistant"; content: string; ts: number };
 
@@ -32,6 +33,14 @@ const K_AI_HISTORY = "phoenix.ai.history.v1";
 const K_AI_MOOD = "phoenix.ai.mood.v1";
 const K_AI_DAILY_LIMIT = "phoenix.ai.dailyLimit.v1";
 const PRO_FLAG_KEY = "phoenix_is_pro";
+
+type PlanView = "free" | "pro" | "expired";
+type DebugState =
+  | "real"
+  | "force-free"
+  | "force-pro"
+  | "force-pro-near"
+  | "force-expired";
 
 const bubble = (mine: boolean) => ({
   alignSelf: mine ? ("flex-end" as const) : ("flex-start" as const),
@@ -156,25 +165,77 @@ export default function AIChatSupport() {
     })();
   }, []);
 
-  // وضعیت پرو
+  // وضعیت پلن (مثل تب‌ها)
   const { me } = useUser();
-  const [isProLocal, setIsProLocal] = useState(false);
-  const [loadingPro, setLoadingPro] = useState(true);
+  const [planView, setPlanView] = useState<PlanView>("free");
+  const [daysLeft, setDaysLeft] = useState<number | null>(null);
+  const [debugState, setDebugState] = useState<DebugState>("real");
+  const [loadingPlan, setLoadingPlan] = useState(true);
 
+  const isProPlan = planView === "pro";
+  const isNearExpire =
+    planView === "pro" && daysLeft != null && daysLeft > 0 && daysLeft <= 7;
+
+  // محاسبه وضعیت پلن + دیباگ
   useEffect(() => {
     (async () => {
       try {
         const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
+        const status = getPlanStatus(me);
         const flagIsPro = flag === "1";
-        const serverIsPro = me?.plan === "pro" || me?.plan === "vip";
-        setIsProLocal(flagIsPro || serverIsPro);
-      } catch {
-        setIsProLocal(false);
+
+        let view: PlanView = "free";
+        let localDaysLeft: number | null = status.daysLeft ?? null;
+
+        if (status.rawExpiresAt) {
+          if (status.isExpired) {
+            view = "expired";
+          } else if (status.isPro || flagIsPro) {
+            view = "pro";
+          } else {
+            view = "free";
+          }
+        } else {
+          view = status.isPro || flagIsPro ? "pro" : "free";
+        }
+
+        // دیباگ
+        if (debugState === "force-free") {
+          view = "free";
+          localDaysLeft = null;
+        } else if (debugState === "force-pro") {
+          view = "pro";
+          localDaysLeft = 30;
+        } else if (debugState === "force-pro-near") {
+          view = "pro";
+          localDaysLeft = 4;
+        } else if (debugState === "force-expired") {
+          view = "expired";
+          localDaysLeft = 0;
+        }
+
+        setPlanView(view);
+        setDaysLeft(localDaysLeft);
+
+        console.log("AI SUPPORT PLAN INIT", {
+          rawPlan: status.rawPlan,
+          rawExpiresAt: status.rawExpiresAt,
+          isExpired: status.isExpired,
+          daysLeft: status.daysLeft,
+          flag,
+          debugState,
+          planView: view,
+          localDaysLeft,
+        });
+      } catch (e) {
+        console.log("AI SUPPORT PLAN ERR", e);
+        setPlanView("free");
+        setDaysLeft(null);
       } finally {
-        setLoadingPro(false);
+        setLoadingPlan(false);
       }
     })();
-  }, [me?.plan]);
+  }, [me, debugState]);
 
   // پیام‌ها
   const [messages, setMessages] = useState<Msg[]>([
@@ -204,7 +265,7 @@ export default function AIChatSupport() {
   const [dailyUsage, setDailyUsage] = useState<DailyUsage | null>(null);
 
   const reachedLimit =
-    !isProLocal &&
+    !isProPlan &&
     dailyUsage != null &&
     dailyUsage.date === todayId() &&
     dailyUsage.count >= 3;
@@ -261,7 +322,7 @@ export default function AIChatSupport() {
 
   // افزایش شمارش روزانه
   const bumpDailyUsage = () => {
-    if (isProLocal) return;
+    if (isProPlan) return;
     const today = todayId();
     setDailyUsage((prev) => {
       let next: DailyUsage;
@@ -414,16 +475,57 @@ export default function AIChatSupport() {
   };
 
   const limitLabel =
-    isProLocal
+    isProPlan
       ? "اشتراک PRO فعال است؛ محدودیتی برای تعداد پیام‌ها نداری."
       : "در نسخه رایگان، روزی حداکثر ۳ پیام می‌تونی به پشتیبان هوشمند بفرستی.";
 
   const limitStateLabel =
-    !isProLocal && dailyUsage?.count != null
+    !isProPlan && dailyUsage?.count != null
       ? `پیام‌های استفاده‌شده امروز: ${toFaDigits(
           String(Math.min(dailyUsage.count, 3))
         )} / ۳`
       : "";
+
+  const badgeBg =
+    planView === "pro"
+      ? isNearExpire
+        ? "#EA580C"
+        : "#F59E0B"
+      : planView === "expired"
+      ? "#DC2626"
+      : "#111827";
+
+  const badgeLabel =
+    planView === "pro"
+      ? "PRO"
+      : planView === "expired"
+      ? "EXPIRED"
+      : "FREE";
+
+  const badgeTextColor =
+    planView === "pro" ? "#111827" : "#F9FAFB";
+
+  if (loadingPlan) {
+    return (
+      <SafeAreaView
+        edges={["top", "bottom"]}
+        style={{ flex: 1, backgroundColor: "#000", alignItems: "center", justifyContent: "center" }}
+      >
+        <ActivityIndicator color="#f97316" />
+        <Text
+          style={{
+            color: "#e5e7eb",
+            marginTop: 8,
+            fontSize: 12,
+          }}
+        >
+          در حال آماده‌سازی پشتیبان هوشمند…
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
+  const rtlHeader = rtl; // فقط برای جهت فلش
 
   return (
     <SafeAreaView
@@ -435,10 +537,83 @@ export default function AIChatSupport() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={0}
       >
+        {/* پنل دیباگ پلن (بالای هدر) */}
+        <View
+          style={{
+            paddingHorizontal: 16,
+            paddingTop: 6,
+          }}
+        >
+          <View
+            style={{
+              padding: 6,
+              borderRadius: 10,
+              backgroundColor: "#020617",
+              borderWidth: 1,
+              borderColor: "#1F2937",
+            }}
+          >
+            <Text
+              style={{
+                color: "#9CA3AF",
+                fontSize: 10,
+                marginBottom: 4,
+                textAlign: "right",
+              }}
+            >
+              حالت نمایش پلن (دیباگ پشتیبان هوشمند):
+            </Text>
+            <View
+              style={{
+                flexDirection: "row-reverse",
+                justifyContent: "space-between",
+                gap: 6,
+              }}
+            >
+              {(
+                [
+                  { key: "real", label: "داده واقعی" },
+                  { key: "force-free", label: "FREE فیک" },
+                  { key: "force-pro", label: "PRO فیک" },
+                  { key: "force-pro-near", label: "PRO نزدیک انقضا" },
+                  { key: "force-expired", label: "EXPIRED فیک" },
+                ] as { key: DebugState; label: string }[]
+              ).map((opt) => {
+                const active = debugState === opt.key;
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    onPress={() => setDebugState(opt.key)}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 4,
+                      borderRadius: 999,
+                      borderWidth: 1,
+                      borderColor: active ? "#2563EB" : "#4B5563",
+                      backgroundColor: active ? "#1D4ED8" : "#020617",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: active ? "#E5E7EB" : "#9CA3AF",
+                        fontSize: 9,
+                        textAlign: "center",
+                        fontWeight: active ? "800" : "500",
+                      }}
+                    >
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+
         {/* Header */}
         <View
           style={{
-            paddingTop: 8,
+            paddingTop: 6,
             paddingHorizontal: 16,
             paddingBottom: 8,
           }}
@@ -458,7 +633,7 @@ export default function AIChatSupport() {
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <Ionicons
-                  name={rtl ? "arrow-forward" : "arrow-back"}
+                  name={rtlHeader ? "arrow-forward" : "arrow-back"}
                   size={20}
                   color="#ffffff"
                 />
@@ -479,7 +654,7 @@ export default function AIChatSupport() {
               </Text>
             </View>
 
-            {/* ستون راست: سپر + بج (PRO/FREE) + سطل آشغال */}
+            {/* ستون راست: سپر + بج پلن + سطل آشغال */}
             <View
               style={{
                 flex: 1,
@@ -507,25 +682,26 @@ export default function AIChatSupport() {
                   />
                 </TouchableOpacity>
 
-                {/* بج همیشه هست: PRO یا FREE */}
+                {/* بج پلن با منطق تب‌ها */}
                 <View
                   style={{
                     paddingHorizontal: 8,
                     paddingVertical: 4,
                     borderRadius: 999,
-                    backgroundColor: isProLocal ? "#f97316" : "#111827",
-                    borderWidth: isProLocal ? 0 : 1,
-                    borderColor: isProLocal ? "transparent" : "#4b5563",
+                    backgroundColor: badgeBg,
+                    borderWidth: planView === "free" ? 1 : 0,
+                    borderColor:
+                      planView === "free" ? "#4B5563" : "transparent",
                   }}
                 >
                   <Text
                     style={{
-                      color: isProLocal ? "#000" : "#e5e7eb",
+                      color: badgeTextColor,
                       fontWeight: "900",
                       fontSize: 10,
                     }}
                   >
-                    {isProLocal ? "PRO" : "FREE"}
+                    {badgeLabel}
                   </Text>
                 </View>
 
@@ -562,7 +738,7 @@ export default function AIChatSupport() {
           )}
 
           {/* متن محدودیت / وضعیت پرو فقط برای غیرپرو */}
-          {!isProLocal && (
+          {!isProPlan && (
             <View style={{ marginTop: 6 }}>
               <Text
                 style={{
@@ -669,6 +845,30 @@ export default function AIChatSupport() {
           )}
         </ScrollView>
 
+        {/* دکمه رفتن به پایین اگر بالا اسکرول کرده */}
+        {showJump && (
+          <TouchableOpacity
+            onPress={jumpToBottom}
+            style={{
+              position: "absolute",
+              right: 16,
+              bottom: 80,
+              backgroundColor: "#111827",
+              borderRadius: 999,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              borderWidth: 1,
+              borderColor: "#4B5563",
+            }}
+          >
+            <Ionicons name="chevron-down" size={16} color="#E5E7EB" />
+            <Text style={{ color: "#E5E7EB", fontSize: 11 }}>رفتن به آخر گفتگو</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Input area */}
         <View
           style={{
@@ -748,7 +948,7 @@ export default function AIChatSupport() {
             ⚠️ پشتیبان هوشمند ققنوس ممکنه گاهی اشتباه کنه؛{"\n"} برای
             تصمیم‌های مهم با درمانگر واقعی مشورت کن.
           </Text>
-          {reachedLimit && !isProLocal && (
+          {reachedLimit && !isProPlan && (
             <Text
               style={{
                 color: "#f97316",

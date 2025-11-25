@@ -1,5 +1,4 @@
 // app/support/tickets/index.tsx
-
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@react-navigation/native";
 import { useFocusEffect, useRouter } from "expo-router";

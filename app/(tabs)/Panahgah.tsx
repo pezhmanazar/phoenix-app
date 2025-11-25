@@ -20,7 +20,12 @@ import { useUser } from "../../hooks/useUser";
 import { getPlanStatus } from "../../lib/plan";
 
 type PlanView = "free" | "pro" | "expired";
-type DebugState = "real" | "force-pro" | "force-free" | "force-expired";
+type DebugState =
+  | "real"
+  | "force-pro"
+  | "force-pro-near"
+  | "force-free"
+  | "force-expired";
 
 const PRO_FLAG_KEY = "phoenix_is_pro";
 
@@ -32,10 +37,16 @@ export default function Panahgah() {
 
   const [q, setQ] = useState("");
   const [planView, setPlanView] = useState<PlanView>("free");
+  const [daysLeft, setDaysLeft] = useState<number | null>(null);
   const [debugState, setDebugState] = useState<DebugState>("real");
   const [loading, setLoading] = useState(true);
 
   const isProPlan = planView === "pro";
+  const isNearExpire =
+    planView === "pro" &&
+    daysLeft != null &&
+    daysLeft > 0 &&
+    daysLeft <= 7;
 
   /** بارگذاری اولیه + محاسبه وضعیت پلن */
   useEffect(() => {
@@ -46,33 +57,52 @@ export default function Panahgah() {
         const flagIsPro = flag === "1";
 
         let view: PlanView = "free";
+        let localDaysLeft: number | null = status.daysLeft;
 
         if (status.rawExpiresAt) {
-          if (status.isExpired) view = "expired";
-          else if (status.isPro || flagIsPro) view = "pro";
-          else view = "free";
+          if (status.isExpired) {
+            view = "expired";
+          } else if (status.isPro || flagIsPro) {
+            view = "pro";
+          } else {
+            view = "free";
+          }
         } else {
           view = status.isPro || flagIsPro ? "pro" : "free";
         }
 
         // Debug override
-        if (debugState === "force-pro") view = "pro";
-        else if (debugState === "force-free") view = "free";
-        else if (debugState === "force-expired") view = "expired";
+        if (debugState === "force-pro") {
+          view = "pro";
+          localDaysLeft = 30;
+        } else if (debugState === "force-pro-near") {
+          view = "pro";
+          localDaysLeft = 4;
+        } else if (debugState === "force-free") {
+          view = "free";
+          localDaysLeft = null;
+        } else if (debugState === "force-expired") {
+          view = "expired";
+          localDaysLeft = 0;
+        }
 
         setPlanView(view);
+        setDaysLeft(localDaysLeft ?? null);
 
         console.log("PANAH INIT", {
           rawPlan: status.rawPlan,
           rawExpiresAt: status.rawExpiresAt,
           isExpired: status.isExpired,
+          daysLeft: status.daysLeft,
           flag,
           debugState,
           planView: view,
+          localDaysLeft,
         });
       } catch (e) {
         console.log("PANAH INIT ERR", e);
         setPlanView("free");
+        setDaysLeft(null);
       } finally {
         setLoading(false);
       }
@@ -84,26 +114,54 @@ export default function Panahgah() {
     React.useCallback(() => {
       let cancelled = false;
       (async () => {
-        const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
-        const status = getPlanStatus(me);
-        const flagIsPro = flag === "1";
+        try {
+          const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
+          const status = getPlanStatus(me);
+          const flagIsPro = flag === "1";
 
-        let view: PlanView = "free";
-        if (status.rawExpiresAt) {
-          if (status.isExpired) view = "expired";
-          else if (status.isPro || flagIsPro) view = "pro";
-          else view = "free";
-        } else {
-          view = status.isPro || flagIsPro ? "pro" : "free";
-        }
+          let view: PlanView = "free";
+          let localDaysLeft: number | null = status.daysLeft;
 
-        if (debugState === "force-pro") view = "pro";
-        else if (debugState === "force-free") view = "free";
-        else if (debugState === "force-expired") view = "expired";
+          if (status.rawExpiresAt) {
+            if (status.isExpired) {
+              view = "expired";
+            } else if (status.isPro || flagIsPro) {
+              view = "pro";
+            } else {
+              view = "free";
+            }
+          } else {
+            view = status.isPro || flagIsPro ? "pro" : "free";
+          }
 
-        if (!cancelled) {
-          setPlanView(view);
-          console.log("PANAH FOCUS", { flag, debugState, planView: view });
+          if (debugState === "force-pro") {
+            view = "pro";
+            localDaysLeft = 30;
+          } else if (debugState === "force-pro-near") {
+            view = "pro";
+            localDaysLeft = 4;
+          } else if (debugState === "force-free") {
+            view = "free";
+            localDaysLeft = null;
+          } else if (debugState === "force-expired") {
+            view = "expired";
+            localDaysLeft = 0;
+          }
+
+          if (!cancelled) {
+            setPlanView(view);
+            setDaysLeft(localDaysLeft ?? null);
+            console.log("PANAH FOCUS", {
+              flag,
+              debugState,
+              planView: view,
+              localDaysLeft,
+              daysLeftReal: status.daysLeft,
+              isExpired: status.isExpired,
+            });
+          }
+        } catch (e) {
+          console.log("PANAH FOCUS ERR", e);
         }
       })();
       return () => {
@@ -181,7 +239,9 @@ export default function Panahgah() {
 
   const badgeBg =
     planView === "pro"
-      ? "#F59E0B"
+      ? isNearExpire
+        ? "#EA580C"
+        : "#F59E0B"
       : planView === "expired"
       ? "#DC2626"
       : "#9CA3AF";
@@ -198,7 +258,6 @@ export default function Panahgah() {
       style={[styles.root, { backgroundColor: colors.background }]}
       edges={["top", "left", "right", "bottom"]}
     >
-
       {/* پنل دیباگ */}
       <View style={{ paddingHorizontal: 12, paddingTop: 8 }}>
         <View
@@ -225,10 +284,11 @@ export default function Panahgah() {
           <View style={{ flexDirection: "row-reverse", gap: 6 }}>
             {(
               [
-                { key: "real", label: "واقعی" },
-                { key: "force-pro", label: "PRO فیک" },
+                { key: "real", label: "داده واقعی" },
                 { key: "force-free", label: "FREE فیک" },
-                { key: "force-expired", label: "منقضی فیک" },
+                { key: "force-pro", label: "PRO فیک" },
+                { key: "force-pro-near", label: "PRO فیک (در حال انقضا)" },
+                { key: "force-expired", label: "EXPIRED فیک" },
               ] as { key: DebugState; label: string }[]
             ).map((opt) => {
               const active = debugState === opt.key;
@@ -266,6 +326,18 @@ export default function Panahgah() {
       <View style={[styles.header, { borderColor: colors.border }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>پناهگاه</Text>
         <View style={styles.headerBadgeRow}>
+          {isNearExpire && (
+            <Text
+              style={{
+                color: "#FACC15",
+                fontSize: 11,
+                fontWeight: "900",
+                marginLeft: 8,
+              }}
+            >
+              {daysLeft} روز تا پایان اشتراک
+            </Text>
+          )}
           <View
             style={[
               styles.headerBadge,

@@ -31,7 +31,12 @@ type Lesson = {
 };
 
 type PlanView = "free" | "pro" | "expired";
-type DebugState = "real" | "force-pro" | "force-free" | "force-expired";
+type DebugState =
+  | "real"
+  | "force-pro"
+  | "force-pro-near"
+  | "force-free"
+  | "force-expired";
 
 const LESSONS: Lesson[] = [
   {
@@ -651,10 +656,16 @@ export default function Mashaal() {
     Record<string, { p: number; d: number }>
   >({});
   const [planView, setPlanView] = useState<PlanView>("free");
+  const [daysLeft, setDaysLeft] = useState<number | null>(null);
   const [debugState, setDebugState] = useState<DebugState>("real");
   const [loadingPlan, setLoadingPlan] = useState(true);
 
   const isProPlan = planView === "pro";
+  const isNearExpire =
+    planView === "pro" &&
+    daysLeft != null &&
+    daysLeft > 0 &&
+    daysLeft <= 7;
 
   // لود اولیه پیشرفت‌ها
   useEffect(() => {
@@ -682,7 +693,7 @@ export default function Mashaal() {
     };
   }, []);
 
-  /** بارگذاری اولیه وضعیت پلن (مثل پناهگاه) */
+  /** بارگذاری اولیه وضعیت پلن (با daysLeft) */
   useEffect(() => {
     (async () => {
       try {
@@ -691,32 +702,51 @@ export default function Mashaal() {
         const flagIsPro = flag === "1";
 
         let view: PlanView = "free";
+        let localDaysLeft: number | null = status.daysLeft;
 
         if (status.rawExpiresAt) {
-          if (status.isExpired) view = "expired";
-          else if (status.isPro || flagIsPro) view = "pro";
-          else view = "free";
+          if (status.isExpired) {
+            view = "expired";
+          } else if (status.isPro || flagIsPro) {
+            view = "pro";
+          } else {
+            view = "free";
+          }
         } else {
           view = status.isPro || flagIsPro ? "pro" : "free";
         }
 
-        if (debugState === "force-pro") view = "pro";
-        else if (debugState === "force-free") view = "free";
-        else if (debugState === "force-expired") view = "expired";
+        if (debugState === "force-pro") {
+          view = "pro";
+          localDaysLeft = 30;
+        } else if (debugState === "force-pro-near") {
+          view = "pro";
+          localDaysLeft = 4;
+        } else if (debugState === "force-free") {
+          view = "free";
+          localDaysLeft = null;
+        } else if (debugState === "force-expired") {
+          view = "expired";
+          localDaysLeft = 0;
+        }
 
         setPlanView(view);
+        setDaysLeft(localDaysLeft ?? null);
 
         console.log("MASHAL INIT", {
           rawPlan: status.rawPlan,
           rawExpiresAt: status.rawExpiresAt,
           isExpired: status.isExpired,
+          daysLeft: status.daysLeft,
           flag,
           debugState,
           planView: view,
+          localDaysLeft,
         });
       } catch (e) {
         console.log("MASHAL INIT ERR", e);
         setPlanView("free");
+        setDaysLeft(null);
       } finally {
         setLoadingPlan(false);
       }
@@ -734,21 +764,45 @@ export default function Mashaal() {
           const flagIsPro = flag === "1";
 
           let view: PlanView = "free";
+          let localDaysLeft: number | null = status.daysLeft;
+
           if (status.rawExpiresAt) {
-            if (status.isExpired) view = "expired";
-            else if (status.isPro || flagIsPro) view = "pro";
-            else view = "free";
+            if (status.isExpired) {
+              view = "expired";
+            } else if (status.isPro || flagIsPro) {
+              view = "pro";
+            } else {
+              view = "free";
+            }
           } else {
             view = status.isPro || flagIsPro ? "pro" : "free";
           }
 
-          if (debugState === "force-pro") view = "pro";
-          else if (debugState === "force-free") view = "free";
-          else if (debugState === "force-expired") view = "expired";
+          if (debugState === "force-pro") {
+            view = "pro";
+            localDaysLeft = 30;
+          } else if (debugState === "force-pro-near") {
+            view = "pro";
+            localDaysLeft = 4;
+          } else if (debugState === "force-free") {
+            view = "free";
+            localDaysLeft = null;
+          } else if (debugState === "force-expired") {
+            view = "expired";
+            localDaysLeft = 0;
+          }
 
           if (!cancelled) {
             setPlanView(view);
-            console.log("MASHAL FOCUS", { flag, debugState, planView: view });
+            setDaysLeft(localDaysLeft ?? null);
+            console.log("MASHAL FOCUS", {
+              flag,
+              debugState,
+              planView: view,
+              localDaysLeft,
+              daysLeftReal: status.daysLeft,
+              isExpired: status.isExpired,
+            });
           }
         } catch (e) {
           console.log("MASHAL FOCUS ERR", e);
@@ -801,7 +855,9 @@ export default function Mashaal() {
 
   const badgeBg =
     planView === "pro"
-      ? "#F59E0B"
+      ? isNearExpire
+        ? "#EA580C"
+        : "#F59E0B"
       : planView === "expired"
       ? "#DC2626"
       : "#9CA3AF";
@@ -815,7 +871,7 @@ export default function Mashaal() {
 
   return (
     <Screen contentContainerStyle={{ flexGrow: 1, paddingBottom: 16 }}>
-      {/* پنل دیباگ حالت پلن (مثل پناهگاه) */}
+      {/* پنل دیباگ حالت پلن */}
       <View style={{ paddingHorizontal: 4, paddingTop: 4, marginBottom: 4 }}>
         <View
           style={{
@@ -839,10 +895,11 @@ export default function Mashaal() {
           <View style={{ flexDirection: "row-reverse", gap: 6 }}>
             {(
               [
-                { key: "real", label: "واقعی" },
-                { key: "force-pro", label: "PRO فیک" },
+                { key: "real", label: "داده واقعی" },
                 { key: "force-free", label: "FREE فیک" },
-                { key: "force-expired", label: "منقضی فیک" },
+                { key: "force-pro", label: "PRO فیک" },
+                { key: "force-pro-near", label: "PRO فیک (در حال انقضا)" },
+                { key: "force-expired", label: "EXPIRED فیک" },
               ] as { key: DebugState; label: string }[]
             ).map((opt) => {
               const active = debugState === opt.key;
@@ -897,10 +954,22 @@ export default function Mashaal() {
         >
           مشعل 🔥
         </Text>
-        <View
-          style={[styles.headerBadge, { backgroundColor: badgeBg }]}
-        >
-          <Text style={styles.headerBadgeText}>{badgeLabel}</Text>
+        <View style={{ flexDirection: "row-reverse", alignItems: "center" }}>
+          {isNearExpire && (
+            <Text
+              style={{
+                color: "#FACC15",
+                fontSize: 11,
+                fontWeight: "900",
+                marginLeft: 8,
+              }}
+            >
+              {daysLeft} روز تا پایان اشتراک
+            </Text>
+          )}
+          <View style={[styles.headerBadge, { backgroundColor: badgeBg }]}>
+            <Text style={styles.headerBadgeText}>{badgeLabel}</Text>
+          </View>
         </View>
       </View>
 
