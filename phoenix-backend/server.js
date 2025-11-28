@@ -13,6 +13,7 @@ import adminRouter from "./routes/admin.js";
 import ticketsRouter from "./routes/tickets.js";
 import publicRouter from "./routes/public.js";   // روتر عمومی که /tickets هم دارد
 import aiRouter from "./routes/ai.js";           // روتر پشتیبانی هوش مصنوعی
+import usersRouter from "./routes/users.js";     // 🔹 روتر جدید یوزرها
 
 // ---------- App ----------
 const app = express();
@@ -34,10 +35,17 @@ app.options("*", cors());
 app.use(morgan("dev"));
 
 // ---------- Static uploads ----------
-const ROOT_UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
-if (!fs.existsSync(ROOT_UPLOAD_DIR)) fs.mkdirSync(ROOT_UPLOAD_DIR, { recursive: true });
+const ROOT_UPLOAD_DIR =
+  process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
 
-app.use("/uploads", express.static(ROOT_UPLOAD_DIR, { maxAge: "1y", index: false }));
+if (!fs.existsSync(ROOT_UPLOAD_DIR)) {
+  fs.mkdirSync(ROOT_UPLOAD_DIR, { recursive: true });
+}
+
+app.use(
+  "/uploads",
+  express.static(ROOT_UPLOAD_DIR, { maxAge: "1y", index: false })
+);
 
 // ---------- Multer (store in /uploads/<YYYY>) ----------
 const storage = multer.diskStorage({
@@ -45,7 +53,9 @@ const storage = multer.diskStorage({
     try {
       const year = new Date().getFullYear().toString();
       const yearDir = path.join(ROOT_UPLOAD_DIR, year);
-      if (!fs.existsSync(yearDir)) fs.mkdirSync(yearDir, { recursive: true });
+      if (!fs.existsSync(yearDir)) {
+        fs.mkdirSync(yearDir, { recursive: true });
+      }
       cb(null, yearDir);
     } catch (e) {
       cb(e, ROOT_UPLOAD_DIR);
@@ -58,6 +68,7 @@ const storage = multer.diskStorage({
     cb(null, `${Date.now()}_${Math.random().toString(16).slice(2)}.${ext}`);
   },
 });
+
 const upload = multer({
   storage,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
@@ -69,6 +80,7 @@ const jsonUnlessMultipart = (req, res, next) => {
   if (ct.includes("multipart/form-data")) return next();
   return express.json({ limit: "1mb" })(req, res, next);
 };
+
 app.use(jsonUnlessMultipart);
 app.use(express.urlencoded({ extended: true, limit: "1mb" })); // برای فرم‌های پنل
 
@@ -81,8 +93,13 @@ const withUploadAny = (req, res, next) => {
       }
       return res
         .status(400)
-        .json({ ok: false, error: err.code || "upload_error", message: err.message });
+        .json({
+          ok: false,
+          error: err.code || "upload_error",
+          message: err.message,
+        });
     }
+
     if (Array.isArray(req.files) && req.files.length && !req.file) {
       req.file =
         req.files.find((f) => f.fieldname === "file") ||
@@ -138,17 +155,22 @@ const logUploadDebug = (req, _res, next) => {
 };
 
 const guardNoContent = (req, res, next) => {
-  const hasFile = (Array.isArray(req.files) && req.files.length) || !!req.file;
-  const hasText = typeof req.body?.text === "string" && req.body.text.trim().length > 0;
-  if (!hasFile && !hasText) return res.status(400).json({ ok: false, error: "no_content" });
+  const hasFile =
+    (Array.isArray(req.files) && req.files.length) || !!req.file;
+  const hasText =
+    typeof req.body?.text === "string" && req.body.text.trim().length > 0;
+  if (!hasFile && !hasText)
+    return res.status(400).json({ ok: false, error: "no_content" });
   next();
 };
 
 // ---------- Root ----------
-app.get("/", (_req, res) => res.json({ ok: true, service: "phoenix-backend" }));
+app.get("/", (_req, res) =>
+  res.json({ ok: true, service: "phoenix-backend" })
+);
 
-// ---------- ✅ PING (اضافه شد) ----------
-app.get("/api/ping", (req, res) => {
+// ---------- ✅ PING ----------
+app.get("/api/ping", (_req, res) => {
   res.json({ ok: true, service: "phoenix-backend", time: Date.now() });
 });
 
@@ -163,20 +185,33 @@ app.use(
   logUploadDebug,
   guardNoContent
 );
-app.use("/api/public/tickets/:id/reply", maybeUpload, markParsed, logUploadDebug);
+app.use(
+  "/api/public/tickets/:id/reply",
+  maybeUpload,
+  markParsed,
+  logUploadDebug
+);
 
 // پشتیبانی هوش مصنوعی
 app.use("/api/public/ai", aiRouter);
+
+// 🔹 مسیرهای یوزر (me / upsert)
+app.use("/api/users", usersRouter);
 
 // تمام مسیرهای عمومی
 app.use("/api/public", publicRouter);
 
 // پنل ادمین
 app.use("/api/admin", adminRouter);
-app.get("/api/admin/me", adminAuth, (req, res) => res.json({ ok: true, admin: req.admin }));
+
+app.get("/api/admin/me", adminAuth, (req, res) =>
+  res.json({ ok: true, admin: req.admin })
+);
 
 // ---------- 404 ----------
-app.use((req, res) => res.status(404).json({ ok: false, error: "not_found" }));
+app.use((req, res) =>
+  res.status(404).json({ ok: false, error: "not_found" })
+);
 
 // ---------- Error handler ----------
 app.use((err, _req, res, _next) => {

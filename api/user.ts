@@ -1,5 +1,5 @@
 // phoenix-app/api/user.ts
-import { BACKEND_URL } from "../constants/env";
+import { APP_API_URL } from "../constants/env";
 
 type ApiOk<T> = { ok: true; data: T };
 type ApiErr = { ok: false; error: string };
@@ -7,27 +7,21 @@ export type ApiResp<T> = ApiOk<T> | ApiErr;
 
 export type UserRecord = {
   phone: string;
-
   fullName?: string | null;
   gender?: "male" | "female" | "other" | null;
   birthDate?: string | null; // yyyy-mm-dd
   avatarUrl?: string | null; // http/file/icon
-
-  // 🔥 پلن و انقضا
   plan?: "free" | "pro" | "vip";
-  planExpiresAt?: string | null; // ISO یا null
-
+  planExpiresAt?: string | null; // ISO
   profileCompleted?: boolean;
   notifyTags?: string[];
-
-  // 🔍 فیلدهای زمانی از دیتابیس
   createdAt?: string | null;
-  lastLoginAt?: string | null; // ISO
+  lastLoginAt?: string | null;
   updatedAt?: string | null;
 };
 
-function toUrl(path: string) {
-  const base = BACKEND_URL.replace(/\/+$/, "");
+function userUrl(path: string) {
+  const base = APP_API_URL.replace(/\/+$/, "");
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
@@ -35,26 +29,36 @@ async function doJson<T>(input: RequestInfo, init?: RequestInit): Promise<ApiRes
   try {
     const res = await fetch(input, init);
     const text = await res.text();
-    const json = text ? JSON.parse(text) : {};
+
+    let json: any = {};
+    try {
+      json = text ? JSON.parse(text) : {};
+    } catch (e: any) {
+      console.log(
+        "[user.doJson] parse error, status =",
+        res.status,
+        "body[0..120] =",
+        text.slice(0, 120)
+      );
+      return { ok: false, error: `PARSE_ERROR_${res.status}` };
+    }
 
     if (!res.ok) {
-      const err = (json as any)?.error || `HTTP_${res.status}`;
+      const err = json?.error || `HTTP_${res.status}`;
       return { ok: false, error: err };
     }
 
-    // اگر سرور خودش { ok, data } برگردانده، همان را پاس بده
     if (typeof json === "object" && json && "ok" in json && "data" in json) {
       return json as ApiResp<T>;
     }
 
-    // در غیر اینصورت فرض کن بدنه مستقیم خود دیتا بوده
     return { ok: true, data: json as T };
   } catch (e: any) {
     return { ok: false, error: e?.message || "NETWORK_ERROR" };
   }
 }
 
-// ----------------- helpers برای شماره موبایل -----------------
+// ----------------- helpers تلفن -----------------
 const toEnDigits = (s: string) =>
   String(s || "").replace(/[0-9۰-۹٠-٩]/g, (d) => {
     const fa = "۰۱۲۳۴۵۶۷۸۹";
@@ -75,22 +79,24 @@ export function normalizeIranPhone(v: string) {
   return only;
 }
 
-// ----------------- APIهای سمت اپ -----------------
+// ----------------- APIها (روی بک‌اند، نه ورسل) -----------------
 
-// گرفتن پروفایل بر اساس شماره (الان از همین استفاده می‌کنیم)
+// GET http://192.168.100.4:4000/api/users/me?phone=...
 export async function getMeByPhone(phone: string): Promise<ApiResp<UserRecord>> {
   const p = normalizeIranPhone(phone);
-  const url = toUrl(`/api/user?phone=${encodeURIComponent(p)}`);
+  const url = userUrl(`/api/users/me?phone=${encodeURIComponent(p)}`);
+  console.log("[user.getMeByPhone] url =", url);
   return doJson<UserRecord>(url, { method: "GET" });
 }
 
-// آپسرت پروفایل (پروفایل ویزارد، آپدیت پلن بعد از پرداخت، ...)
+// POST http://192.168.100.4:4000/api/users/upsert
 export async function upsertUserByPhone(
   phone: string,
   payload: Partial<UserRecord>
 ): Promise<ApiResp<UserRecord>> {
   const p = normalizeIranPhone(phone);
-  const url = toUrl(`/api/user?phone=${encodeURIComponent(p)}`);
+  const url = userUrl(`/api/users/upsert`);
+  console.log("[user.upsertUserByPhone] url =", url, "payload =", { ...payload, phone: p });
   return doJson<UserRecord>(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -98,9 +104,9 @@ export async function upsertUserByPhone(
   });
 }
 
-// ریست‌کردن پروفایل (برای تست)
+// اختیاری
 export async function resetUserByPhone(phone: string): Promise<ApiResp<UserRecord>> {
   const p = normalizeIranPhone(phone);
-  const url = toUrl(`/api/user?phone=${encodeURIComponent(p)}&reset=true`);
+  const url = userUrl(`/api/users/reset?phone=${encodeURIComponent(p)}`);
   return doJson<UserRecord>(url, { method: "DELETE" });
 }

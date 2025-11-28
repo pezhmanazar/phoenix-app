@@ -1,0 +1,825 @@
+// components/EditProfileModal.tsx
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  LayoutChangeEvent,
+} from "react";
+import {
+  Alert,
+  I18nManager,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useTheme } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+import { usePhoenix } from "../hooks/PhoenixContext";
+import { useUser } from "../hooks/useUser";
+import { useAuth } from "../hooks/useAuth";
+import JalaliSelect from "./JalaliSelect";
+import { saveReminders, saveTags, saveToday } from "../lib/storage";
+import { upsertUserByPhone } from "../api/user";
+
+type Props = {
+  onClose: () => void;
+};
+
+const EditProfileModal: React.FC<Props> = ({ onClose }) => {
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const {
+    profileName,
+    avatarUrl,
+    setProfileName,
+    setAvatarUrl,
+    isDark,
+    toggleTheme,
+    setPelekanProgress,
+    setDayProgress,
+    resetStreak,
+    resetNoContact,
+    addPoints,
+    points,
+  } = usePhoenix();
+
+  const { me, refresh } = useUser() as any;
+  const { phone } = useAuth();
+
+  const [name, setName] = useState<string>(me?.fullName ?? profileName);
+  const [photo, setPhoto] = useState<string | null>(
+    (me?.avatarUrl as string | null) ?? (avatarUrl as string | null)
+  );
+  const [saving, setSaving] = useState(false);
+
+  const [gender, setGender] = useState<"male" | "female" | "other">(
+    (me?.gender as any) ?? "male"
+  );
+  const [birthDate, setBirthDate] = useState<string | undefined>(
+    (me?.birthDate as string | undefined) ?? undefined
+  );
+
+  // 🔄 سینک مستقیم از me وقتی از سرور آپدیت شد
+  useEffect(() => {
+    if (me?.fullName) setName(me.fullName as string);
+    if (me?.avatarUrl) setPhoto(me.avatarUrl as string);
+    if (me?.gender) setGender(me.gender as any);
+    if (me?.birthDate) setBirthDate(me.birthDate as string);
+  }, [me?.fullName, me?.avatarUrl, me?.gender, me?.birthDate]);
+
+  // ❗️فالس‌بک از AsyncStorage اگر از سرور تاریخ/جنسیت نداشتیم
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem("phoenix_profile");
+        if (!raw) return;
+        const p = JSON.parse(raw);
+
+        if (!me?.fullName && p.fullName) setName(p.fullName);
+        if (!me?.avatarUrl && p.avatarUrl) setPhoto(p.avatarUrl);
+        if (!me?.gender && p.gender) setGender(p.gender as any);
+        if (!me?.birthDate && p.birthDate) setBirthDate(p.birthDate as string);
+      } catch {
+        // ignore
+      }
+    })();
+  }, [me?.fullName, me?.avatarUrl, me?.gender, me?.birthDate]);
+
+  const safeSetPhoto = (uri: string) => {
+    if (mountedRef.current) setPhoto(uri);
+  };
+
+  const scrollRef = useRef<ScrollView | null>(null);
+  const [lastFocusKey, setLastFocusKey] = useState<"name" | "birth">("name");
+  const posRef = useRef<{ [k: string]: number }>({});
+
+  useEffect(() => {
+    const sh = Keyboard.addListener("keyboardDidShow", () => {
+      requestAnimationFrame(() => {
+        const y = posRef.current[lastFocusKey] ?? 0;
+        scrollRef.current?.scrollTo({
+          y: Math.max(0, y - 24),
+          animated: true,
+        });
+      });
+    });
+    const hd = Keyboard.addListener("keyboardDidHide", () => {});
+    return () => {
+      sh.remove();
+      hd.remove();
+    };
+  }, [lastFocusKey]);
+
+  const onLayoutCapture =
+    (key: "name" | "birth") =>
+    (e: LayoutChangeEvent) => {
+      posRef.current[key] = e.nativeEvent.layout.y;
+    };
+
+  const onFocusScroll = (key: "name" | "birth") => () => {
+    setLastFocusKey(key);
+    setTimeout(() => {
+      const y = posRef.current[key] ?? 0;
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, y - 24),
+        animated: true,
+      });
+    }, 80);
+  };
+
+  const pickFromGallery = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(
+          "اجازه دسترسی لازم است",
+          "برای انتخاب عکس از گالری، اجازهٔ دسترسی را فعال کن."
+        );
+        return;
+      }
+
+      const galleryMediaField =
+        (ImagePicker as any).MediaType
+          ? { mediaTypes: [(ImagePicker as any).MediaType.Image] }
+          : { mediaTypes: (ImagePicker as any).MediaTypeOptions.Images };
+
+      const res = await ImagePicker.launchImageLibraryAsync({
+        ...(galleryMediaField as any),
+        allowsEditing: true,
+        quality: 0.9,
+        aspect: [1, 1],
+        selectionLimit: 1,
+      });
+
+      if (!res.canceled) {
+        const uri = (res as any).assets?.[0]?.uri;
+        if (uri) safeSetPhoto(uri);
+      }
+    } catch {
+      Alert.alert("خطا", "هنگام باز کردن گالری مشکلی پیش آمد.");
+    }
+  };
+
+  const pickFromCamera = async () => {
+    try {
+      const camPerm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!camPerm.granted) {
+        Alert.alert(
+          "اجازهٔ دوربین لازم است",
+          "برای گرفتن عکس با دوربین، اجازهٔ دسترسی را فعال کن."
+        );
+        return;
+      }
+      const res = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        quality: 0.8,
+        aspect: [1, 1],
+      });
+      if (!res.canceled) {
+        const uri = (res as any).assets?.[0]?.uri;
+        if (uri) safeSetPhoto(uri);
+      }
+    } catch {
+      Alert.alert("خطا", "هنگام باز کردن دوربین مشکلی پیش آمد.");
+    }
+  };
+
+  const renderModalAvatar = () => {
+    if (typeof photo === "string" && photo.startsWith("icon:")) {
+      const which = photo.split(":")[1];
+      const iconName = which === "woman" ? "woman" : "man";
+      const color = which === "woman" ? "#A855F7" : "#3B82F6";
+      return (
+        <View
+          style={{
+            width: 84,
+            height: 84,
+            borderRadius: 42,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: color + "22",
+            borderWidth: 1,
+            borderColor: color,
+          }}
+        >
+          <Ionicons name={iconName as any} size={60} color={color} />
+        </View>
+      );
+    }
+    const isValidUri =
+      typeof photo === "string" && /^(file:|content:|https?:)/.test(photo);
+    if (isValidUri) {
+      return (
+        <Image
+          source={{ uri: photo! }}
+          style={{ width: 84, height: 84, borderRadius: 42 }}
+        />
+      );
+    }
+    return (
+      <View
+        style={{
+          width: 84,
+          height: 84,
+          borderRadius: 42,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#3B82F622",
+          borderWidth: 1,
+          borderColor: "#3B82F6",
+        }}
+      >
+        <Ionicons name="person" size={60} color="#3B82F6" />
+      </View>
+    );
+  };
+
+  const save = async () => {
+    const safeName = (name || "").trim() || "کاربر";
+    const safeAvatar = photo || "icon:man";
+
+    if (!phone) {
+      Alert.alert("خطا", "شماره موبایل پیدا نشد. دوباره وارد شو.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      const body = {
+        fullName: safeName,
+        avatarUrl: safeAvatar,
+        gender,
+        birthDate: birthDate ?? null,
+        profileCompleted: true,
+      };
+
+      const res = await upsertUserByPhone(phone, body);
+
+      if (!res.ok) {
+        Alert.alert("خطا", res.error || "ثبت در سرور ناموفق بود.");
+      } else {
+        setProfileName(safeName);
+        setAvatarUrl(safeAvatar);
+
+        // ❗️اینجا birthDate و gender هم ذخیره می‌کنیم
+        await AsyncStorage.setItem(
+          "phoenix_profile",
+          JSON.stringify({
+            id: me?.id ?? "",
+            fullName: safeName,
+            avatarUrl: safeAvatar,
+            gender,
+            birthDate: birthDate ?? null,
+          })
+        );
+
+        await refresh().catch(() => {});
+      }
+
+      onClose();
+    } catch (e: any) {
+      Alert.alert("خطا", e?.message || "مشکل شبکه");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmResetAll = () => {
+    Alert.alert(
+      "شروع از صفر",
+      "همهٔ تمرین‌ها، برنامه‌ها، یادآورها، تگ‌ها و امتیازها صفر می‌شود و از اول شروع می‌کنی. ادامه می‌دهی؟",
+      [
+        { text: "انصراف", style: "cancel" },
+        {
+          text: "بله، پاک کن",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await Promise.all([
+                saveToday([]),
+                saveReminders([]),
+                saveTags([]),
+              ]);
+              setPelekanProgress(0);
+              setDayProgress(0);
+              resetStreak();
+              resetNoContact();
+              if (points > 0) addPoints(-points);
+              setProfileName("کاربر");
+              setAvatarUrl("icon:man");
+              Alert.alert(
+                "پاک‌سازی انجام شد",
+                "همه‌چیز صفر شد. از نو شروع کن ✨"
+              );
+              onClose();
+            } catch {
+              Alert.alert("خطا", "در پاک‌سازی داده‌ها مشکلی پیش آمد.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  return (
+    <Modal
+      key="edit-profile-modal"
+      animationType="slide"
+      transparent
+      statusBarTranslucent
+      presentationStyle="overFullScreen"
+      hardwareAccelerated
+      avoidKeyboard
+      onRequestClose={onClose}
+      supportedOrientations={["portrait", "landscape"]}
+    >
+      <View className="modalBackdrop" style={styles.modalBackdrop}>
+        <View
+          style={[
+            styles.modalCard,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={
+              (Platform.select({ ios: 8, android: 0 }) as number) || 0
+            }
+            style={{ maxHeight: "86%" }}
+          >
+            <ScrollView
+              ref={scrollRef}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              contentContainerStyle={{
+                paddingBottom: insets.bottom + 24,
+              }}
+              showsVerticalScrollIndicator={false}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontSize: 16,
+                    fontWeight: "800",
+                  }}
+                >
+                  ویرایش پروفایل
+                </Text>
+                <TouchableOpacity onPress={onClose}>
+                  <Ionicons name="close" size={22} color={colors.text} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ alignItems: "center", marginTop: 10 }}>
+                {renderModalAvatar()}
+              </View>
+
+              {/* نام */}
+              <View
+                style={{ gap: 10, marginTop: 12 }}
+                onLayout={onLayoutCapture("name")}
+              >
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontSize: 12,
+                    fontWeight: "700",
+                  }}
+                >
+                  نام
+                </Text>
+                <TextInput
+                  value={name}
+                  onChangeText={(t) => mountedRef.current && setName(t)}
+                  onFocus={onFocusScroll("name")}
+                  placeholder="نام شما"
+                  placeholderTextColor="#8E8E93"
+                  style={[
+                    styles.input,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: colors.background,
+                    },
+                  ]}
+                  textAlign={I18nManager.isRTL ? "right" : "right"}
+                  returnKeyType="done"
+                />
+              </View>
+
+              {/* منبع تصویر */}
+              <Text
+                style={{
+                  marginTop: 14,
+                  color: colors.text,
+                  fontWeight: "700",
+                }}
+              >
+                تصویر پروفایل
+              </Text>
+              <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
+                <TouchableOpacity
+                  onPress={pickFromGallery}
+                  style={[
+                    styles.secondaryBtn,
+                    {
+                      borderColor: colors.border,
+                      flexDirection: "row",
+                      gap: 6,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="images-outline"
+                    size={18}
+                    color={colors.text}
+                  />
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontWeight: "800",
+                    }}
+                  >
+                    از گالری
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={pickFromCamera}
+                  style={[
+                    styles.secondaryBtn,
+                    {
+                      borderColor: colors.border,
+                      flexDirection: "row",
+                      gap: 6,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="camera-outline"
+                    size={18}
+                    color={colors.text}
+                  />
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontWeight: "800",
+                    }}
+                  >
+                    دوربین
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* آیکن مرد / زن */}
+              <Text
+                style={{
+                  marginTop: 12,
+                  marginBottom: 6,
+                  color: colors.text,
+                  fontWeight: "700",
+                }}
+              >
+                یا انتخاب آیکن
+              </Text>
+              <View
+                style={{
+                  flexDirection: "row",
+                  gap: 14,
+                  justifyContent: "center",
+                }}
+              >
+                {(["man", "woman"] as const).map((which) => {
+                  const selected = photo === `icon:${which}`;
+                  const color = which === "woman" ? "#A855F7" : "#3B82F6";
+                  return (
+                    <TouchableOpacity
+                      key={which}
+                      onPress={() =>
+                        mountedRef.current && setPhoto(`icon:${which}`)
+                      }
+                      activeOpacity={0.85}
+                      style={{
+                        width: 72,
+                        height: 72,
+                        borderRadius: 36,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: color + "22",
+                        borderWidth: selected ? 2 : 1,
+                        borderColor: selected ? color : colors.border,
+                      }}
+                    >
+                      <Ionicons name={which as any} size={44} color={color} />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* جنسیت */}
+              <Text
+                style={{
+                  marginTop: 16,
+                  color: colors.text,
+                  fontWeight: "700",
+                }}
+              >
+                جنسیت
+              </Text>
+              <View
+                style={{
+                  flexDirection: "row-reverse",
+                  gap: 10,
+                  marginTop: 8,
+                }}
+              >
+                {[
+                  { key: "male", label: "مرد", icon: "male" },
+                  { key: "female", label: "زن", icon: "female" },
+                  { key: "other", label: "سایر", icon: "person" },
+                ].map((g) => {
+                  const selected = gender === (g.key as any);
+                  return (
+                    <TouchableOpacity
+                      key={g.key}
+                      onPress={() => setGender(g.key as any)}
+                      activeOpacity={0.85}
+                      style={{
+                        flex: 1,
+                        height: 44,
+                        borderRadius: 12,
+                        backgroundColor: selected
+                          ? "#ECFEFF"
+                          : colors.background,
+                        borderWidth: 2,
+                        borderColor: selected ? colors.primary : colors.border,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexDirection: "row",
+                        gap: 6,
+                      }}
+                    >
+                      <Ionicons
+                        name={g.icon as any}
+                        size={18}
+                        color={selected ? colors.primary : "#8E8E93"}
+                      />
+                      <Text
+                        style={{
+                          color: selected ? colors.primary : colors.text,
+                          fontWeight: "800",
+                        }}
+                      >
+                        {g.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* تاریخ تولد */}
+<View style={{ marginTop: 16 }} onLayout={onLayoutCapture("birth")}>
+  <Text
+    style={{
+      color: colors.text,
+      fontWeight: "700",
+    }}
+  >
+    تاریخ تولد (اختیاری)
+  </Text>
+  <View style={{ marginTop: 6 }}>
+    <JalaliSelect
+      key={birthDate || "no-birth"}   // 👈 این خط جدید است
+      initial={birthDate}
+      onChange={(iso) => setBirthDate(iso)}
+      minYear={1330}
+      maxYear={1390}
+      grid
+      styleContainer={{
+        borderColor: colors.border,
+        backgroundColor: colors.background,
+        minHeight: 56,
+        borderRadius: 12,
+      }}
+      stylePicker={{
+        backgroundColor: colors.card,
+        borderColor: colors.border,
+      }}
+      textColor={colors.text}
+      accentColor={colors.primary}
+      dark
+    />
+  </View>
+  {!!birthDate && (
+    <Text
+      style={{
+        color: "#B8BBC2",
+        fontSize: 12,
+        marginTop: 6,
+      }}
+    >
+      تاریخ انتخابی (میلادی):{" "}
+      <Text
+        style={{
+          color: colors.text,
+          fontWeight: "800",
+        }}
+      >
+        {birthDate}
+      </Text>
+    </Text>
+  )}
+</View>
+
+              {/* حالت تیره */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginTop: 14,
+                }}
+              >
+                <View>
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontSize: 14,
+                      fontWeight: "800",
+                    }}
+                  >
+                    حالت تیره
+                  </Text>
+                  <Text
+                    style={{
+                      color: "#8E8E93",
+                      fontSize: 12,
+                      marginTop: 2,
+                    }}
+                  >
+                    ظاهر اپلیکیشن
+                  </Text>
+                </View>
+                <Switch value={isDark} onValueChange={toggleTheme} />
+              </View>
+
+              {/* شروع از صفر */}
+              <View style={{ marginTop: 14 }}>
+                <TouchableOpacity
+                  onPress={confirmResetAll}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#ef4444",
+                    backgroundColor:
+                      Platform.OS === "ios" ? "#ef444420" : "#ef444410",
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                    alignItems: "center",
+                    flexDirection: "row",
+                    justifyContent: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Ionicons
+                    name="trash-bin-outline"
+                    size={18}
+                    color="#ef4444"
+                  />
+                  <Text
+                    style={{
+                      color: "#ef4444",
+                      fontWeight: "800",
+                    }}
+                  >
+                    شروع از صفر (پاک‌سازی کامل)
+                  </Text>
+                </TouchableOpacity>
+                <Text
+                  style={{
+                    color: "#8E8E93",
+                    fontSize: 11,
+                    textAlign: "center",
+                    marginTop: 6,
+                  }}
+                >
+                  با این کار تمام تمرین‌ها، برنامه‌ها، یادآورها، تگ‌ها و
+                  امتیازها صفر می‌شود.
+                </Text>
+              </View>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  gap: 10,
+                  marginTop: 16,
+                }}
+              >
+                <TouchableOpacity
+                  onPress={save}
+                  style={[
+                    styles.primaryBtn,
+                    { backgroundColor: colors.primary },
+                  ]}
+                  disabled={saving}
+                >
+                  <Text
+                    style={{
+                      color: "#fff",
+                      fontWeight: "800",
+                    }}
+                  >
+                    {saving ? "در حال ذخیره…" : "ذخیره"}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={onClose}
+                  style={[
+                    styles.secondaryBtn,
+                    { borderColor: colors.border },
+                  ]}
+                  disabled={saving}
+                >
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontWeight: "800",
+                    }}
+                  >
+                    انصراف
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+export default EditProfileModal;
+
+const styles = StyleSheet.create({
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "flex-end",
+  },
+  modalCard: {
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  primaryBtn: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  secondaryBtn: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+});

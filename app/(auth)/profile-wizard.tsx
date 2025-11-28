@@ -16,11 +16,13 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import AsyncStorage from "@react-native-async-storage/async-storage"; // ✅ اضافه شد
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { useAuth } from "../../hooks/useAuth";
 import { upsertUserByPhone, getMeByPhone } from "../../api/user";
 import JalaliSelect from "../../components/JalaliSelect";
+import { usePhoenix } from "../../hooks/PhoenixContext";
+import { useUser } from "../../hooks/useUser";
 
 type Gender = "male" | "female" | "other";
 
@@ -37,7 +39,12 @@ const P = {
   primarySoft: "#FFE6D5",
 };
 const shadow = Platform.select({
-  ios: { shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 24, shadowOffset: { width: 0, height: 10 } },
+  ios: {
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
+  },
   android: { elevation: 6 },
 });
 
@@ -65,15 +72,19 @@ export default function ProfileWizard() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
+  // 👉 کانتکست‌ها برای سینک بعد از ویزارد
+  const { setProfileName, setAvatarUrl } = usePhoenix();
+  const { refresh } = useUser() as any;
+
   const [fullName, setFullName] = useState("");
   const [gender, setGender] = useState<Gender | null>(null);
   const [birthDate, setBirthDate] = useState<string | undefined>(undefined); // yyyy-mm-dd
-  const [avatarUrl, setAvatarUrl] = useState<string>("icon:female");
+  const [avatarUrl, setAvatarUrlState] = useState<string>("icon:female");
   const [saving, setSaving] = useState(false);
 
   const mounted = useRef(true);
   const submittingRef = useRef(false);
-  const redirectedRef = useRef(false); // ✅ جلوی ریدایرکت دوباره
+  const redirectedRef = useRef(false); // جلوگیری از ریدایرکت دوباره
 
   useEffect(() => {
     mounted.current = true;
@@ -85,11 +96,17 @@ export default function ProfileWizard() {
   // ✅ اگر قبلاً پروفایل تکمیل شده (فلگ محلی)، همین ابتدا برو تب‌ها
   useEffect(() => {
     (async () => {
-      const flag = await AsyncStorage.getItem("profile_completed_flag");
-      //if (flag === "1" && !redirectedRef.current) {
-        //redirectedRef.current = true;
-        //router.replace("/(tabs)");
-      //}
+      try {
+        const flag = await AsyncStorage.getItem("profile_completed_flag");
+        if (__DEV__) console.log("[profile-wizard] local flag =", flag);
+        if (flag === "1" && !redirectedRef.current) {
+          redirectedRef.current = true;
+          if (__DEV__) console.log("[profile-wizard] redirect via local flag");
+          router.replace("/(tabs)");
+        }
+      } catch (e) {
+        if (__DEV__) console.log("[profile-wizard] local flag error:", e);
+      }
     })();
   }, [router]);
 
@@ -99,28 +116,63 @@ export default function ProfileWizard() {
     (async () => {
       try {
         const r = await getMeByPhone(phone);
+        if (__DEV__) console.log("[profile-wizard] getMeByPhone →", r);
+
         if (r.ok && r.data) {
           const d = r.data as any;
 
-          // اگر سرور می‌گه کامل است، بدون نمایش فرم برو تب‌ها
-          //if (d.profileCompleted === true && !redirectedRef.current) {
-            //await AsyncStorage.setItem("profile_completed_flag", "1"); // همسان‌سازی فلگ
-            //redirectedRef.current = true;
-           // router.replace("/(tabs)");
-           // return;
-         // }
+          // ✅ اگر سرور می‌گوید پروفایل کامل است، مستقیم رد شو
+          if (d.profileCompleted === true && !redirectedRef.current) {
+            await AsyncStorage.setItem("profile_completed_flag", "1");
+            redirectedRef.current = true;
+            if (__DEV__) console.log("[profile-wizard] redirect via server flag");
+            router.replace("/(tabs)");
+            return;
+          }
 
+          // 🔹 مقداردهی فرم
           if (d.fullName) setFullName(String(d.fullName));
           if (d.gender) setGender(d.gender as Gender);
           if (d.birthDate) setBirthDate(String(d.birthDate));
-          if (d.avatarUrl) setAvatarUrl(String(d.avatarUrl));
-          if (!d.avatarUrl && d.gender) {
-            setAvatarUrl(d.gender === "male" ? "icon:male" : d.gender === "female" ? "icon:female" : "icon:female");
+
+          let safeAvatar =
+            (d.avatarUrl as string | undefined) ??
+            (avatarUrl || undefined) ??
+            null;
+
+          if (!safeAvatar && d.gender) {
+            safeAvatar =
+              d.gender === "male"
+                ? "icon:male"
+                : d.gender === "female"
+                ? "icon:female"
+                : "icon:female";
           }
+          if (safeAvatar) setAvatarUrlState(safeAvatar);
+
+          const safeName = (d.fullName as string) || "کاربر";
+
+          // 🔹 سینک با PhoenixContext
+          setProfileName(safeName);
+          if (safeAvatar) setAvatarUrl(safeAvatar);
+
+          // 🔹 ذخیره‌ی کامل پروفایل روی دستگاه
+          await AsyncStorage.setItem(
+            "phoenix_profile",
+            JSON.stringify({
+              id: d.id ?? "",
+              fullName: safeName,
+              avatarUrl: safeAvatar ?? null,
+              gender: d.gender ?? null,
+              birthDate: d.birthDate ?? null,
+            })
+          );
         }
-      } catch {}
+      } catch (e) {
+        if (__DEV__) console.log("[profile-wizard] getMeByPhone error:", e);
+      }
     })();
-  }, [phone, router]);
+  }, [phone, router, setAvatarUrl, setProfileName, avatarUrl]);
 
   /* ---------------- Image Pickers (compat with old/new APIs) ---------------- */
   async function ensureMediaPermission() {
@@ -159,7 +211,7 @@ export default function ProfileWizard() {
 
       if (!res.canceled) {
         const uri = (res as any).assets?.[0]?.uri;
-        if (uri) setAvatarUrl(uri);
+        if (uri) setAvatarUrlState(uri);
       }
     } catch (e) {
       if (__DEV__) console.log("pickFromGallery error:", e);
@@ -178,7 +230,7 @@ export default function ProfileWizard() {
       });
       if (!res.canceled) {
         const uri = (res as any).assets?.[0]?.uri;
-        if (uri) setAvatarUrl(uri);
+        if (uri) setAvatarUrlState(uri);
       }
     } catch (e) {
       if (__DEV__) console.log("pickFromCamera error:", e);
@@ -190,7 +242,8 @@ export default function ProfileWizard() {
   const Avatar = () => {
     if (avatarUrl.startsWith("icon:")) {
       const which = avatarUrl.split(":")[1];
-      const color = which === "female" ? "#A855F7" : which === "male" ? "#3B82F6" : P.primary;
+      const color =
+        which === "female" ? "#A855F7" : which === "male" ? "#3B82F6" : P.primary;
       const IconName = which === "other" ? "account" : (which as "female" | "male");
       return (
         <View
@@ -241,7 +294,10 @@ export default function ProfileWizard() {
         }}
       >
         {valid ? (
-          <Image source={{ uri: avatarUrl }} style={{ width: 88, height: 88, borderRadius: 44 }} />
+          <Image
+            source={{ uri: avatarUrl }}
+            style={{ width: 88, height: 88, borderRadius: 44 }}
+          />
         ) : (
           <Ionicons name="person" size={52} color={P.textMuted} />
         )}
@@ -252,7 +308,8 @@ export default function ProfileWizard() {
   /* ---------------- Validation ---------------- */
   const validate = () => {
     const n = (fullName || "").trim();
-    if (n.length < 2) return Alert.alert("خطا", "نام و نام خانوادگی را کامل وارد کن."), false;
+    if (n.length < 2)
+      return Alert.alert("خطا", "نام و نام خانوادگی را کامل وارد کن."), false;
     if (!gender) return Alert.alert("خطا", "جنسیت را انتخاب کن."), false;
     return true;
   };
@@ -263,11 +320,14 @@ export default function ProfileWizard() {
     if (submittingRef.current) return;
     if (!validate()) return;
 
+    const safeName = (fullName || "").trim();
+    const safeAvatar = avatarUrl || null;
+
     const body = {
-      fullName: (fullName || "").trim(),
+      fullName: safeName,
       gender: gender as string,
       birthDate: birthDate || null,
-      avatarUrl: avatarUrl || null,
+      avatarUrl: safeAvatar,
       plan: "free",
       profileCompleted: true,
       lastLoginAt: new Date().toISOString(),
@@ -276,7 +336,8 @@ export default function ProfileWizard() {
     try {
       submittingRef.current = true;
       setSaving(true);
-      if (__DEV__) console.log("[profile-wizard] upsert by phone →", phone, body);
+      if (__DEV__)
+        console.log("[profile-wizard] upsert by phone →", phone, body);
 
       let r = await upsertUserByPhone(phone, body);
       if (!r.ok && /NOT_FOUND|404/i.test(String(r.error))) {
@@ -291,17 +352,47 @@ export default function ProfileWizard() {
       // ✅ فلگ محلی را ست کن تا دفعات بعد ویزارد باز نشود
       await AsyncStorage.setItem("profile_completed_flag", "1");
 
-      // سرور را هم می‌خوانیم؛ اگر به هر دلیل false بود، با فلگ محلی عبور می‌کنیم
-      const me = await getMeByPhone(phone).catch(() => ({ ok: false } as any));
-      let completed = (me as any)?.ok ? !!(me as any).data?.profileCompleted : false;
-      if (!completed) {
-        const flag = await AsyncStorage.getItem("profile_completed_flag");
-        if (flag === "1") completed = true;
+      // ✅ پروفایل نهایی را از سرور بگیر تا مطمئن شویم
+      const meResp = await getMeByPhone(phone).catch(
+        () => ({ ok: false } as any)
+      );
+
+      if ((meResp as any).ok && (meResp as any).data) {
+        const d = (meResp as any).data as any;
+
+        const finalName = (d.fullName as string) || safeName || "کاربر";
+        const finalAvatar =
+          (d.avatarUrl as string | undefined) ||
+          safeAvatar ||
+          (d.gender === "male"
+            ? "icon:male"
+            : d.gender === "female"
+            ? "icon:female"
+            : "icon:female");
+
+        // 🔹 سینک با PhoenixContext
+        setProfileName(finalName);
+        setAvatarUrl(finalAvatar);
+
+        // 🔹 ذخیره کامل روی دستگاه
+        await AsyncStorage.setItem(
+          "phoenix_profile",
+          JSON.stringify({
+            id: d.id ?? "",
+            fullName: finalName,
+            avatarUrl: finalAvatar,
+            gender: d.gender ?? gender ?? null,
+            birthDate: d.birthDate ?? birthDate ?? null,
+          })
+        );
       }
+
+      // 🔹 رفرش useUser (me) برای تب‌ها
+      await refresh().catch(() => {});
 
       if (!redirectedRef.current) {
         redirectedRef.current = true;
-        router.replace(completed ? "/(tabs)" : "/(tabs)"); // ✅ در هر صورت به تب‌ها برو
+        router.replace("/(tabs)");
       }
     } catch (e: any) {
       Alert.alert("خطا", e?.message || "مشکل شبکه");
@@ -320,7 +411,10 @@ export default function ProfileWizard() {
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
         <ScrollView
-          contentContainerStyle={{ paddingBottom: insets.bottom + 24, alignItems: "center" }}
+          contentContainerStyle={{
+            paddingBottom: insets.bottom + 24,
+            alignItems: "center",
+          }}
           keyboardShouldPersistTaps="handled"
         >
           <View
@@ -334,9 +428,24 @@ export default function ProfileWizard() {
             }}
           >
             {/* Header */}
-            <View style={{ backgroundColor: P.primary, height: 150, alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ color: "#FFF8F2", fontWeight: "900", fontSize: 18 }}>تکمیل پروفایل</Text>
-              <Text style={{ color: "#FFE6D5", marginTop: 4, fontSize: 12 }}>برای ادامه چند فیلد ساده را پُر کن</Text>
+            <View
+              style={{
+                backgroundColor: P.primary,
+                height: 150,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text
+                style={{ color: "#FFF8F2", fontWeight: "900", fontSize: 18 }}
+              >
+                تکمیل پروفایل
+              </Text>
+              <Text
+                style={{ color: "#FFE6D5", marginTop: 4, fontSize: 12 }}
+              >
+                برای ادامه چند فیلد ساده را پُر کن
+              </Text>
             </View>
 
             {/* Floating Avatar & Actions */}
@@ -345,9 +454,16 @@ export default function ProfileWizard() {
                 <Avatar />
               </View>
 
-              <View style={{ flexDirection: "row", gap: 10, marginTop: 10, marginBottom: 6 }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  gap: 10,
+                  marginTop: 10,
+                  marginBottom: 6,
+                }}
+              >
                 <TouchableOpacity
-                  onPress={() => setAvatarUrl("icon:female")}
+                  onPress={() => setAvatarUrlState("icon:female")}
                   style={{
                     paddingVertical: 8,
                     paddingHorizontal: 12,
@@ -357,10 +473,14 @@ export default function ProfileWizard() {
                     borderColor: P.primary,
                   }}
                 >
-                  <Text style={{ color: P.primaryDark, fontWeight: "800" }}>آیکن زن</Text>
+                  <Text
+                    style={{ color: P.primaryDark, fontWeight: "800" }}
+                  >
+                    آیکن زن
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={() => setAvatarUrl("icon:male")}
+                  onPress={() => setAvatarUrlState("icon:male")}
                   style={{
                     paddingVertical: 8,
                     paddingHorizontal: 12,
@@ -370,13 +490,26 @@ export default function ProfileWizard() {
                     borderColor: P.primary,
                   }}
                 >
-                  <Text style={{ color: P.primaryDark, fontWeight: "800" }}>آیکن مرد</Text>
+                  <Text
+                    style={{ color: P.primaryDark, fontWeight: "800" }}
+                  >
+                    آیکن مرد
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={pickFromGallery}
-                  style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, backgroundColor: P.primary }}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    borderRadius: 10,
+                    backgroundColor: P.primary,
+                  }}
                 >
-                  <Text style={{ color: "#fff", fontWeight: "900" }}>انتخاب عکس</Text>
+                  <Text
+                    style={{ color: "#fff", fontWeight: "900" }}
+                  >
+                    انتخاب عکس
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={pickFromCamera}
@@ -391,7 +524,11 @@ export default function ProfileWizard() {
                     justifyContent: "center",
                   }}
                 >
-                  <Ionicons name="camera" size={18} color={P.textDark} />
+                  <Ionicons
+                    name="camera"
+                    size={18}
+                    color={P.textDark}
+                  />
                 </TouchableOpacity>
               </View>
             </View>
@@ -419,7 +556,14 @@ export default function ProfileWizard() {
                   paddingHorizontal: 14,
                 }}
               >
-                <Text style={{ color: P.textDark, fontWeight: "800", textAlign: "right", writingDirection: "rtl" }}>
+                <Text
+                  style={{
+                    color: P.textDark,
+                    fontWeight: "800",
+                    textAlign: "right",
+                    writingDirection: "rtl",
+                  }}
+                >
                   {phone || "-"}
                 </Text>
               </View>
@@ -449,14 +593,22 @@ export default function ProfileWizard() {
               {/* Gender */}
               <Label>جنسیت</Label>
               <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-                {([
-                  { key: "male", label: "مرد", icon: "male" },
-                  { key: "female", label: "زن", icon: "female" },
-                  { key: "other", label: "سایر", icon: "gender-non-binary" },
-                ] as const).map((g) => {
+                {(
+                  [
+                    { key: "male", label: "مرد", icon: "male" },
+                    { key: "female", label: "زن", icon: "female" },
+                    { key: "other", label: "سایر", icon: "gender-non-binary" },
+                  ] as const
+                ).map((g) => {
                   const selected = gender === (g.key as Gender);
-                  const IconComp = g.key === "other" ? MaterialCommunityIcons : Ionicons;
-                  const iconName = g.key === "other" ? ("gender-non-binary" as any) : (g.icon as any);
+                  const IconComp =
+                    g.key === "other"
+                      ? MaterialCommunityIcons
+                      : Ionicons;
+                  const iconName =
+                    g.key === "other"
+                      ? ("gender-non-binary" as any)
+                      : (g.icon as any);
                   return (
                     <Pressable
                       key={g.key}
@@ -465,7 +617,9 @@ export default function ProfileWizard() {
                         flex: 1,
                         height: 48,
                         borderRadius: 12,
-                        backgroundColor: selected ? P.primarySoft : P.inputBg,
+                        backgroundColor: selected
+                          ? P.primarySoft
+                          : P.inputBg,
                         borderWidth: 2,
                         borderColor: selected ? P.primary : P.border,
                         alignItems: "center",
@@ -474,30 +628,67 @@ export default function ProfileWizard() {
                         gap: 6,
                       }}
                     >
-                      <IconComp name={iconName} size={18} color={selected ? P.primaryDark : P.textMuted} />
-                      <Text style={{ color: selected ? P.primaryDark : P.textDark, fontWeight: "800" }}>{g.label}</Text>
+                      <IconComp
+                        name={iconName}
+                        size={18}
+                        color={
+                          selected ? P.primaryDark : P.textMuted
+                        }
+                      />
+                      <Text
+                        style={{
+                          color: selected
+                            ? P.primaryDark
+                            : P.textDark,
+                          fontWeight: "800",
+                        }}
+                      >
+                        {g.label}
+                      </Text>
                     </Pressable>
                   );
                 })}
               </View>
 
               {/* Birthdate */}
-              <Label>تاریخ تولد (اختیاری)</Label>
-              <JalaliSelect
-                initial={birthDate}
-                onChange={(iso) => setBirthDate(iso)}
-                minYear={1330}
-                maxYear={1390}
-                styleContainer={{ borderColor: P.border, backgroundColor: P.inputBg }}
-                stylePicker={{ backgroundColor: P.cardBg, borderColor: P.border }}
-                textColor={P.textDark}
-                accentColor={P.primary}
-                dark
-                grid
-              />
+<Label>تاریخ تولد (اختیاری)</Label>
+<JalaliSelect
+  key={birthDate || "no-birth"}   // 👈 فقط این خط اضافه شد
+  initial={birthDate}
+  onChange={(iso) => setBirthDate(iso)}
+  minYear={1330}
+  maxYear={1390}
+  styleContainer={{
+    borderColor: P.border,
+    backgroundColor: P.inputBg,
+  }}
+  stylePicker={{
+    backgroundColor: P.cardBg,
+    borderColor: P.border,
+  }}
+  textColor={P.textDark}
+  accentColor={P.primary}
+  dark
+  grid
+/>
               {!!birthDate && (
-                <Text style={{ color: P.textMuted, fontSize: 12, marginTop: 6, textAlign: "left" }}>
-                  تاریخ انتخابی (میلادی): <Text style={{ color: P.textDark, fontWeight: "800" }}>{birthDate}</Text>
+                <Text
+                  style={{
+                    color: P.textMuted,
+                    fontSize: 12,
+                    marginTop: 6,
+                    textAlign: "left",
+                  }}
+                >
+                  تاریخ انتخابی (میلادی):{" "}
+                  <Text
+                    style={{
+                      color: P.textDark,
+                      fontWeight: "800",
+                    }}
+                  >
+                    {birthDate}
+                  </Text>
                 </Text>
               )}
 
@@ -509,13 +700,21 @@ export default function ProfileWizard() {
                 style={{
                   height: 54,
                   borderRadius: 16,
-                  backgroundColor: saving ? P.primaryDark : P.primary,
+                  backgroundColor: saving
+                    ? P.primaryDark
+                    : P.primary,
                   alignItems: "center",
                   justifyContent: "center",
                   marginTop: 18,
                 }}
               >
-                <Text style={{ color: "#fff", fontSize: 16, fontWeight: "900" }}>
+                <Text
+                  style={{
+                    color: "#fff",
+                    fontSize: 16,
+                    fontWeight: "900",
+                  }}
+                >
                   {saving ? "در حال ذخیره…" : "ذخیره و شروع"}
                 </Text>
               </TouchableOpacity>
