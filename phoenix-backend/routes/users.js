@@ -150,7 +150,16 @@ router.post("/upsert", authUser, async (req, res) => {
     return res.json({ ok: true, data: user });
   } catch (e) {
     console.error("[users.upsert] error:", e);
-    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+
+    const code = e?.code ? String(e.code) : "";
+    const message = e?.message ? String(e.message) : "";
+
+    const errorLabel =
+      code && code.startsWith("P")
+        ? `PRISMA_${code}`             // مثلا PRISMA_P2002
+        : message || "SERVER_ERROR";
+
+    return res.status(500).json({ ok: false, error: errorLabel });
   }
 });
 
@@ -218,7 +227,16 @@ router.post("/", async (req, res) => {
     return res.json({ ok: true, data: user });
   } catch (e) {
     console.error("[users.root-post] error:", e);
-    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+
+    const code = e?.code ? String(e.code) : "";
+    const message = e?.message ? String(e.message) : "";
+
+    const errorLabel =
+      code && code.startsWith("P")
+        ? `PRISMA_${code}`
+        : message || "SERVER_ERROR";
+
+    return res.status(500).json({ ok: false, error: errorLabel });
   }
 });
 
