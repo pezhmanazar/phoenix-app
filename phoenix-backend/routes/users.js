@@ -28,11 +28,13 @@ function parseDateOrNull(value) {
 function authUser(req, res, next) {
   const header = String(req.headers["authorization"] || "");
   const [scheme, token] = header.split(" ");
+
   const secret =
     process.env.APP_JWT_SECRET ||
     process.env.OTP_JWT_SECRET ||
     process.env.JWT_SECRET ||
     "";
+
   const isDev = process.env.NODE_ENV !== "production";
 
   // 1) مسیر نرمال با Bearer token
@@ -48,7 +50,6 @@ function authUser(req, res, next) {
       return next();
     } catch (e) {
       console.error("[users] token verify error:", e.message);
-      // اگر پروداکشن هستیم، بای‌پس نداریم
       if (!isDev) {
         return res.status(401).json({ ok: false, error: "TOKEN_INVALID" });
       }
@@ -76,10 +77,11 @@ function authUser(req, res, next) {
       .status(500)
       .json({ ok: false, error: "SERVER_MISCONFIGURED" });
   }
+
   return res.status(401).json({ ok: false, error: "NO_TOKEN" });
 }
 
-/* ---------- GET /api/user/me ---------- */
+/* ---------- GET /api/users/me ---------- */
 router.get("/me", authUser, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
@@ -95,8 +97,8 @@ router.get("/me", authUser, async (req, res) => {
   }
 });
 
-/* ---------- POST /api/user/upsert ----------
-   این برای پروفایل‌ویزارد و ادیت پروفایل داخل اپ است (با توکن / DEV_BYPASS)
+/* ---------- POST /api/users/upsert ----------
+   پروفایل‌ویزارد و ادیت پروفایل (با توکن / DEV_BYPASS)
 ------------------------------------------------ */
 router.post("/upsert", authUser, async (req, res) => {
   try {
@@ -107,15 +109,14 @@ router.post("/upsert", authUser, async (req, res) => {
       gender,
       birthDate,
       profileCompleted,
-      avatarUrl,
+      avatarUrl,      // ورودی، ولی در Prisma استفاده نمی‌شود
       plan,
       planExpiresAt,
-      lastLoginAt,
+      lastLoginAt,    // ورودی، ولی در Prisma استفاده نمی‌شود
     } = req.body || {};
 
     const birthDateValue = parseDateOrNull(birthDate);
     const planExpiresValue = parseDateOrNull(planExpiresAt);
-    const lastLoginValue = parseDateOrNull(lastLoginAt);
 
     const user = await prisma.user.upsert({
       where: { phone },
@@ -124,17 +125,15 @@ router.post("/upsert", authUser, async (req, res) => {
         fullName: fullName ?? "",
         gender: gender ?? null,
         birthDate: birthDateValue,
-        avatarUrl: avatarUrl ?? null,
+        // avatarUrl و lastLoginAt در این دیتابیس فیلد ندارند
         profileCompleted: !!profileCompleted,
         plan: plan || "free",
         planExpiresAt: planExpiresValue,
-        lastLoginAt: lastLoginValue,
       },
       update: {
         fullName: fullName ?? undefined,
         gender: gender ?? undefined,
         birthDate: birthDate ? birthDateValue : undefined,
-        avatarUrl: avatarUrl ?? undefined,
         profileCompleted:
           typeof profileCompleted === "boolean"
             ? profileCompleted
@@ -142,74 +141,59 @@ router.post("/upsert", authUser, async (req, res) => {
         plan: plan ?? undefined,
         planExpiresAt:
           typeof planExpiresAt !== "undefined" ? planExpiresValue : undefined,
-        lastLoginAt:
-          typeof lastLoginAt !== "undefined" ? lastLoginValue : undefined,
       },
     });
 
     return res.json({ ok: true, data: user });
   } catch (e) {
     console.error("[users.upsert] error:", e);
-
     const code = e?.code ? String(e.code) : "";
-    const message = e?.message ? String(e.message) : "";
-
     const errorLabel =
       code && code.startsWith("P")
-        ? `PRISMA_${code}`             // مثلا PRISMA_P2002
-        : message || "SERVER_ERROR";
-
+        ? `PRISMA_${code}`
+        : "SERVER_ERROR";
     return res.status(500).json({ ok: false, error: errorLabel });
   }
 });
 
-/* ---------- POST /api/user ----------
-   ⬅️ این همونیه که از pay/verify.js صدا می‌زنی:
-   body: { phone, plan, planExpiresAt, ... }
-
-   - اینجا authUser نداریم، چون از سمت سرورِ پرداخت میاد
-   - برای امنیت می‌تونی بعداً یک secret header هم چک کنی
+/* ---------- POST /api/users ----------
+   کال از pay/verify (بدون توکن)
 ------------------------------------------------ */
 router.post("/", async (req, res) => {
   try {
     const rawPhone = req.body?.phone;
     const phone = normalizePhone(rawPhone);
-
     if (!phone) {
       return res.status(400).json({ ok: false, error: "PHONE_REQUIRED" });
     }
 
     const {
       fullName,
-      avatarUrl,
+      avatarUrl,     // نادیده گرفته می‌شود
       gender,
       birthDate,
       profileCompleted,
       plan,
       planExpiresAt,
-      lastLoginAt,
+      lastLoginAt,   // نادیده گرفته می‌شود
     } = req.body || {};
 
     const birthDateValue = parseDateOrNull(birthDate);
     const planExpiresValue = parseDateOrNull(planExpiresAt);
-    const lastLoginValue = parseDateOrNull(lastLoginAt);
 
     const user = await prisma.user.upsert({
       where: { phone },
       create: {
         phone,
         fullName: fullName ?? "",
-        avatarUrl: avatarUrl ?? null,
         gender: gender ?? null,
         birthDate: birthDateValue,
         profileCompleted: !!profileCompleted,
         plan: plan || "free",
         planExpiresAt: planExpiresValue,
-        lastLoginAt: lastLoginValue,
       },
       update: {
         fullName: fullName ?? undefined,
-        avatarUrl: avatarUrl ?? undefined,
         gender: gender ?? undefined,
         birthDate: birthDate ? birthDateValue : undefined,
         profileCompleted:
@@ -219,23 +203,17 @@ router.post("/", async (req, res) => {
         plan: plan ?? undefined,
         planExpiresAt:
           typeof planExpiresAt !== "undefined" ? planExpiresValue : undefined,
-        lastLoginAt:
-          typeof lastLoginAt !== "undefined" ? lastLoginValue : undefined,
       },
     });
 
     return res.json({ ok: true, data: user });
   } catch (e) {
     console.error("[users.root-post] error:", e);
-
     const code = e?.code ? String(e.code) : "";
-    const message = e?.message ? String(e.message) : "";
-
     const errorLabel =
       code && code.startsWith("P")
         ? `PRISMA_${code}`
-        : message || "SERVER_ERROR";
-
+        : "SERVER_ERROR";
     return res.status(500).json({ ok: false, error: errorLabel });
   }
 });

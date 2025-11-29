@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -129,8 +129,8 @@ model User {
   birthDate DateTime?
 
   // ✅ فیلدهای رسمی اشتراک
-  plan           Plan      @default(free)  // free | pro | vip
-  planExpiresAt  DateTime?               // تاریخ انقضای همین پلن
+  plan          Plan      @default(free) // free | pro | vip
+  planExpiresAt DateTime?               // تاریخ انقضای همین پلن
 
   // (اختیاری ولی مفید – اگر نخواستی می‌تونی حذفش کنی)
   profileCompleted Boolean @default(false)
@@ -146,13 +146,13 @@ model Subscription {
   userId    String
   user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  authority   String             // کد زرین‌پال
-  refId       String             // ref_id زرین‌پال
-  amount      Int
-  months      Int
-  plan        String             // فعلاً "pro" نگه می‌داریم
-  status      SubscriptionStatus @default(active)
-  expiresAt   DateTime
+  authority String             // کد زرین‌پال
+  refId     String             // ref_id زرین‌پال
+  amount    Int
+  months    Int
+  plan      String             // فعلاً "pro" نگه می‌داریم
+  status    SubscriptionStatus @default(active)
+  expiresAt DateTime
 
   createdAt DateTime @default(now())
 
