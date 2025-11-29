@@ -17,17 +17,22 @@ function normalizePhone(input) {
   return null;
 }
 
+function parseDateOrNull(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  return d;
+}
+
 /* ---------- auth middleware (توکن + DEV_BYPASS) ---------- */
 function authUser(req, res, next) {
   const header = String(req.headers["authorization"] || "");
   const [scheme, token] = header.split(" ");
-
   const secret =
     process.env.APP_JWT_SECRET ||
     process.env.OTP_JWT_SECRET ||
     process.env.JWT_SECRET ||
     "";
-
   const isDev = process.env.NODE_ENV !== "production";
 
   // 1) مسیر نرمال با Bearer token
@@ -55,7 +60,6 @@ function authUser(req, res, next) {
   if (isDev) {
     const fromQuery = normalizePhone(req.query?.phone);
     const fromBody = normalizePhone(req.body?.phone);
-
     const phone = fromQuery || fromBody;
     if (phone) {
       console.warn("[users][authUser] DEV_BYPASS → using phone =", phone);
@@ -72,17 +76,15 @@ function authUser(req, res, next) {
       .status(500)
       .json({ ok: false, error: "SERVER_MISCONFIGURED" });
   }
-
   return res.status(401).json({ ok: false, error: "NO_TOKEN" });
 }
 
-/* ---------- GET /api/users/me ---------- */
+/* ---------- GET /api/user/me ---------- */
 router.get("/me", authUser, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { phone: req.userPhone },
     });
-
     return res.json({
       ok: true,
       data: user || null,
@@ -93,11 +95,13 @@ router.get("/me", authUser, async (req, res) => {
   }
 });
 
-/* ---------- POST /api/users/upsert ---------- */
-// بعد از تمام شدن پروفایل‌ویزارد این رو صدا می‌زنی
+/* ---------- POST /api/user/upsert ----------
+   این برای پروفایل‌ویزارد و ادیت پروفایل داخل اپ است (با توکن / DEV_BYPASS)
+------------------------------------------------ */
 router.post("/upsert", authUser, async (req, res) => {
   try {
     const phone = req.userPhone;
+
     const {
       fullName,
       gender,
@@ -109,47 +113,111 @@ router.post("/upsert", authUser, async (req, res) => {
       lastLoginAt,
     } = req.body || {};
 
-    let birthDateValue = null;
-    if (birthDate) {
-      const d = new Date(birthDate);
-      if (!isNaN(d.getTime())) birthDateValue = d;
-    }
-
-    let planExpiresValue = null;
-    if (planExpiresAt) {
-      const d = new Date(planExpiresAt);
-      if (!isNaN(d.getTime())) planExpiresValue = d;
-    }
+    const birthDateValue = parseDateOrNull(birthDate);
+    const planExpiresValue = parseDateOrNull(planExpiresAt);
+    const lastLoginValue = parseDateOrNull(lastLoginAt);
 
     const user = await prisma.user.upsert({
-  where: { phone },
-  create: {
-    phone,
-    fullName: fullName ?? "",
-    gender: gender ?? null,
-    birthDate: birthDateValue,
-    // ✅ فعلاً فقط فیلدهایی که مطمئنیم در اسکیما هستن
-    plan: plan || "free",
-    planExpiresAt: planExpiresValue,
-    // اگر profileCompleted در اسکیما نباشه، بعد از ارور بعدی حذفش می‌کنیم
-    profileCompleted: !!profileCompleted,
-  },
-  update: {
-    fullName: fullName ?? undefined,
-    gender: gender ?? undefined,
-    birthDate: birthDate ? birthDateValue : undefined,
-    profileCompleted:
-      typeof profileCompleted === "boolean"
-        ? profileCompleted
-        : undefined,
-    plan: plan ?? undefined,
-    planExpiresAt: planExpiresValue ?? undefined,
-  },
-});
+      where: { phone },
+      create: {
+        phone,
+        fullName: fullName ?? "",
+        gender: gender ?? null,
+        birthDate: birthDateValue,
+        avatarUrl: avatarUrl ?? null,
+        profileCompleted: !!profileCompleted,
+        plan: plan || "free",
+        planExpiresAt: planExpiresValue,
+        lastLoginAt: lastLoginValue,
+      },
+      update: {
+        fullName: fullName ?? undefined,
+        gender: gender ?? undefined,
+        birthDate: birthDate ? birthDateValue : undefined,
+        avatarUrl: avatarUrl ?? undefined,
+        profileCompleted:
+          typeof profileCompleted === "boolean"
+            ? profileCompleted
+            : undefined,
+        plan: plan ?? undefined,
+        planExpiresAt:
+          typeof planExpiresAt !== "undefined" ? planExpiresValue : undefined,
+        lastLoginAt:
+          typeof lastLoginAt !== "undefined" ? lastLoginValue : undefined,
+      },
+    });
 
     return res.json({ ok: true, data: user });
   } catch (e) {
     console.error("[users.upsert] error:", e);
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
+/* ---------- POST /api/user ----------
+   ⬅️ این همونیه که از pay/verify.js صدا می‌زنی:
+   body: { phone, plan, planExpiresAt, ... }
+
+   - اینجا authUser نداریم، چون از سمت سرورِ پرداخت میاد
+   - برای امنیت می‌تونی بعداً یک secret header هم چک کنی
+------------------------------------------------ */
+router.post("/", async (req, res) => {
+  try {
+    const rawPhone = req.body?.phone;
+    const phone = normalizePhone(rawPhone);
+
+    if (!phone) {
+      return res.status(400).json({ ok: false, error: "PHONE_REQUIRED" });
+    }
+
+    const {
+      fullName,
+      avatarUrl,
+      gender,
+      birthDate,
+      profileCompleted,
+      plan,
+      planExpiresAt,
+      lastLoginAt,
+    } = req.body || {};
+
+    const birthDateValue = parseDateOrNull(birthDate);
+    const planExpiresValue = parseDateOrNull(planExpiresAt);
+    const lastLoginValue = parseDateOrNull(lastLoginAt);
+
+    const user = await prisma.user.upsert({
+      where: { phone },
+      create: {
+        phone,
+        fullName: fullName ?? "",
+        avatarUrl: avatarUrl ?? null,
+        gender: gender ?? null,
+        birthDate: birthDateValue,
+        profileCompleted: !!profileCompleted,
+        plan: plan || "free",
+        planExpiresAt: planExpiresValue,
+        lastLoginAt: lastLoginValue,
+      },
+      update: {
+        fullName: fullName ?? undefined,
+        avatarUrl: avatarUrl ?? undefined,
+        gender: gender ?? undefined,
+        birthDate: birthDate ? birthDateValue : undefined,
+        profileCompleted:
+          typeof profileCompleted === "boolean"
+            ? profileCompleted
+            : undefined,
+        plan: plan ?? undefined,
+        planExpiresAt:
+          typeof planExpiresAt !== "undefined" ? planExpiresValue : undefined,
+        lastLoginAt:
+          typeof lastLoginAt !== "undefined" ? lastLoginValue : undefined,
+      },
+    });
+
+    return res.json({ ok: true, data: user });
+  } catch (e) {
+    console.error("[users.root-post] error:", e);
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });

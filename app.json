@@ -11,7 +11,9 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "UIBackgroundModes": ["audio"]
+        "UIBackgroundModes": [
+          "audio"
+        ]
       }
     },
     "android": {
@@ -45,7 +47,9 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
-          "dark": { "backgroundColor": "#000000" }
+          "dark": {
+            "backgroundColor": "#000000"
+          }
         }
       ],
       "expo-web-browser",
@@ -53,11 +57,16 @@
       [
         "expo-build-properties",
         {
-          "ios": { "useFrameworks": "static" },
-          "android": { "kotlinVersion": "2.1.20" }
+          "ios": {
+            "useFrameworks": "static"
+          },
+          "android": {
+            "kotlinVersion": "2.1.20"
+          }
         }
       ],
-      "./app.plugin.js"
+      "./app.plugin.js",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -65,7 +74,9 @@
     },
     "extra": {
       "router": {},
-      "eas": { "projectId": "70668c38-b154-40e2-9f81-923a43b27850" }
+      "eas": {
+        "projectId": "70668c38-b154-40e2-9f81-923a43b27850"
+      }
     },
     "owner": "pezhman_azar"
   }
