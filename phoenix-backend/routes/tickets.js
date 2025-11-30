@@ -2,10 +2,48 @@
 import { PrismaClient } from "@prisma/client";
 import { Router } from "express";
 import path from "path";
+import { ensureTherapyChatAllowed } from "../lib/reactive-plan.js";
 
 const prisma = new PrismaClient();
 
-// ====================== روتر پنل/ادمین (قدیمی شما) ======================
+// ================= helper پلن برای چت درمانگر =================
+
+/**
+ * بسته به نوع تیکت اگر therapy باشد، چک می‌کند که کاربر اجازه چت درمانگر دارد یا نه.
+ * اگر اجازه نداشته باشد:
+ *   - خودش 403 برمی‌گرداند
+ *   - true برمی‌گرداند (یعنی روت باید return کند و ادامه ندهد)
+ * اگر اجازه داشته باشد یا تیکت فنی باشد:
+ *   - false برمی‌گرداند (یعنی روت می‌تواند ادامه بدهد)
+ */
+async function checkTherapyAccessOrReject({ res, type, openedById, contact }) {
+  const t = (type || "").toString().toLowerCase();
+  if (t !== "therapy") return false; // تیکت فنی است؛ نیازی به چک پلن نیست
+
+  const userKey =
+    (openedById && String(openedById)) ||
+    (contact && String(contact)) ||
+    null;
+
+  if (!userKey) {
+    res
+      .status(403)
+      .json({ ok: false, error: "therapy_not_allowed_missing_user" });
+    return true;
+  }
+
+  try {
+    await ensureTherapyChatAllowed(userKey);
+    return false; // اجازه داده شد
+  } catch (err) {
+    console.error("therapy access denied:", err);
+    res.status(403).json({ ok: false, error: "therapy_not_allowed" });
+    return true;
+  }
+}
+
+// ====================== روتر پنل/ادمین (قدیمی) ======================
+
 const router = Router();
 
 /**
@@ -15,16 +53,22 @@ const router = Router();
  */
 router.post("/", async (req, res) => {
   try {
-    const { title, description, contact, type, openedById, openedByName } = req.body || {};
+    const { title, description, contact, type, openedById, openedByName } =
+      req.body || {};
+
     if (!title || !description) {
-      return res.status(400).json({ ok: false, error: "title and description are required" });
+      return res
+        .status(400)
+        .json({ ok: false, error: "title and description are required" });
     }
+
     let ticketType;
     if (typeof type === "string") {
       const t = type.toLowerCase();
       if (t === "tech" || t === "therapy") ticketType = t;
       else return res.status(400).json({ ok: false, error: "invalid_type" });
     }
+
     const t = await prisma.ticket.create({
       data: {
         title,
@@ -39,6 +83,7 @@ router.post("/", async (req, res) => {
         messages: { orderBy: { createdAt: "asc" } },
       },
     });
+
     const withDisplay = { ...t, displayTitle: t.openedByName || t.title };
     res.json({ ok: true, ticket: withDisplay });
   } catch (e) {
@@ -63,6 +108,7 @@ router.get("/", async (req, res) => {
       }
       where.type = t;
     }
+
     const list = await prisma.ticket.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -70,7 +116,11 @@ router.get("/", async (req, res) => {
         messages: { orderBy: { createdAt: "asc" } },
       },
     });
-    const mapped = list.map((t) => ({ ...t, displayTitle: t.openedByName || t.title }));
+
+    const mapped = list.map((t) => ({
+      ...t,
+      displayTitle: t.openedByName || t.title,
+    }));
     res.json({ ok: true, tickets: mapped });
   } catch (e) {
     console.error(e);
@@ -108,17 +158,24 @@ router.post("/:id/reply", async (req, res) => {
   try {
     const id = String(req.params.id);
     const { text } = req.body || {};
-    if (!text) return res.status(400).json({ ok: false, error: "text required" });
+    if (!text)
+      return res.status(400).json({ ok: false, error: "text required" });
+
     const exists = await prisma.ticket.findUnique({ where: { id } });
-    if (!exists) return res.status(404).json({ ok: false, error: "not_found" });
+    if (!exists)
+      return res.status(404).json({ ok: false, error: "not_found" });
+
     const message = await prisma.message.create({
       data: { ticketId: id, sender: "admin", text },
     });
+
     const ticket = await prisma.ticket.findUnique({
       where: { id },
       include: { messages: { orderBy: { createdAt: "asc" } } },
     });
-    const withDisplay = ticket ? { ...ticket, displayTitle: ticket.openedByName || ticket.title } : ticket;
+    const withDisplay = ticket
+      ? { ...ticket, displayTitle: ticket.openedByName || ticket.title }
+      : ticket;
     res.json({ ok: true, ticket: withDisplay, message });
   } catch (e) {
     console.error(e);
@@ -137,6 +194,7 @@ router.patch("/:id/status", async (req, res) => {
     if (!["open", "pending", "closed"].includes(status)) {
       return res.status(400).json({ ok: false, error: "invalid_status" });
     }
+
     const t = await prisma.ticket.update({
       where: { id },
       data: { status },
@@ -154,6 +212,7 @@ router.patch("/:id/status", async (req, res) => {
 });
 
 // ====================== روتر عمومی کاربر ======================
+
 export const publicTicketsRouter = Router();
 
 /**
@@ -182,11 +241,23 @@ publicTicketsRouter.post("/send", async (req, res) => {
   try {
     const { type, text, openedById, openedByName, contact } = req.body || {};
     const msgText = (text || "").trim();
-    if (!msgText) return res.status(400).json({ ok: false, error: "text_required" });
+    if (!msgText)
+      return res.status(400).json({ ok: false, error: "text_required" });
+
     const tType = String(type || "tech").toLowerCase();
     if (tType !== "tech" && tType !== "therapy") {
       return res.status(400).json({ ok: false, error: "invalid_type" });
     }
+
+    // 🔒 گارد پلن برای چت درمانگر
+    const blocked = await checkTherapyAccessOrReject({
+      res,
+      type: tType,
+      openedById,
+      contact,
+    });
+    if (blocked) return;
+
     const latestName = (openedByName || "کاربر").toString().trim();
 
     let ticket = await prisma.ticket.findFirst({
@@ -225,13 +296,19 @@ publicTicketsRouter.post("/send", async (req, res) => {
     await prisma.message.create({
       data: { ticketId: ticket.id, sender: "user", type: "text", text: msgText },
     });
-    await prisma.ticket.update({ where: { id: ticket.id }, data: { unread: true, updatedAt: new Date() } });
+
+    await prisma.ticket.update({
+      where: { id: ticket.id },
+      data: { unread: true, updatedAt: new Date() },
+    });
 
     const fresh = await prisma.ticket.findUnique({
       where: { id: ticket.id },
       include: { messages: { orderBy: { createdAt: "asc" } } },
     });
-    const withDisplay = fresh ? { ...fresh, displayTitle: fresh.openedByName || fresh.title } : fresh;
+    const withDisplay = fresh
+      ? { ...fresh, displayTitle: fresh.openedByName || fresh.title }
+      : fresh;
     return res.json({ ok: true, ticket: withDisplay });
   } catch (e) {
     console.error("public tickets/send error:", e);
@@ -245,28 +322,67 @@ publicTicketsRouter.post("/send", async (req, res) => {
 publicTicketsRouter.post("/:id/reply", async (req, res) => {
   try {
     const id = String(req.params.id);
-    const { text, openedByName } = req.body || {};
+    const { text, openedById, openedByName } = req.body || {};
     const msgText = (text || "").trim();
-    if (!msgText) return res.status(400).json({ ok: false, error: "text_required" });
+    if (!msgText)
+      return res.status(400).json({ ok: false, error: "text_required" });
 
-    const exists = await prisma.ticket.findUnique({ where: { id } });
-    if (!exists) return res.status(404).json({ ok: false, error: "not_found" });
+    const exists = await prisma.ticket.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        type: true,
+        openedById: true,
+        openedByName: true,
+        contact: true,
+      },
+    });
+    if (!exists)
+      return res.status(404).json({ ok: false, error: "not_found" });
+
+    // 🔒 گارد پلن برای چت درمانگر
+    const blocked = await checkTherapyAccessOrReject({
+      res,
+      type: exists.type,
+      openedById: openedById || exists.openedById,
+      contact: exists.contact,
+    });
+    if (blocked) return;
 
     const latestName = (openedByName || "").toString().trim();
+    const dataUpdate = {};
+
     if (latestName && latestName !== exists.openedByName) {
-      await prisma.ticket.update({ where: { id }, data: { openedByName: latestName, title: latestName } });
+      dataUpdate.openedByName = latestName;
+      dataUpdate.title = latestName;
+    }
+    if (openedById && openedById !== exists.openedById) {
+      dataUpdate.openedById = String(openedById);
+    }
+
+    if (Object.keys(dataUpdate).length > 0) {
+      await prisma.ticket.update({
+        where: { id },
+        data: dataUpdate,
+      });
     }
 
     await prisma.message.create({
       data: { ticketId: id, sender: "user", type: "text", text: msgText },
     });
-    await prisma.ticket.update({ where: { id }, data: { unread: true, updatedAt: new Date() } });
+
+    await prisma.ticket.update({
+      where: { id },
+      data: { unread: true, updatedAt: new Date() },
+    });
 
     const fresh = await prisma.ticket.findUnique({
       where: { id },
-      include: { messages: { orderBy: { createdAt: "asc" } } }, // ← اصلاح شد
+      include: { messages: { orderBy: { createdAt: "asc" } } },
     });
-    const withDisplay = fresh ? { ...fresh, displayTitle: fresh.openedByName || fresh.title } : fresh;
+    const withDisplay = fresh
+      ? { ...fresh, displayTitle: fresh.openedByName || fresh.title }
+      : fresh;
     res.json({ ok: true, ticket: withDisplay });
   } catch (e) {
     console.error("public tickets/:id/reply error:", e);
@@ -281,13 +397,59 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
 publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
   try {
     const id = String(req.params.id);
-    const exists = await prisma.ticket.findUnique({ where: { id } });
-    if (!exists) return res.status(404).json({ ok: false, error: "not_found" });
 
-    const rawText = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+    const exists = await prisma.ticket.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        type: true,
+        openedById: true,
+        openedByName: true,
+        contact: true,
+      },
+    });
+    if (!exists)
+      return res.status(404).json({ ok: false, error: "not_found" });
+
+    const rawText =
+      typeof req.body?.text === "string" ? req.body.text.trim() : "";
     const hasText = rawText.length > 0;
 
-    // فایل (بدون تایپ‌اسکریپت)
+    const openedById =
+      req.body?.openedById !== undefined && req.body.openedById !== null
+        ? String(req.body.openedById)
+        : undefined;
+    const openedByName =
+      req.body?.openedByName !== undefined && req.body.openedByName !== null
+        ? String(req.body.openedByName)
+        : undefined;
+
+    // 🔒 گارد پلن برای چت درمانگر
+    const blocked = await checkTherapyAccessOrReject({
+      res,
+      type: exists.type,
+      openedById: openedById || exists.openedById,
+      contact: exists.contact,
+    });
+    if (blocked) return;
+
+    // آپدیت نام/آیدی اگر لازم بود
+    const dataUpdate = {};
+    if (
+      openedByName &&
+      openedByName.trim() &&
+      openedByName.trim() !== exists.openedByName
+    ) {
+      dataUpdate.openedByName = openedByName.trim();
+      dataUpdate.title = openedByName.trim();
+    }
+    if (openedById && openedById !== exists.openedById) {
+      dataUpdate.openedById = openedById;
+    }
+    if (Object.keys(dataUpdate).length > 0) {
+      await prisma.ticket.update({ where: { id }, data: dataUpdate });
+    }
+
     const f = req.file;
     let messageType = "text";
     let fileUrl = null;
@@ -300,7 +462,6 @@ publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
       size = typeof f.size === "number" ? f.size : null;
       const filename = path.basename(f.path || f.filename || "");
       fileUrl = filename ? `/uploads/${filename}` : null;
-
       const mt = (mime || "").toLowerCase();
       if (mt.startsWith("audio/")) messageType = "voice";
       else if (mt.startsWith("image/")) messageType = "image";
@@ -329,14 +490,18 @@ publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
       },
     });
 
-    await prisma.ticket.update({ where: { id }, data: { unread: true, updatedAt: new Date() } });
+    await prisma.ticket.update({
+      where: { id },
+      data: { unread: true, updatedAt: new Date() },
+    });
 
     const ticket = await prisma.ticket.findUnique({
       where: { id },
       include: { messages: { orderBy: { createdAt: "asc" } } },
     });
-    const withDisplay = ticket ? { ...ticket, displayTitle: ticket.openedByName || ticket.title } : ticket;
-
+    const withDisplay = ticket
+      ? { ...ticket, displayTitle: ticket.openedByName || ticket.title }
+      : ticket;
     res.json({ ok: true, ticket: withDisplay });
   } catch (e) {
     console.error("public tickets/:id/reply-upload error:", e);
@@ -345,4 +510,5 @@ publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
 });
 
 // ====================== اکسپورت‌ها ======================
+
 export default router;

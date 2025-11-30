@@ -46,6 +46,7 @@ import { getPlanStatus } from "../../../lib/plan";
 
 /* ===== انواع ===== */
 type MessageType = "text" | "voice" | "image" | "file";
+
 type Message = {
   id: string;
   ticketId: string;
@@ -58,6 +59,7 @@ type Message = {
   ts?: string;
   createdAt?: string;
 };
+
 type Ticket = {
   id: string;
   title: string;
@@ -75,11 +77,13 @@ type PlanView = "free" | "pro" | "expiring" | "expired";
 const PRO_FLAG_KEY = "phoenix_is_pro";
 const PLAN_DEBUG_KEY = "phoenix_plan_debug";
 
+/* تشخیص نوع پیام بر اساس mime یا url */
 function detectType(m?: string | null, url?: string | null): MessageType {
   const mime = (m || "").toLowerCase();
   if (mime.startsWith("image/")) return "image";
   if (mime.startsWith("audio/")) return "voice";
   if (mime) return "file";
+
   const u = (url || "").toLowerCase();
   if (
     u.endsWith(".png") ||
@@ -146,6 +150,7 @@ function ImageLightbox({
 }) {
   const scale = useRef(new Animated.Value(1)).current;
   const lastTap = useRef<number>(0);
+
   const onDoubleTap = () => {
     const now = Date.now();
     if (now - lastTap.current < 250) {
@@ -159,9 +164,11 @@ function ImageLightbox({
     }
     lastTap.current = now;
   };
+
   useEffect(() => {
     if (!visible) scale.setValue(1);
   }, [visible, scale]);
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.lbBackdrop}>
@@ -184,9 +191,17 @@ function ImageLightbox({
 let currentSound: Audio.Sound | null = null;
 let setGlobalPlaying: ((activeId: string | null) => void) | null = null;
 
-function Waveform({ progress = 0, tint = "#fff" }: { progress?: number; tint?: string }) {
+function Waveform({
+  progress = 0,
+  tint = "#fff",
+}: {
+  progress?: number;
+  tint?: string;
+}) {
   const bars = 64;
-  const arr = Array.from({ length: bars }, (_, i) => 6 + Math.floor(8 * Math.abs(Math.sin(i * 0.37))));
+  const arr = Array.from({ length: bars }, (_, i) => {
+    return 6 + Math.floor(8 * Math.abs(Math.sin(i * 0.37)));
+  });
   const activeCount = Math.floor(arr.length * progress);
   const inactive =
     tint === "#000" ? "rgba(0,0,0,0.35)" : "rgba(255,255,255,0.35)";
@@ -210,6 +225,7 @@ function Waveform({ progress = 0, tint = "#fff" }: { progress?: number; tint?: s
     </View>
   );
 }
+
 function fmt(ms: number) {
   const s = Math.max(0, Math.floor(ms / 1000));
   const m = Math.floor(s / 60);
@@ -327,6 +343,7 @@ function VoicePlayer({
         setPos(0);
         setProgress(0);
       }
+
       const st = await s.getStatusAsync();
       if ("isPlaying" in st && st.isPlaying) {
         await s.pauseAsync();
@@ -390,9 +407,7 @@ function VoicePlayer({
     <View style={{ gap: 10, width: "100%" }}>
       <View
         style={{ width: "100%", overflow: "hidden" }}
-        onLayout={(e) =>
-          (wfWidth.current = e.nativeEvent.layout.width || 1)
-        }
+        onLayout={(e) => (wfWidth.current = e.nativeEvent.layout.width || 1)}
         {...pan.panHandlers}
       >
         <Waveform progress={progress} tint={tint} />
@@ -539,7 +554,9 @@ function Composer({
         playsInSilentModeIOS: true,
       });
       const rec = new Audio.Recording();
-      await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      await rec.prepareToRecordAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
       rec.setOnRecordingStatusUpdate((st) => {
         if (!st.canRecord) return;
         const ms = st.durationMillis ?? 0;
@@ -554,6 +571,7 @@ function Composer({
       alert("شروع ضبط ناموفق بود.");
     }
   };
+
   const stopRecording = async (auto = false) => {
     if (!recording) return;
     try {
@@ -572,7 +590,9 @@ function Composer({
   };
 
   const createTicketIfNeeded = async (textFallback: string) => {
+    // اگر تیکت هنوز ساخته نشده (ورود از /support/tickets/therapy)
     if (!ticketType) return ticketId;
+
     const { openedById, openedByName } = await getUserIdentity();
     const res = await fetch(`${BACKEND_URL}/api/public/tickets/send`, {
       method: "POST",
@@ -590,14 +610,17 @@ function Composer({
         openedByName,
       }),
     });
+
     const json = await res.json().catch(() => null);
     if (!res.ok || !json?.ok) {
       const msg = extractErrorMessage(json?.error, "ساخت تیکت ناموفق بود");
       throw new Error(msg);
     }
+
     const newId: string =
       (json.ticket && json.ticket.id) || json.ticketId || json.id || "";
     if (!newId) throw new Error("شناسهٔ تیکت در پاسخ نبود");
+
     onTicketCreated?.(String(newId));
     return String(newId);
   };
@@ -605,12 +628,14 @@ function Composer({
   const sendText = async () => {
     if (!hasText) return;
     if (planGuard()) return;
+
     try {
       setSending(true);
       const textPayload = text.trim();
 
       let targetId = ticketId;
       if (ticketType) {
+        // اگر صفحه برای نوع تیکت است (tech/therapy)، اول تیکت بساز
         targetId = await createTicketIfNeeded(textPayload);
         setText("");
         onSent();
@@ -642,6 +667,7 @@ function Composer({
         const msg = extractErrorMessage(json?.error, "ارسال ناموفق");
         throw new Error(msg);
       }
+
       setText("");
       onSent();
     } catch (e: any) {
@@ -660,6 +686,7 @@ function Composer({
     fd.append("openedByName", String(openedByName || "کاربر"));
 
     if (hasText) fd.append("text", text.trim());
+
     if (image) {
       const file: any = {
         uri: image.uri,
@@ -679,8 +706,10 @@ function Composer({
       fd.append("attachment", file);
       fd.append("durationSec", String(durationSec));
     }
+
     return fd;
   };
+
   const tryPost = async (url: string, fd: FormData) => {
     const res = await fetch(url, { method: "POST", body: fd });
     let json: any = null;
@@ -693,6 +722,7 @@ function Composer({
   const sendUpload = async () => {
     if (!hasAttachment && !hasText) return;
     if (planGuard()) return;
+
     try {
       setSending(true);
 
@@ -707,6 +737,8 @@ function Composer({
         `${BACKEND_URL}/api/public/tickets/${targetId}/reply-upload`,
         fd
       );
+
+      // fallback برای سرور قدیمی
       if (res.status === 404 || json?.error === "not_found") {
         const fd2 = await buildForm();
         ({ res, json } = await tryPost(
@@ -714,6 +746,7 @@ function Composer({
           fd2
         ));
       }
+
       if (!res.ok || !json?.ok) {
         const msg = extractErrorMessage(json?.error, "ارسال ناموفق");
         throw new Error(msg);
@@ -895,8 +928,9 @@ function Composer({
   );
 }
 
-/* ================= Pin ================= */
+/* ================= Pin (پین کردن پیام‌ها در کلاینت) ================= */
 const pinKey = (ticketId: string) => `pins:${ticketId}`;
+
 async function loadPins(ticketId: string): Promise<string[]> {
   try {
     const raw = await AsyncStorage.getItem(pinKey(ticketId));
@@ -907,6 +941,7 @@ async function loadPins(ticketId: string): Promise<string[]> {
     return [];
   }
 }
+
 async function savePins(ticketId: string, ids: string[]) {
   try {
     await AsyncStorage.setItem(pinKey(ticketId), JSON.stringify(ids));
@@ -959,15 +994,14 @@ export default function TicketDetail() {
   const msgPositions = useRef<Record<string, number>>({});
   const [pins, setPins] = useState<string[]>([]);
 
-  const [kbH, setKbH] = useState(0);
   useEffect(() => {
     const show = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      (e) => setKbH(e.endCoordinates?.height || 0)
+      () => {}
     );
     const hide = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => setKbH(0)
+      () => {}
     );
     return () => {
       show.remove();
@@ -975,7 +1009,7 @@ export default function TicketDetail() {
     };
   }, []);
 
-  // سنک وضعیت پلن
+  /* سنک وضعیت پلن از روی me + فلگ لوکال + دیباگ مود */
   const syncPlanView = useCallback(async () => {
     try {
       const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
@@ -1048,6 +1082,7 @@ export default function TicketDetail() {
 
   const fetchTicket = useCallback(
     async (silent: boolean = false) => {
+      // اگر id=tech/therapy باشه، یعنی هنوز تیکت واقعی نداریم
       if (typeFromParam) {
         if (!silent) setLoading(false);
         return;
@@ -1074,7 +1109,10 @@ export default function TicketDetail() {
   }, [fetchTicket]);
 
   useLayoutEffect(() => {
-    const titleType = (ticket?.type || typeFromParam) as "tech" | "therapy" | null;
+    const titleType = (ticket?.type || typeFromParam) as
+      | "tech"
+      | "therapy"
+      | null;
     if (!titleType) return;
     const title =
       titleType === "therapy"
@@ -1188,12 +1226,15 @@ export default function TicketDetail() {
     );
   }, [ticket, typeFromParam]);
 
-  const chatType = (ticket?.type || typeFromParam) as "tech" | "therapy" | null;
+  const chatType = (ticket?.type || typeFromParam) as
+    | "tech"
+    | "therapy"
+    | null;
   const isTherapyChat = chatType === "therapy";
 
   const isProPlan = planView === "pro" || planView === "expiring";
 
-  // رنگ بج
+  // رنگ بج پلن
   const badgeBg =
     planView === "pro"
       ? "#22C55E"
@@ -1236,7 +1277,9 @@ export default function TicketDetail() {
             marginBottom: 4,
           }}
         >
-          {`planView=${planView} | serverPlan=${me?.plan ?? "none"} | debug=${debugMode}`}
+          {`planView=${planView} | serverPlan=${
+            me?.plan ?? "none"
+          } | debug=${debugMode}`}
         </Text>
         <ScrollView
           horizontal
@@ -1286,7 +1329,7 @@ export default function TicketDetail() {
       </View>
     );
 
-  // حالت قفلِ چت درمانگر
+  /* حالت قفلِ چت درمانگر وقتی پلن PRO نیست */
   if (planLoaded && isTherapyChat && !isProPlan) {
     const isExpiredView = planView === "expired";
     return (
@@ -1329,9 +1372,7 @@ export default function TicketDetail() {
               >
                 چت با درمانگر ققنوس
               </Text>
-              <View
-                style={[styles.planBadge, { backgroundColor: badgeBg }]}
-              >
+              <View style={[styles.planBadge, { backgroundColor: badgeBg }]}>
                 <Text style={styles.planBadgeText}>{badgeLabel}</Text>
               </View>
             </View>
@@ -1438,7 +1479,7 @@ export default function TicketDetail() {
       },
     ];
     const textColor = { color: mine ? "#fff" : colors.text };
-    const dark = mine;
+    const darkBubble = mine;
     const fullURL = m.fileUrl ? `${BACKEND_URL}${m.fileUrl}` : undefined;
     const type: MessageType = m.type || detectType(m.mime, m.fileUrl);
     const isPinned = pins.includes(m.id);
@@ -1492,7 +1533,7 @@ export default function TicketDetail() {
             />
             <Text
               style={{
-                color: dark ? "#000" : "#aaa",
+                color: darkBubble ? "#000" : "#aaa",
                 fontSize: 11,
                 marginTop: 4,
               }}
@@ -1508,7 +1549,7 @@ export default function TicketDetail() {
               id={m.id}
               uri={fullURL}
               durationSec={m.durationSec ?? undefined}
-              dark={voiceDark || dark}
+              dark={voiceDark || darkBubble}
             />
           </View>
         ) : null}
@@ -1608,9 +1649,7 @@ export default function TicketDetail() {
             </Text>
 
             {isTherapyChat && (
-              <View
-                style={[styles.planBadge, { backgroundColor: badgeBg }]}
-              >
+              <View style={[styles.planBadge, { backgroundColor: badgeBg }]}>
                 <Text style={styles.planBadgeText}>{badgeLabel}</Text>
               </View>
             )}
@@ -1726,10 +1765,9 @@ export default function TicketDetail() {
                   lineHeight: 18,
                 }}
               >
-                ارسال پیام به درمانگر ققنوس فقط برای کاربرانی فعاله که
-                اشتراک PRO را از تب «پرداخت» فعال کرده‌اند. اگر فعلاً
-                اشتراک نداری، می‌تونی از پشتیبانی فنی یا پشتیبان هوشمند
-                استفاده کنی.
+                ارسال پیام به درمانگر ققنوس فقط برای کاربرانی فعاله که اشتراک
+                PRO را از تب «پرداخت» فعال کرده‌اند. اگر فعلاً اشتراک نداری،
+                می‌تونی از پشتیبانی فنی یا پشتیبان هوشمند استفاده کنی.
               </Text>
             </View>
           )}

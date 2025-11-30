@@ -5,27 +5,38 @@ type ApiOk<T> = { ok: true; data: T };
 type ApiErr = { ok: false; error: string };
 export type ApiResp<T> = ApiOk<T> | ApiErr;
 
+export type UserPlan = "free" | "pro" | "vip";
+
 export type UserRecord = {
+  id?: string;
   phone: string;
   fullName?: string | null;
   gender?: "male" | "female" | "other" | null;
   birthDate?: string | null; // yyyy-mm-dd
   avatarUrl?: string | null; // http/file/icon
-  plan?: "free" | "pro" | "vip";
+
+  plan?: UserPlan;
   planExpiresAt?: string | null; // ISO
+
   profileCompleted?: boolean;
   notifyTags?: string[];
+
   createdAt?: string | null;
   lastLoginAt?: string | null;
   updatedAt?: string | null;
 };
+
+export type Me = UserRecord;
 
 function userUrl(path: string) {
   const base = APP_API_URL.replace(/\/+$/, "");
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-async function doJson<T>(input: RequestInfo, init?: RequestInit): Promise<ApiResp<T>> {
+async function doJson<T>(
+  input: RequestInfo,
+  init?: RequestInit
+): Promise<ApiResp<T>> {
   try {
     const res = await fetch(input, init);
     const text = await res.text();
@@ -58,7 +69,7 @@ async function doJson<T>(input: RequestInfo, init?: RequestInit): Promise<ApiRes
   }
 }
 
-// ----------------- helpers تلفن -----------------
+// ----------------- helper تبدیل رقم -----------------
 const toEnDigits = (s: string) =>
   String(s || "").replace(/[0-9۰-۹٠-٩]/g, (d) => {
     const fa = "۰۱۲۳۴۵۶۷۸۹";
@@ -79,14 +90,16 @@ export function normalizeIranPhone(v: string) {
   return only;
 }
 
-// ----------------- APIها (روی بک‌اند، نه ورسل) -----------------
+/* ----------------- این سه تا برای پروفایل‌ویزارد و کار با بک‌اند لوکال ----------------- */
 
 // GET http://192.168.100.4:4000/api/users/me?phone=...
-export async function getMeByPhone(phone: string): Promise<ApiResp<UserRecord>> {
+export async function getMeByPhone(
+  phone: string
+): Promise<ApiResp<UserRecord | null>> {
   const p = normalizeIranPhone(phone);
   const url = userUrl(`/api/users/me?phone=${encodeURIComponent(p)}`);
   console.log("[user.getMeByPhone] url =", url);
-  return doJson<UserRecord>(url, { method: "GET" });
+  return doJson<UserRecord | null>(url, { method: "GET" });
 }
 
 // POST http://192.168.100.4:4000/api/users/upsert
@@ -96,7 +109,11 @@ export async function upsertUserByPhone(
 ): Promise<ApiResp<UserRecord>> {
   const p = normalizeIranPhone(phone);
   const url = userUrl(`/api/users/upsert`);
-  console.log("[user.upsertUserByPhone] url =", url, "payload =", { ...payload, phone: p });
+  console.log("[user.upsertUserByPhone] url =", url, "payload =", {
+    ...payload,
+    phone: p,
+  });
+
   return doJson<UserRecord>(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -104,9 +121,22 @@ export async function upsertUserByPhone(
   });
 }
 
-// اختیاری
-export async function resetUserByPhone(phone: string): Promise<ApiResp<UserRecord>> {
+// DELETE برای ریست پروفایل (اگر روی بک‌اند پیاده شده باشد)
+export async function resetUserByPhone(
+  phone: string
+): Promise<ApiResp<UserRecord>> {
   const p = normalizeIranPhone(phone);
   const url = userUrl(`/api/users/reset?phone=${encodeURIComponent(p)}`);
   return doJson<UserRecord>(url, { method: "DELETE" });
+}
+
+/* ----------------- fetchMe برای useUser (فعلاً بدون ریکوئست واقعی) ----------------- */
+
+/**
+ * فعلاً برای جلوگیری از حلقه و اسپم، این تابع کاربر را از سرور نمی‌خواند
+ * و همیشه `null` برمی‌گرداند. یعنی me در UserProvider تهی است.
+ * وقتی خواستی me را هم از نئون/ورسل بخوانیم، همین تابع را گسترش می‌دهیم.
+ */
+export async function fetchMe(): Promise<Me | null> {
+  return null;
 }
