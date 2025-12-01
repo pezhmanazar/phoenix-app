@@ -18,7 +18,6 @@ import { useUser } from "../../hooks/useUser";
 import { startPay, verifyPay } from "../../api/pay";
 import * as WebBrowser from "expo-web-browser";
 import { toJalaali } from "jalaali-js";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getPlanStatus } from "../../lib/plan";
 
 type PlanKey = "trial15" | "p30" | "p90" | "p180";
@@ -40,13 +39,8 @@ type PayResultState = {
   message?: string | null;
 };
 
-// 🔧 حالت‌های تست UI اشتراک
-type DebugState = "real" | "pro-almost" | "pro-expired";
-
 // نمای نمایش پلن برای UI (هم‌راستا با تب پلکان / ققنوس)
 type PlanView = "free" | "pro" | "expiring" | "expired";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 const plans: PlanOption[] = [
   {
@@ -105,8 +99,6 @@ function formatJalaliDate(iso?: string | null): string | null {
   return `${toFa(jd)} ${months[jm - 1]} ${toFa(jy)}`;
 }
 
-const PRO_FLAG_KEY = "phoenix_is_pro";
-
 export default function SubscriptionScreen() {
   const { colors } = useTheme();
   const router = useRouter();
@@ -118,7 +110,6 @@ export default function SubscriptionScreen() {
 
   const [payingKey, setPayingKey] = useState<PlanKey | null>(null);
   const payingRef = useRef(false);
-  const [proFlag, setProFlag] = useState(false);
 
   const [payResult, setPayResult] = useState<PayResultState>({
     visible: false,
@@ -127,79 +118,43 @@ export default function SubscriptionScreen() {
     message: null,
   });
 
-  // 🔧 حالت تست UI (واقعی / پرو نزدیک انقضا / پرو منقضی)
-  const [debugState, setDebugState] = useState<DebugState>("real");
-
+  // هر بار ورود به تب → فقط از سرور می‌خوانیم
   useFocusEffect(
     useCallback(() => {
-      (async () => {
-        try {
-          const v = await AsyncStorage.getItem(PRO_FLAG_KEY);
-          const isPro = v === "1";
-          setProFlag(isPro);
-          console.log("[SUB] focus -> local PRO flag =", v, "=>", isPro);
-        } catch {
-          setProFlag(false);
-        }
-      })();
-
       refresh().catch(() => {});
       return () => {};
     }, [refresh])
   );
 
-  // 🔍 منبع واحد وضعیت پلن: getPlanStatus + فلگ لوکال
+  // 🔍 منبع واحد وضعیت پلن: فقط دیتابیس (getPlanStatus)
   const status = getPlanStatus(me);
-  const flagIsPro = proFlag;
 
   let planView: PlanView = "free";
   let daysRemaining: number | null = null;
   let expireAt: string | null = status.rawExpiresAt ?? null;
 
-  if (status.rawExpiresAt) {
-    if (status.isExpired) {
-      planView = "expired";
-      daysRemaining = 0;
-    } else if (status.isPro || flagIsPro) {
-      const d =
-        typeof status.daysLeft === "number" ? status.daysLeft : null;
-      if (d != null && d > 0 && d <= 7) {
-        planView = "expiring";
-        daysRemaining = d;
-      } else {
-        planView = "pro";
-        daysRemaining = d;
-      }
+  // اگر پلن قبلاً پرو بوده و الان تاریخش گذشته ⇒ expired
+  if (
+    status.isExpired &&
+    (status.rawPlan === "pro" || status.rawPlan === "vip")
+  ) {
+    planView = "expired";
+    daysRemaining = 0;
+  } else if (status.isPro) {
+    // پرو یا VIP فعال
+    const d =
+      typeof status.daysLeft === "number" ? status.daysLeft : null;
+    if (d != null && d > 0 && d <= 7) {
+      planView = "expiring";
+      daysRemaining = d;
     } else {
-      planView = "free";
+      planView = "pro";
+      daysRemaining = d;
     }
   } else {
-    if (status.isPro || flagIsPro) {
-      planView = "pro";
-    } else {
-      planView = "free";
-    }
-  }
-
-  // 🔧 اوورراید برای تست UI در همین تب
-  if (debugState !== "real") {
-    const nowTs = Date.now();
-    if (debugState === "pro-almost") {
-      planView = "expiring";
-      daysRemaining = 2;
-      expireAt = new Date(nowTs + 2 * DAY_MS).toISOString();
-    } else if (debugState === "pro-expired") {
-      planView = "expired";
-      daysRemaining = 0;
-      expireAt = new Date(nowTs - 1 * DAY_MS).toISOString();
-    }
-
-    console.log("[SUB][DEBUG] override status", {
-      debugState,
-      planView,
-      daysRemaining,
-      expireAt,
-    });
+    // هیچ پلن فعالی نداریم
+    planView = "free";
+    daysRemaining = null;
   }
 
   const niceExpireText = useMemo(() => {
@@ -209,13 +164,6 @@ export default function SubscriptionScreen() {
 
   const isAlmostExpired = planView === "expiring";
   const isProActive = planView === "pro" || planView === "expiring";
-
-  console.log("[SUB] planView =", planView, {
-    status,
-    flagIsPro,
-    expireAt,
-    daysRemaining,
-  });
 
   async function handleBuy(option: PlanOption) {
     if (!option.amount) {
@@ -232,20 +180,24 @@ export default function SubscriptionScreen() {
     setPayingKey(option.key);
 
     try {
-      console.log("[SUB] startPay request", { phone, amount: option.amount });
-
+      // --- ۱) شروع پرداخت ---
       const start = await startPay({
         phone: phone!,
         amount: option.amount,
       });
 
-      console.log("[SUB] startPay response", start);
-
-      if (!start.ok || !start.data) {
+      // فقط روی ok نارویینگ کن
+      if (!start.ok) {
         Alert.alert(
           "خطا",
           start.error || "در اتصال به سرور مشکلی پیش آمد."
         );
+        return;
+      }
+
+      // اینجا start حتماً ApiOk است؛ ولی برای اطمینان:
+      if (!start.data) {
+        Alert.alert("خطا", "در اتصال به سرور مشکلی پیش آمد.");
         return;
       }
 
@@ -255,8 +207,8 @@ export default function SubscriptionScreen() {
         return;
       }
 
+      // --- ۲) باز کردن درگاه ---
       const result = await WebBrowser.openBrowserAsync(gatewayUrl);
-      console.log("[SUB] WebBrowser result", result);
 
       if (result.type === "cancel") {
         Alert.alert(
@@ -266,12 +218,7 @@ export default function SubscriptionScreen() {
         return;
       }
 
-      console.log("[SUB] verifyPay request", {
-        authority,
-        amount: option.amount,
-        phone,
-      });
-
+      // --- ۳) تأیید پرداخت ---
       const ver = await verifyPay({
         authority,
         status: "OK",
@@ -279,9 +226,7 @@ export default function SubscriptionScreen() {
         amount: option.amount!,
       });
 
-      console.log("[SUB] verifyPay response", ver);
-
-      if (!ver.ok || !ver.data) {
+      if (!ver.ok) {
         setPayResult({
           visible: true,
           success: false,
@@ -293,18 +238,23 @@ export default function SubscriptionScreen() {
         return;
       }
 
-      const data = ver.data;
-      const refId = data.refId ?? "—";
-
-      if (data.plan === "pro" || data.plan === "vip") {
-        await AsyncStorage.setItem(PRO_FLAG_KEY, "1");
-        console.log("[SUB] set local PRO flag -> phoenix_is_pro = 1");
-      } else {
-        await AsyncStorage.removeItem(PRO_FLAG_KEY);
-        console.log("[SUB] clear local PRO flag");
+      if (!ver.data) {
+        setPayResult({
+          visible: true,
+          success: false,
+          refId: null,
+          message:
+            "وضعیت پرداخت مشخص نشد. اگر مبلغ از حسابت کم شده، چند دقیقه بعد وضعیت اشتراک را دوباره چک کن.",
+        });
+        return;
       }
 
-      await refresh().catch(() => {});
+      // refId ممکنه number باشه → حتماً string کن
+      const rawRefId = (ver.data as any).refId as string | number | undefined;
+      const refId = rawRefId != null ? String(rawRefId) : "—";
+
+      // ✅ بعد از تایید پرداخت، یوزر را از بک‌اند با force=true می‌کشیم
+      await refresh({ force: true }).catch(() => {});
 
       setPayResult({
         visible: true,
@@ -313,7 +263,6 @@ export default function SubscriptionScreen() {
         message: "پرداخت با موفقیت انجام شد و اشتراک ققنوس برات فعال شده.",
       });
     } catch (e: any) {
-      console.log("[SUB] handleBuy error", e?.message || e);
       setPayResult({
         visible: true,
         success: false,
@@ -371,76 +320,10 @@ export default function SubscriptionScreen() {
           }}
           showsVerticalScrollIndicator={false}
         >
-          {/* 🔧 پنل تست حالت اشتراک (می‌تونی قبل از انتشار پاکش کنی) */}
-          <View
-            style={{
-              marginTop: 12,
-              marginBottom: 8,
-              padding: 10,
-              borderRadius: 12,
-              backgroundColor: "#020617",
-              borderWidth: 1,
-              borderColor: "#1F2937",
-            }}
-          >
-            <Text
-              style={{
-                color: "#9CA3AF",
-                fontSize: 11,
-                marginBottom: 6,
-                textAlign: "right",
-              }}
-            >
-              حالت نمایش اشتراک برای تست UI:
-            </Text>
-            <View
-              style={{
-                flexDirection: "row-reverse",
-                justifyContent: "space-between",
-                gap: 6,
-              }}
-            >
-              {(
-                [
-                  { key: "real", label: "داده واقعی" },
-                  { key: "pro-almost", label: "پرو - نزدیک انقضا" },
-                  { key: "pro-expired", label: "پرو - منقضی‌شده" },
-                ] as { key: DebugState; label: string }[]
-              ).map((opt) => {
-                const active = debugState === opt.key;
-                return (
-                  <TouchableOpacity
-                    key={opt.key}
-                    onPress={() => setDebugState(opt.key)}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 6,
-                      borderRadius: 999,
-                      borderWidth: 1,
-                      borderColor: active ? "#2563EB" : "#4B5563",
-                      backgroundColor: active ? "#1D4ED8" : "#020617",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: active ? "#E5E7EB" : "#9CA3AF",
-                        fontSize: 11,
-                        textAlign: "center",
-                        fontWeight: active ? "800" : "500",
-                      }}
-                    >
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
           {/* Header */}
           <View
             style={{
-              marginTop: 4,
+              marginTop: 12,
               padding: 16,
               borderRadius: 20,
               backgroundColor: "#111827",

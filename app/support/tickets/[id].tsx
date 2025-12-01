@@ -74,9 +74,6 @@ type Ticket = {
 
 type PlanView = "free" | "pro" | "expiring" | "expired";
 
-const PRO_FLAG_KEY = "phoenix_is_pro";
-const PLAN_DEBUG_KEY = "phoenix_plan_debug";
-
 /* تشخیص نوع پیام بر اساس mime یا url */
 function detectType(m?: string | null, url?: string | null): MessageType {
   const mime = (m || "").toLowerCase();
@@ -980,7 +977,6 @@ export default function TicketDetail() {
 
   const [planView, setPlanView] = useState<PlanView>("free");
   const [planLoaded, setPlanLoaded] = useState(false);
-  const [debugMode, setDebugMode] = useState<"auto" | PlanView>("auto");
 
   const typeFromParam = parseTicketType(id);
 
@@ -1009,62 +1005,34 @@ export default function TicketDetail() {
     };
   }, []);
 
-  /* سنک وضعیت پلن از روی me + فلگ لوکال + دیباگ مود */
-  const syncPlanView = useCallback(async () => {
+  /* سنک وضعیت پلن از روی me (با استفاده از getPlanStatus) */
+  const syncPlanView = useCallback(() => {
     try {
-      const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
-      const flagIsPro = flag === "1";
       const status = getPlanStatus(me);
 
       let view: PlanView = "free";
 
-      const expIso = status.rawExpiresAt;
-      let isExpSoon = false;
-      if (expIso) {
-        const exp = new Date(expIso);
-        if (!isNaN(exp.getTime())) {
-          const diff = exp.getTime() - Date.now();
-          const oneDay = 24 * 60 * 60 * 1000;
-          isExpSoon = diff > 0 && diff <= 3 * oneDay;
-        }
-      }
-
-      if (status.rawExpiresAt) {
-        if (status.isExpired) {
-          view = "expired";
-        } else if (status.isPro || flagIsPro) {
-          view = isExpSoon ? "expiring" : "pro";
+      if (
+        status.isExpired &&
+        (status.rawPlan === "pro" || status.rawPlan === "vip")
+      ) {
+        view = "expired";
+      } else if (status.isPro) {
+        const d =
+          typeof status.daysLeft === "number" ? status.daysLeft : null;
+        if (d != null && d > 0 && d <= 7) {
+          view = "expiring";
         } else {
-          view = "free";
+          view = "pro";
         }
       } else {
-        view = status.isPro || flagIsPro ? "pro" : "free";
+        view = "free";
       }
 
-      let dbgMode: "auto" | PlanView = "auto";
-      try {
-        const dbgRaw = await AsyncStorage.getItem(PLAN_DEBUG_KEY);
-        if (
-          dbgRaw === "free" ||
-          dbgRaw === "pro" ||
-          dbgRaw === "expiring" ||
-          dbgRaw === "expired"
-        ) {
-          dbgMode = dbgRaw;
-          view = dbgMode;
-        } else {
-          dbgMode = "auto";
-        }
-      } catch {
-        dbgMode = "auto";
-      }
-
-      setDebugMode(dbgMode);
       setPlanView(view);
     } catch (e) {
       console.log("TICKET PLAN ERR", e);
       setPlanView("free");
-      setDebugMode("auto");
     } finally {
       setPlanLoaded(true);
     }
@@ -1256,79 +1224,6 @@ export default function TicketDetail() {
       ? "چت با درمانگر ققنوس"
       : "چت با پشتیبانی فنی ققنوس";
 
-  const changeDebugMode = useCallback(
-    async (mode: "auto" | PlanView) => {
-      try {
-        await AsyncStorage.setItem(PLAN_DEBUG_KEY, mode);
-      } catch {}
-      await syncPlanView();
-    },
-    [syncPlanView]
-  );
-
-  const DebugLine =
-    __DEV__ && (
-      <View style={{ paddingHorizontal: 12, paddingBottom: 4 }}>
-        <Text
-          style={{
-            color: "#6b7280",
-            fontSize: 10,
-            textAlign: "center",
-            marginBottom: 4,
-          }}
-        >
-          {`planView=${planView} | serverPlan=${
-            me?.plan ?? "none"
-          } | debug=${debugMode}`}
-        </Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{
-            justifyContent: "center",
-            alignItems: "center",
-            columnGap: 6,
-            paddingBottom: 2,
-          }}
-        >
-          {[
-            { key: "auto" as const, label: "AUTO" },
-            { key: "free" as const, label: "FREE" },
-            { key: "pro" as const, label: "PRO" },
-            { key: "expiring" as const, label: "EXPIRING" },
-            { key: "expired" as const, label: "EXPIRED" },
-          ].map((opt) => {
-            const active = debugMode === opt.key;
-            return (
-              <TouchableOpacity
-                key={opt.key}
-                onPress={() => changeDebugMode(opt.key)}
-                style={{
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: active ? "#2563eb" : "#d1d5db",
-                  backgroundColor: active ? "#dbeafe" : "#f9fafb",
-                }}
-                activeOpacity={0.8}
-              >
-                <Text
-                  style={{
-                    fontSize: 10,
-                    fontWeight: "800",
-                    color: active ? "#1d4ed8" : "#4b5563",
-                  }}
-                >
-                  {opt.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
-    );
-
   /* حالت قفلِ چت درمانگر وقتی پلن PRO نیست */
   if (planLoaded && isTherapyChat && !isProPlan) {
     const isExpiredView = planView === "expired";
@@ -1379,8 +1274,6 @@ export default function TicketDetail() {
 
             <View style={{ width: 32 }} />
           </View>
-
-          {DebugLine}
 
           <View
             style={{
@@ -1657,8 +1550,6 @@ export default function TicketDetail() {
 
           <View style={{ width: 32 }} />
         </View>
-
-        {DebugLine}
 
         {pinnedList.length ? (
           <ScrollView

@@ -17,10 +17,9 @@ import { LinearGradient } from "expo-linear-gradient";
 import Screen from "@/components/Screen";
 import { useAudio } from "../../hooks/useAudio";
 import { useUser } from "../../hooks/useUser";
-import { getPlanStatus } from "../../lib/plan";
+import { getPlanStatus, PRO_FLAG_KEY } from "../../lib/plan";
 
 const keyFor = (id: string) => `Mashaal.progress.${id}`;
-const PRO_FLAG_KEY = "phoenix_is_pro";
 
 type Lesson = {
   id: string;
@@ -31,12 +30,6 @@ type Lesson = {
 };
 
 type PlanView = "free" | "pro" | "expired";
-type DebugState =
-  | "real"
-  | "force-pro"
-  | "force-pro-near"
-  | "force-free"
-  | "force-expired";
 
 const LESSONS: Lesson[] = [
   {
@@ -88,6 +81,7 @@ const toHMM = (ms: number) => {
   return `${m}:${pad(s)}`;
 };
 
+/* ------------------ کارت هر درس ------------------ */
 function LessonCard({
   item,
   onOpen,
@@ -224,6 +218,7 @@ function LessonCard({
   );
 }
 
+/* ------------------ پلیر ------------------ */
 function Player({
   lesson,
   onClose,
@@ -300,7 +295,7 @@ function Player({
     enabled: lesson.kind === "audio",
   });
 
-  // Throttle عادی هر 2 ثانیه، اما اگر به انتها رسیدیم فوراً ۱۰۰٪ ثبت کن
+  // Throttle هر ۲ ثانیه (و اگر رسید به انتها، سریع ۱۰۰٪ ثبت کن)
   const lastProgressRef = useRef(0);
   const atAudioEnd =
     lesson.kind === "audio" &&
@@ -647,6 +642,7 @@ function Player({
   );
 }
 
+/* ------------------ تب مشعل ------------------ */
 export default function Mashaal() {
   const { colors } = useTheme();
   const { me } = useUser();
@@ -657,7 +653,6 @@ export default function Mashaal() {
   >({});
   const [planView, setPlanView] = useState<PlanView>("free");
   const [daysLeft, setDaysLeft] = useState<number | null>(null);
-  const [debugState, setDebugState] = useState<DebugState>("real");
   const [loadingPlan, setLoadingPlan] = useState(true);
 
   const isProPlan = planView === "pro";
@@ -693,7 +688,7 @@ export default function Mashaal() {
     };
   }, []);
 
-  /** بارگذاری اولیه وضعیت پلن (با daysLeft) */
+  /** بارگذاری اولیه وضعیت پلن */
   useEffect(() => {
     (async () => {
       try {
@@ -706,7 +701,10 @@ export default function Mashaal() {
 
         if (status.rawExpiresAt) {
           if (status.isExpired) {
-            view = "expired";
+            view =
+              status.rawPlan === "pro" || status.rawPlan === "vip"
+                ? "expired"
+                : "free";
           } else if (status.isPro || flagIsPro) {
             view = "pro";
           } else {
@@ -714,20 +712,6 @@ export default function Mashaal() {
           }
         } else {
           view = status.isPro || flagIsPro ? "pro" : "free";
-        }
-
-        if (debugState === "force-pro") {
-          view = "pro";
-          localDaysLeft = 30;
-        } else if (debugState === "force-pro-near") {
-          view = "pro";
-          localDaysLeft = 4;
-        } else if (debugState === "force-free") {
-          view = "free";
-          localDaysLeft = null;
-        } else if (debugState === "force-expired") {
-          view = "expired";
-          localDaysLeft = 0;
         }
 
         setPlanView(view);
@@ -739,7 +723,6 @@ export default function Mashaal() {
           isExpired: status.isExpired,
           daysLeft: status.daysLeft,
           flag,
-          debugState,
           planView: view,
           localDaysLeft,
         });
@@ -751,7 +734,7 @@ export default function Mashaal() {
         setLoadingPlan(false);
       }
     })();
-  }, [me, debugState]);
+  }, [me]);
 
   /** هر بار تب مشعل فوکوس بگیرد، وضعیت پلن دوباره محاسبه شود */
   useFocusEffect(
@@ -768,7 +751,10 @@ export default function Mashaal() {
 
           if (status.rawExpiresAt) {
             if (status.isExpired) {
-              view = "expired";
+              view =
+                status.rawPlan === "pro" || status.rawPlan === "vip"
+                  ? "expired"
+                  : "free";
             } else if (status.isPro || flagIsPro) {
               view = "pro";
             } else {
@@ -778,26 +764,11 @@ export default function Mashaal() {
             view = status.isPro || flagIsPro ? "pro" : "free";
           }
 
-          if (debugState === "force-pro") {
-            view = "pro";
-            localDaysLeft = 30;
-          } else if (debugState === "force-pro-near") {
-            view = "pro";
-            localDaysLeft = 4;
-          } else if (debugState === "force-free") {
-            view = "free";
-            localDaysLeft = null;
-          } else if (debugState === "force-expired") {
-            view = "expired";
-            localDaysLeft = 0;
-          }
-
           if (!cancelled) {
             setPlanView(view);
             setDaysLeft(localDaysLeft ?? null);
             console.log("MASHAL FOCUS", {
               flag,
-              debugState,
               planView: view,
               localDaysLeft,
               daysLeftReal: status.daysLeft,
@@ -811,7 +782,7 @@ export default function Mashaal() {
       return () => {
         cancelled = true;
       };
-    }, [me, debugState])
+    }, [me])
   );
 
   const open = (l: Lesson) => setSelected(l);
@@ -869,70 +840,10 @@ export default function Mashaal() {
       ? "EXPIRED"
       : "FREE";
 
+  const badgeTextColor = planView === "expired" ? "#FFFFFF" : "#111827";
+
   return (
     <Screen contentContainerStyle={{ flexGrow: 1, paddingBottom: 16 }}>
-      {/* پنل دیباگ حالت پلن */}
-      <View style={{ paddingHorizontal: 4, paddingTop: 4, marginBottom: 4 }}>
-        <View
-          style={{
-            padding: 8,
-            borderRadius: 10,
-            backgroundColor: "#020617",
-            borderWidth: 1,
-            borderColor: "#1F2937",
-          }}
-        >
-          <Text
-            style={{
-              color: "#9CA3AF",
-              fontSize: 11,
-              marginBottom: 6,
-              textAlign: "right",
-            }}
-          >
-            حالت نمایش پلن در مشعل (دیباگ):
-          </Text>
-          <View style={{ flexDirection: "row-reverse", gap: 6 }}>
-            {(
-              [
-                { key: "real", label: "داده واقعی" },
-                { key: "force-free", label: "FREE فیک" },
-                { key: "force-pro", label: "PRO فیک" },
-                { key: "force-pro-near", label: "PRO فیک (در حال انقضا)" },
-                { key: "force-expired", label: "EXPIRED فیک" },
-              ] as { key: DebugState; label: string }[]
-            ).map((opt) => {
-              const active = debugState === opt.key;
-              return (
-                <TouchableOpacity
-                  key={opt.key}
-                  onPress={() => setDebugState(opt.key)}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 5,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: active ? "#2563EB" : "#4B5563",
-                    backgroundColor: active ? "#1D4ED8" : "#020617",
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: active ? "#E5E7EB" : "#9CA3AF",
-                      fontSize: 10,
-                      textAlign: "center",
-                      fontWeight: active ? "800" : "500",
-                    }}
-                  >
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-      </View>
-
       {/* هدر + بج پلن */}
       <View
         style={{
@@ -968,12 +879,16 @@ export default function Mashaal() {
             </Text>
           )}
           <View style={[styles.headerBadge, { backgroundColor: badgeBg }]}>
-            <Text style={styles.headerBadgeText}>{badgeLabel}</Text>
+            <Text
+              style={[styles.headerBadgeText, { color: badgeTextColor }]}
+            >
+              {badgeLabel}
+            </Text>
           </View>
         </View>
       </View>
 
-      {/* اگر پلن پرو نیست → صفحه قفل‌شده (دو حالت free / expired) */}
+      {/* اگر پلن پرو نیست → صفحه قفل‌شده */}
       {!isProPlan ? (
         <View
           style={{
@@ -1151,11 +1066,7 @@ export default function Mashaal() {
         </View>
       ) : (
         // حالت PRO و داخل پلیر
-        <Player
-          lesson={selected}
-          onClose={close}
-          onProgress={handleProgress}
-        />
+        <Player lesson={selected} onClose={close} onProgress={handleProgress} />
       )}
     </Screen>
   );
@@ -1168,7 +1079,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   headerBadgeText: {
-    color: "#111827",
     fontWeight: "900",
     fontSize: 11,
   },

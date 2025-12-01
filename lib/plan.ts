@@ -1,6 +1,9 @@
 // phoenix-app/lib/plan.ts
 import type { UserRecord } from "../api/user";
 
+/** فلگ مشترک برای جاهایی که می‌خوایم پرو بودن را تو AsyncStorage نگه داریم */
+export const PRO_FLAG_KEY = "phoenix_is_pro";
+
 export type EffectivePlan = "free" | "pro" | "vip";
 
 export type PlanStatus = {
@@ -16,6 +19,11 @@ export type PlanStatus = {
   isExpired: boolean;
   /** تعداد روز باقیمانده تا انقضا؛ اگر تاریخ نداشته باشیم → null */
   daysLeft: number | null;
+  /**
+   * آیا پلن "در حال انقضا" است؟
+   * یعنی هنوز پرو است و بین ۱ تا ۷ روز تا پایانش باقی مانده.
+   */
+  isAlmostExpired: boolean;
 };
 
 /** پلن خام را از یوزر بگیر (اگر undefined بود → free) */
@@ -34,7 +42,7 @@ function safeDate(input?: string | null): Date | null {
 /**
  * محاسبه وضعیت پلن از روی رکورد یوزر
  * - اگر planExpiresAt نداشته باشد → پلن می‌تواند دائمی باشد (مثلاً PRO دائمی) یا free
- * - اگر planExpiresAt در گذشته باشد → پلن موثر free
+ * - اگر planExpiresAt در گذشته باشد → پلن موثر free و isExpired = true
  */
 export function getPlanStatus(
   user?: UserRecord | null,
@@ -42,6 +50,7 @@ export function getPlanStatus(
 ): PlanStatus {
   const rawPlan = getRawPlan(user);
   const rawExpiresAt = user?.planExpiresAt ?? null;
+
   const exp = safeDate(rawExpiresAt);
   const hasExpiry = !!exp;
 
@@ -61,17 +70,25 @@ export function getPlanStatus(
   if (!hasExpiry) {
     // بدون تاریخ انقضا → پلن می‌تواند واقعاً PRO/VIP دائمی باشد
     effectivePlan = rawPlan === "pro" || rawPlan === "vip" ? rawPlan : "free";
-    // در این حالت daysLeft = null می‌ماند
+    // در این حالت daysLeft = null می‌ماند و isExpired = false
   } else {
     // اگر تاریخ داریم:
     if (!isExpired) {
       effectivePlan = rawPlan;
     } else {
+      // منقضی شده → عملاً دسترسی مثل free
       effectivePlan = "free";
     }
   }
 
   const isPro = effectivePlan === "pro" || effectivePlan === "vip";
+
+  const isAlmostExpired =
+    isPro &&
+    !isExpired &&
+    typeof daysLeft === "number" &&
+    daysLeft > 0 &&
+    daysLeft <= 7;
 
   return {
     rawPlan,
@@ -80,6 +97,7 @@ export function getPlanStatus(
     isPro,
     isExpired,
     daysLeft,
+    isAlmostExpired,
   };
 }
 
@@ -88,6 +106,6 @@ export function formatExpireDate(iso?: string | null): string | null {
   if (!iso) return null;
   const d = safeDate(iso);
   if (!d) return null;
-  // اینجا فعلاً میلادی ساده؛ بعداً اگر خواستی شمسی/لوکال اضافه می‌کنیم
+  // فعلاً میلادی ساده؛ بعداً اگر خواستی شمسی/لوکال اضافه می‌کنیم
   return d.toISOString().slice(0, 10); // yyyy-mm-dd
 }

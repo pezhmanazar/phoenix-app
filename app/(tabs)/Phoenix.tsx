@@ -4,16 +4,15 @@ import { useTheme, useFocusEffect } from "@react-navigation/native";
 import Constants from "expo-constants";
 import { StatusBar } from "expo-status-bar";
 import { toJalaali } from "jalaali-js";
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   Alert,
   I18nManager,
   Image,
-  Linking,
-  Switch,
   Text,
   TouchableOpacity,
   View,
+  Linking,
 } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import Screen from "../../components/Screen";
@@ -21,16 +20,9 @@ import { usePhoenix } from "../../hooks/PhoenixContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "../../hooks/useAuth";
 import { useRouter } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
-import * as LinkingExpo from "expo-linking";
-import { makeRedirectUri } from "expo-auth-session";
-import { startPay, verifyPay } from "../../api/pay";
 import { useUser } from "../../hooks/useUser";
-import { getPlanStatus } from "../../lib/plan";
-
+import { getPlanStatus, PRO_FLAG_KEY } from "../../lib/plan";
 import EditProfileModal from "../../components/EditProfileModal";
-
-const PRO_FLAG_KEY = "phoenix_is_pro";
 
 type PlanView = "free" | "pro" | "expiring" | "expired";
 
@@ -526,78 +518,12 @@ export default function Phoenix() {
     setAvatarUrl,
   } = usePhoenix();
   const router = useRouter();
-  const { phone, signOut } = useAuth();
+  const { signOut } = useAuth();
   const { me, refresh } = useUser() as any;
 
-  // پرداخت
-  const payingRef = useRef(false);
-
-  const openProPay = async () => {
-    if (payingRef.current) return;
-    try {
-      payingRef.current = true;
-      if (!phone) {
-        Alert.alert("نیاز به ورود", "با شماره موبایل وارد شو.");
-        payingRef.current = false;
-        return;
-      }
-      const start = await startPay({ phone: phone!, amount: 199000 });
-      if (!(start as any)?.gatewayUrl) {
-        payingRef.current = false;
-        Alert.alert("خطا", "gatewayUrl دریافت نشد.");
-        return;
-      }
-      const gatewayUrl = (start as any).gatewayUrl;
-      const redirectUrl = makeRedirectUri({ path: "pay" });
-      const sub = LinkingExpo.addEventListener("url", async (ev) => {
-        try {
-          const u = LinkingExpo.parse(ev.url);
-          const qAuthority = String(
-            (u.queryParams as any)?.Authority ||
-              (u.queryParams as any)?.authority ||
-              ""
-          );
-          const qStatus = String(
-            (u.queryParams as any)?.Status ||
-              (u.queryParams as any)?.status ||
-              ""
-          );
-          if (!qAuthority) return;
-          const ver = await verifyPay({
-            authority: qAuthority,
-            status: (qStatus || "NOK") as any,
-            phone: phone!,
-            amount: 199000,
-          });
-          if (!(ver as any)?.ok) {
-            Alert.alert(
-              "ناموفق",
-              String((ver as any).error || "VERIFY_FAILED")
-            );
-            return;
-          }
-          const refId =
-            (ver as any).refId || (ver as any).data?.refId || "—";
-          Alert.alert("پرداخت موفق", `کد رهگیری:\n${refId}`);
-          await refresh().catch(() => {});
-        } finally {
-          sub.remove();
-          payingRef.current = false;
-        }
-      });
-      await WebBrowser.openBrowserAsync(
-        `${gatewayUrl}?cb=${encodeURIComponent(redirectUrl)}`
-      );
-    } catch (e: any) {
-      payingRef.current = false;
-      Alert.alert("خطا", e?.message || "اشکال در پرداخت");
-    }
-  };
-
-  // وضعیت پلن: مثل پلکان
+  // وضعیت پلن
   const [planView, setPlanView] = useState<PlanView>("free");
   const [expiringDaysLeft, setExpiringDaysLeft] = useState<number | null>(null);
-  const [planLoaded, setPlanLoaded] = useState(false);
 
   const syncPlanView = useCallback(async () => {
     try {
@@ -626,31 +552,15 @@ export default function Phoenix() {
           view = "free";
         }
       } else {
-        if (status.isPro || flagIsPro) {
-          view = "pro";
-        } else {
-          view = "free";
-        }
+        view = status.isPro || flagIsPro ? "pro" : "free";
       }
 
       setPlanView(view);
       setExpiringDaysLeft(expDays);
-
-      console.log("PHOENIX PLAN", {
-        plan: status.rawPlan,
-        rawExpiresAt: status.rawExpiresAt,
-        isExpired: status.isExpired,
-        daysLeft: status.daysLeft,
-        flag,
-        planView: view,
-        expiringDaysLeft: expDays,
-      });
     } catch (e) {
       console.log("PHOENIX PLAN ERR", e);
       setPlanView("free");
       setExpiringDaysLeft(null);
-    } finally {
-      setPlanLoaded(true);
     }
   }, [me]);
 
@@ -789,15 +699,8 @@ export default function Phoenix() {
     }
   }
 
-  // دیباگ پلن در خود تب ققنوس
-  const [debugEnabled, setDebugEnabled] = useState(false);
-  const [debugPlanView, setDebugPlanView] = useState<PlanView>("free");
-  const [debugDaysLeft, setDebugDaysLeft] = useState<number | null>(3);
-
-  const uiPlanView: PlanView = debugEnabled ? debugPlanView : planView;
-  const uiDaysLeft: number | null = debugEnabled
-    ? debugDaysLeft
-    : expiringDaysLeft;
+  const uiPlanView: PlanView = planView;
+  const uiDaysLeft: number | null = expiringDaysLeft;
 
   const isProLikePlan =
     uiPlanView === "pro" || uiPlanView === "expiring";
@@ -820,17 +723,6 @@ export default function Phoenix() {
 
   const showExpiring =
     uiPlanView === "expiring" && uiDaysLeft != null && uiDaysLeft > 0;
-
-  console.log("PHOENIX RENDER", {
-    mePlan: me?.plan,
-    planView,
-    expiringDaysLeft,
-    debugEnabled,
-    debugPlanView,
-    debugDaysLeft,
-    uiPlanView,
-    uiDaysLeft,
-  });
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -877,169 +769,6 @@ export default function Phoenix() {
           </View>
         </View>
 
-        {/* پنل دیباگ پلن مخصوص تب ققنوس */}
-        {__DEV__ && (
-          <View
-            style={{
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: 12,
-              paddingHorizontal: 10,
-              paddingVertical: 8,
-              backgroundColor: colors.card,
-              gap: 6,
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 11,
-                  color: "#6b7280",
-                  fontWeight: "700",
-                }}
-              >
-                DEBUG PLAN — Phoenix tab
-              </Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 11,
-                    color: debugEnabled ? colors.primary : "#9ca3af",
-                  }}
-                >
-                  {debugEnabled ? "فعال" : "خاموش"}
-                </Text>
-                <Switch
-                  value={debugEnabled}
-                  onValueChange={setDebugEnabled}
-                />
-              </View>
-            </View>
-
-            <Text
-              style={{
-                fontSize: 10,
-                color: "#6b7280",
-              }}
-            >
-              {`serverPlan=${me?.plan ?? "none"} | planView=${planView} | daysLeft=${expiringDaysLeft ?? "-"} | debugView=${debugPlanView} | debugDays=${debugDaysLeft ?? "-"} | uiView=${uiPlanView}`}
-            </Text>
-
-            {debugEnabled && (
-              <>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    flexWrap: "wrap",
-                    gap: 6,
-                    marginTop: 4,
-                  }}
-                >
-                  {(["free", "pro", "expiring", "expired"] as PlanView[]).map(
-                    (pv) => {
-                      const selected = debugPlanView === pv;
-                      return (
-                        <TouchableOpacity
-                          key={pv}
-                          onPress={() => setDebugPlanView(pv)}
-                          style={{
-                            paddingHorizontal: 10,
-                            paddingVertical: 4,
-                            borderRadius: 999,
-                            borderWidth: 1,
-                            borderColor: selected
-                              ? colors.primary
-                              : colors.border,
-                            backgroundColor: selected
-                              ? colors.primary + "22"
-                              : "transparent",
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 11,
-                              color: colors.text,
-                              fontWeight: "700",
-                            }}
-                          >
-                            {pv}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    }
-                  )}
-                </View>
-
-                {debugPlanView === "expiring" && (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 6,
-                      marginTop: 4,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        color: "#6b7280",
-                      }}
-                    >
-                      روز باقی‌مانده (برای تست expiring):
-                    </Text>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        gap: 4,
-                      }}
-                    >
-                      {[1, 2, 3, 5, 7].map((n) => {
-                        const sel = debugDaysLeft === n;
-                        return (
-                          <TouchableOpacity
-                            key={n}
-                            onPress={() => setDebugDaysLeft(n)}
-                            style={{
-                              paddingHorizontal: 8,
-                              paddingVertical: 2,
-                              borderRadius: 999,
-                              borderWidth: 1,
-                              borderColor: sel
-                                ? colors.primary
-                                : colors.border,
-                            }}
-                          >
-                            <Text
-                              style={{
-                                fontSize: 11,
-                                color: colors.text,
-                              }}
-                            >
-                              {toPersianDigits(n)}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  </View>
-                )}
-              </>
-            )}
-          </View>
-        )}
-
         {/* کارت پروفایل */}
         <View
           style={{
@@ -1079,7 +808,7 @@ export default function Phoenix() {
                   {profileName}
                 </Text>
 
-                {/* بج پلن مثل پلکان */}
+                {/* بج پلن */}
                 <View
                   style={{
                     paddingHorizontal: 10,

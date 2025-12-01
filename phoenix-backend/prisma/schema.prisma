@@ -114,13 +114,8 @@ enum SubscriptionStatus {
   canceled
 }
 
-/** 👇 پلن استاندارد ققنوس */
-enum Plan {
-  free
-  pro
-  vip
-}
-
+// ❌ enum Plan را حذف کردیم تا لازم نباشه type دیتابیسی public.Plan بسازیم
+// ✅ پلن را به صورت رشته ذخیره می‌کنیم: 'free' | 'pro' | 'vip'
 model User {
   id        String   @id @default(uuid())
   phone     String   @unique
@@ -128,11 +123,10 @@ model User {
   gender    String?  // male / female / other (ساده نگه می‌داریم)
   birthDate DateTime?
 
-  // ✅ فیلدهای رسمی اشتراک
-  plan          Plan      @default(free) // free | pro | vip
-  planExpiresAt DateTime?               // تاریخ انقضای همین پلن
+  // ✅ فیلدهای رسمی اشتراک - به صورت String
+  plan          String   @default("free") // 'free' | 'pro' | 'vip'
+  planExpiresAt DateTime?
 
-  // (اختیاری ولی مفید – اگر نخواستی می‌تونی حذفش کنی)
   profileCompleted Boolean @default(false)
 
   createdAt DateTime @default(now())
@@ -146,12 +140,12 @@ model Subscription {
   userId    String
   user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  authority String             // کد زرین‌پال
-  refId     String             // ref_id زرین‌پال
+  authority String               // کد زرین‌پال
+  refId     String               // ref_id زرین‌پال
   amount    Int
   months    Int
-  plan      String             // فعلاً "pro" نگه می‌داریم
-  status    SubscriptionStatus @default(active)
+  plan      String               // فعلاً "pro" نگه می‌داریم
+  status    SubscriptionStatus   @default(active)
   expiresAt DateTime
 
   createdAt DateTime @default(now())

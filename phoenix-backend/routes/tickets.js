@@ -2,7 +2,7 @@
 import { PrismaClient } from "@prisma/client";
 import { Router } from "express";
 import path from "path";
-import { ensureTherapyChatAllowed } from "../lib/reactive-plan.js";
+import { isUserPro } from "../services/planStatus.js";
 
 const prisma = new PrismaClient();
 
@@ -20,24 +20,42 @@ async function checkTherapyAccessOrReject({ res, type, openedById, contact }) {
   const t = (type || "").toString().toLowerCase();
   if (t !== "therapy") return false; // تیکت فنی است؛ نیازی به چک پلن نیست
 
+  // سعی می‌کنیم با phone یا id کاربر را پیدا کنیم
   const userKey =
     (openedById && String(openedById)) ||
     (contact && String(contact)) ||
     null;
 
   if (!userKey) {
-    res
-      .status(403)
-      .json({ ok: false, error: "therapy_not_allowed_missing_user" });
+    res.status(403).json({
+      ok: false,
+      error: "therapy_requires_pro", // کاربر مشخص نیست، اجازه نمی‌دیم
+    });
     return true;
   }
 
   try {
-    await ensureTherapyChatAllowed(userKey);
-    return false; // اجازه داده شد
+    // سعی می‌کنیم هم با phone هم با id پیداش کنیم
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [{ phone: userKey }, { id: userKey }],
+      },
+    });
+
+    if (!user || !isUserPro(user)) {
+      // یا کاربر پیدا نشد، یا پلن پرو / وی‌آی‌پی فعال ندارد
+      res.status(403).json({
+        ok: false,
+        error: "therapy_requires_pro",
+      });
+      return true;
+    }
+
+    // اوکی؛ اجازه داریم ادامه بدهیم
+    return false;
   } catch (err) {
-    console.error("therapy access denied:", err);
-    res.status(403).json({ ok: false, error: "therapy_not_allowed" });
+    console.error("[tickets] therapy access check failed:", err);
+    res.status(500).json({ ok: false, error: "therapy_check_failed" });
     return true;
   }
 }

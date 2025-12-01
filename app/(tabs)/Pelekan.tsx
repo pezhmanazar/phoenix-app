@@ -26,7 +26,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
 import { useUser } from "../../hooks/useUser";
-import { getPlanStatus } from "../../lib/plan";
+import { getPlanStatus, PRO_FLAG_KEY } from "../../lib/plan";
 
 /* --------------------------- مدل و دادهٔ اولیه --------------------------- */
 type StepDef = { id: string; title: string; days: number };
@@ -46,16 +46,8 @@ type Progress = {
 };
 
 type PlanView = "free" | "pro" | "expired" | "expiring";
-type DebugState =
-  | "real"
-  | "force-pro"
-  | "force-free"
-  | "force-expired"
-  | "force-expiring";
 
 const PROGRESS_KEY = "Pelekan.progress.v1";
-/** فلگ مستقل برای پرو شدن از طرف paytest / پرداخت */
-const PRO_FLAG_KEY = "phoenix_is_pro";
 
 /** پیش‌فرض */
 const defaultProgress: Progress = {
@@ -121,7 +113,6 @@ export default function PelekanScreen() {
   const [loading, setLoading] = useState(true);
 
   const [planView, setPlanView] = useState<PlanView>("free");
-  const [debugState, setDebugState] = useState<DebugState>("real");
   const [expiringDaysLeft, setExpiringDaysLeft] = useState<number | null>(null);
 
   // مودال قشنگ برای FREE / EXPIRED
@@ -131,26 +122,10 @@ export default function PelekanScreen() {
 
   const isProPlan = planView === "pro" || planView === "expiring";
 
-  // بارگذاری اولیه از AsyncStorage + محاسبه وضعیت پلن با getPlanStatus
-  useEffect(() => {
-    (async () => {
+  const computePlanView = useCallback(
+    async (includeProgress: boolean) => {
       try {
-        const [rawProgress, flag] = await Promise.all([
-          AsyncStorage.getItem(PROGRESS_KEY),
-          AsyncStorage.getItem(PRO_FLAG_KEY),
-        ]);
-
-        // ۱) گرفتن پروگرس ذخیره‌شده (اگر خراب بود → default)
-        let base: Progress = defaultProgress;
-        if (rawProgress) {
-          try {
-            base = { ...defaultProgress, ...JSON.parse(rawProgress) };
-          } catch {
-            base = defaultProgress;
-          }
-        }
-
-        // ۲) وضعیت پلن از سمت سرور (با درنظر گرفتن انقضا)
+        const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
         const status = getPlanStatus(me);
         const flagIsPro = flag === "1";
 
@@ -162,8 +137,8 @@ export default function PelekanScreen() {
             view = "expired";
             expDays = 0;
           } else if (status.isPro || flagIsPro) {
-            // پلن فعّال داریم، ببین چند روز مانده
-            const d = typeof status.daysLeft === "number" ? status.daysLeft : null;
+            const d =
+              typeof status.daysLeft === "number" ? status.daysLeft : null;
             if (d != null && d > 0 && d <= 7) {
               view = "expiring";
               expDays = d;
@@ -175,7 +150,6 @@ export default function PelekanScreen() {
             view = "free";
           }
         } else {
-          // بدون تاریخ انقضا → فقط پرو/وی‌آی‌پی فعال = pro
           if (status.isPro || flagIsPro) {
             view = "pro";
           } else {
@@ -183,145 +157,68 @@ export default function PelekanScreen() {
           }
         }
 
-        // ۴) اوورراید دیباگ
-        if (debugState === "force-pro") {
-          view = "pro";
-          expDays = null;
-        } else if (debugState === "force-free") {
-          view = "free";
-          expDays = null;
-        } else if (debugState === "force-expired") {
-          view = "expired";
-          expDays = 0;
-        } else if (debugState === "force-expiring") {
-          view = "expiring";
-          expDays = 4; // عدد نمایشی برای تست
-        }
-
         const finalIsPro = view === "pro" || view === "expiring";
 
-        const merged: Progress = {
-          ...base,
-          isPro: finalIsPro,
-        };
+        if (includeProgress) {
+          const rawProgress = await AsyncStorage.getItem(PROGRESS_KEY);
+          let base: Progress = defaultProgress;
+          if (rawProgress) {
+            try {
+              base = { ...defaultProgress, ...JSON.parse(rawProgress) };
+            } catch {
+              base = defaultProgress;
+            }
+          }
+          const merged: Progress = {
+            ...base,
+            isPro: finalIsPro,
+          };
+          setProgress(merged);
+        } else {
+          // فقط وضعیت پلن آپدیت شود
+          setProgress((prev) => ({ ...prev, isPro: finalIsPro }));
+        }
 
-        setProgress(merged);
         setPlanView(view);
         setExpiringDaysLeft(expDays);
-
-        console.log("PELEKAN INIT", {
-          plan: status.rawPlan,
-          rawExpiresAt: status.rawExpiresAt,
-          isExpired: status.isExpired,
-          daysLeft: status.daysLeft,
-          flag,
-          debugState,
-          planView: view,
-          expiringDaysLeft: expDays,
-        });
       } catch (e) {
-        console.log("PELEKAN INIT ERR", e);
-        setProgress(defaultProgress);
+        if (includeProgress) {
+          setProgress(defaultProgress);
+        }
         setPlanView("free");
         setExpiringDaysLeft(null);
       } finally {
-        setLoading(false);
+        if (includeProgress) setLoading(false);
       }
-    })();
-  }, [me, debugState]);
+    },
+    [me]
+  );
 
-  // هر بار تب پلکان فوکوس شد، وضعیت پلن را دوباره از سرور + فلگ لوکال محاسبه کن
+  // بارگذاری اولیه: پروگرس + وضعیت پلن
+  useEffect(() => {
+    computePlanView(true);
+  }, [computePlanView]);
+
+  // هر بار تب فوکوس شد: فقط وضعیت پلن را تازه کن
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
       let cancelled = false;
 
       (async () => {
-        try {
-          const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
-          const status = getPlanStatus(me);
-          const flagIsPro = flag === "1";
-
-          let view: PlanView = "free";
-          let expDays: number | null = null;
-
-          if (status.rawExpiresAt) {
-            if (status.isExpired) {
-              view = "expired";
-              expDays = 0;
-            } else if (status.isPro || flagIsPro) {
-              const d = typeof status.daysLeft === "number" ? status.daysLeft : null;
-              if (d != null && d > 0 && d <= 7) {
-                view = "expiring";
-                expDays = d;
-              } else {
-                view = "pro";
-                expDays = d;
-              }
-            } else {
-              view = "free";
-            }
-          } else {
-            if (status.isPro || flagIsPro) {
-              view = "pro";
-            } else {
-              view = "free";
-            }
-          }
-
-          if (debugState === "force-pro") {
-            view = "pro";
-            expDays = null;
-          } else if (debugState === "force-free") {
-            view = "free";
-            expDays = null;
-          } else if (debugState === "force-expired") {
-            view = "expired";
-            expDays = 0;
-          } else if (debugState === "force-expiring") {
-            view = "expiring";
-            expDays = 4;
-          }
-
-          if (!cancelled) {
-            setPlanView(view);
-            setExpiringDaysLeft(expDays);
-            console.log("PELEKAN FOCUS", {
-              plan: status.rawPlan,
-              rawExpiresAt: status.rawExpiresAt,
-              isExpired: status.isExpired,
-              daysLeft: status.daysLeft,
-              flag,
-              debugState,
-              planView: view,
-              expiringDaysLeft: expDays,
-            });
-          }
-        } catch (e) {
-          console.log("PELEKAN FOCUS ERR", e);
-        }
+        await computePlanView(false);
+        if (cancelled) return;
       })();
 
       return () => {
         cancelled = true;
       };
-    }, [me, debugState])
+    }, [computePlanView])
   );
 
   const persist = useCallback(async (p: Progress) => {
     setProgress(p);
     await AsyncStorage.setItem(PROGRESS_KEY, JSON.stringify(p));
   }, []);
-
-  console.log(
-    "PELEKAN RENDER plan =",
-    me?.plan,
-    "planView =",
-    planView,
-    "debugState =",
-    debugState,
-    "expiringDaysLeft =",
-    expiringDaysLeft
-  );
 
   // پالت تطبیقی روشن/تاریک
   const palette = {
@@ -490,7 +387,6 @@ export default function PelekanScreen() {
     available: boolean
   ) => {
     if (!isProPlan) {
-      // مودال داخلی، نه Alert سفید
       setPlanInfoModal(planView === "expired" ? "expired" : "free");
       return;
     }
@@ -514,10 +410,15 @@ export default function PelekanScreen() {
               activeOpacity={0.9}
               onPress={() => {
                 if (!isProPlan) {
-                  setPlanInfoModal(planView === "expired" ? "expired" : "free");
+                  setPlanInfoModal(
+                    planView === "expired" ? "expired" : "free"
+                  );
                   return;
                 } else {
-                  Alert.alert("تبریک ✨", "پلکان برای تو باز است؛ از روزها شروع کن.");
+                  Alert.alert(
+                    "تبریک ✨",
+                    "پلکان برای تو باز است؛ از روزها شروع کن."
+                  );
                 }
               }}
               style={{
@@ -705,91 +606,17 @@ export default function PelekanScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.center, { backgroundColor: palette.bg }]}>
-        <Text style={{ color: palette.text }}>در حال بارگذاری…</Text>
+      <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
+        <Text style={{ color: colors.text }}>در حال بارگذاری…</Text>
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView
-      style={[styles.root, { backgroundColor: palette.bg }]}
+      style={[styles.root, { backgroundColor: colors.background }]}
       edges={["top", "left", "right", "bottom"]}
     >
-      {/* پنل دیباگ حالت پلن در خود تب پلکان */}
-      <View
-        style={{
-          paddingHorizontal: 12,
-          paddingTop: 8,
-          paddingBottom: 4,
-        }}
-      >
-        <View
-          style={{
-            padding: 8,
-            borderRadius: 10,
-            backgroundColor: "#020617",
-            borderWidth: 1,
-            borderColor: "#1F2937",
-          }}
-        >
-          <Text
-            style={{
-              color: "#9CA3AF",
-              fontSize: 11,
-              marginBottom: 6,
-              textAlign: "right",
-            }}
-          >
-            حالت نمایش پلن (دیباگ پلکان):
-          </Text>
-          <View
-            style={{
-              flexDirection: "row-reverse",
-              justifyContent: "space-between",
-              gap: 6,
-            }}
-          >
-            {(
-              [
-                { key: "real", label: "داده واقعی" },
-                { key: "force-free", label: "FREE فیک" },
-                { key: "force-pro", label: "PRO فیک" },
-                { key: "force-expired", label: "EXPIRED فیک" },
-                { key: "force-expiring", label: "PRO (در حال انقضا) فیک" },
-              ] as { key: DebugState; label: string }[]
-            ).map((opt) => {
-              const active = debugState === opt.key;
-              return (
-                <TouchableOpacity
-                  key={opt.key}
-                  onPress={() => setDebugState(opt.key)}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 5,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: active ? "#2563EB" : "#4B5563",
-                    backgroundColor: active ? "#1D4ED8" : "#020617",
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: active ? "#E5E7EB" : "#9CA3AF",
-                      fontSize: 10,
-                      textAlign: "center",
-                      fontWeight: active ? "800" : "500",
-                    }}
-                  >
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-      </View>
-
       <Header
         planView={planView}
         gems={progress.gems}

@@ -1,13 +1,13 @@
 // lib/planStatus.ts
 
 export type EffectivePlan = "free" | "pro" | "expired";
-
 export type BaseStatus = "free" | "pro";
 
 export interface PlanStatusInput {
   me: any;                     // همون شیء user از useUser()
-  proFlag: boolean;            // phoenix_is_pro === "1"
-  localExpire?: string | null; // تاریخی که بعد از verifyPay تو state نگه می‌داری
+  // ⚠️ این دو تا عملاً بازنشسته شدن؛ فقط برای سازگاری تایپی نگه‌شون می‌داریم
+  proFlag?: boolean;           // phoenix_is_pro === "1" (دیگه در منطق استفاده نمی‌شود)
+  localExpire?: string | null; // تاریخ لوکال بعد از پرداخت (دیگه در منطق استفاده نمی‌شود)
   now?: Date;                  // برای تست، می‌تونی تزریق کنی. در عمل لازم نیست پرش کنی.
 }
 
@@ -27,7 +27,6 @@ export interface PlanStatusResult {
  */
 export function getServerExpireFromUser(me: any): string | null {
   if (!me) return null;
-
   return (
     me.planExpiresAt ??
     me.planExpireAt ??
@@ -39,32 +38,27 @@ export function getServerExpireFromUser(me: any): string | null {
 }
 
 /**
- * محاسبه وضعیت نهایی پلن بر اساس:
+ * محاسبه وضعیت نهایی پلن بر اساس فقط و فقط سرور:
  * - plan در سرور
- * - فلگ local PRO (phoenix_is_pro)
- * - تاریخ انقضا (سرور + لوکال بعد از پرداخت)
+ * - تاریخ انقضا از سرور
+ *
+ * proFlag و localExpire دیگر نقشی در منطق ندارند.
  */
-export function computePlanStatus(
-  input: PlanStatusInput
-): PlanStatusResult {
-  const { me, proFlag, localExpire, now: nowArg } = input;
+export function computePlanStatus(input: PlanStatusInput): PlanStatusResult {
+  const { me, now: nowArg } = input;
   const now = nowArg ?? new Date();
 
   const rawPlan: string = (me?.plan as string) || "free";
 
-  // ۱) baseStatus قبل از درنظر گرفتن تاریخ انقضا
+  // ۱) baseStatus قبل از درنظر گرفتن تاریخ انقضا (فقط از روی plan سرور)
   let baseStatus: BaseStatus = "free";
   if (rawPlan === "pro" || rawPlan === "vip") {
     baseStatus = "pro";
   }
-  if (proFlag) {
-    baseStatus = "pro";
-  }
 
-  // ۲) تاریخ انقضا: اول localExpire، بعد سرور
+  // ۲) تاریخ انقضا فقط از سرور
   const serverExpire = getServerExpireFromUser(me);
-  const planExpiresRaw: string | null = localExpire || serverExpire || null;
-  const planExpiresAt: string | undefined = planExpiresRaw || undefined;
+  const planExpiresAt: string | undefined = serverExpire || undefined;
 
   // ۳) چک انقضا
   let isExpired = false;

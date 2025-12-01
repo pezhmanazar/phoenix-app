@@ -1,4 +1,5 @@
 // phoenix-app/api/user.ts
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { APP_API_URL } from "../constants/env";
 
 type ApiOk<T> = { ok: true; data: T };
@@ -14,13 +15,10 @@ export type UserRecord = {
   gender?: "male" | "female" | "other" | null;
   birthDate?: string | null; // yyyy-mm-dd
   avatarUrl?: string | null; // http/file/icon
-
   plan?: UserPlan;
   planExpiresAt?: string | null; // ISO
-
   profileCompleted?: boolean;
   notifyTags?: string[];
-
   createdAt?: string | null;
   lastLoginAt?: string | null;
   updatedAt?: string | null;
@@ -92,7 +90,7 @@ export function normalizeIranPhone(v: string) {
 
 /* ----------------- این سه تا برای پروفایل‌ویزارد و کار با بک‌اند لوکال ----------------- */
 
-// GET http://192.168.100.4:4000/api/users/me?phone=...
+// GET http://192.168.xxx.xxx:4000/api/users/me?phone=...
 export async function getMeByPhone(
   phone: string
 ): Promise<ApiResp<UserRecord | null>> {
@@ -102,7 +100,7 @@ export async function getMeByPhone(
   return doJson<UserRecord | null>(url, { method: "GET" });
 }
 
-// POST http://192.168.100.4:4000/api/users/upsert
+// POST http://192.168.xxx.xxx:4000/api/users/upsert
 export async function upsertUserByPhone(
   phone: string,
   payload: Partial<UserRecord>
@@ -113,7 +111,6 @@ export async function upsertUserByPhone(
     ...payload,
     phone: p,
   });
-
   return doJson<UserRecord>(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -130,13 +127,31 @@ export async function resetUserByPhone(
   return doJson<UserRecord>(url, { method: "DELETE" });
 }
 
-/* ----------------- fetchMe برای useUser (فعلاً بدون ریکوئست واقعی) ----------------- */
-
+/* ----------------- fetchMe برای useUser ----------------- */
 /**
- * فعلاً برای جلوگیری از حلقه و اسپم، این تابع کاربر را از سرور نمی‌خواند
- * و همیشه `null` برمی‌گرداند. یعنی me در UserProvider تهی است.
- * وقتی خواستی me را هم از نئون/ورسل بخوانیم، همین تابع را گسترش می‌دهیم.
+ * me را واقعا از بک‌اند ققنوس می‌خواند.
+ * منبع شماره موبایل: otp_phone_v1 داخل AsyncStorage (همونی که useAuth می‌سازه).
  */
 export async function fetchMe(): Promise<Me | null> {
-  return null;
+  try {
+    const storedPhone = await AsyncStorage.getItem("otp_phone_v1");
+    if (!storedPhone) {
+      console.log("[user.fetchMe] no stored phone");
+      return null;
+    }
+
+    console.log("[user.fetchMe] loading me for phone =", storedPhone);
+
+    const resp = await getMeByPhone(storedPhone);
+    if (!resp.ok) {
+      console.log("[user.fetchMe] error =", resp.error);
+      return null;
+    }
+
+    console.log("[user.fetchMe] loaded me =", resp.data);
+    return resp.data;
+  } catch (e: any) {
+    console.log("[user.fetchMe] exception", e?.message || e);
+    return null;
+  }
 }

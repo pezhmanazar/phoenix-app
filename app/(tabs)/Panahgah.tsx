@@ -1,5 +1,5 @@
 // app/(tabs)/Panahgah.tsx
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -17,17 +17,9 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { allScenarios } from "@/lib/panahgah/registry";
 import { useUser } from "../../hooks/useUser";
-import { getPlanStatus } from "../../lib/plan";
+import { getPlanStatus, PRO_FLAG_KEY } from "../../lib/plan";
 
-type PlanView = "free" | "pro" | "expired";
-type DebugState =
-  | "real"
-  | "force-pro"
-  | "force-pro-near"
-  | "force-free"
-  | "force-expired";
-
-const PRO_FLAG_KEY = "phoenix_is_pro";
+type PlanView = "free" | "pro" | "expired" | "expiring";
 
 export default function Panahgah() {
   const { colors } = useTheme();
@@ -37,137 +29,74 @@ export default function Panahgah() {
 
   const [q, setQ] = useState("");
   const [planView, setPlanView] = useState<PlanView>("free");
-  const [daysLeft, setDaysLeft] = useState<number | null>(null);
-  const [debugState, setDebugState] = useState<DebugState>("real");
+  const [expiringDaysLeft, setExpiringDaysLeft] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const isProPlan = planView === "pro";
+  const isProPlan = planView === "pro" || planView === "expiring";
   const isNearExpire =
-    planView === "pro" &&
-    daysLeft != null &&
-    daysLeft > 0 &&
-    daysLeft <= 7;
+    planView === "expiring" &&
+    expiringDaysLeft != null &&
+    expiringDaysLeft > 0;
 
-  /** بارگذاری اولیه + محاسبه وضعیت پلن */
-  useEffect(() => {
-    (async () => {
-      try {
-        const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
-        const status = getPlanStatus(me);
-        const flagIsPro = flag === "1";
+  /** سینک وضعیت پلن از سرور + فلگ لوکال */
+  const syncPlanView = useCallback(async () => {
+    try {
+      const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
+      const status = getPlanStatus(me);
+      const flagIsPro = flag === "1";
 
-        let view: PlanView = "free";
-        let localDaysLeft: number | null = status.daysLeft;
+      let view: PlanView = "free";
+      let expDays: number | null = null;
 
-        if (status.rawExpiresAt) {
-          if (status.isExpired) {
-            view = "expired";
-          } else if (status.isPro || flagIsPro) {
-            view = "pro";
+      if (status.rawExpiresAt) {
+        if (status.isExpired) {
+          view = "expired";
+          expDays = 0;
+        } else if (status.isPro || flagIsPro) {
+          const d =
+            typeof status.daysLeft === "number" ? status.daysLeft : null;
+          if (d != null && d > 0 && d <= 7) {
+            view = "expiring";
+            expDays = d;
           } else {
-            view = "free";
+            view = "pro";
+            expDays = d;
           }
         } else {
-          view = status.isPro || flagIsPro ? "pro" : "free";
-        }
-
-        // Debug override
-        if (debugState === "force-pro") {
-          view = "pro";
-          localDaysLeft = 30;
-        } else if (debugState === "force-pro-near") {
-          view = "pro";
-          localDaysLeft = 4;
-        } else if (debugState === "force-free") {
           view = "free";
-          localDaysLeft = null;
-        } else if (debugState === "force-expired") {
-          view = "expired";
-          localDaysLeft = 0;
         }
-
-        setPlanView(view);
-        setDaysLeft(localDaysLeft ?? null);
-
-        console.log("PANAH INIT", {
-          rawPlan: status.rawPlan,
-          rawExpiresAt: status.rawExpiresAt,
-          isExpired: status.isExpired,
-          daysLeft: status.daysLeft,
-          flag,
-          debugState,
-          planView: view,
-          localDaysLeft,
-        });
-      } catch (e) {
-        console.log("PANAH INIT ERR", e);
-        setPlanView("free");
-        setDaysLeft(null);
-      } finally {
-        setLoading(false);
+      } else {
+        // بدون تاریخ انقضا → فقط اگر پلن یا فلگ نشان بده پرویی
+        if (status.isPro || flagIsPro) {
+          view = "pro";
+        } else {
+          view = "free";
+        }
       }
+
+      setPlanView(view);
+      setExpiringDaysLeft(expDays);
+    } catch (e) {
+      console.log("PANAHGAH PLAN ERR", e);
+      setPlanView("free");
+      setExpiringDaysLeft(null);
+    }
+  }, [me]);
+
+  /** بارگذاری اولیه */
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      await syncPlanView();
+      setLoading(false);
     })();
-  }, [me, debugState]);
+  }, [syncPlanView]);
 
-  /** هر بار فوکوس → دوباره محاسبه */
+  /** هر بار فوکوس → دوباره محاسبه (بدون لودینگ فول‌اسکرین) */
   useFocusEffect(
-    React.useCallback(() => {
-      let cancelled = false;
-      (async () => {
-        try {
-          const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
-          const status = getPlanStatus(me);
-          const flagIsPro = flag === "1";
-
-          let view: PlanView = "free";
-          let localDaysLeft: number | null = status.daysLeft;
-
-          if (status.rawExpiresAt) {
-            if (status.isExpired) {
-              view = "expired";
-            } else if (status.isPro || flagIsPro) {
-              view = "pro";
-            } else {
-              view = "free";
-            }
-          } else {
-            view = status.isPro || flagIsPro ? "pro" : "free";
-          }
-
-          if (debugState === "force-pro") {
-            view = "pro";
-            localDaysLeft = 30;
-          } else if (debugState === "force-pro-near") {
-            view = "pro";
-            localDaysLeft = 4;
-          } else if (debugState === "force-free") {
-            view = "free";
-            localDaysLeft = null;
-          } else if (debugState === "force-expired") {
-            view = "expired";
-            localDaysLeft = 0;
-          }
-
-          if (!cancelled) {
-            setPlanView(view);
-            setDaysLeft(localDaysLeft ?? null);
-            console.log("PANAH FOCUS", {
-              flag,
-              debugState,
-              planView: view,
-              localDaysLeft,
-              daysLeftReal: status.daysLeft,
-              isExpired: status.isExpired,
-            });
-          }
-        } catch (e) {
-          console.log("PANAH FOCUS ERR", e);
-        }
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }, [me, debugState])
+    useCallback(() => {
+      syncPlanView();
+    }, [syncPlanView])
   );
 
   const data = useMemo(() => {
@@ -176,8 +105,7 @@ export default function Panahgah() {
     const qq = q.trim();
     return items.filter(
       (s) =>
-        s.title.includes(qq) ||
-        s.id.includes(qq.replace(/\s+/g, "-"))
+        s.title.includes(qq) || s.id.includes(qq.replace(/\s+/g, "-"))
     );
   }, [q]);
 
@@ -226,7 +154,9 @@ export default function Panahgah() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]}>
+      <SafeAreaView
+        style={[styles.root, { backgroundColor: colors.background }]}
+      >
         <View style={[styles.center, { paddingBottom: insets.bottom }]}>
           <ActivityIndicator color={colors.primary} />
           <Text style={{ color: colors.text, marginTop: 8, fontSize: 12 }}>
@@ -239,15 +169,15 @@ export default function Panahgah() {
 
   const badgeBg =
     planView === "pro"
-      ? isNearExpire
-        ? "#EA580C"
-        : "#F59E0B"
+      ? "#F59E0B"
+      : planView === "expiring"
+      ? "#F97316"
       : planView === "expired"
       ? "#DC2626"
       : "#9CA3AF";
 
   const badgeLabel =
-    planView === "pro"
+    planView === "pro" || planView === "expiring"
       ? "PRO"
       : planView === "expired"
       ? "EXPIRED"
@@ -258,73 +188,11 @@ export default function Panahgah() {
       style={[styles.root, { backgroundColor: colors.background }]}
       edges={["top", "left", "right", "bottom"]}
     >
-      {/* پنل دیباگ */}
-      <View style={{ paddingHorizontal: 12, paddingTop: 8 }}>
-        <View
-          style={{
-            padding: 8,
-            borderRadius: 10,
-            backgroundColor: "#020617",
-            borderWidth: 1,
-            borderColor: "#1F2937",
-            marginBottom: 8,
-          }}
-        >
-          <Text
-            style={{
-              color: "#9CA3AF",
-              fontSize: 11,
-              marginBottom: 6,
-              textAlign: "right",
-            }}
-          >
-            حالت نمایش پلن (دیباگ):
-          </Text>
-
-          <View style={{ flexDirection: "row-reverse", gap: 6 }}>
-            {(
-              [
-                { key: "real", label: "داده واقعی" },
-                { key: "force-free", label: "FREE فیک" },
-                { key: "force-pro", label: "PRO فیک" },
-                { key: "force-pro-near", label: "PRO فیک (در حال انقضا)" },
-                { key: "force-expired", label: "EXPIRED فیک" },
-              ] as { key: DebugState; label: string }[]
-            ).map((opt) => {
-              const active = debugState === opt.key;
-              return (
-                <TouchableOpacity
-                  key={opt.key}
-                  onPress={() => setDebugState(opt.key)}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 5,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: active ? "#2563EB" : "#4B5563",
-                    backgroundColor: active ? "#1D4ED8" : "#020617",
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: active ? "#E5E7EB" : "#9CA3AF",
-                      fontSize: 10,
-                      textAlign: "center",
-                      fontWeight: active ? "800" : "500",
-                    }}
-                  >
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-      </View>
-
       {/* Header */}
       <View style={[styles.header, { borderColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>پناهگاه</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>
+          پناهگاه
+        </Text>
         <View style={styles.headerBadgeRow}>
           {isNearExpire && (
             <Text
@@ -335,22 +203,17 @@ export default function Panahgah() {
                 marginLeft: 8,
               }}
             >
-              {daysLeft} روز تا پایان اشتراک
+              {expiringDaysLeft} روز تا پایان اشتراک
             </Text>
           )}
-          <View
-            style={[
-              styles.headerBadge,
-              { backgroundColor: badgeBg },
-            ]}
-          >
+          <View style={[styles.headerBadge, { backgroundColor: badgeBg }]}>
             <Text style={styles.headerBadgeText}>{badgeLabel}</Text>
           </View>
         </View>
       </View>
 
       {/* صفحه قفل‌شده → FREE یا EXPIRED */}
-      {planView !== "pro" ? (
+      {!isProPlan ? (
         <View
           style={{
             flex: 1,
@@ -389,8 +252,8 @@ export default function Panahgah() {
                     lineHeight: 22,
                   }}
                 >
-                  پناهگاه جاییه برای وقتی که یهو حالت بد میشه، یا وسوسه می‌شی پیام
-                  بدی، یا احساساتت ناگهانی بهت هجوم میارن.
+                  پناهگاه جاییه برای وقتی که یهو حالت بد میشه، یا وسوسه می‌شی
+                  پیام بدی، یا احساساتت ناگهانی بهت هجوم میارن.
                   {"\n\n"}
                   برای اینکه دوباره به همه‌ی سناریوهای اورژانسی و مسیرهای نجات
                   دسترسی داشته باشی، پلن ققنوس رو تمدید کن.
@@ -442,7 +305,9 @@ export default function Panahgah() {
       ) : (
         <>
           {/* Search */}
-          <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 }}>
+          <View
+            style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 }}
+          >
             <View
               style={[
                 styles.searchBox,
@@ -465,7 +330,7 @@ export default function Panahgah() {
             </View>
           </View>
 
-          {/* لیست */}
+          {/* لیست سناریوها */}
           <FlatList
             data={data}
             keyExtractor={(it) => it.id}
@@ -496,7 +361,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   headerTitle: { fontSize: 18, fontWeight: "900" },
-  headerBadgeRow: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
+  headerBadgeRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+  },
 
   headerBadge: {
     paddingHorizontal: 10,
@@ -504,7 +373,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   headerBadgeText: {
-    color: "#111827",
+    color: "#ffffffff",
     fontWeight: "900",
     fontSize: 11,
   },

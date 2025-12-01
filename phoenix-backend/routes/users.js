@@ -84,9 +84,11 @@ function authUser(req, res, next) {
 /* ---------- GET /api/users/me ---------- */
 router.get("/me", authUser, async (req, res) => {
   try {
+    const phone = req.userPhone;
     const user = await prisma.user.findUnique({
-      where: { phone: req.userPhone },
+      where: { phone },
     });
+    console.log("[users.me] phone =", phone, "→ user =", JSON.stringify(user, null, 2));
     return res.json({
       ok: true,
       data: user || null,
@@ -109,40 +111,66 @@ router.post("/upsert", authUser, async (req, res) => {
       gender,
       birthDate,
       profileCompleted,
-      avatarUrl,      // ورودی، ولی در Prisma استفاده نمی‌شود
+      avatarUrl,      // در Prisma نداریم
       plan,
       planExpiresAt,
-      lastLoginAt,    // ورودی، ولی در Prisma استفاده نمی‌شود
+      lastLoginAt,    // در Prisma نداریم
     } = req.body || {};
+
+    console.log("[users.upsert] HIT phone =", phone, "body =", req.body);
 
     const birthDateValue = parseDateOrNull(birthDate);
     const planExpiresValue = parseDateOrNull(planExpiresAt);
+
+    // 👇 فقط وقتی فیلدها واقعا پر هستن، تو update می‌ذاریم
+    const updateData = {};
+
+    if (typeof fullName === "string" && fullName.trim().length > 0) {
+      updateData.fullName = fullName.trim();
+    }
+
+    if (typeof gender === "string" && gender.trim().length > 0) {
+      updateData.gender = gender.trim();
+    }
+
+    if (birthDate !== undefined) {
+      updateData.birthDate = birthDateValue;
+    }
+
+    if (typeof profileCompleted === "boolean") {
+      updateData.profileCompleted = profileCompleted;
+    }
+
+    if (plan !== undefined) {
+      updateData.plan = plan;
+    }
+
+    if (planExpiresAt !== undefined) {
+      updateData.planExpiresAt = planExpiresValue;
+    }
+
+    // اگر هیچ آپدیتی نیست، فقط برگردون
+    if (Object.keys(updateData).length === 0) {
+      const existing = await prisma.user.findUnique({ where: { phone } });
+      console.log("[users.upsert] NO_UPDATE phone =", phone, "existing =", existing);
+      return res.json({ ok: true, data: existing });
+    }
 
     const user = await prisma.user.upsert({
       where: { phone },
       create: {
         phone,
-        fullName: fullName ?? "",
-        gender: gender ?? null,
+        fullName: typeof fullName === "string" ? fullName.trim() : "",
+        gender: typeof gender === "string" && gender.trim().length > 0 ? gender.trim() : null,
         birthDate: birthDateValue,
-        // avatarUrl و lastLoginAt در این دیتابیس فیلد ندارند
         profileCompleted: !!profileCompleted,
         plan: plan || "free",
         planExpiresAt: planExpiresValue,
       },
-      update: {
-        fullName: fullName ?? undefined,
-        gender: gender ?? undefined,
-        birthDate: birthDate ? birthDateValue : undefined,
-        profileCompleted:
-          typeof profileCompleted === "boolean"
-            ? profileCompleted
-            : undefined,
-        plan: plan ?? undefined,
-        planExpiresAt:
-          typeof planExpiresAt !== "undefined" ? planExpiresValue : undefined,
-      },
+      update: updateData,
     });
+
+    console.log("[users.upsert] UPSERT_RESULT user =", user);
 
     return res.json({ ok: true, data: user });
   } catch (e) {
@@ -163,48 +191,66 @@ router.post("/", async (req, res) => {
   try {
     const rawPhone = req.body?.phone;
     const phone = normalizePhone(rawPhone);
+
     if (!phone) {
       return res.status(400).json({ ok: false, error: "PHONE_REQUIRED" });
     }
 
     const {
       fullName,
-      avatarUrl,     // نادیده گرفته می‌شود
+      avatarUrl,      // نادیده گرفته می‌شود
       gender,
       birthDate,
       profileCompleted,
       plan,
       planExpiresAt,
-      lastLoginAt,   // نادیده گرفته می‌شود
+      lastLoginAt,    // نادیده گرفته می‌شود
     } = req.body || {};
+
+    console.log("[users.root-post] HIT phone =", phone, "body =", req.body);
 
     const birthDateValue = parseDateOrNull(birthDate);
     const planExpiresValue = parseDateOrNull(planExpiresAt);
+
+    // ⚠️ اینجا هم مثل بالا: فقط اگر واقعا مقدار معنادار داریم، آپدیت کن
+    const updateData = {};
+
+    if (typeof fullName === "string" && fullName.trim().length > 0) {
+      updateData.fullName = fullName.trim();
+    }
+    if (typeof gender === "string" && gender.trim().length > 0) {
+      updateData.gender = gender.trim();
+    }
+    if (birthDate !== undefined) {
+      updateData.birthDate = birthDateValue;
+    }
+    if (typeof profileCompleted === "boolean") {
+      updateData.profileCompleted = profileCompleted;
+    }
+    if (plan !== undefined) {
+      updateData.plan = plan;
+    }
+    if (planExpiresAt !== undefined) {
+      updateData.planExpiresAt = planExpiresValue;
+    }
+
+    console.log("[users.root-post] updateData =", updateData);
 
     const user = await prisma.user.upsert({
       where: { phone },
       create: {
         phone,
-        fullName: fullName ?? "",
-        gender: gender ?? null,
+        fullName: typeof fullName === "string" ? fullName.trim() : "",
+        gender: typeof gender === "string" && gender.trim().length > 0 ? gender.trim() : null,
         birthDate: birthDateValue,
         profileCompleted: !!profileCompleted,
         plan: plan || "free",
         planExpiresAt: planExpiresValue,
       },
-      update: {
-        fullName: fullName ?? undefined,
-        gender: gender ?? undefined,
-        birthDate: birthDate ? birthDateValue : undefined,
-        profileCompleted:
-          typeof profileCompleted === "boolean"
-            ? profileCompleted
-            : undefined,
-        plan: plan ?? undefined,
-        planExpiresAt:
-          typeof planExpiresAt !== "undefined" ? planExpiresValue : undefined,
-      },
+      update: updateData,
     });
+
+    console.log("[users.root-post] UPSERT_RESULT user =", user);
 
     return res.json({ ok: true, data: user });
   } catch (e) {
