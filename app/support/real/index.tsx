@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@react-navigation/native";
 import { useRouter, Stack } from "expo-router";
@@ -19,11 +19,10 @@ const DEFAULT_TITLES = {
 
 export default function RealSupport() {
   const { colors, dark } = useTheme();
-  const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const goTo = (type: "tech" | "therapy") => {
-    // 👇 فقط نوع را می‌فرستیم؛ خود صفحه‌ی تیکت تیکت واقعی را می‌سازد
+    // فقط نوع را می‌فرستیم؛ خود صفحه‌ی تیکت تیکت واقعی را می‌سازد
     router.push(`/support/tickets/${type}`);
   };
 
@@ -85,10 +84,7 @@ export default function RealSupport() {
 
   return (
     <SafeAreaView
-      style={[
-        styles.root,
-        { backgroundColor: colors.background, paddingTop: insets.top },
-      ]}
+      style={[styles.root, { backgroundColor: colors.background }]}
     >
       <Stack.Screen options={{ headerShown: false }} />
 

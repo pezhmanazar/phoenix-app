@@ -33,10 +33,6 @@ export default function Panahgah() {
   const [loading, setLoading] = useState(true);
 
   const isProPlan = planView === "pro" || planView === "expiring";
-  const isNearExpire =
-    planView === "expiring" &&
-    expiringDaysLeft != null &&
-    expiringDaysLeft > 0;
 
   /** سینک وضعیت پلن از سرور + فلگ لوکال */
   const syncPlanView = useCallback(async () => {
@@ -76,6 +72,16 @@ export default function Panahgah() {
 
       setPlanView(view);
       setExpiringDaysLeft(expDays);
+
+      //console.log("PANAHGAH PLAN INIT", {
+       //rawPlan: status.rawPlan,
+        //rawExpiresAt: status.rawExpiresAt,
+        //isExpired: status.isExpired,
+        //daysLeft: status.daysLeft,
+        //flag,
+        //planView: view,
+        //expDays,
+     // });
     } catch (e) {
       console.log("PANAHGAH PLAN ERR", e);
       setPlanView("free");
@@ -167,21 +173,46 @@ export default function Panahgah() {
     );
   }
 
-  const badgeBg =
-    planView === "pro"
-      ? "#F59E0B"
+  // 🔰 وضعیت بج هماهنگ با تب Subscription (چهار حالت)
+  type BadgeState = "free" | "pro" | "expiring" | "expired";
+  const badgeState: BadgeState =
+    planView === "expired"
+      ? "expired"
       : planView === "expiring"
-      ? "#F97316"
-      : planView === "expired"
-      ? "#DC2626"
-      : "#9CA3AF";
+      ? "expiring"
+      : planView === "pro"
+      ? "pro"
+      : "free";
+
+  const badgeBg =
+    badgeState === "expired"
+      ? "#7f1d1d55"
+      : badgeState === "expiring"
+      ? "#fbbf2455"
+      : badgeState === "pro"
+      ? "#16a34a33"
+      : "#4B556333";
+
+  const badgeTextColor =
+    badgeState === "expired"
+      ? "#F87171"
+      : badgeState === "expiring"
+      ? "#FBBF24"
+      : badgeState === "pro"
+      ? "#4ADE80"
+      : "#E5E7EB";
 
   const badgeLabel =
-    planView === "pro" || planView === "expiring"
-      ? "PRO"
-      : planView === "expired"
+    badgeState === "expired"
       ? "EXPIRED"
+      : badgeState === "pro" || badgeState === "expiring"
+      ? "PRO"
       : "FREE";
+
+  const showExpiring =
+    badgeState === "expiring" &&
+    expiringDaysLeft != null &&
+    expiringDaysLeft > 0;
 
   return (
     <SafeAreaView
@@ -194,10 +225,10 @@ export default function Panahgah() {
           پناهگاه
         </Text>
         <View style={styles.headerBadgeRow}>
-          {isNearExpire && (
+          {showExpiring && (
             <Text
               style={{
-                color: "#FACC15",
+                color: "#FBBF24",
                 fontSize: 11,
                 fontWeight: "900",
                 marginLeft: 8,
@@ -206,8 +237,24 @@ export default function Panahgah() {
               {expiringDaysLeft} روز تا پایان اشتراک
             </Text>
           )}
-          <View style={[styles.headerBadge, { backgroundColor: badgeBg }]}>
-            <Text style={styles.headerBadgeText}>{badgeLabel}</Text>
+          <View
+            style={[
+              styles.headerBadge,
+              {
+                backgroundColor: badgeBg,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.headerBadgeText,
+                {
+                  color: badgeTextColor,
+                },
+              ]}
+            >
+              {badgeLabel}
+            </Text>
           </View>
         </View>
       </View>
@@ -241,7 +288,6 @@ export default function Panahgah() {
                 >
                   اشتراکت منقضی شده و پناهگاه فعلاً برات قفله.
                 </Text>
-
                 <Text
                   style={{
                     color: colors.text,
@@ -284,7 +330,6 @@ export default function Panahgah() {
                     پناهگاه مخصوص لحظه‌های اورژانسی بعد از جداییه
                   </Text>
                 </View>
-
                 <Text
                   style={{
                     color: colors.text,
@@ -329,7 +374,6 @@ export default function Panahgah() {
               />
             </View>
           </View>
-
           {/* لیست سناریوها */}
           <FlatList
             data={data}
@@ -351,7 +395,6 @@ export default function Panahgah() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-
   header: {
     borderBottomWidth: 1,
     paddingHorizontal: 16,
@@ -366,18 +409,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-
   headerBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
   },
   headerBadgeText: {
-    color: "#ffffffff",
     fontWeight: "900",
     fontSize: 11,
   },
-
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -387,20 +427,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
-
   card: { borderWidth: 1, borderRadius: 16, padding: 14 },
-
   row: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
-
   title: { flex: 1, textAlign: "right", fontWeight: "900" },
-
   lockCard: {
     borderWidth: 1,
     borderRadius: 16,
     padding: 16,
     flex: 1,
   },
-
   bulletRow: {
     flexDirection: "row-reverse",
     alignItems: "center",

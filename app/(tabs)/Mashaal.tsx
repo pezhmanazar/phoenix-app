@@ -9,12 +9,12 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useTheme, useFocusEffect } from "@react-navigation/native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Video, ResizeMode, AVPlaybackStatusSuccess } from "expo-av";
 import Slider from "@react-native-community/slider";
 import { LinearGradient } from "expo-linear-gradient";
-import Screen from "@/components/Screen";
 import { useAudio } from "../../hooks/useAudio";
 import { useUser } from "../../hooks/useUser";
 import { getPlanStatus, PRO_FLAG_KEY } from "../../lib/plan";
@@ -295,7 +295,7 @@ function Player({
     enabled: lesson.kind === "audio",
   });
 
-  // Throttle هر ۲ ثانیه (و اگر رسید به انتها، سریع ۱۰۰٪ ثبت کن)
+  // Throttle هر ۲ ثانیه
   const lastProgressRef = useRef(0);
   const atAudioEnd =
     lesson.kind === "audio" &&
@@ -436,7 +436,6 @@ function Player({
             position: "relative",
           }}
         >
-          {/* بک‌گراند از کاور + گرادیانت + هاله تیره */}
           {!!coverSource && (
             <>
               <Image
@@ -657,10 +656,7 @@ export default function Mashaal() {
 
   const isProPlan = planView === "pro";
   const isNearExpire =
-    planView === "pro" &&
-    daysLeft != null &&
-    daysLeft > 0 &&
-    daysLeft <= 7;
+    planView === "pro" && daysLeft != null && daysLeft > 0 && daysLeft <= 7;
 
   // لود اولیه پیشرفت‌ها
   useEffect(() => {
@@ -716,18 +712,7 @@ export default function Mashaal() {
 
         setPlanView(view);
         setDaysLeft(localDaysLeft ?? null);
-
-        console.log("MASHAL INIT", {
-          rawPlan: status.rawPlan,
-          rawExpiresAt: status.rawExpiresAt,
-          isExpired: status.isExpired,
-          daysLeft: status.daysLeft,
-          flag,
-          planView: view,
-          localDaysLeft,
-        });
       } catch (e) {
-        console.log("MASHAL INIT ERR", e);
         setPlanView("free");
         setDaysLeft(null);
       } finally {
@@ -767,17 +752,8 @@ export default function Mashaal() {
           if (!cancelled) {
             setPlanView(view);
             setDaysLeft(localDaysLeft ?? null);
-            console.log("MASHAL FOCUS", {
-              flag,
-              planView: view,
-              localDaysLeft,
-              daysLeftReal: status.daysLeft,
-              isExpired: status.isExpired,
-            });
           }
-        } catch (e) {
-          console.log("MASHAL FOCUS ERR", e);
-        }
+        } catch (e) {}
       })();
       return () => {
         cancelled = true;
@@ -802,48 +778,64 @@ export default function Mashaal() {
 
   if (loadingPlan) {
     return (
-      <Screen
-        contentContainerStyle={{
-          flexGrow: 1,
-          alignItems: "center",
-          justifyContent: "center",
-          paddingBottom: 16,
-        }}
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: colors.background }}
+        edges={["top", "left", "right", "bottom"]}
       >
-        <ActivityIndicator color={colors.primary} />
-        <Text
+        <View
           style={{
-            color: colors.text,
-            marginTop: 8,
-            fontSize: 12,
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            paddingBottom: 16,
           }}
         >
-          در حال آماده‌سازی مشعل…
-        </Text>
-      </Screen>
+          <ActivityIndicator color={colors.primary} />
+          <Text
+            style={{
+              color: colors.text,
+              marginTop: 8,
+              fontSize: 12,
+            }}
+          >
+            در حال آماده‌سازی مشعل…
+          </Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
-  const badgeBg =
-    planView === "pro"
-      ? isNearExpire
-        ? "#EA580C"
-        : "#F59E0B"
-      : planView === "expired"
-      ? "#DC2626"
-      : "#9CA3AF";
+  // 🎯 سیستم بج هماهنگ با تب Subscription:
+  // FREE: پس‌زمینه تیره، متن روشن
+  // PRO: سبز تیره + متن سبز نئونی
+  // PRO نزدیک انقضا: قهوه‌ای تیره + متن زرد
+  // EXPIRED: قرمز تیره + متن صورتی روشن
+  let badgeBg = "#111827";          // FREE
+  let badgeTextColor = "#E5E7EB";
+  let badgeLabel: "FREE" | "PRO" | "EXPIRED" = "FREE";
 
-  const badgeLabel =
-    planView === "pro"
-      ? "PRO"
-      : planView === "expired"
-      ? "EXPIRED"
-      : "FREE";
-
-  const badgeTextColor = planView === "expired" ? "#FFFFFF" : "#111827";
-
+  if (planView === "pro") {
+    if (isNearExpire) {
+      // PRO نزدیک انقضا
+      badgeBg = "#451A03";
+      badgeTextColor = "#FBBF24";
+    } else {
+      // PRO عادی
+      badgeBg = "#064E3B";
+      badgeTextColor = "#4ADE80";
+    }
+    badgeLabel = "PRO";
+  } else if (planView === "expired") {
+    // منقضی
+    badgeBg = "#7F1D1D";
+    badgeTextColor = "#FCA5A5";
+    badgeLabel = "EXPIRED";
+  }
   return (
-    <Screen contentContainerStyle={{ flexGrow: 1, paddingBottom: 16 }}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: colors.background, paddingBottom: 16 }}
+      edges={["top", "left", "right", "bottom"]}
+    >
       {/* هدر + بج پلن */}
       <View
         style={{
@@ -851,7 +843,7 @@ export default function Mashaal() {
           alignItems: "center",
           justifyContent: "space-between",
           marginBottom: 12,
-          paddingHorizontal: 4,
+          paddingHorizontal: 16,
           marginTop: 4,
         }}
       >
@@ -898,7 +890,7 @@ export default function Mashaal() {
             borderColor: colors.border,
             backgroundColor: colors.card,
             padding: 16,
-            marginHorizontal: 4,
+            marginHorizontal: 16,
             marginTop: 4,
           }}
         >
@@ -967,9 +959,9 @@ export default function Mashaal() {
                   lineHeight: 20,
                 }}
               >
-                این تب برای این ساخته شده که فقط حالِت کمی بهتر نشه؛
-                واقعاً مهارت بسازی برای مدیریت احساس، وسواس فکری، ترس از
-                تنهایی و بازسازی عزت‌نفس بعد از جدایی.
+                این تب برای این ساخته شده که فقط حالِت کمی بهتر نشه؛ واقعاً مهارت
+                بسازی برای مدیریت احساس، وسواس فکری، ترس از تنهایی و بازسازی
+                عزت‌نفس بعد از جدایی.
               </Text>
 
               <View style={{ marginTop: 14, gap: 6 }}>
@@ -1038,7 +1030,7 @@ export default function Mashaal() {
         </View>
       ) : !selected ? (
         // حالت PRO و هنوز در لیست هستیم
-        <View style={{ gap: 10, flexGrow: 1 }}>
+        <View style={{ gap: 10, flexGrow: 1, paddingHorizontal: 16 }}>
           <Text
             style={{
               color: "#8E8E93",
@@ -1066,9 +1058,15 @@ export default function Mashaal() {
         </View>
       ) : (
         // حالت PRO و داخل پلیر
-        <Player lesson={selected} onClose={close} onProgress={handleProgress} />
+        <View style={{ flex: 1, paddingHorizontal: 16 }}>
+          <Player
+            lesson={selected}
+            onClose={close}
+            onProgress={handleProgress}
+          />
+        </View>
       )}
-    </Screen>
+    </SafeAreaView>
   );
 }
 

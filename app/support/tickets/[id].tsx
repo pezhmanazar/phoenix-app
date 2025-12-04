@@ -40,9 +40,10 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { Audio } from "expo-av";
 import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { ViewStyle } from "react-native";
 import BACKEND_URL from "../../../constants/backend";
 import { useUser } from "../../../hooks/useUser";
-import { getPlanStatus } from "../../../lib/plan";
+import { getPlanStatus, PRO_FLAG_KEY } from "../../../lib/plan";
 
 /* ===== انواع ===== */
 type MessageType = "text" | "voice" | "image" | "file";
@@ -1005,33 +1006,40 @@ export default function TicketDetail() {
     };
   }, []);
 
-  /* سنک وضعیت پلن از روی me (با استفاده از getPlanStatus) */
-  const syncPlanView = useCallback(() => {
+  /* سنک وضعیت پلن از روی me (با استفاده از getPlanStatus + PRO_FLAG_KEY) */
+  const syncPlanView = useCallback(async () => {
     try {
+      const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
       const status = getPlanStatus(me);
+      const flagIsPro = flag === "1";
 
       let view: PlanView = "free";
 
-      if (
-        status.isExpired &&
-        (status.rawPlan === "pro" || status.rawPlan === "vip")
-      ) {
-        view = "expired";
-      } else if (status.isPro) {
-        const d =
-          typeof status.daysLeft === "number" ? status.daysLeft : null;
-        if (d != null && d > 0 && d <= 7) {
-          view = "expiring";
+      if (status.rawExpiresAt) {
+        // پلن تاریخ انقضا دارد
+        if (
+          status.isExpired &&
+          (status.rawPlan === "pro" || status.rawPlan === "vip")
+        ) {
+          view = "expired";
+        } else if (status.isPro || flagIsPro) {
+          const d =
+            typeof status.daysLeft === "number" ? status.daysLeft : null;
+          if (d != null && d > 0 && d <= 7) {
+            view = "expiring";
+          } else {
+            view = "pro";
+          }
         } else {
-          view = "pro";
+          view = "free";
         }
       } else {
-        view = "free";
+        // بدون تاریخ انقضا → فقط بر اساس isPro یا فلگ لوکال
+        view = status.isPro || flagIsPro ? "pro" : "free";
       }
 
       setPlanView(view);
     } catch (e) {
-      console.log("TICKET PLAN ERR", e);
       setPlanView("free");
     } finally {
       setPlanLoaded(true);
@@ -1202,22 +1210,24 @@ export default function TicketDetail() {
 
   const isProPlan = planView === "pro" || planView === "expiring";
 
-  // رنگ بج پلن
-  const badgeBg =
-    planView === "pro"
-      ? "#22C55E"
-      : planView === "expiring"
-      ? "#F97316"
-      : planView === "expired"
-      ? "#DC2626"
-      : "#4B5563";
+  // رنگ و متن بج پلن، هماهنگ با تب Subscription
+  let badgeBg = "#111827";
+  let badgeTextColor = "#E5E7EB";
+  let badgeLabel: "FREE" | "PRO" | "EXPIRED" = "FREE";
 
-  const badgeLabel =
-    planView === "free"
-      ? "FREE"
-      : planView === "expired"
-      ? "EXPIRED"
-      : "PRO";
+  if (planView === "pro") {
+    badgeBg = "#064E3B";        // سبز تیره
+    badgeTextColor = "#4ADE80"; // سبز روشن
+    badgeLabel = "PRO";
+  } else if (planView === "expiring") {
+    badgeBg = "#451A03";        // کهربایی تیره
+    badgeTextColor = "#FBBF24"; // زرد
+    badgeLabel = "PRO";
+  } else if (planView === "expired") {
+    badgeBg = "#7F1D1D";        // قرمز تیره
+    badgeTextColor = "#FCA5A5"; // قرمز روشن
+    badgeLabel = "EXPIRED";
+  }
 
   const headerTitle =
     chatType === "therapy"
@@ -1268,7 +1278,14 @@ export default function TicketDetail() {
                 چت با درمانگر ققنوس
               </Text>
               <View style={[styles.planBadge, { backgroundColor: badgeBg }]}>
-                <Text style={styles.planBadgeText}>{badgeLabel}</Text>
+                <Text
+                  style={[
+                    styles.planBadgeText,
+                    { color: badgeTextColor },
+                  ]}
+                >
+                  {badgeLabel}
+                </Text>
               </View>
             </View>
 
@@ -1357,20 +1374,22 @@ export default function TicketDetail() {
 
   const renderMessage = (m: Message) => {
     const mine = m.sender === "admin";
-    const bubbleStyle = [
-      styles.msg,
-      {
-        borderColor: colors.border,
-        backgroundColor: mine ? colors.primary : colors.background,
-        alignSelf: mine
-          ? rtl
-            ? "flex-start"
-            : "flex-end"
-          : rtl
-          ? "flex-end"
-          : "flex-start",
-      },
-    ];
+    const alignSelf: ViewStyle["alignSelf"] = mine
+  ? rtl
+    ? "flex-start"
+    : "flex-end"
+  : rtl
+  ? "flex-end"
+  : "flex-start";
+
+const bubbleStyle: ViewStyle[] = [
+  styles.msg,
+  {
+    borderColor: colors.border,
+    backgroundColor: mine ? colors.primary : colors.background,
+    alignSelf,
+  },
+];
     const textColor = { color: mine ? "#fff" : colors.text };
     const darkBubble = mine;
     const fullURL = m.fileUrl ? `${BACKEND_URL}${m.fileUrl}` : undefined;
@@ -1543,7 +1562,14 @@ export default function TicketDetail() {
 
             {isTherapyChat && (
               <View style={[styles.planBadge, { backgroundColor: badgeBg }]}>
-                <Text style={styles.planBadgeText}>{badgeLabel}</Text>
+                <Text
+                  style={[
+                    styles.planBadgeText,
+                    { color: badgeTextColor },
+                  ]}
+                >
+                  {badgeLabel}
+                </Text>
               </View>
             )}
           </View>
@@ -1718,7 +1744,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   planBadgeText: {
-    color: "#111827",
     fontWeight: "900",
     fontSize: 10,
   },

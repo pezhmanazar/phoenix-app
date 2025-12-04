@@ -3,7 +3,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme, useFocusEffect } from "@react-navigation/native";
 import Constants from "expo-constants";
 import { StatusBar } from "expo-status-bar";
-import { toJalaali } from "jalaali-js";
 import React, { useEffect, useState, useCallback } from "react";
 import {
   Alert,
@@ -139,7 +138,9 @@ function NoContactCard() {
 
   const onLogToday = () => {
     const ok = incNoContact();
-    if (!ok) console.log("امروز قبلاً ثبت شده است.");
+    if (!ok) {
+      // امروز قبلاً ثبت شده است.
+    }
   };
 
   return (
@@ -523,7 +524,7 @@ export default function Phoenix() {
 
   // وضعیت پلن
   const [planView, setPlanView] = useState<PlanView>("free");
-  const [expiringDaysLeft, setExpiringDaysLeft] = useState<number | null>(null);
+  const [daysLeft, setDaysLeft] = useState<number | null>(null);
 
   const syncPlanView = useCallback(async () => {
     try {
@@ -532,35 +533,40 @@ export default function Phoenix() {
       const flagIsPro = flag === "1";
 
       let view: PlanView = "free";
-      let expDays: number | null = null;
+      let localDaysLeft: number | null =
+        typeof status.daysLeft === "number" ? status.daysLeft : null;
 
       if (status.rawExpiresAt) {
         if (status.isExpired) {
-          view = "expired";
-          expDays = 0;
+          view =
+            status.rawPlan === "pro" || status.rawPlan === "vip"
+              ? "expired"
+              : "free";
+          if (localDaysLeft !== null && localDaysLeft < 0) {
+            localDaysLeft = 0;
+          }
         } else if (status.isPro || flagIsPro) {
-          const d =
-            typeof status.daysLeft === "number" ? status.daysLeft : null;
-          if (d != null && d > 0 && d <= 7) {
+          if (localDaysLeft != null && localDaysLeft > 0 && localDaysLeft <= 7) {
             view = "expiring";
-            expDays = d;
           } else {
             view = "pro";
-            expDays = d;
           }
         } else {
           view = "free";
         }
       } else {
-        view = status.isPro || flagIsPro ? "pro" : "free";
+        if (status.isPro || flagIsPro) {
+          view = "pro";
+        } else {
+          view = "free";
+        }
       }
 
       setPlanView(view);
-      setExpiringDaysLeft(expDays);
+      setDaysLeft(localDaysLeft);
     } catch (e) {
-      console.log("PHOENIX PLAN ERR", e);
       setPlanView("free");
-      setExpiringDaysLeft(null);
+      setDaysLeft(null);
     }
   }, [me]);
 
@@ -590,35 +596,6 @@ export default function Phoenix() {
   useEffect(() => {
     return () => setEditVisible(false);
   }, []);
-
-  const g = new Date();
-  const { jy, jm, jd } = toJalaali(g);
-  const weekdays = [
-    "یکشنبه",
-    "دوشنبه",
-    "سه‌شنبه",
-    "چهارشنبه",
-    "پنجشنبه",
-    "جمعه",
-    "شنبه",
-  ];
-  const months = [
-    "فروردین",
-    "اردیبهشت",
-    "خرداد",
-    "تیر",
-    "مرداد",
-    "شهریور",
-    "مهر",
-    "آبان",
-    "آذر",
-    "دی",
-    "بهمن",
-    "اسفند",
-  ];
-  const dateText = `${weekdays[g.getDay()]} ${toPersianDigits(
-    jd
-  )} ${months[jm - 1]} ${toPersianDigits(jy)}`;
 
   const bumpPelekan = () => setPelekanProgress(pelekanProgress + 5);
   const bumpDay = () => setDayProgress(dayProgress + 10);
@@ -700,26 +677,33 @@ export default function Phoenix() {
   }
 
   const uiPlanView: PlanView = planView;
-  const uiDaysLeft: number | null = expiringDaysLeft;
+  const uiDaysLeft: number | null = daysLeft;
 
   const isProLikePlan =
     uiPlanView === "pro" || uiPlanView === "expiring";
 
-  const badgeBg =
-    uiPlanView === "pro"
-      ? "#F59E0B"
-      : uiPlanView === "expiring"
-      ? "#F97316"
-      : uiPlanView === "expired"
-      ? "#DC2626"
-      : "#4B5563";
-
-  const badgeLabel =
-    uiPlanView === "pro" || uiPlanView === "expiring"
-      ? "PRO"
-      : uiPlanView === "expired"
-      ? "EXPIRED"
-      : "FREE";
+  const badgeStyle = {
+    free: {
+      bg: "#020617", // مثل تب ساب
+      fg: "#FFFFFF",
+      label: "FREE",
+    },
+    pro: {
+      bg: "#022C22",
+      fg: "#86EFAC",
+      label: "PRO",
+    },
+    expiring: {
+      bg: "#78350F",
+      fg: "#FACC15",
+      label: "PRO",
+    },
+    expired: {
+      bg: "#450A0A",
+      fg: "#FCA5A5",
+      label: "EXPIRED",
+    },
+  }[uiPlanView];
 
   const showExpiring =
     uiPlanView === "expiring" && uiDaysLeft != null && uiDaysLeft > 0;
@@ -739,37 +723,7 @@ export default function Phoenix() {
         }}
         backgroundColor={colors.background}
       >
-        {/* هدر بالا */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "flex-start",
-          }}
-        >
-          <View>
-            <Text
-              style={{
-                fontSize: 18,
-                fontWeight: "800",
-                color: colors.text,
-              }}
-            >
-              سلام، {profileName}
-            </Text>
-            <Text
-              style={{
-                fontSize: 12,
-                color: "#8E8E93",
-                marginTop: 2,
-              }}
-            >
-              {dateText}
-            </Text>
-          </View>
-        </View>
-
-        {/* کارت پروفایل */}
+        {/* کارت پروفایل (بدون سلام/تاریخ بالای صفحه) */}
         <View
           style={{
             backgroundColor: colors.card,
@@ -808,23 +762,23 @@ export default function Phoenix() {
                   {profileName}
                 </Text>
 
-                {/* بج پلن */}
+                {/* بج پلن هماهنگ با تب ساب */}
                 <View
                   style={{
-                    paddingHorizontal: 10,
-                    paddingVertical: 4,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
                     borderRadius: 999,
-                    backgroundColor: badgeBg,
+                    backgroundColor: badgeStyle.bg,
                   }}
                 >
                   <Text
                     style={{
-                      color: "#ffffff",
+                      color: badgeStyle.fg,
                       fontWeight: "900",
                       fontSize: 11,
                     }}
                   >
-                    {badgeLabel}
+                    {badgeStyle.label}
                   </Text>
                 </View>
 
@@ -832,11 +786,11 @@ export default function Phoenix() {
                   <Text
                     style={{
                       fontSize: 11,
-                      color: "#F97316",
+                      color: "#FACC15",
                       fontWeight: "900",
                     }}
                   >
-                    {toPersianDigits(uiDaysLeft!)} روز تا پایان اشتراک
+                    {toPersianDigits(uiDaysLeft!)} روز از اشتراکت باقی مانده
                   </Text>
                 )}
               </View>

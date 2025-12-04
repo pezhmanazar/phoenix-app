@@ -30,6 +30,7 @@ import { getPlanStatus, PRO_FLAG_KEY } from "../../lib/plan";
 
 /* --------------------------- مدل و دادهٔ اولیه --------------------------- */
 type StepDef = { id: string; title: string; days: number };
+
 const STEPS: StepDef[] = [
   { id: "step0", title: "پله صفر", days: 0 },
   { id: "step1", title: "پله اول: سوختن", days: 9 },
@@ -76,6 +77,7 @@ function Pulsing({
   playing?: boolean;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
+
   useEffect(() => {
     if (!playing) {
       scale.setValue(1);
@@ -100,6 +102,7 @@ function Pulsing({
     loop.start();
     return () => loop.stop();
   }, [playing, scale]);
+
   return <Animated.View style={{ transform: [{ scale }] }}>{children}</Animated.View>;
 }
 
@@ -175,13 +178,12 @@ export default function PelekanScreen() {
           };
           setProgress(merged);
         } else {
-          // فقط وضعیت پلن آپدیت شود
           setProgress((prev) => ({ ...prev, isPro: finalIsPro }));
         }
 
         setPlanView(view);
         setExpiringDaysLeft(expDays);
-      } catch (e) {
+      } catch {
         if (includeProgress) {
           setProgress(defaultProgress);
         }
@@ -203,12 +205,10 @@ export default function PelekanScreen() {
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-
       (async () => {
         await computePlanView(false);
         if (cancelled) return;
       })();
-
       return () => {
         cancelled = true;
       };
@@ -359,6 +359,7 @@ export default function PelekanScreen() {
     if (s > progress.stepIndex) return false;
     return d < progress.dayIndex;
   };
+
   const isAvailable = (s: number, d: number) =>
     s === progress.stepIndex && d === progress.dayIndex;
 
@@ -374,7 +375,6 @@ export default function PelekanScreen() {
       dayIndex = nextDay;
     }
 
-    // هر روز ۳ الماس، استریک +۱
     gems += 3;
     streak = Math.min(999, streak + 1);
     await persist({ stepIndex, dayIndex, gems, streak, isPro });
@@ -390,7 +390,6 @@ export default function PelekanScreen() {
       setPlanInfoModal(planView === "expired" ? "expired" : "free");
       return;
     }
-    // در حالت PRO روی هر روز که تپ کند، فقط یک قدم جلو می‌رویم و امتیاز می‌گیرد
     await handleCompleteToday();
   };
 
@@ -507,7 +506,6 @@ export default function PelekanScreen() {
 
         const nodeX = item.zig === "L" ? NODE_X_LEFT : NODE_X_RIGHT;
 
-        // رنگ‌های نود
         const bg = done
           ? palette.node.doneBg
           : available
@@ -529,7 +527,6 @@ export default function PelekanScreen() {
           ? palette.node.availableLabel
           : palette.node.lockedLabel;
 
-        // مسیر «از پایین به بالا»
         const bottomY = CELL_H;
         const topY = 0;
         const pathD = `
@@ -546,7 +543,6 @@ export default function PelekanScreen() {
           <View
             style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}
           >
-            {/* منحنی پس‌زمینه */}
             <Svg
               width={PATH_W}
               height={CELL_H}
@@ -561,7 +557,6 @@ export default function PelekanScreen() {
               />
             </Svg>
 
-            {/* دایره روز (روی مسیر) */}
             <NodeWrapper {...(available ? { playing: true } : {})}>
               <TouchableOpacity
                 activeOpacity={0.9}
@@ -606,7 +601,9 @@ export default function PelekanScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
+      <SafeAreaView
+        style={[styles.center, { backgroundColor: colors.background }]}
+      >
         <Text style={{ color: colors.text }}>در حال بارگذاری…</Text>
       </SafeAreaView>
     );
@@ -705,21 +702,23 @@ function Header({
 }) {
   const { colors } = useTheme();
 
-  const badgeBg =
-    planView === "pro"
-      ? "#F59E0B"
-      : planView === "expiring"
-      ? "#F97316"
-      : planView === "expired"
-      ? "#DC2626"
-      : "#9CA3AF";
+  let badgeBg = "#111827";
+  let badgeTextColor = "#E5E7EB";
+  let badgeLabel: "FREE" | "PRO" | "EXPIRED" = "FREE";
 
-  const badgeLabel =
-    planView === "pro" || planView === "expiring"
-      ? "PRO"
-      : planView === "expired"
-      ? "EXPIRED"
-      : "FREE";
+  if (planView === "pro") {
+    badgeBg = "#064E3B";
+    badgeTextColor = "#4ADE80";
+    badgeLabel = "PRO";
+  } else if (planView === "expiring") {
+    badgeBg = "#451A03";
+    badgeTextColor = "#FBBF24";
+    badgeLabel = "PRO";
+  } else if (planView === "expired") {
+    badgeBg = "#7F1D1D";
+    badgeTextColor = "#FCA5A5";
+    badgeLabel = "EXPIRED";
+  }
 
   const showExpiring =
     planView === "expiring" &&
@@ -733,9 +732,17 @@ function Header({
         { backgroundColor: colors.card, borderColor: colors.border },
       ]}
     >
-      <View style={styles.topItem}>
+      {/* ستون وضعیت پلن (راست) */}
+      <View style={[styles.topItem, { justifyContent: "flex-start" }]}>
         <View style={[styles.badge, { backgroundColor: badgeBg }]}>
-          <Text style={styles.badgeText}>{badgeLabel}</Text>
+          <Text
+            style={[
+              styles.badgeText,
+              { color: badgeTextColor },
+            ]}
+          >
+            {badgeLabel}
+          </Text>
         </View>
         {showExpiring && (
           <Text style={styles.expiringText}>
@@ -743,11 +750,15 @@ function Header({
           </Text>
         )}
       </View>
-      <View style={styles.topItem}>
+
+      {/* ستون وسط: الماس – همیشه وسط */}
+      <View style={[styles.topItem, { justifyContent: "center" }]}>
         <Ionicons name="diamond" size={18} color="#60A5FA" />
         <Text style={[styles.topText, { color: colors.text }]}> {gems}</Text>
       </View>
-      <View style={styles.topItem}>
+
+      {/* ستون چپ: استریک */}
+      <View style={[styles.topItem, { justifyContent: "flex-end" }]}>
         <Ionicons name="flame" size={18} color="#F97316" />
         <Text style={[styles.topText, { color: colors.text }]}>{streak}</Text>
       </View>
@@ -763,17 +774,29 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 1,
   },
-  topItem: { flexDirection: "row-reverse", alignItems: "center", gap: 6 },
+  topItem: {
+    flex: 1,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+  },
   topText: { fontWeight: "900" },
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  badgeText: { color: "#ffffff", fontWeight: "900", fontSize: 12 },
+
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  badgeText: {
+    fontWeight: "900",
+    fontSize: 12,
+  },
   expiringText: {
-    color: "#F97316",
+    color: "#FBBF24",
     fontWeight: "900",
     fontSize: 11,
   },

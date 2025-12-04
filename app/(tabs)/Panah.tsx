@@ -35,12 +35,9 @@ export default function Panah() {
 
   const isProPlan = planView === "pro";
   const isNearExpire =
-    planView === "pro" &&
-    daysLeft != null &&
-    daysLeft > 0 &&
-    daysLeft <= 7;
+    planView === "pro" && daysLeft != null && daysLeft > 0 && daysLeft <= 7;
 
-  /** بارگذاری اولیه وضعیت پلن */
+  /** بارگذاری اولیه وضعیت پلن (با در نظر گرفتن PRO_FLAG_KEY) */
   useEffect(() => {
     (async () => {
       try {
@@ -70,15 +67,15 @@ export default function Panah() {
         setPlanView(view);
         setDaysLeft(localDaysLeft ?? null);
 
-        console.log("PANAH INIT", {
-          rawPlan: status.rawPlan,
-          rawExpiresAt: status.rawExpiresAt,
-          isExpired: status.isExpired,
-          daysLeft: status.daysLeft,
-          flag,
-          planView: view,
-          localDaysLeft,
-        });
+        //console.log("PANAH INIT", {
+          //rawPlan: status.rawPlan,
+         // rawExpiresAt: status.rawExpiresAt,
+         // isExpired: status.isExpired,
+        //  daysLeft: status.daysLeft,
+         // flag,
+         // planView: view,
+         // localDaysLeft,
+        //});
       } catch (e) {
         console.log("PANAH INIT ERR", e);
         setPlanView("free");
@@ -89,11 +86,10 @@ export default function Panah() {
     })();
   }, [me]);
 
-  /** هر بار تب پناه فوکوس می‌گیرد → دوباره محاسبه */
+  /** هر بار تب پناه فوکوس می‌گیرد → دوباره محاسبه (با فلگ پرو) */
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-
       (async () => {
         try {
           const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
@@ -121,43 +117,49 @@ export default function Panah() {
           if (!cancelled) {
             setPlanView(view);
             setDaysLeft(localDaysLeft ?? null);
-            console.log("PANAH FOCUS", {
-              flag,
-              planView: view,
-              localDaysLeft,
-              daysLeftReal: status.daysLeft,
-              isExpired: status.isExpired,
-            });
+            //console.log("PANAH FOCUS", {
+              //flag,
+              //planView: view,
+              //localDaysLeft,
+              //daysLeftReal: status.daysLeft,
+              //isExpired: status.isExpired,
+           // });
           }
         } catch (e) {
-          console.log("PANAH FOCUS ERR", e);
+          //console.log("PANAH FOCUS ERR", e);
         }
       })();
-
       return () => {
         cancelled = true;
       };
     }, [me])
   );
 
-  const badgeBg =
-    planView === "pro"
-      ? isNearExpire
-        ? "#EA580C"
-        : "#F59E0B"
-      : planView === "expired"
-      ? "#DC2626"
-      : "#9CA3AF";
+  // 🎯 سیستم بج هماهنگ با تب Subscription:
+  // FREE: پس‌زمینه تیره، متن روشن
+  // PRO: سبز تیره + متن سبز نئونی
+  // PRO نزدیک انقضا (از روی daysLeft): قهوه‌ای تیره + متن زرد
+  // EXPIRED: قرمز تیره + متن صورتی روشن
+  let badgeBg = "#111827";
+  let badgeTextColor = "#E5E7EB";
+  let badgeLabel: "FREE" | "PRO" | "EXPIRED" = "FREE";
 
-  const badgeLabel =
-    planView === "pro"
-      ? "PRO"
-      : planView === "expired"
-      ? "EXPIRED"
-      : "FREE";
-
-  // متن بج در حالت EXPIRED سفید
-  const badgeTextColor = planView === "expired" ? "#FFFFFF" : "#111827";
+  if (planView === "pro") {
+    if (isNearExpire) {
+      // پرو نزدیک انقضا
+      badgeBg = "#451A03";
+      badgeTextColor = "#FBBF24";
+    } else {
+      // پرو عادی
+      badgeBg = "#064E3B";
+      badgeTextColor = "#4ADE80";
+    }
+    badgeLabel = "PRO";
+  } else if (planView === "expired") {
+    badgeBg = "#7F1D1D";
+    badgeTextColor = "#FCA5A5";
+    badgeLabel = "EXPIRED";
+  }
 
   if (loadingPlan) {
     return (
@@ -165,7 +167,7 @@ export default function Panah() {
         style={[styles.root, { backgroundColor: colors.background }]}
         edges={["top", "left", "right", "bottom"]}
       >
-        <View className="center">
+        <View style={styles.center}>
           <ActivityIndicator color={colors.primary} />
           <Text
             style={{
@@ -209,8 +211,6 @@ export default function Panah() {
               styles.badge,
               {
                 backgroundColor: badgeBg,
-                borderWidth: planView === "free" ? 1 : 0,
-                borderColor: planView === "free" ? "#4B5563" : "transparent",
               },
             ]}
           >
@@ -238,7 +238,6 @@ export default function Panah() {
           <Ionicons name="list" size={28} color="#7C2D12" />
           <Text style={styles.bigBtnText}>پشتیبان واقعی</Text>
         </TouchableOpacity>
-
         <TouchableOpacity
           activeOpacity={0.9}
           style={[styles.bigBtn, styles.aiSupport]}

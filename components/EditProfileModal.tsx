@@ -3,7 +3,6 @@ import React, {
   useEffect,
   useRef,
   useState,
-  LayoutChangeEvent,
 } from "react";
 import {
   Alert,
@@ -20,6 +19,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  LayoutChangeEvent, // 👈 از react-native
 } from "react-native";
 import { useTheme } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -81,7 +81,6 @@ const EditProfileModal: React.FC<Props> = ({ onClose }) => {
     (me?.birthDate as string | undefined) ?? undefined
   );
 
-  // 🔄 سینک مستقیم از me وقتی از سرور آپدیت شد
   useEffect(() => {
     if (me?.fullName) setName(me.fullName as string);
     if (me?.avatarUrl) setPhoto(me.avatarUrl as string);
@@ -89,7 +88,6 @@ const EditProfileModal: React.FC<Props> = ({ onClose }) => {
     if (me?.birthDate) setBirthDate(me.birthDate as string);
   }, [me?.fullName, me?.avatarUrl, me?.gender, me?.birthDate]);
 
-  // ❗️فالس‌بک از AsyncStorage اگر از سرور تاریخ/جنسیت نداشتیم
   useEffect(() => {
     (async () => {
       try {
@@ -284,7 +282,6 @@ const EditProfileModal: React.FC<Props> = ({ onClose }) => {
         setProfileName(safeName);
         setAvatarUrl(safeAvatar);
 
-        // ❗️اینجا birthDate و gender هم ذخیره می‌کنیم
         await AsyncStorage.setItem(
           "phoenix_profile",
           JSON.stringify({
@@ -352,11 +349,11 @@ const EditProfileModal: React.FC<Props> = ({ onClose }) => {
       statusBarTranslucent
       presentationStyle="overFullScreen"
       hardwareAccelerated
-      avoidKeyboard
+      // ❌ avoidKeyboard حذف شد؛ در تایپ Modal وجود ندارد
       onRequestClose={onClose}
       supportedOrientations={["portrait", "landscape"]}
     >
-      <View className="modalBackdrop" style={styles.modalBackdrop}>
+      <View style={styles.modalBackdrop}>
         <View
           style={[
             styles.modalCard,
@@ -379,45 +376,78 @@ const EditProfileModal: React.FC<Props> = ({ onClose }) => {
               }}
               showsVerticalScrollIndicator={false}
             >
+              {/* هدر */}
               <View
                 style={{
                   flexDirection: "row",
-                  justifyContent: "space-between",
                   alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 8,
                 }}
               >
-                <Text
+                <View style={{ width: 32 }} />
+                <View
                   style={{
-                    color: colors.text,
-                    fontSize: 16,
-                    fontWeight: "800",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    alignSelf: "center",
+                    gap: 8,
                   }}
                 >
-                  ویرایش پروفایل
-                </Text>
+                  <Ionicons
+                    name="person-circle-outline"
+                    size={22}
+                    color={colors.primary}
+                  />
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontSize: 16,
+                      fontWeight: "900",
+                      textAlign: "center",
+                    }}
+                  >
+                    ویرایش پروفایل
+                  </Text>
+                </View>
                 <TouchableOpacity onPress={onClose}>
                   <Ionicons name="close" size={22} color={colors.text} />
                 </TouchableOpacity>
               </View>
 
-              <View style={{ alignItems: "center", marginTop: 10 }}>
+              <View style={{ alignItems: "center", marginTop: 4 }}>
                 {renderModalAvatar()}
               </View>
 
               {/* نام */}
               <View
-                style={{ gap: 10, marginTop: 12 }}
+                style={{ gap: 10, marginTop: 16 }}
                 onLayout={onLayoutCapture("name")}
               >
-                <Text
+                <View
                   style={{
-                    color: colors.text,
-                    fontSize: 12,
-                    fontWeight: "700",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    alignSelf: "flex-end",
+                    gap: 6,
                   }}
                 >
-                  نام
-                </Text>
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontSize: 12,
+                      fontWeight: "700",
+                      textAlign: "right",
+                    }}
+                  >
+                    نام
+                  </Text>
+                  <Ionicons
+                    name="person-outline"
+                    size={16}
+                    color={colors.text}
+                  />
+                </View>
                 <TextInput
                   value={name}
                   onChangeText={(t) => mountedRef.current && setName(t)}
@@ -437,263 +467,348 @@ const EditProfileModal: React.FC<Props> = ({ onClose }) => {
                 />
               </View>
 
-              {/* منبع تصویر */}
-              <Text
-                style={{
-                  marginTop: 14,
-                  color: colors.text,
-                  fontWeight: "700",
-                }}
-              >
-                تصویر پروفایل
-              </Text>
-              <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
-                <TouchableOpacity
-                  onPress={pickFromGallery}
-                  style={[
-                    styles.secondaryBtn,
-                    {
-                      borderColor: colors.border,
-                      flexDirection: "row",
-                      gap: 6,
-                    },
-                  ]}
+              {/* تصویر پروفایل */}
+              <View style={{ marginTop: 18 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    alignSelf: "flex-end",
+                    gap: 6,
+                  }}
                 >
-                  <Ionicons
-                    name="images-outline"
-                    size={18}
-                    color={colors.text}
-                  />
                   <Text
                     style={{
                       color: colors.text,
-                      fontWeight: "800",
+                      fontWeight: "700",
+                      textAlign: "right",
                     }}
                   >
-                    از گالری
+                    تصویر پروفایل
                   </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={pickFromCamera}
-                  style={[
-                    styles.secondaryBtn,
-                    {
-                      borderColor: colors.border,
-                      flexDirection: "row",
-                      gap: 6,
-                    },
-                  ]}
-                >
                   <Ionicons
-                    name="camera-outline"
-                    size={18}
+                    name="image-outline"
+                    size={16}
                     color={colors.text}
                   />
-                  <Text
-                    style={{
-                      color: colors.text,
-                      fontWeight: "800",
-                    }}
+                </View>
+
+                <View
+                  style={{ flexDirection: "row", gap: 10, marginTop: 8 }}
+                >
+                  <TouchableOpacity
+                    onPress={pickFromGallery}
+                    style={[
+                      styles.secondaryBtn,
+                      {
+                        borderColor: colors.border,
+                        flexDirection: "row",
+                        gap: 6,
+                      },
+                    ]}
                   >
-                    دوربین
-                  </Text>
-                </TouchableOpacity>
+                    <Ionicons
+                      name="images-outline"
+                      size={18}
+                      color={colors.text}
+                    />
+                    <Text
+                      style={{
+                        color: colors.text,
+                        fontWeight: "800",
+                      }}
+                    >
+                      از گالری
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={pickFromCamera}
+                    style={[
+                      styles.secondaryBtn,
+                      {
+                        borderColor: colors.border,
+                        flexDirection: "row",
+                        gap: 6,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="camera-outline"
+                      size={18}
+                      color={colors.text}
+                    />
+                    <Text
+                      style={{
+                        color: colors.text,
+                        fontWeight: "800",
+                      }}
+                    >
+                      دوربین
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {/* آیکن مرد / زن */}
-              <Text
-                style={{
-                  marginTop: 12,
-                  marginBottom: 6,
-                  color: colors.text,
-                  fontWeight: "700",
-                }}
-              >
-                یا انتخاب آیکن
-              </Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  gap: 14,
-                  justifyContent: "center",
-                }}
-              >
-                {(["man", "woman"] as const).map((which) => {
-                  const selected = photo === `icon:${which}`;
-                  const color = which === "woman" ? "#A855F7" : "#3B82F6";
-                  return (
-                    <TouchableOpacity
-                      key={which}
-                      onPress={() =>
-                        mountedRef.current && setPhoto(`icon:${which}`)
-                      }
-                      activeOpacity={0.85}
-                      style={{
-                        width: 72,
-                        height: 72,
-                        borderRadius: 36,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        backgroundColor: color + "22",
-                        borderWidth: selected ? 2 : 1,
-                        borderColor: selected ? color : colors.border,
-                      }}
-                    >
-                      <Ionicons name={which as any} size={44} color={color} />
-                    </TouchableOpacity>
-                  );
-                })}
+              <View style={{ marginTop: 16 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    alignSelf: "flex-end",
+                    gap: 6,
+                    marginBottom: 6,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontWeight: "700",
+                      textAlign: "right",
+                    }}
+                  >
+                    یا انتخاب آیکن
+                  </Text>
+                  <Ionicons
+                    name="happy-outline"
+                    size={16}
+                    color={colors.text}
+                  />
+                </View>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    gap: 14,
+                    justifyContent: "center",
+                  }}
+                >
+                  {(["man", "woman"] as const).map((which) => {
+                    const selected = photo === `icon:${which}`;
+                    const color = which === "woman" ? "#A855F7" : "#3B82F6";
+                    return (
+                      <TouchableOpacity
+                        key={which}
+                        onPress={() =>
+                          mountedRef.current && setPhoto(`icon:${which}`)
+                        }
+                        activeOpacity={0.85}
+                        style={{
+                          width: 72,
+                          height: 72,
+                          borderRadius: 36,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: color + "22",
+                          borderWidth: selected ? 2 : 1,
+                          borderColor: selected ? color : colors.border,
+                        }}
+                      >
+                        <Ionicons
+                          name={which as any}
+                          size={44}
+                          color={color}
+                        />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
 
               {/* جنسیت */}
-              <Text
-                style={{
-                  marginTop: 16,
-                  color: colors.text,
-                  fontWeight: "700",
-                }}
-              >
-                جنسیت
-              </Text>
-              <View
-                style={{
-                  flexDirection: "row-reverse",
-                  gap: 10,
-                  marginTop: 8,
-                }}
-              >
-                {[
-                  { key: "male", label: "مرد", icon: "male" },
-                  { key: "female", label: "زن", icon: "female" },
-                  { key: "other", label: "سایر", icon: "person" },
-                ].map((g) => {
-                  const selected = gender === (g.key as any);
-                  return (
-                    <TouchableOpacity
-                      key={g.key}
-                      onPress={() => setGender(g.key as any)}
-                      activeOpacity={0.85}
-                      style={{
-                        flex: 1,
-                        height: 44,
-                        borderRadius: 12,
-                        backgroundColor: selected
-                          ? "#ECFEFF"
-                          : colors.background,
-                        borderWidth: 2,
-                        borderColor: selected ? colors.primary : colors.border,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexDirection: "row",
-                        gap: 6,
-                      }}
-                    >
-                      <Ionicons
-                        name={g.icon as any}
-                        size={18}
-                        color={selected ? colors.primary : "#8E8E93"}
-                      />
-                      <Text
+              <View style={{ marginTop: 18 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    alignSelf: "flex-end",
+                    gap: 6,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontWeight: "700",
+                      textAlign: "right",
+                    }}
+                  >
+                    جنسیت
+                  </Text>
+                  <Ionicons
+                    name="male-female-outline"
+                    size={16}
+                    color={colors.text}
+                  />
+                </View>
+
+                <View
+                  style={{
+                    flexDirection: "row-reverse",
+                    gap: 10,
+                    marginTop: 8,
+                  }}
+                >
+                  {[
+                    { key: "male", label: "مرد", icon: "male" },
+                    { key: "female", label: "زن", icon: "female" },
+                    { key: "other", label: "سایر", icon: "person" },
+                  ].map((g) => {
+                    const selected = gender === (g.key as any);
+                    return (
+                      <TouchableOpacity
+                        key={g.key}
+                        onPress={() => setGender(g.key as any)}
+                        activeOpacity={0.85}
                         style={{
-                          color: selected ? colors.primary : colors.text,
-                          fontWeight: "800",
+                          flex: 1,
+                          height: 44,
+                          borderRadius: 12,
+                          backgroundColor: selected
+                            ? "#ECFEFF"
+                            : colors.background,
+                          borderWidth: 2,
+                          borderColor: selected
+                            ? colors.primary
+                            : colors.border,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexDirection: "row",
+                          gap: 6,
                         }}
                       >
-                        {g.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                        <Ionicons
+                          name={g.icon as any}
+                          size={18}
+                          color={selected ? colors.primary : "#8E8E93"}
+                        />
+                        <Text
+                          style={{
+                            color: selected ? colors.primary : colors.text,
+                            fontWeight: "800",
+                          }}
+                        >
+                          {g.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
 
               {/* تاریخ تولد */}
-<View style={{ marginTop: 16 }} onLayout={onLayoutCapture("birth")}>
-  <Text
-    style={{
-      color: colors.text,
-      fontWeight: "700",
-    }}
-  >
-    تاریخ تولد (اختیاری)
-  </Text>
-  <View style={{ marginTop: 6 }}>
-    <JalaliSelect
-      key={birthDate || "no-birth"}   // 👈 این خط جدید است
-      initial={birthDate}
-      onChange={(iso) => setBirthDate(iso)}
-      minYear={1330}
-      maxYear={1390}
-      grid
-      styleContainer={{
-        borderColor: colors.border,
-        backgroundColor: colors.background,
-        minHeight: 56,
-        borderRadius: 12,
-      }}
-      stylePicker={{
-        backgroundColor: colors.card,
-        borderColor: colors.border,
-      }}
-      textColor={colors.text}
-      accentColor={colors.primary}
-      dark
-    />
-  </View>
-  {!!birthDate && (
-    <Text
-      style={{
-        color: "#B8BBC2",
-        fontSize: 12,
-        marginTop: 6,
-      }}
-    >
-      تاریخ انتخابی (میلادی):{" "}
-      <Text
-        style={{
-          color: colors.text,
-          fontWeight: "800",
-        }}
-      >
-        {birthDate}
-      </Text>
-    </Text>
-  )}
-</View>
+              <View
+                style={{ marginTop: 18 }}
+                onLayout={onLayoutCapture("birth")}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    alignSelf: "flex-end",
+                    gap: 6,
+                    marginBottom: 6,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontWeight: "700",
+                      textAlign: "right",
+                    }}
+                  >
+                    تاریخ تولد (اختیاری)
+                  </Text>
+                  <Ionicons
+                    name="calendar-outline"
+                    size={16}
+                    color={colors.text}
+                  />
+                </View>
 
-              {/* حالت تیره */}
+                <JalaliSelect
+                  key={birthDate || "no-birth"}
+                  initial={birthDate}
+                  onChange={(iso) => setBirthDate(iso)}
+                  minYear={1330}
+                  maxYear={1390}
+                  grid
+                  styleContainer={{
+                    borderColor: colors.border,
+                    backgroundColor: colors.background,
+                    minHeight: 56,
+                    borderRadius: 12,
+                  }}
+                  stylePicker={{
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
+                  }}
+                  textColor={colors.text}
+                  accentColor={colors.primary}
+                  dark
+                />
+
+                {!!birthDate && (
+                  <Text
+                    style={{
+                      color: "#B8BBC2",
+                      fontSize: 12,
+                      marginTop: 6,
+                      textAlign: "right",
+                    }}
+                  >
+                    تاریخ انتخابی (میلادی):{" "}
+                    <Text
+                      style={{
+                        color: colors.text,
+                        fontWeight: "800",
+                      }}
+                    >
+                      {birthDate}
+                    </Text>
+                  </Text>
+                )}
+              </View>
+
+              {/* حالت روشن */}
               <View
                 style={{
-                  flexDirection: "row",
+                  flexDirection: "row-reverse",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  marginTop: 14,
+                  marginTop: 18,
                 }}
               >
-                <View>
+                <View
+                  style={{
+                    flexDirection: "column",
+                    alignItems: "flex-end",
+                  }}
+                >
                   <Text
                     style={{
                       color: colors.text,
                       fontSize: 14,
                       fontWeight: "800",
+                      textAlign: "right",
                     }}
                   >
-                    حالت تیره
+                    حالت روشن
                   </Text>
                   <Text
                     style={{
                       color: "#8E8E93",
                       fontSize: 12,
                       marginTop: 2,
+                      textAlign: "right",
                     }}
                   >
-                    ظاهر اپلیکیشن
+                    فعال کردن تم روشن اپلیکیشن
                   </Text>
                 </View>
-                <Switch value={isDark} onValueChange={toggleTheme} />
+                <Switch value={!isDark} onValueChange={toggleTheme} />
               </View>
 
               {/* شروع از صفر */}
-              <View style={{ marginTop: 14 }}>
+              <View style={{ marginTop: 18 }}>
                 <TouchableOpacity
                   onPress={confirmResetAll}
                   style={{
@@ -736,6 +851,7 @@ const EditProfileModal: React.FC<Props> = ({ onClose }) => {
                 </Text>
               </View>
 
+              {/* دکمه‌ها */}
               <View
                 style={{
                   flexDirection: "row",

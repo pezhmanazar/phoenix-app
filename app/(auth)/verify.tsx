@@ -1,20 +1,37 @@
 // app/(auth)/verify.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, Pressable, ActivityIndicator, TextInput, Alert, I18nManager } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  ActivityIndicator,
+  TextInput,
+  Alert,
+  I18nManager,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme } from "@react-navigation/native";
+import { StatusBar } from "expo-status-bar";
 import { toApi } from "../../constants/env";
 import { useAuth } from "../../hooks/useAuth";
 import { useUser } from "../../hooks/useUser";
-import { sendCode as apiSendCode, verifyCode as apiVerifyCode } from "../../api/auth"; // اگر verifyCode را نداری، از fetch داخلی پایین استفاده می‌شود
+import {
+  sendCode as apiSendCode,
+  verifyCode as apiVerifyCode,
+} from "../../api/auth";
 
 // تبدیل اعداد فارسی/عربی به انگلیسی
 function toEnDigits(input: string) {
-  const fa = "۰۱۲۳۴۵۶۷۸۹", ar = "٠١٢٣٤٥٦٧٨٩";
+  const fa = "۰۱۲۳۴۵۶۷۸۹",
+    ar = "٠١٢٣٤٥٦٧٨٩";
   return String(input || "").replace(/[0-9۰-۹٠-٩]/g, (d) => {
-    const iFa = fa.indexOf(d); if (iFa > -1) return String(iFa);
-    const iAr = ar.indexOf(d); if (iAr > -1) return String(iAr);
+    const iFa = fa.indexOf(d);
+    if (iFa > -1) return String(iFa);
+    const iAr = ar.indexOf(d);
+    if (iAr > -1) return String(iAr);
     return d;
   });
 }
@@ -22,22 +39,40 @@ function toEnDigits(input: string) {
 function withTimeout<T>(p: Promise<T>, ms = 15000) {
   return new Promise<T>((resolve, reject) => {
     const id = setTimeout(() => reject(new Error("REQUEST_TIMEOUT")), ms);
-    p.then((v) => { clearTimeout(id); resolve(v); })
-     .catch((e) => { clearTimeout(id); reject(e); });
+    p.then((v) => {
+      clearTimeout(id);
+      resolve(v);
+    }).catch((e) => {
+      clearTimeout(id);
+      reject(e);
+    });
   });
 }
 
+// چک ساده اینکه کد آمادهٔ تأیید است یا نه
+function isCodeReady(value: string) {
+  return /^\d{5,6}$/.test(toEnDigits(value));
+}
+
 export default function VerifyScreen() {
-  const { colors } = useTheme();
+  const { colors, dark } = useTheme();
   const router = useRouter();
   const { setToken, setPhone } = useAuth();
   const { refresh } = useUser();
 
   // پارامترها از صفحهٔ لاگین
-  const params = useLocalSearchParams<{ phone?: string; token?: string; exp?: string }>();
+  const params =
+    useLocalSearchParams<{ phone?: string; token?: string; exp?: string }>();
   const phone = useMemo(() => String(params.phone || ""), [params.phone]);
   const otpToken = useMemo(() => String(params.token || ""), [params.token]);
-  const initialExp = useMemo(() => Math.max(1, parseInt(String(params.exp || "120"), 10) || 120), [params.exp]);
+  const initialExp = useMemo(
+    () =>
+      Math.max(
+        1,
+        parseInt(String(params.exp || "120"), 10) || 120
+      ),
+    [params.exp]
+  );
 
   // وضعیت‌ها
   const [code, setCode] = useState("");
@@ -53,38 +88,52 @@ export default function VerifyScreen() {
 
   useEffect(() => {
     if (secondsLeft <= 0) return;
-    const t = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000);
+    const t = setInterval(
+      () => setSecondsLeft((s) => Math.max(0, s - 1)),
+      1000
+    );
     return () => clearInterval(t);
   }, [secondsLeft]);
 
-  const canVerify = /^\d{5,6}$/.test(toEnDigits(code)) && !loading;
+  const canVerifyNow = isCodeReady(code) && !loading;
 
-  async function doVerify() {
-    if (!canVerify || runRef.current) return;
+  async function doVerify(enCodeOverride?: string) {
+    const enCode = enCodeOverride ?? toEnDigits(code).trim();
+
+    if (!isCodeReady(enCode) || loading || runRef.current) return;
+
     runRef.current = true;
     setLoading(true);
     try {
-      const enCode = toEnDigits(code).trim();
-      const url = `${toApi("/api/verifyCode")}?phone=${encodeURIComponent(phone)}&code=${encodeURIComponent(enCode)}&token=${encodeURIComponent(otpToken)}`;
-
+      const url = `${toApi("/api/verifyCode")}?phone=${encodeURIComponent(
+        phone
+      )}&code=${encodeURIComponent(enCode)}&token=${encodeURIComponent(
+        otpToken
+      )}`;
       console.log("[verifyCode] →", url);
 
       // اگر api/auth شما verifyCode را صادر می‌کند از آن استفاده کن؛ وگرنه fallback
       let resp: any;
       if (typeof apiVerifyCode === "function") {
-        resp = await withTimeout(apiVerifyCode(phone, enCode, otpToken), 15000);
+        resp = await withTimeout(
+          apiVerifyCode(phone, enCode, otpToken),
+          15000
+        );
       } else {
         const r = await withTimeout(fetch(url, { method: "GET" }), 15000);
         resp = await r.json().catch(() => ({} as any));
       }
-
       console.log("[verifyCode][OK]", resp);
 
       if (!resp?.ok) {
         const err = String(resp?.error || "VERIFY_FAILED");
         if (err === "TOKEN_INVALID_OR_EXPIRED") {
           Alert.alert("کد منقضی شد", "دوباره ارسال کد را بزن.");
-        } else if (err === "MISMATCH" || err === "CODE_NOT_MATCH" || err === "INVALID_CODE") {
+        } else if (
+          err === "MISMATCH" ||
+          err === "CODE_NOT_MATCH" ||
+          err === "INVALID_CODE"
+        ) {
           Alert.alert("کد نادرست", "کد تأیید اشتباه است. دوباره تلاش کن.");
         } else {
           Alert.alert("خطا", "تأیید ناموفق بود. دوباره امتحان کن.");
@@ -92,24 +141,28 @@ export default function VerifyScreen() {
         return;
       }
 
-      // ✅ انتظار داریم سرور sessionToken بده (طبق لاگ‌های قبلی‌ات)
-      const sessionToken: string | undefined = resp.sessionToken || resp.data?.sessionToken;
+      // ✅ انتظار داریم سرور sessionToken بده
+      const sessionToken: string | undefined =
+        resp.sessionToken || resp.data?.sessionToken;
       if (!sessionToken) {
         Alert.alert("خطا", "توکن سشن از سرور دریافت نشد.");
         return;
       }
 
-    await setToken(sessionToken);
-await setPhone(phone);
-await refresh().catch(() => {});
+      await setToken(sessionToken);
+      await setPhone(phone);
+      await refresh().catch(() => {});
 
-// 👇 به‌جای رفتن مستقیم به تب‌ها، برو به ویزارد
-router.replace("/(auth)/profile-wizard");
+      // رفتن به ویزارد پروفایل
+      router.replace("/(auth)/profile-wizard");
     } catch (e: any) {
       console.log("[verifyCode][ERR]", e?.message);
       const msg = String(e?.message || "");
       if (msg === "REQUEST_TIMEOUT") {
-        Alert.alert("کندی شبکه", "پاسخی دریافت نشد. اینترنت را چک کن و دوباره امتحان کن.");
+        Alert.alert(
+          "کندی شبکه",
+          "پاسخی دریافت نشد. اینترنت را چک کن و دوباره امتحان کن."
+        );
       } else {
         Alert.alert("خطا", "تأیید کد ناموفق بود.");
       }
@@ -123,11 +176,12 @@ router.replace("/(auth)/profile-wizard");
     if (resending || secondsLeft > 0) return;
     setResending(true);
     try {
-      console.log("[resend] →", `${toApi("/api/sendCode")}?phone=${encodeURIComponent(phone)}`);
+      console.log(
+        "[resend] →",
+        `${toApi("/api/sendCode")}?phone=${encodeURIComponent(phone)}`
+      );
       const res = await withTimeout(apiSendCode(phone), 15000);
       if (res?.ok && res?.token) {
-        // توکن جدید می‌آید؛ صفحهٔ فعلی با توکن تازه ریست شود
-        // راه ساده: پارامترها را با router.setParams آپدیت کن
         router.setParams({
           phone,
           token: res.token,
@@ -153,87 +207,188 @@ router.replace("/(auth)/profile-wizard");
     }
   }
 
+  // وقتی کاربر کد را می‌نویسد
+  function handleChangeCode(t: string) {
+    const next = toEnDigits(t).replace(/\D/g, "").slice(0, 6);
+    setCode(next);
+
+    // اگر کد کامل شد، خودکار سعی کن تأیید کنی
+    if (isCodeReady(next) && !loading && !runRef.current) {
+      // با همان کد نرمال‌شده
+      doVerify(next);
+    }
+  }
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#0b0c10" }}>
-      <View style={{ flex: 1, justifyContent: "center", padding: 20 }}>
-        <Text style={{ fontSize: 20, fontWeight: "800", color: "#fff", marginBottom: 8 }}>
-          تأیید کد
-        </Text>
-        <Text style={{ color: "#9aa0a6", marginBottom: 12 }}>
-          کد ۵ رقمی ارسال‌شده به {phone} را وارد کن.
-        </Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar style={dark ? "light" : "dark"} />
 
-        <TextInput
-          value={code}
-          onChangeText={(t) => setCode(toEnDigits(t).replace(/\D/g, "").slice(0, 6))}
-          keyboardType="number-pad"
-          placeholder="کد تأیید"
-          placeholderTextColor="#6b7280"
-          maxLength={6}
-          onSubmitEditing={doVerify}
-          returnKeyType="done"
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <View
           style={{
-            backgroundColor: "#111216",
-            color: "#fff",
-            borderWidth: 1,
-            borderColor: "#2a2f36",
-            borderRadius: 12,
-            paddingHorizontal: 14,
-            height: 48,
-            marginBottom: 12,
-            letterSpacing: 6,
-            textAlign: I18nManager.isRTL ? "center" : "center",
-            fontSize: 18,
-            fontWeight: "800",
-          }}
-        />
-
-        <Pressable
-          onPress={doVerify}
-          disabled={!canVerify}
-          style={{
-            height: 48,
-            borderRadius: 12,
-            backgroundColor: canVerify ? "#10b981" : "#374151",
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: 12,
+            flex: 1,
+            paddingHorizontal: 20,
+            paddingTop: 32,
+            paddingBottom: 24,
           }}
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={{ color: "#fff", fontSize: 16, fontWeight: "800" }}>ورود</Text>
-          )}
-        </Pressable>
-
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Text style={{ color: "#9aa0a6" }}>
-            انقضا: <Text style={{ color: "#fff", fontWeight: "800" }}>{secondsLeft}s</Text>
-          </Text>
-
-          <Pressable
-            onPress={resend}
-            disabled={resending || secondsLeft > 0}
+          {/* کارت عنوان */}
+          <View
             style={{
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              borderRadius: 10,
+              borderRadius: 18,
               borderWidth: 1,
-              borderColor: secondsLeft > 0 ? "#374151" : "#2563eb",
-              opacity: secondsLeft > 0 ? 0.6 : 1,
+              paddingHorizontal: 16,
+              paddingVertical: 18,
+              gap: 8,
+              backgroundColor: colors.card,
+              borderColor: colors.border,
             }}
           >
-            {resending ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={{ color: secondsLeft > 0 ? "#9aa0a6" : "#60a5fa", fontWeight: "800" }}>
-                ارسال مجدد کد
+            <Text
+              style={{
+                fontSize: 20,
+                fontWeight: "900",
+                color: colors.text,
+                textAlign: "center",
+              }}
+            >
+              تأیید کد
+            </Text>
+            <Text
+              style={{
+                fontSize: 13,
+                lineHeight: 20,
+                color: dark ? "#d4d4d8" : "#9ca3af",
+                textAlign: "center",
+              }}
+            >
+              کد ۵ رقمی ارسال‌شده به {phone} را وارد کن.
+            </Text>
+          </View>
+
+          {/* بخش اصلی */}
+          <View style={{ marginTop: 24, flex: 1 }}>
+            {/* فیلد کد */}
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: "700",
+                color: colors.text,
+                textAlign: "right",
+                marginBottom: 6,
+              }}
+            >
+              کد تأیید
+            </Text>
+            <TextInput
+              value={code}
+              onChangeText={handleChangeCode}
+              keyboardType="number-pad"
+              placeholder="·····"
+              placeholderTextColor={dark ? "#4b5563" : "#9ca3af"}
+              maxLength={6}
+              returnKeyType="done"
+              style={{
+                backgroundColor: colors.card,
+                color: colors.text,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 12,
+                paddingHorizontal: 14,
+                height: 52,
+                marginBottom: 16,
+                letterSpacing: 8,
+                textAlign: "center",
+                fontSize: 20,
+                fontWeight: "800",
+              }}
+            />
+
+            {/* دکمه ورود */}
+            <Pressable
+              onPress={() => doVerify()}
+              disabled={!canVerifyNow}
+              style={{
+                height: 48,
+                borderRadius: 12,
+                backgroundColor: canVerifyNow ? "#10b981" : "#374151",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text
+                  style={{
+                    color: "#fff",
+                    fontSize: 16,
+                    fontWeight: "800",
+                  }}
+                >
+                  ورود
+                </Text>
+              )}
+            </Pressable>
+
+            {/* تایمر انقضا زیر دکمه، وسط چین */}
+            <Text
+              style={{
+                marginTop: 8,
+                textAlign: "center",
+                fontSize: 12,
+                color: dark ? "#d4d4d8" : "#6b7280",
+              }}
+            >
+              مهلت باقی‌مانده برای این کد:{" "}
+              <Text style={{ fontWeight: "800", color: colors.text }}>
+                {secondsLeft} ثانیه
               </Text>
-            )}
-          </Pressable>
+            </Text>
+
+            {/* اسپیس‌دهنده برای بردن دکمه ارسال مجدد به پایین */}
+            <View style={{ flex: 1 }} />
+
+            {/* ارسال مجدد کد – پایین صفحه، وسط */}
+            <Pressable
+              onPress={resend}
+              disabled={resending || secondsLeft > 0}
+              style={{
+                alignSelf: "center",
+                paddingHorizontal: 18,
+                paddingVertical: 10,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor:
+                  secondsLeft > 0 || resending ? "#4b5563" : "#2563eb",
+                opacity: secondsLeft > 0 || resending ? 0.6 : 1,
+              }}
+            >
+              {resending ? (
+                <ActivityIndicator color={colors.text} />
+              ) : (
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "700",
+                    color:
+                      secondsLeft > 0
+                        ? dark
+                          ? "#9ca3af"
+                          : "#6b7280"
+                        : "#60a5fa",
+                  }}
+                >
+                  ارسال مجدد کد
+                </Text>
+              )}
+            </Pressable>
+          </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

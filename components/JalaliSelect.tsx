@@ -1,25 +1,43 @@
 // phoenix-app/components/JalaliSelect.tsx
 import React, { useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
-import { toJalaali, toGregorian, isValidJalaaliDate, jalaaliMonthLength } from "jalaali-js";
+import {
+  toJalaali,
+  toGregorian,
+  isValidJalaaliDate,
+  jalaaliMonthLength,
+} from "jalaali-js";
 
 type Props = {
-  initial?: string;                 // yyyy-mm-dd (میلادی)
+  initial?: string;              // yyyy-mm-dd (میلادی)
   onChange: (isoDate: string) => void;
-  minYear?: number;                 // پیش‌فرض 1330
-  maxYear?: number;                 // پیش‌فرض 1390
+  minYear?: number;              // پیش‌فرض 1330
+  maxYear?: number;              // پیش‌فرض 1390
   styleContainer?: any;
   stylePicker?: any;
   textColor?: string;
   accentColor?: string;
   dark?: boolean;
+  grid?: boolean;                // فقط برای سازگاری با جایی که صدا زده می‌شود
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
-const faDigits = (s: string | number) => String(s).replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[+d]);
+const faDigits = (s: string | number) =>
+  String(s).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[+d]);
+
 const monthNames = [
-  "فروردین","اردیبهشت","خرداد","تیر","مرداد","شهریور",
-  "مهر","آبان","آذر","دی","بهمن","اسفند"
+  "فروردین",
+  "اردیبهشت",
+  "خرداد",
+  "تیر",
+  "مرداد",
+  "شهریور",
+  "مهر",
+  "آبان",
+  "آذر",
+  "دی",
+  "بهمن",
+  "اسفند",
 ];
 
 export default function JalaliSelect({
@@ -33,7 +51,7 @@ export default function JalaliSelect({
   accentColor = "#0EA5A4",
   dark = false,
 }: Props) {
-  // اگر initial داده شده (میلادی)، به جلالی تبدیل کن
+  // اگر initial داده شد (میلادی)، به جلالی تبدیل کن
   const initJ = useMemo(() => {
     if (!initial) return null;
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(initial);
@@ -46,11 +64,14 @@ export default function JalaliSelect({
   const [jy, setJy] = useState(initJ?.jy ?? 1370);
   const [jm, setJm] = useState(initJ?.jm ?? 1);
   const [jd, setJd] = useState(initJ?.jd ?? 1);
-
   const [open, setOpen] = useState<null | "year" | "month" | "day">(null);
 
   const daysInMonth = useMemo(
-    () => Array.from({ length: jalaaliMonthLength(jy, jm) }, (_, i) => i + 1),
+    () =>
+      Array.from(
+        { length: jalaaliMonthLength(jy, jm) },
+        (_, i) => i + 1
+      ),
     [jy, jm]
   );
 
@@ -75,12 +96,30 @@ export default function JalaliSelect({
         justifyContent: "center",
       }}
     >
-      <Text style={{ fontWeight: "800", color: dark ? "#E5E7EB" : textColor }}>{label}</Text>
+      <Text
+        style={{
+          fontWeight: "800",
+          color: dark ? "#E5E7EB" : textColor,
+        }}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 
   return (
-    <View style={[{ borderWidth: 1, borderColor: dark ? "#1F2937" : "#E5E7EB", borderRadius: 14, padding: 12, gap: 10 }, styleContainer]}>
+    <View
+      style={[
+        {
+          borderWidth: 1,
+          borderColor: dark ? "#1F2937" : "#E5E7EB",
+          borderRadius: 14,
+          padding: 12,
+          gap: 10,
+        },
+        styleContainer,
+      ]}
+    >
       <View style={{ flexDirection: "row", gap: 10 }}>
         {chip(`سال: ${faDigits(jy)}`, () => setOpen("year"))}
         {chip(`ماه: ${monthNames[jm - 1]}`, () => setOpen("month"))}
@@ -88,46 +127,151 @@ export default function JalaliSelect({
       </View>
 
       {/* YEAR */}
-      <Modal visible={open === "year"} animationType="slide" transparent onRequestClose={() => setOpen(null)}>
-        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
-          <View style={[{ backgroundColor: dark ? "#101317" : "#FFFFFF", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 16, maxHeight: "70%" }, stylePicker]}>
-            <Text style={{ fontWeight: "900", color: dark ? "#E5E7EB" : textColor, fontSize: 16, textAlign: "center", marginBottom: 8 }}>انتخاب سال</Text>
+      <Modal
+        visible={open === "year"}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setOpen(null)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <View
+            style={[
+              {
+                backgroundColor: dark ? "#101317" : "#FFFFFF",
+                borderTopLeftRadius: 20,
+                borderTopRightRadius: 20,
+                padding: 16,
+                maxHeight: "70%",
+              },
+              stylePicker,
+            ]}
+          >
+            <Text
+              style={{
+                fontWeight: "900",
+                color: dark ? "#E5E7EB" : textColor,
+                fontSize: 16,
+                textAlign: "center",
+                marginBottom: 8,
+              }}
+            >
+              انتخاب سال
+            </Text>
             <ScrollView>
               <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-                {Array.from({ length: maxYear - minYear + 1 }, (_, i) => maxYear - i).map(yy => {
+                {Array.from(
+                  { length: maxYear - minYear + 1 },
+                  (_, i) => maxYear - i
+                ).map((yy) => {
                   const selected = yy === jy;
                   return (
                     <Pressable
                       key={yy}
-                      onPress={() => { setJy(yy); setOpen(null); commit(yy, jm, Math.min(jd, jalaaliMonthLength(yy, jm))); }}
-                      style={{ width: "33.33%", padding: 8, alignItems: "center" }}
+                      onPress={() => {
+                        const safeDay = Math.min(
+                          jd,
+                          jalaaliMonthLength(yy, jm)
+                        );
+                        setJy(yy);
+                        setJd(safeDay);
+                        setOpen(null);
+                        commit(yy, jm, safeDay);
+                      }}
+                      style={{
+                        width: "33.33%",
+                        padding: 8,
+                        alignItems: "center",
+                      }}
                     >
-                      <View style={{
-                        height: 44, minWidth: 80, paddingHorizontal: 10,
-                        borderRadius: 999, alignItems: "center", justifyContent: "center",
-                        backgroundColor: selected ? accentColor : (dark ? "#111827" : "#F3F4F6"),
-                        borderWidth: selected ? 0 : 1,
-                        borderColor: dark ? "#1F2937" : "#E5E7EB",
-                      }}>
-                        <Text style={{ color: selected ? "#fff" : (dark ? "#E5E7EB" : "#111827"), fontWeight: "800" }}>{faDigits(yy)}</Text>
+                      <View
+                        style={{
+                          height: 44,
+                          minWidth: 80,
+                          paddingHorizontal: 10,
+                          borderRadius: 999,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: selected
+                            ? accentColor
+                            : dark
+                            ? "#111827"
+                            : "#F3F4F6",
+                          borderWidth: selected ? 0 : 1,
+                          borderColor: dark ? "#1F2937" : "#E5E7EB",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: selected
+                              ? "#fff"
+                              : dark
+                              ? "#E5E7EB"
+                              : "#111827",
+                            fontWeight: "800",
+                          }}
+                        >
+                          {faDigits(yy)}
+                        </Text>
                       </View>
                     </Pressable>
                   );
                 })}
               </View>
             </ScrollView>
-            <Pressable onPress={() => setOpen(null)} style={{ alignSelf: "center", marginTop: 12 }}>
-              <Text style={{ color: accentColor, fontWeight: "900" }}>بستن</Text>
+            <Pressable
+              onPress={() => setOpen(null)}
+              style={{ alignSelf: "center", marginTop: 12 }}
+            >
+              <Text style={{ color: accentColor, fontWeight: "900" }}>
+                بستن
+              </Text>
             </Pressable>
           </View>
         </View>
       </Modal>
 
       {/* MONTH */}
-      <Modal visible={open === "month"} animationType="slide" transparent onRequestClose={() => setOpen(null)}>
-        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
-          <View style={[{ backgroundColor: dark ? "#101317" : "#FFFFFF", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 16 }, stylePicker]}>
-            <Text style={{ fontWeight: "900", color: dark ? "#E5E7EB" : textColor, fontSize: 16, textAlign: "center", marginBottom: 8 }}>انتخاب ماه</Text>
+      <Modal
+        visible={open === "month"}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setOpen(null)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <View
+            style={[
+              {
+                backgroundColor: dark ? "#101317" : "#FFFFFF",
+                borderTopLeftRadius: 20,
+                borderTopRightRadius: 20,
+                padding: 16,
+              },
+              stylePicker,
+            ]}
+          >
+            <Text
+              style={{
+                fontWeight: "900",
+                color: dark ? "#E5E7EB" : textColor,
+                fontSize: 16,
+                textAlign: "center",
+                marginBottom: 8,
+              }}
+            >
+              انتخاب ماه
+            </Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
               {monthNames.map((m, idx) => {
                 const mm = idx + 1;
@@ -135,62 +279,166 @@ export default function JalaliSelect({
                 return (
                   <Pressable
                     key={mm}
-                    onPress={() => { setJm(mm); setOpen(null); commit(jy, mm, Math.min(jd, jalaaliMonthLength(jy, mm))); }}
-                    style={{ width: "33.33%", padding: 8, alignItems: "center" }}
+                    onPress={() => {
+                      const safeDay = Math.min(
+                        jd,
+                        jalaaliMonthLength(jy, mm)
+                      );
+                      setJm(mm);
+                      setJd(safeDay);
+                      setOpen(null);
+                      commit(jy, mm, safeDay);
+                    }}
+                    style={{
+                      width: "33.33%",
+                      padding: 8,
+                      alignItems: "center",
+                    }}
                   >
-                    <View style={{
-                      height: 44, minWidth: 90, borderRadius: 999,
-                      alignItems: "center", justifyContent: "center",
-                      backgroundColor: selected ? accentColor : (dark ? "#111827" : "#F3F4F6"),
-                      borderWidth: selected ? 0 : 1,
-                      borderColor: dark ? "#1F2937" : "#E5E7EB",
-                      paddingHorizontal: 12,
-                    }}>
-                      <Text style={{ color: selected ? "#fff" : (dark ? "#E5E7EB" : "#111827"), fontWeight: "900", fontSize: 13 }}>{m}</Text>
+                    <View
+                      style={{
+                        height: 44,
+                        minWidth: 90,
+                        borderRadius: 999,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: selected
+                          ? accentColor
+                          : dark
+                          ? "#111827"
+                          : "#F3F4F6",
+                        borderWidth: selected ? 0 : 1,
+                        borderColor: dark ? "#1F2937" : "#E5E7EB",
+                        paddingHorizontal: 12,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: selected
+                            ? "#fff"
+                            : dark
+                            ? "#E5E7EB"
+                            : "#111827",
+                          fontWeight: "900",
+                          fontSize: 13,
+                        }}
+                      >
+                        {m}
+                      </Text>
                     </View>
                   </Pressable>
                 );
               })}
             </View>
-            <Pressable onPress={() => setOpen(null)} style={{ alignSelf: "center", marginTop: 12 }}>
-              <Text style={{ color: accentColor, fontWeight: "900" }}>بستن</Text>
+            <Pressable
+              onPress={() => setOpen(null)}
+              style={{ alignSelf: "center", marginTop: 12 }}
+            >
+              <Text style={{ color: accentColor, fontWeight: "900" }}>
+                بستن
+              </Text>
             </Pressable>
           </View>
         </View>
       </Modal>
 
       {/* DAY */}
-      <Modal visible={open === "day"} animationType="slide" transparent onRequestClose={() => setOpen(null)}>
-        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
-          <View style={[{ backgroundColor: dark ? "#101317" : "#FFFFFF", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 16, maxHeight: "65%" }, stylePicker]}>
-            <Text style={{ fontWeight: "900", color: dark ? "#E5E7EB" : textColor, fontSize: 16, textAlign: "center", marginBottom: 8 }}>انتخاب روز</Text>
+      <Modal
+        visible={open === "day"}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setOpen(null)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <View
+            style={[
+              {
+                backgroundColor: dark ? "#101317" : "#FFFFFF",
+                borderTopLeftRadius: 20,
+                borderTopRightRadius: 20,
+                padding: 16,
+                maxHeight: "65%",
+              },
+              stylePicker,
+            ]}
+          >
+            <Text
+              style={{
+                fontWeight: "900",
+                color: dark ? "#E5E7EB" : textColor,
+                fontSize: 16,
+                textAlign: "center",
+                marginBottom: 8,
+              }}
+            >
+              انتخاب روز
+            </Text>
             <ScrollView>
               <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-                {daysInMonth.map(d => {
+                {daysInMonth.map((d) => {
                   const selected = d === jd;
                   return (
                     <Pressable
                       key={d}
-                      onPress={() => { setJd(d); setOpen(null); commit(jy, jm, d); }}
-                      style={{ width: "25%", padding: 8, alignItems: "center" }} // 4 ستون
+                      onPress={() => {
+                        setJd(d);
+                        setOpen(null);
+                        commit(jy, jm, d);
+                      }}
+                      style={{
+                        width: "25%",
+                        padding: 8,
+                        alignItems: "center",
+                      }}
                     >
-                      <View style={{
-                        height: 44, minWidth: 44, borderRadius: 999,
-                        alignItems: "center", justifyContent: "center",
-                        backgroundColor: selected ? accentColor : (dark ? "#111827" : "#F3F4F6"),
-                        borderWidth: selected ? 0 : 1,
-                        borderColor: dark ? "#1F2937" : "#E5E7EB",
-                        paddingHorizontal: 10,
-                      }}>
-                        <Text style={{ color: selected ? "#fff" : (dark ? "#E5E7EB" : "#111827"), fontWeight: "900" }}>{faDigits(d)}</Text>
+                      <View
+                        style={{
+                          height: 44,
+                          minWidth: 44,
+                          borderRadius: 999,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: selected
+                            ? accentColor
+                            : dark
+                            ? "#111827"
+                            : "#F3F4F6",
+                          borderWidth: selected ? 0 : 1,
+                          borderColor: dark ? "#1F2937" : "#E5E7EB",
+                          paddingHorizontal: 10,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: selected
+                              ? "#fff"
+                              : dark
+                              ? "#E5E7EB"
+                              : "#111827",
+                            fontWeight: "900",
+                          }}
+                        >
+                          {faDigits(d)}
+                        </Text>
                       </View>
                     </Pressable>
                   );
                 })}
               </View>
             </ScrollView>
-            <Pressable onPress={() => setOpen(null)} style={{ alignSelf: "center", marginTop: 12 }}>
-              <Text style={{ color: accentColor, fontWeight: "900" }}>بستن</Text>
+            <Pressable
+              onPress={() => setOpen(null)}
+              style={{ alignSelf: "center", marginTop: 12 }}
+            >
+              <Text style={{ color: accentColor, fontWeight: "900" }}>
+                بستن
+              </Text>
             </Pressable>
           </View>
         </View>

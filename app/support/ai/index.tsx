@@ -1,5 +1,5 @@
 // app/support/ai/index.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import {
   ActivityIndicator,
   I18nManager,
@@ -25,22 +25,15 @@ import { v4 as uuidv4 } from "uuid";
 import BACKEND_URL from "../../../constants/backend";
 import { useUser } from "../../../hooks/useUser";
 import { useRouter } from "expo-router";
-import { getPlanStatus } from "../../../lib/plan";
+import { getPlanStatus, PRO_FLAG_KEY } from "../../../lib/plan";
 
 type Msg = { id: string; role: "user" | "assistant"; content: string; ts: number };
 
 const K_AI_HISTORY = "phoenix.ai.history.v1";
 const K_AI_MOOD = "phoenix.ai.mood.v1";
 const K_AI_DAILY_LIMIT = "phoenix.ai.dailyLimit.v1";
-const PRO_FLAG_KEY = "phoenix_is_pro";
 
 type PlanView = "free" | "pro" | "expired";
-type DebugState =
-  | "real"
-  | "force-free"
-  | "force-pro"
-  | "force-pro-near"
-  | "force-expired";
 
 const bubble = (mine: boolean) => ({
   alignSelf: mine ? ("flex-end" as const) : ("flex-start" as const),
@@ -51,7 +44,10 @@ const bubble = (mine: boolean) => ({
 const toFaDigits = (s: string) => s.replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[+d]);
 const hhmm = (ts: number) =>
   toFaDigits(
-    new Date(ts).toLocaleTimeString("fa-IR", { hour: "2-digit", minute: "2-digit" })
+    new Date(ts).toLocaleTimeString("fa-IR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    })
   );
 
 /* تایپینگ داتس */
@@ -165,18 +161,16 @@ export default function AIChatSupport() {
     })();
   }, []);
 
-  // وضعیت پلن (مثل تب‌ها)
+  // وضعیت پلن
   const { me } = useUser();
   const [planView, setPlanView] = useState<PlanView>("free");
   const [daysLeft, setDaysLeft] = useState<number | null>(null);
-  const [debugState, setDebugState] = useState<DebugState>("real");
   const [loadingPlan, setLoadingPlan] = useState(true);
 
   const isProPlan = planView === "pro";
   const isNearExpire =
     planView === "pro" && daysLeft != null && daysLeft > 0 && daysLeft <= 7;
 
-  // محاسبه وضعیت پلن + دیباگ
   useEffect(() => {
     (async () => {
       try {
@@ -199,21 +193,6 @@ export default function AIChatSupport() {
           view = status.isPro || flagIsPro ? "pro" : "free";
         }
 
-        // دیباگ
-        if (debugState === "force-free") {
-          view = "free";
-          localDaysLeft = null;
-        } else if (debugState === "force-pro") {
-          view = "pro";
-          localDaysLeft = 30;
-        } else if (debugState === "force-pro-near") {
-          view = "pro";
-          localDaysLeft = 4;
-        } else if (debugState === "force-expired") {
-          view = "expired";
-          localDaysLeft = 0;
-        }
-
         setPlanView(view);
         setDaysLeft(localDaysLeft);
 
@@ -223,7 +202,6 @@ export default function AIChatSupport() {
           isExpired: status.isExpired,
           daysLeft: status.daysLeft,
           flag,
-          debugState,
           planView: view,
           localDaysLeft,
         });
@@ -235,7 +213,7 @@ export default function AIChatSupport() {
         setLoadingPlan(false);
       }
     })();
-  }, [me, debugState]);
+  }, [me]);
 
   // پیام‌ها
   const [messages, setMessages] = useState<Msg[]>([
@@ -302,22 +280,32 @@ export default function AIChatSupport() {
           } else {
             const fresh = { date: todayId(), count: 0 };
             setDailyUsage(fresh);
-            AsyncStorage.setItem(K_AI_DAILY_LIMIT, JSON.stringify(fresh)).catch(() => {});
+            AsyncStorage.setItem(
+              K_AI_DAILY_LIMIT,
+              JSON.stringify(fresh)
+            ).catch(() => {});
           }
         } else {
           const fresh = { date: todayId(), count: 0 };
           setDailyUsage(fresh);
-          AsyncStorage.setItem(K_AI_DAILY_LIMIT, JSON.stringify(fresh)).catch(() => {});
+          AsyncStorage.setItem(
+            K_AI_DAILY_LIMIT,
+            JSON.stringify(fresh)
+          ).catch(() => {});
         }
       } catch {}
     })();
   }, []);
 
   useEffect(() => {
-    AsyncStorage.setItem(K_AI_HISTORY, JSON.stringify(messages)).catch(() => {});
+    AsyncStorage.setItem(K_AI_HISTORY, JSON.stringify(messages)).catch(
+      () => {}
+    );
   }, [messages]);
   useEffect(() => {
-    AsyncStorage.setItem(K_AI_MOOD, JSON.stringify(moodHistory)).catch(() => {});
+    AsyncStorage.setItem(K_AI_MOOD, JSON.stringify(moodHistory)).catch(
+      () => {}
+    );
   }, [moodHistory]);
 
   // افزایش شمارش روزانه
@@ -331,7 +319,9 @@ export default function AIChatSupport() {
       } else {
         next = { date: today, count: prev.count + 1 };
       }
-      AsyncStorage.setItem(K_AI_DAILY_LIMIT, JSON.stringify(next)).catch(() => {});
+      AsyncStorage.setItem(K_AI_DAILY_LIMIT, JSON.stringify(next)).catch(
+        () => {}
+      );
       return next;
     });
   };
@@ -375,12 +365,20 @@ export default function AIChatSupport() {
 
     setText("");
 
-    const myMsg: Msg = { id: uuidv4(), role: "user", content: t, ts: Date.now() };
+    const myMsg: Msg = {
+      id: uuidv4(),
+      role: "user",
+      content: t,
+      ts: Date.now(),
+    };
     const nextMessages = [...messages, myMsg];
     setMessages(nextMessages);
     setLoading(true);
 
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+    setTimeout(
+      () => scrollRef.current?.scrollToEnd({ animated: true }),
+      50
+    );
 
     const compact = nextMessages
       .slice(-10)
@@ -421,7 +419,10 @@ export default function AIChatSupport() {
       ]);
     } finally {
       setLoading(false);
-      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+      setTimeout(
+        () => scrollRef.current?.scrollToEnd({ animated: true }),
+        100
+      );
     }
   };
 
@@ -446,8 +447,7 @@ export default function AIChatSupport() {
       { text: "کپی متن", onPress: () => Clipboard.setStringAsync(m.content) },
       {
         text: "اشتراک‌گذاری",
-        onPress: () =>
-          Share.share({ message: m.content }).catch(() => {}),
+        onPress: () => Share.share({ message: m.content }).catch(() => {}),
       },
       { text: "بستن", style: "cancel" },
     ]);
@@ -474,10 +474,9 @@ export default function AIChatSupport() {
     ]);
   };
 
-  const limitLabel =
-    isProPlan
-      ? "اشتراک PRO فعال است؛ محدودیتی برای تعداد پیام‌ها نداری."
-      : "در نسخه رایگان، روزی حداکثر ۳ پیام می‌تونی به پشتیبان هوشمند بفرستی.";
+  const limitLabel = isProPlan
+    ? "اشتراک PRO فعال است؛ محدودیتی برای تعداد پیام‌ها نداری."
+    : "در نسخه رایگان، روزی حداکثر ۳ پیام می‌تونی به پشتیبان هوشمند بفرستی.";
 
   const limitStateLabel =
     !isProPlan && dailyUsage?.count != null
@@ -486,30 +485,52 @@ export default function AIChatSupport() {
         )} / ۳`
       : "";
 
-  const badgeBg =
-    planView === "pro"
-      ? isNearExpire
-        ? "#EA580C"
-        : "#F59E0B"
-      : planView === "expired"
-      ? "#DC2626"
-      : "#111827";
+  // 🔰 هماهنگ با تب Subscription
+  type BadgeState = "free" | "pro" | "expiring" | "expired";
+  const badgeState: BadgeState =
+    planView === "expired"
+      ? "expired"
+      : planView === "pro" && isNearExpire
+      ? "expiring"
+      : planView === "pro"
+      ? "pro"
+      : "free";
 
-  const badgeLabel =
-    planView === "pro"
-      ? "PRO"
-      : planView === "expired"
-      ? "EXPIRED"
-      : "FREE";
+  const badgeBg =
+    badgeState === "expired"
+      ? "#7f1d1d55"
+      : badgeState === "expiring"
+      ? "#fbbf2455"
+      : badgeState === "pro"
+      ? "#16a34a33"
+      : "#4B556333";
 
   const badgeTextColor =
-    planView === "pro" ? "#111827" : "#F9FAFB";
+    badgeState === "expired"
+      ? "#F87171"
+      : badgeState === "expiring"
+      ? "#FBBF24"
+      : badgeState === "pro"
+      ? "#4ADE80"
+      : "#E5E7EB";
+
+  const badgeLabel =
+    badgeState === "expired"
+      ? "EXPIRED"
+      : badgeState === "pro" || badgeState === "expiring"
+      ? "PRO"
+      : "FREE";
 
   if (loadingPlan) {
     return (
       <SafeAreaView
         edges={["top", "bottom"]}
-        style={{ flex: 1, backgroundColor: "#000", alignItems: "center", justifyContent: "center" }}
+        style={{
+          flex: 1,
+          backgroundColor: "#000",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
       >
         <ActivityIndicator color="#f97316" />
         <Text
@@ -537,79 +558,6 @@ export default function AIChatSupport() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={0}
       >
-        {/* پنل دیباگ پلن (بالای هدر) */}
-        <View
-          style={{
-            paddingHorizontal: 16,
-            paddingTop: 6,
-          }}
-        >
-          <View
-            style={{
-              padding: 6,
-              borderRadius: 10,
-              backgroundColor: "#020617",
-              borderWidth: 1,
-              borderColor: "#1F2937",
-            }}
-          >
-            <Text
-              style={{
-                color: "#9CA3AF",
-                fontSize: 10,
-                marginBottom: 4,
-                textAlign: "right",
-              }}
-            >
-              حالت نمایش پلن (دیباگ پشتیبان هوشمند):
-            </Text>
-            <View
-              style={{
-                flexDirection: "row-reverse",
-                justifyContent: "space-between",
-                gap: 6,
-              }}
-            >
-              {(
-                [
-                  { key: "real", label: "داده واقعی" },
-                  { key: "force-free", label: "FREE فیک" },
-                  { key: "force-pro", label: "PRO فیک" },
-                  { key: "force-pro-near", label: "PRO نزدیک انقضا" },
-                  { key: "force-expired", label: "EXPIRED فیک" },
-                ] as { key: DebugState; label: string }[]
-              ).map((opt) => {
-                const active = debugState === opt.key;
-                return (
-                  <TouchableOpacity
-                    key={opt.key}
-                    onPress={() => setDebugState(opt.key)}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 4,
-                      borderRadius: 999,
-                      borderWidth: 1,
-                      borderColor: active ? "#2563EB" : "#4B5563",
-                      backgroundColor: active ? "#1D4ED8" : "#020617",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: active ? "#E5E7EB" : "#9CA3AF",
-                        fontSize: 9,
-                        textAlign: "center",
-                        fontWeight: active ? "800" : "500",
-                      }}
-                    >
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        </View>
-
         {/* Header */}
         <View
           style={{
@@ -682,16 +630,13 @@ export default function AIChatSupport() {
                   />
                 </TouchableOpacity>
 
-                {/* بج پلن با منطق تب‌ها */}
+                {/* بج پلن هماهنگ با تب Subscription */}
                 <View
                   style={{
-                    paddingHorizontal: 8,
+                    paddingHorizontal: 10,
                     paddingVertical: 4,
                     borderRadius: 999,
                     backgroundColor: badgeBg,
-                    borderWidth: planView === "free" ? 1 : 0,
-                    borderColor:
-                      planView === "free" ? "#4B5563" : "transparent",
                   }}
                 >
                   <Text
@@ -865,7 +810,9 @@ export default function AIChatSupport() {
             }}
           >
             <Ionicons name="chevron-down" size={16} color="#E5E7EB" />
-            <Text style={{ color: "#E5E7EB", fontSize: 11 }}>رفتن به آخر گفتگو</Text>
+            <Text style={{ color: "#E5E7EB", fontSize: 11 }}>
+              رفتن به آخر گفتگو
+            </Text>
           </TouchableOpacity>
         )}
 
