@@ -11,6 +11,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Keyboard,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -22,18 +23,19 @@ import { useAuth } from "../../hooks/useAuth";
 import { upsertUserByPhone, getMeByPhone } from "../../api/user";
 import JalaliSelect from "../../components/JalaliSelect";
 import { usePhoenix } from "../../hooks/PhoenixContext";
+import type { UserRecord } from "../../api/user";
 import { useUser } from "../../hooks/useUser";
 
 type Gender = "male" | "female" | "other";
 
 /* ---------------- Colors / Tokens (Orange theme) ---------------- */
 const P = {
-  pageBg: "#0B0C10",
-  cardBg: "#121418",
+  pageBg: "#05070C",
+  cardBg: "#0B0F16",
   textDark: "#FFFFFF",
   textMuted: "#9AA0A6",
   border: "#262B33",
-  inputBg: "#161A20",
+  inputBg: "#111827",
   primary: "#FF6A00",
   primaryDark: "#CC5600",
   primarySoft: "#FFE6D5",
@@ -41,50 +43,48 @@ const P = {
 const shadow = Platform.select({
   ios: {
     shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 12 },
   },
-  android: { elevation: 6 },
+  android: { elevation: 8 },
 });
 
-/* ---------------- Small UI helpers ---------------- */
-const Label = ({ children }: { children: React.ReactNode }) => (
-  <Text
-    style={{
-      color: P.textMuted,
-      fontSize: 12,
-      fontWeight: "800",
-      marginTop: 14,
-      marginBottom: 6,
-      textAlign: "left",
-      alignSelf: "flex-end",
-      width: "100%",
-      writingDirection: "rtl",
-    }}
-  >
-    {children}
-  </Text>
-);
+/* ---------------- Avatar presets (همسان با EditProfile / Phoenix) ---------------- */
+const PRESET_AVATARS: { id: string; src: any }[] = [
+  { id: "avatar:phoenix", src: require("../../assets/avatars/phoenix.png") },
+  { id: "avatar:1", src: require("../../assets/avatars/man1.png") },
+  { id: "avatar:2", src: require("../../assets/avatars/woman1.png") },
+  { id: "avatar:3", src: require("../../assets/avatars/man2.png") },
+  { id: "avatar:4", src: require("../../assets/avatars/woman2.png") },
+  { id: "avatar:5", src: require("../../assets/avatars/neutral1.png") },
+  { id: "avatar:6", src: require("../../assets/avatars/neutral2.png") },
+];
+
+const getPresetAvatarSource = (id: string | null) => {
+  if (!id) return null;
+  const found = PRESET_AVATARS.find((a) => a.id === id);
+  return found?.src ?? null;
+};
 
 export default function ProfileWizard() {
   const { phone } = useAuth();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  // 👉 کانتکست‌ها برای سینک بعد از ویزارد
   const { setProfileName, setAvatarUrl } = usePhoenix();
   const { refresh } = useUser() as any;
 
   const [fullName, setFullName] = useState("");
+  const [nameConfirmed, setNameConfirmed] = useState(false);
   const [gender, setGender] = useState<Gender | null>(null);
   const [birthDate, setBirthDate] = useState<string | undefined>(undefined); // yyyy-mm-dd
-  const [avatarUrl, setAvatarUrlState] = useState<string>("icon:female");
+  const [avatarUrl, setAvatarUrlState] = useState<string>("avatar:phoenix");
   const [saving, setSaving] = useState(false);
 
   const mounted = useRef(true);
   const submittingRef = useRef(false);
-  const redirectedRef = useRef(false); // جلوگیری از ریدایرکت دوباره
+  const redirectedRef = useRef(false);
 
   useEffect(() => {
     mounted.current = true;
@@ -93,7 +93,7 @@ export default function ProfileWizard() {
     };
   }, []);
 
-  // ✅ اگر قبلاً پروفایل تکمیل شده (فلگ محلی)، همین ابتدا برو تب‌ها
+  // اگر قبلاً پروفایل تکمیل شده (فلگ محلی)، همین ابتدا برو تب‌ها
   useEffect(() => {
     (async () => {
       try {
@@ -110,7 +110,7 @@ export default function ProfileWizard() {
     })();
   }, [router]);
 
-  // پیش‌پر کردن فیلدها از سرور (بر اساس شماره) + اگر completed بود، برو تب‌ها
+  // پیش‌پر کردن فیلدها از سرور (بر اساس شماره)
   useEffect(() => {
     if (!phone || redirectedRef.current) return;
     (async () => {
@@ -121,7 +121,6 @@ export default function ProfileWizard() {
         if (r.ok && r.data) {
           const d = r.data as any;
 
-          // ✅ اگر سرور می‌گوید پروفایل کامل است، مستقیم رد شو
           if (d.profileCompleted === true && !redirectedRef.current) {
             await AsyncStorage.setItem("profile_completed_flag", "1");
             redirectedRef.current = true;
@@ -130,12 +129,11 @@ export default function ProfileWizard() {
             return;
           }
 
-          // 🔹 مقداردهی فرم
           if (d.fullName) setFullName(String(d.fullName));
           if (d.gender) setGender(d.gender as Gender);
           if (d.birthDate) setBirthDate(String(d.birthDate));
 
-          let safeAvatar =
+          let safeAvatar: string | null =
             (d.avatarUrl as string | undefined) ??
             (avatarUrl || undefined) ??
             null;
@@ -146,17 +144,17 @@ export default function ProfileWizard() {
                 ? "icon:male"
                 : d.gender === "female"
                 ? "icon:female"
-                : "icon:female";
+                : "avatar:phoenix";
           }
-          if (safeAvatar) setAvatarUrlState(safeAvatar);
+          if (!safeAvatar) safeAvatar = "avatar:phoenix";
+
+          setAvatarUrlState(safeAvatar);
 
           const safeName = (d.fullName as string) || "کاربر";
 
-          // 🔹 سینک با PhoenixContext
           setProfileName(safeName);
-          if (safeAvatar) setAvatarUrl(safeAvatar);
+          setAvatarUrl(safeAvatar);
 
-          // 🔹 ذخیره‌ی کامل پروفایل روی دستگاه
           await AsyncStorage.setItem(
             "phoenix_profile",
             JSON.stringify({
@@ -174,7 +172,7 @@ export default function ProfileWizard() {
     })();
   }, [phone, router, setAvatarUrl, setProfileName, avatarUrl]);
 
-  /* ---------------- Image Pickers (compat with old/new APIs) ---------------- */
+  /* ---------------- Image Pickers ---------------- */
   async function ensureMediaPermission() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
@@ -238,19 +236,51 @@ export default function ProfileWizard() {
     }
   };
 
-  /* ---------------- Avatar ---------------- */
+  /* ---------------- Avatar (نمایش) ---------------- */
   const Avatar = () => {
-    if (avatarUrl.startsWith("icon:")) {
-      const which = avatarUrl.split(":")[1];
+    const current =
+      (typeof avatarUrl === "string" && avatarUrl.trim().length > 0
+        ? avatarUrl
+        : null) || "avatar:phoenix";
+
+    if (current.startsWith("avatar:")) {
+      const src = getPresetAvatarSource(current);
+      if (src) {
+        return (
+          <View
+            style={{
+              width: 104,
+              height: 104,
+              borderRadius: 52,
+              backgroundColor: P.cardBg,
+              borderWidth: 3,
+              borderColor: P.primarySoft,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Image
+              source={src}
+              style={{ width: 96, height: 96, borderRadius: 48 }}
+              resizeMode="cover"
+            />
+          </View>
+        );
+      }
+    }
+
+    if (typeof current === "string" && current.startsWith("icon:")) {
+      const which = current.split(":")[1];
       const color =
         which === "female" ? "#A855F7" : which === "male" ? "#3B82F6" : P.primary;
-      const IconName = which === "other" ? "account" : (which as "female" | "male");
+      const IconName =
+        which === "other" ? "account" : (which as "female" | "male");
       return (
         <View
           style={{
-            width: 96,
-            height: 96,
-            borderRadius: 48,
+            width: 104,
+            height: 104,
+            borderRadius: 52,
             backgroundColor: P.cardBg,
             alignItems: "center",
             justifyContent: "center",
@@ -260,9 +290,9 @@ export default function ProfileWizard() {
         >
           <View
             style={{
-              width: 88,
-              height: 88,
-              borderRadius: 44,
+              width: 96,
+              height: 96,
+              borderRadius: 48,
               backgroundColor: P.primarySoft,
               alignItems: "center",
               justifyContent: "center",
@@ -279,7 +309,55 @@ export default function ProfileWizard() {
         </View>
       );
     }
-    const valid = /^(file:|content:|https?:)/.test(avatarUrl);
+
+    const valid =
+      typeof current === "string" && /^(file:|content:|https?:)/.test(current);
+    if (valid) {
+      return (
+        <View
+          style={{
+            width: 104,
+            height: 104,
+            borderRadius: 52,
+            backgroundColor: P.cardBg,
+            borderWidth: 3,
+            borderColor: P.primarySoft,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Image
+            source={{ uri: current }}
+            style={{ width: 96, height: 96, borderRadius: 48 }}
+          />
+        </View>
+      );
+    }
+
+    const phoenixSrc = getPresetAvatarSource("avatar:phoenix");
+    if (phoenixSrc) {
+      return (
+        <View
+          style={{
+            width: 104,
+            height: 104,
+            borderRadius: 52,
+            backgroundColor: P.cardBg,
+            borderWidth: 3,
+            borderColor: P.primarySoft,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Image
+            source={phoenixSrc}
+            style={{ width: 96, height: 96, borderRadius: 48 }}
+            resizeMode="cover"
+          />
+        </View>
+      );
+    }
+
     return (
       <View
         style={{
@@ -293,14 +371,7 @@ export default function ProfileWizard() {
           justifyContent: "center",
         }}
       >
-        {valid ? (
-          <Image
-            source={{ uri: avatarUrl }}
-            style={{ width: 88, height: 88, borderRadius: 44 }}
-          />
-        ) : (
-          <Ionicons name="person" size={52} color={P.textMuted} />
-        )}
+        <Ionicons name="person" size={52} color={P.textMuted} />
       </View>
     );
   };
@@ -321,17 +392,17 @@ export default function ProfileWizard() {
     if (!validate()) return;
 
     const safeName = (fullName || "").trim();
-    const safeAvatar = avatarUrl || null;
+const safeAvatar = avatarUrl || "avatar:phoenix";
 
-    const body = {
-      fullName: safeName,
-      gender: gender as string,
-      birthDate: birthDate || null,
-      avatarUrl: safeAvatar,
-      plan: "free",
-      profileCompleted: true,
-      lastLoginAt: new Date().toISOString(),
-    };
+const body: Partial<UserRecord> = {
+  fullName: safeName,
+  gender: gender ?? null,          // ✅ بدون as string
+  birthDate: birthDate || null,
+  avatarUrl: safeAvatar,
+  plan: "free",
+  profileCompleted: true,
+  lastLoginAt: new Date().toISOString(),
+};
 
     try {
       submittingRef.current = true;
@@ -349,10 +420,8 @@ export default function ProfileWizard() {
         return Alert.alert("خطا", r.error || "HTTP_400");
       }
 
-      // ✅ فلگ محلی را ست کن تا دفعات بعد ویزارد باز نشود
       await AsyncStorage.setItem("profile_completed_flag", "1");
 
-      // ✅ پروفایل نهایی را از سرور بگیر تا مطمئن شویم
       const meResp = await getMeByPhone(phone).catch(
         () => ({ ok: false } as any)
       );
@@ -361,20 +430,14 @@ export default function ProfileWizard() {
         const d = (meResp as any).data as any;
 
         const finalName = (d.fullName as string) || safeName || "کاربر";
-        const finalAvatar =
+        const finalAvatar: string =
           (d.avatarUrl as string | undefined) ||
           safeAvatar ||
-          (d.gender === "male"
-            ? "icon:male"
-            : d.gender === "female"
-            ? "icon:female"
-            : "icon:female");
+          "avatar:phoenix";
 
-        // 🔹 سینک با PhoenixContext
         setProfileName(finalName);
         setAvatarUrl(finalAvatar);
 
-        // 🔹 ذخیره کامل روی دستگاه
         await AsyncStorage.setItem(
           "phoenix_profile",
           JSON.stringify({
@@ -387,7 +450,6 @@ export default function ProfileWizard() {
         );
       }
 
-      // 🔹 رفرش useUser (me) برای تب‌ها
       await refresh().catch(() => {});
 
       if (!redirectedRef.current) {
@@ -402,11 +464,19 @@ export default function ProfileWizard() {
     }
   };
 
+  /* ---- helper برای تأیید نام ---- */
+  const confirmName = () => {
+    Keyboard.dismiss();
+    if ((fullName || "").trim().length > 0) {
+      setNameConfirmed(true);
+    }
+  };
+
   /* ---------------- UI ---------------- */
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: P.pageBg }}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : undefined} // ⬅️ فقط iOS
         style={{ flex: 1 }}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
@@ -444,58 +514,142 @@ export default function ProfileWizard() {
               <Text
                 style={{ color: "#FFE6D5", marginTop: 4, fontSize: 12 }}
               >
-                برای ادامه چند فیلد ساده را پُر کن
+                فقط چند قدم تا شروع ققنوس فاصله داری
               </Text>
             </View>
 
             {/* Floating Avatar & Actions */}
             <View style={{ alignItems: "center" }}>
-              <View style={{ marginTop: -35 }}>
+              <View style={{ marginTop: -40 }}>
                 <Avatar />
               </View>
 
+              {/* آواتارهای آماده */}
+              <View
+                style={{
+                  marginTop: 12,
+                  paddingHorizontal: 18,
+                  width: "100%",
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "flex-end",
+                    gap: 6,
+                    marginBottom: 6,
+                  }}
+                >
+                  <Ionicons
+                    name="sparkles-outline"
+                    size={16}
+                    color={P.textMuted}
+                  />
+                  <Text
+                    style={{
+                      color: P.textMuted,
+                      fontSize: 12,
+                      fontWeight: "800",
+                      textAlign: "right",
+                    }}
+                  >
+                    انتخاب آواتار آماده
+                  </Text>
+                </View>
+
+                {/* ردیف اول */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    marginBottom: 10,
+                  }}
+                >
+                  {PRESET_AVATARS.slice(0, 4).map((av) => {
+                    const selected =
+                      (avatarUrl || "avatar:phoenix") === av.id;
+                    return (
+                      <TouchableOpacity
+                        key={av.id}
+                        onPress={() => setAvatarUrlState(av.id)}
+                        activeOpacity={0.9}
+                      >
+                        <View
+                          style={{
+                            width: 64,
+                            height: 64,
+                            borderRadius: 32,
+                            overflow: "hidden",
+                            borderWidth: selected ? 2 : 1,
+                            borderColor: selected
+                              ? P.primary
+                              : P.border,
+                          }}
+                        >
+                          <Image
+                            source={av.src}
+                            style={{ width: "100%", height: "100%" }}
+                            resizeMode="cover"
+                          />
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* ردیف دوم */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-evenly",
+                  }}
+                >
+                  {PRESET_AVATARS.slice(4).map((av) => {
+                    const selected =
+                      (avatarUrl || "avatar:phoenix") === av.id;
+                    return (
+                      <TouchableOpacity
+                        key={av.id}
+                        onPress={() => setAvatarUrlState(av.id)}
+                        activeOpacity={0.9}
+                      >
+                        <View
+                          style={{
+                            width: 64,
+                            height: 64,
+                            borderRadius: 32,
+                            overflow: "hidden",
+                            borderWidth: selected ? 2 : 1,
+                            borderColor: selected
+                              ? P.primary
+                              : P.border,
+                          }}
+                        >
+                          <Image
+                            source={av.src}
+                            style={{ width: "100%", height: "100%" }}
+                            resizeMode="cover"
+                          />
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* دکمه‌های گالری / دوربین / ریست */}
               <View
                 style={{
                   flexDirection: "row",
-                  gap: 10,
-                  marginTop: 10,
+                  gap: 8,
+                  marginTop: 12,
                   marginBottom: 6,
+                  paddingHorizontal: 18,
+                  width: "100%",
+                  justifyContent: "center",
                 }}
               >
-                <TouchableOpacity
-                  onPress={() => setAvatarUrlState("icon:female")}
-                  style={{
-                    paddingVertical: 8,
-                    paddingHorizontal: 12,
-                    borderRadius: 10,
-                    backgroundColor: P.primarySoft,
-                    borderWidth: 1,
-                    borderColor: P.primary,
-                  }}
-                >
-                  <Text
-                    style={{ color: P.primaryDark, fontWeight: "800" }}
-                  >
-                    آیکن زن
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setAvatarUrlState("icon:male")}
-                  style={{
-                    paddingVertical: 8,
-                    paddingHorizontal: 12,
-                    borderRadius: 10,
-                    backgroundColor: P.primarySoft,
-                    borderWidth: 1,
-                    borderColor: P.primary,
-                  }}
-                >
-                  <Text
-                    style={{ color: P.primaryDark, fontWeight: "800" }}
-                  >
-                    آیکن مرد
-                  </Text>
-                </TouchableOpacity>
                 <TouchableOpacity
                   onPress={pickFromGallery}
                   style={{
@@ -503,32 +657,67 @@ export default function ProfileWizard() {
                     paddingHorizontal: 12,
                     borderRadius: 10,
                     backgroundColor: P.primary,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
                   }}
                 >
-                  <Text
-                    style={{ color: "#fff", fontWeight: "900" }}
-                  >
-                    انتخاب عکس
+                  <Ionicons name="images-outline" size={16} color="#fff" />
+                  <Text style={{ color: "#fff", fontWeight: "900", fontSize: 12 }}>
+                    از گالری
                   </Text>
                 </TouchableOpacity>
+
                 <TouchableOpacity
                   onPress={pickFromCamera}
                   style={{
-                    width: 44,
-                    height: 44,
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
                     borderRadius: 10,
                     backgroundColor: "#0F172A10",
                     borderWidth: 1,
                     borderColor: P.border,
+                    flexDirection: "row",
                     alignItems: "center",
-                    justifyContent: "center",
+                    gap: 6,
+                  }}
+                >
+                  <Ionicons name="camera-outline" size={16} color={P.textDark} />
+                  <Text
+                    style={{ color: P.textDark, fontWeight: "800", fontSize: 12 }}
+                  >
+                    دوربین
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setAvatarUrlState("avatar:phoenix")}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    borderRadius: 10,
+                    backgroundColor: P.inputBg,
+                    borderWidth: 1,
+                    borderColor: P.border,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
                   }}
                 >
                   <Ionicons
-                    name="camera"
-                    size={18}
-                    color={P.textDark}
+                    name="refresh-outline"
+                    size={16}
+                    color={P.textMuted}
                   />
+                  <Text
+                    style={{
+                      color: P.textMuted,
+                      fontWeight: "800",
+                      fontSize: 12,
+                    }}
+                  >
+                    ققنوس پیش‌فرض
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -540,11 +729,35 @@ export default function ProfileWizard() {
                 paddingBottom: 18,
                 paddingTop: 8,
                 direction: "rtl",
-                writingDirection: "rtl",
               }}
             >
-              {/* Phone (read-only) */}
-              <Label>شماره موبایل</Label>
+              {/* Phone */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "flex-start",
+                  marginTop: 12,
+                  marginBottom: 4,
+                  gap: 6,
+                }}
+              >
+                <Ionicons
+                  name="call-outline"
+                  size={14}
+                  color={P.textMuted}
+                />
+                <Text
+                  style={{
+                    color: P.textMuted,
+                    fontSize: 12,
+                    fontWeight: "800",
+                    textAlign: "right",
+                  }}
+                >
+                  شماره موبایل
+                </Text>
+              </View>
               <View
                 style={{
                   height: 48,
@@ -569,29 +782,106 @@ export default function ProfileWizard() {
               </View>
 
               {/* Name */}
-              <Label>نام</Label>
-              <TextInput
-                value={fullName}
-                onChangeText={setFullName}
-                placeholder="مثلاً: پژمان"
-                placeholderTextColor={P.textMuted}
+              <View
                 style={{
-                  height: 50,
-                  borderRadius: 14,
-                  backgroundColor: P.inputBg,
-                  borderColor: P.border,
-                  borderWidth: 1,
-                  paddingHorizontal: 14,
-                  color: P.textDark,
-                  fontWeight: "700",
-                  textAlign: "right",
-                  writingDirection: "rtl",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "flex-start",
+                  marginTop: 14,
+                  marginBottom: 6,
+                  gap: 6,
                 }}
-                returnKeyType="done"
-              />
+              >
+                <Ionicons
+                  name="person-outline"
+                  size={14}
+                  color={P.textMuted}
+                />
+                <Text
+                  style={{
+                    color: P.textMuted,
+                    fontSize: 12,
+                    fontWeight: "800",
+                    textAlign: "right",
+                  }}
+                >
+                  نام
+                </Text>
+              </View>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <TextInput
+                  value={fullName}
+                  onChangeText={(t) => {
+                    setFullName(t);
+                    if (nameConfirmed) setNameConfirmed(false);
+                  }}
+                  placeholder="مثلاً: پژمان"
+                  placeholderTextColor={P.textMuted}
+                  style={{
+                    flex: 1,
+                    height: 50,
+                    borderRadius: 14,
+                    backgroundColor: P.inputBg,
+                    borderColor: P.border,
+                    borderWidth: 1,
+                    paddingHorizontal: 14,
+                    color: P.textDark,
+                    fontWeight: "700",
+                    textAlign: "right",
+                    writingDirection: "rtl",
+                  }}
+                  returnKeyType="done"
+                  onSubmitEditing={confirmName}
+                />
+                <TouchableOpacity
+                  onPress={confirmName}
+                  activeOpacity={0.9}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 12,
+                    backgroundColor: nameConfirmed ? "#16A34A" : P.primary,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Ionicons name="checkmark" size={22} color="#fff" />
+                </TouchableOpacity>
+              </View>
 
               {/* Gender */}
-              <Label>جنسیت</Label>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "flex-start",
+                  marginTop: 16,
+                  marginBottom: 6,
+                  gap: 6,
+                }}
+              >
+                <Ionicons
+                  name="male-female-outline"
+                  size={14}
+                  color={P.textMuted}
+                />
+                <Text
+                  style={{
+                    color: P.textMuted,
+                    fontSize: 12,
+                    fontWeight: "800",
+                    textAlign: "right",
+                  }}
+                >
+                  جنسیت
+                </Text>
+              </View>
               <View style={{ flexDirection: "row-reverse", gap: 10 }}>
                 {(
                   [
@@ -612,7 +902,10 @@ export default function ProfileWizard() {
                   return (
                     <Pressable
                       key={g.key}
-                      onPress={() => setGender(g.key as Gender)}
+                      onPress={() => {
+                        Keyboard.dismiss();
+                        setGender(g.key as Gender);
+                      }}
                       style={{
                         flex: 1,
                         height: 48,
@@ -651,26 +944,54 @@ export default function ProfileWizard() {
               </View>
 
               {/* Birthdate */}
-<Label>تاریخ تولد (اختیاری)</Label>
-<JalaliSelect
-  key={birthDate || "no-birth"}   // 👈 فقط این خط اضافه شد
-  initial={birthDate}
-  onChange={(iso) => setBirthDate(iso)}
-  minYear={1330}
-  maxYear={1390}
-  styleContainer={{
-    borderColor: P.border,
-    backgroundColor: P.inputBg,
-  }}
-  stylePicker={{
-    backgroundColor: P.cardBg,
-    borderColor: P.border,
-  }}
-  textColor={P.textDark}
-  accentColor={P.primary}
-  dark
-  grid
-/>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "flex-start",
+                  marginTop: 16,
+                  marginBottom: 6,
+                  gap: 6,
+                }}
+              >
+                <Ionicons
+                  name="calendar-outline"
+                  size={14}
+                  color={P.textMuted}
+                />
+                <Text
+                  style={{
+                    color: P.textMuted,
+                    fontSize: 12,
+                    fontWeight: "800",
+                    textAlign: "right",
+                  }}
+                >
+                  تاریخ تولد (اختیاری)
+                </Text>
+              </View>
+              <JalaliSelect
+                key={birthDate || "no-birth"}
+                initial={birthDate}
+                onChange={(iso) => {
+                  Keyboard.dismiss();
+                  setBirthDate(iso);
+                }}
+                minYear={1330}
+                maxYear={1390}
+                styleContainer={{
+                  borderColor: P.border,
+                  backgroundColor: P.inputBg,
+                }}
+                stylePicker={{
+                  backgroundColor: P.cardBg,
+                  borderColor: P.border,
+                }}
+                textColor={P.textDark}
+                accentColor={P.primary}
+                dark
+                grid
+              />
               {!!birthDate && (
                 <Text
                   style={{
@@ -680,7 +1001,7 @@ export default function ProfileWizard() {
                     textAlign: "left",
                   }}
                 >
-                  تاریخ انتخابی (میلادی):{" "}
+                  تاریخ انتخابی (میلادی): {" "}
                   <Text
                     style={{
                       color: P.textDark,
@@ -694,7 +1015,10 @@ export default function ProfileWizard() {
 
               {/* Submit */}
               <TouchableOpacity
-                onPress={onSubmit}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  onSubmit();
+                }}
                 disabled={saving}
                 activeOpacity={0.9}
                 style={{

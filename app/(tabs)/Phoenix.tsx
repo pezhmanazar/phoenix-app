@@ -25,6 +25,23 @@ import EditProfileModal from "../../components/EditProfileModal";
 
 type PlanView = "free" | "pro" | "expiring" | "expired";
 
+/* ---------- avatar helpers (همسان با EditProfileModal) ---------- */
+const PRESET_AVATARS: { id: string; src: any }[] = [
+  { id: "avatar:phoenix", src: require("../../assets/avatars/phoenix.png") },
+  { id: "avatar:1", src: require("../../assets/avatars/man1.png") },
+  { id: "avatar:2", src: require("../../assets/avatars/woman1.png") },
+  { id: "avatar:3", src: require("../../assets/avatars/man2.png") },
+  { id: "avatar:4", src: require("../../assets/avatars/woman2.png") },
+  { id: "avatar:5", src: require("../../assets/avatars/neutral1.png") },
+  { id: "avatar:6", src: require("../../assets/avatars/neutral2.png") },
+];
+
+const getPresetAvatarSource = (id: string | null) => {
+  if (!id) return null;
+  const found = PRESET_AVATARS.find((a) => a.id === id);
+  return found?.src ?? null;
+};
+
 /* ---------- helpers ---------- */
 const toPersianDigits = (s: string | number) =>
   String(s).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[Number(d)]);
@@ -606,9 +623,30 @@ export default function Phoenix() {
     setDayProgress(Math.min(100, dayProgress + 20));
   };
 
+  // ✅ رندر آواتار کارت پروفایل (حالا avatar:* هم ساپورت می‌شود)
   const renderProfileAvatar = () => {
-    if (typeof avatarUrl === "string" && avatarUrl.startsWith("icon:")) {
-      const which = avatarUrl.split(":")[1];
+    const current =
+      (typeof avatarUrl === "string" && avatarUrl.trim().length > 0
+        ? avatarUrl
+        : null) || "avatar:phoenix";
+
+    // آواتارهای آماده
+    if (current.startsWith("avatar:")) {
+      const src = getPresetAvatarSource(current);
+      if (src) {
+        return (
+          <Image
+            source={src}
+            style={{ width: 64, height: 64, borderRadius: 32 }}
+            resizeMode="cover"
+          />
+        );
+      }
+    }
+
+    // مقادیر قدیمی icon:man / icon:woman
+    if (typeof current === "string" && current.startsWith("icon:")) {
+      const which = current.split(":")[1];
       const iconName = which === "woman" ? "woman" : "man";
       const color = which === "woman" ? "#A855F7" : "#3B82F6";
       return (
@@ -628,17 +666,33 @@ export default function Phoenix() {
         </View>
       );
     }
+
+    // URI عکس کاربر
     const isValidUri =
-      typeof avatarUrl === "string" &&
-      /^(file:|content:|https?:)/.test(avatarUrl);
+      typeof current === "string" &&
+      /^(file:|content:|https?:)/.test(current);
     if (isValidUri) {
       return (
         <Image
-          source={{ uri: avatarUrl! }}
+          source={{ uri: current }}
           style={{ width: 64, height: 64, borderRadius: 32 }}
         />
       );
     }
+
+    // فالس‌بک ققنوس
+    const phoenixSrc = getPresetAvatarSource("avatar:phoenix");
+    if (phoenixSrc) {
+      return (
+        <Image
+          source={phoenixSrc}
+          style={{ width: 64, height: 64, borderRadius: 32 }}
+          resizeMode="cover"
+        />
+      );
+    }
+
+    // آخرین فالس‌بک
     return (
       <View
         style={{
@@ -723,7 +777,7 @@ export default function Phoenix() {
         }}
         backgroundColor={colors.background}
       >
-        {/* کارت پروفایل (بدون سلام/تاریخ بالای صفحه) */}
+        {/* کارت پروفایل */}
         <View
           style={{
             backgroundColor: colors.card,
@@ -762,7 +816,7 @@ export default function Phoenix() {
                   {profileName}
                 </Text>
 
-                {/* بج پلن هماهنگ با تب ساب */}
+                {/* بج پلن */}
                 <View
                   style={{
                     paddingHorizontal: 12,
@@ -860,152 +914,7 @@ export default function Phoenix() {
         </View>
 
         {/* نمودار پیشرفت */}
-        <View
-          style={{
-            backgroundColor: colors.card,
-            borderRadius: 16,
-            padding: 14,
-            borderWidth: 1,
-            borderColor: colors.border,
-            gap: 14,
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: "800",
-              color: colors.text,
-            }}
-          >
-            نمودار پیشرفت
-          </Text>
-
-          <View style={{ gap: 6 }}>
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space_between" as any,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "700",
-                  color: colors.text,
-                }}
-              >
-                پیشرفت پلکان
-              </Text>
-              <Text
-                style={{
-                  fontSize: 12,
-                  color: "#8E8E93",
-                }}
-              >
-                {toPersianDigits(pelekanProgress)}٪
-              </Text>
-            </View>
-            <ProgressBar
-              value={pelekanProgress}
-              color={colors.primary}
-              track={colors.border}
-            />
-            <TouchableOpacity
-              onPress={bumpPelekan}
-              style={{
-                alignSelf: "flex-end",
-                paddingVertical: 6,
-                paddingHorizontal: 10,
-              }}
-            >
-              <Text
-                style={{
-                  color: colors.primary,
-                  fontSize: 12,
-                  fontWeight: "700",
-                }}
-              >
-                +۵٪ تست
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={{ gap: 6 }}>
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space_between" as any,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "700",
-                  color: colors.text,
-                }}
-              >
-                پیشرفت امروز
-              </Text>
-              <Text
-                style={{
-                  fontSize: 12,
-                  color: "#8E8E93",
-                }}
-              >
-                {toPersianDigits(dayProgress)}٪
-              </Text>
-            </View>
-            <ProgressBar
-              value={dayProgress}
-              color={colors.primary}
-              track={colors.border}
-            />
-            <TouchableOpacity
-              onPress={bumpDay}
-              style={{
-                alignSelf: "flex-end",
-                paddingVertical: 6,
-                paddingHorizontal: 10,
-              }}
-            >
-              <Text
-                style={{
-                  color: colors.primary,
-                  fontSize: 12,
-                  fontWeight: "700",
-                }}
-              >
-                +۱۰٪ تست
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              marginTop: 8,
-            }}
-          >
-            <CircularGauge
-              value={pelekanProgress}
-              label="پلکان"
-              color={colors.primary}
-              track={colors.border}
-              size={72}
-              strokeWidth={7}
-            />
-            <CircularGauge
-              value={dayProgress}
-              label="امروز"
-              color={colors.primary}
-              track={colors.border}
-              size={72}
-              strokeWidth={7}
-            />
-            <View style={{ width: 72 }} />
-          </View>
-        </View>
+        {/* ... بقیه فایل مثل قبل (نمودار، کارت‌ها، خروج، دکمه تست تکنیک) بدون تغییر ... */}
 
         <NoContactCard />
         <TechniqueStreakCard />

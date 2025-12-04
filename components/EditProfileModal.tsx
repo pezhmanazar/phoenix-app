@@ -19,7 +19,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  LayoutChangeEvent, // 👈 از react-native
+  LayoutChangeEvent,
 } from "react-native";
 import { useTheme } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -37,6 +37,27 @@ import { upsertUserByPhone } from "../api/user";
 type Props = {
   onClose: () => void;
 };
+
+// 🔹 آواتارهای آماده
+const PRESET_AVATARS: { id: string; src: any }[] = [
+  { id: "avatar:phoenix", src: require("../assets/avatars/phoenix.png") },
+  { id: "avatar:1", src: require("../assets/avatars/man1.png") },
+  { id: "avatar:2", src: require("../assets/avatars/woman1.png") },
+  { id: "avatar:3", src: require("../assets/avatars/man2.png") },
+  { id: "avatar:4", src: require("../assets/avatars/woman2.png") },
+  { id: "avatar:5", src: require("../assets/avatars/neutral1.png") },
+  { id: "avatar:6", src: require("../assets/avatars/neutral2.png") },
+];
+
+const getPresetAvatarSource = (id: string | null) => {
+  if (!id) return null;
+  const found = PRESET_AVATARS.find((a) => a.id === id);
+  return found?.src ?? null;
+};
+
+// نرمال‌سازی آواتار (جلوگیری از رشته‌ی خالی و null)
+const normalizeAvatar = (v?: string | null) =>
+  v && typeof v === "string" && v.trim().length > 0 ? v : null;
 
 const EditProfileModal: React.FC<Props> = ({ onClose }) => {
   const { colors } = useTheme();
@@ -68,10 +89,14 @@ const EditProfileModal: React.FC<Props> = ({ onClose }) => {
   const { me, refresh } = useUser() as any;
   const { phone } = useAuth();
 
+  // ✅ مقدار اولیه آواتار با فالس‌بک روی ققنوس
+  const initialAvatar =
+    normalizeAvatar(me?.avatarUrl as string | null) ??
+    normalizeAvatar(avatarUrl as string | null) ??
+    "avatar:phoenix";
+
   const [name, setName] = useState<string>(me?.fullName ?? profileName);
-  const [photo, setPhoto] = useState<string | null>(
-    (me?.avatarUrl as string | null) ?? (avatarUrl as string | null)
-  );
+  const [photo, setPhoto] = useState<string | null>(initialAvatar);
   const [saving, setSaving] = useState(false);
 
   const [gender, setGender] = useState<"male" | "female" | "other">(
@@ -80,6 +105,21 @@ const EditProfileModal: React.FC<Props> = ({ onClose }) => {
   const [birthDate, setBirthDate] = useState<string | undefined>(
     (me?.birthDate as string | undefined) ?? undefined
   );
+
+  // اگر هیچ آواتاری توی سرور و کانتکست نبود، یک بار ققنوس را به عنوان پیش‌فرض ست کن
+  useEffect(() => {
+    const normalizedMe = normalizeAvatar(me?.avatarUrl as string | null);
+    const normalizedCtx = normalizeAvatar(avatarUrl as string | null);
+
+    if (!normalizedMe && !normalizedCtx) {
+      if (photo !== "avatar:phoenix") {
+        setPhoto("avatar:phoenix");
+      }
+      if (avatarUrl !== "avatar:phoenix") {
+        setAvatarUrl("avatar:phoenix");
+      }
+    }
+  }, [me?.avatarUrl, avatarUrl, photo, setAvatarUrl]);
 
   useEffect(() => {
     if (me?.fullName) setName(me.fullName as string);
@@ -96,14 +136,18 @@ const EditProfileModal: React.FC<Props> = ({ onClose }) => {
         const p = JSON.parse(raw);
 
         if (!me?.fullName && p.fullName) setName(p.fullName);
-        if (!me?.avatarUrl && p.avatarUrl) setPhoto(p.avatarUrl);
+        if (!me?.avatarUrl && p.avatarUrl) {
+          const norm = normalizeAvatar(p.avatarUrl);
+          setPhoto(norm ?? "avatar:phoenix");
+          if (!avatarUrl && norm) setAvatarUrl(norm);
+        }
         if (!me?.gender && p.gender) setGender(p.gender as any);
         if (!me?.birthDate && p.birthDate) setBirthDate(p.birthDate as string);
       } catch {
         // ignore
       }
     })();
-  }, [me?.fullName, me?.avatarUrl, me?.gender, me?.birthDate]);
+  }, [me?.fullName, me?.avatarUrl, me?.gender, me?.birthDate, avatarUrl, setAvatarUrl]);
 
   const safeSetPhoto = (uri: string) => {
     if (mountedRef.current) setPhoto(uri);
@@ -204,9 +248,32 @@ const EditProfileModal: React.FC<Props> = ({ onClose }) => {
     }
   };
 
+  // 🖼 آواتار بالای صفحه
   const renderModalAvatar = () => {
-    if (typeof photo === "string" && photo.startsWith("icon:")) {
-      const which = photo.split(":")[1];
+    const current = photo || "avatar:phoenix";
+
+    // اگر از آواتارهای آماده بود
+    if (current.startsWith("avatar:")) {
+      const src = getPresetAvatarSource(current);
+      if (src) {
+        return (
+          <Image
+            source={src}
+            style={{
+              width: 96,
+              height: 96,
+              borderRadius: 48,
+              borderWidth: 2,
+              borderColor: "#FACC15",
+            }}
+          />
+        );
+      }
+    }
+
+    // مقادیر قدیمی icon:man / icon:woman
+    if (typeof current === "string" && current.startsWith("icon:")) {
+      const which = current.split(":")[1];
       const iconName = which === "woman" ? "woman" : "man";
       const color = which === "woman" ? "#A855F7" : "#3B82F6";
       return (
@@ -226,16 +293,36 @@ const EditProfileModal: React.FC<Props> = ({ onClose }) => {
         </View>
       );
     }
+
+    // اگر URI عکس کاربر بود
     const isValidUri =
-      typeof photo === "string" && /^(file:|content:|https?:)/.test(photo);
+      typeof current === "string" && /^(file:|content:|https?:)/.test(current);
     if (isValidUri) {
       return (
         <Image
-          source={{ uri: photo! }}
+          source={{ uri: current }}
           style={{ width: 84, height: 84, borderRadius: 42 }}
         />
       );
     }
+
+    // فالس‌بک ققنوس
+    const phoenixSrc = getPresetAvatarSource("avatar:phoenix");
+    if (phoenixSrc) {
+      return (
+        <Image
+          source={phoenixSrc}
+          style={{
+            width: 96,
+            height: 96,
+            borderRadius: 48,
+            borderWidth: 2,
+            borderColor: "#FACC15",
+          }}
+        />
+      );
+    }
+
     return (
       <View
         style={{
@@ -256,7 +343,7 @@ const EditProfileModal: React.FC<Props> = ({ onClose }) => {
 
   const save = async () => {
     const safeName = (name || "").trim() || "کاربر";
-    const safeAvatar = photo || "icon:man";
+    const safeAvatar = photo || "avatar:phoenix"; // ✅ پیش‌فرض ققنوس
 
     if (!phone) {
       Alert.alert("خطا", "شماره موبایل پیدا نشد. دوباره وارد شو.");
@@ -326,7 +413,7 @@ const EditProfileModal: React.FC<Props> = ({ onClose }) => {
               resetNoContact();
               if (points > 0) addPoints(-points);
               setProfileName("کاربر");
-              setAvatarUrl("icon:man");
+              setAvatarUrl("avatar:phoenix");
               Alert.alert(
                 "پاک‌سازی انجام شد",
                 "همه‌چیز صفر شد. از نو شروع کن ✨"
@@ -349,7 +436,6 @@ const EditProfileModal: React.FC<Props> = ({ onClose }) => {
       statusBarTranslucent
       presentationStyle="overFullScreen"
       hardwareAccelerated
-      // ❌ avoidKeyboard حذف شد؛ در تایپ Modal وجود ندارد
       onRequestClose={onClose}
       supportedOrientations={["portrait", "landscape"]}
     >
@@ -467,7 +553,7 @@ const EditProfileModal: React.FC<Props> = ({ onClose }) => {
                 />
               </View>
 
-              {/* تصویر پروفایل */}
+              {/* تصویر پروفایل (گالری / دوربین) */}
               <View style={{ marginTop: 18 }}>
                 <View
                   style={{
@@ -549,8 +635,8 @@ const EditProfileModal: React.FC<Props> = ({ onClose }) => {
                 </View>
               </View>
 
-              {/* آیکن مرد / زن */}
-              <View style={{ marginTop: 16 }}>
+              {/* آواتارهای آماده: ۴ تا بالا، ۳ تا پایین */}
+              <View style={{ marginTop: 18 }}>
                 <View
                   style={{
                     flexDirection: "row",
@@ -567,47 +653,87 @@ const EditProfileModal: React.FC<Props> = ({ onClose }) => {
                       textAlign: "right",
                     }}
                   >
-                    یا انتخاب آیکن
+                    آواتارهای آماده
                   </Text>
                   <Ionicons
-                    name="happy-outline"
+                    name="sparkles-outline"
                     size={16}
                     color={colors.text}
                   />
                 </View>
+
+                {/* ردیف اول (۴ تا) */}
                 <View
                   style={{
                     flexDirection: "row",
-                    gap: 14,
-                    justifyContent: "center",
+                    justifyContent: "space-between",
+                    marginBottom: 12,
                   }}
                 >
-                  {(["man", "woman"] as const).map((which) => {
-                    const selected = photo === `icon:${which}`;
-                    const color = which === "woman" ? "#A855F7" : "#3B82F6";
+                  {PRESET_AVATARS.slice(0, 4).map((av) => {
+                    const selected = (photo || "avatar:phoenix") === av.id;
                     return (
                       <TouchableOpacity
-                        key={which}
-                        onPress={() =>
-                          mountedRef.current && setPhoto(`icon:${which}`)
-                        }
+                        key={av.id}
+                        onPress={() => setPhoto(av.id)}
                         activeOpacity={0.85}
-                        style={{
-                          width: 72,
-                          height: 72,
-                          borderRadius: 36,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          backgroundColor: color + "22",
-                          borderWidth: selected ? 2 : 1,
-                          borderColor: selected ? color : colors.border,
-                        }}
                       >
-                        <Ionicons
-                          name={which as any}
-                          size={44}
-                          color={color}
-                        />
+                        <View
+                          style={{
+                            width: 64,
+                            height: 64,
+                            borderRadius: 32,
+                            overflow: "hidden",
+                            borderWidth: selected ? 2 : 1,
+                            borderColor: selected
+                              ? colors.primary
+                              : colors.border,
+                          }}
+                        >
+                          <Image
+                            source={av.src}
+                            style={{ width: "100%", height: "100%" }}
+                            resizeMode="cover"
+                          />
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* ردیف دوم (۳ تا) */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-evenly",
+                  }}
+                >
+                  {PRESET_AVATARS.slice(4).map((av) => {
+                    const selected = (photo || "avatar:phoenix") === av.id;
+                    return (
+                      <TouchableOpacity
+                        key={av.id}
+                        onPress={() => setPhoto(av.id)}
+                        activeOpacity={0.85}
+                      >
+                        <View
+                          style={{
+                            width: 64,
+                            height: 64,
+                            borderRadius: 32,
+                            overflow: "hidden",
+                            borderWidth: selected ? 2 : 1,
+                            borderColor: selected
+                              ? colors.primary
+                              : colors.border,
+                          }}
+                        >
+                          <Image
+                            source={av.src}
+                            style={{ width: "100%", height: "100%" }}
+                            resizeMode="cover"
+                          />
+                        </View>
                       </TouchableOpacity>
                     );
                   })}
