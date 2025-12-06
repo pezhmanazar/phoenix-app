@@ -1,11 +1,10 @@
 // routes/users.js
 import express from "express";
-import jwt from "jsonwebtoken";
 import prisma from "../utils/prisma.js";
 
 const router = express.Router();
 
-// ✅ برای اینکه DEV_BYPASS بتواند از req.body استفاده کند
+// برای اینکه بتوانیم از req.body استفاده کنیم
 router.use(express.json());
 
 /* ---------- helpers ---------- */
@@ -24,71 +23,45 @@ function parseDateOrNull(value) {
   return d;
 }
 
-/* ---------- auth middleware (توکن + DEV_BYPASS) ---------- */
+/* ---------- auth با شماره موبایل (بدون JWT) ---------- */
+/**
+ * منطق:
+ *   - شماره را از query.phone یا body.phone می‌خوانیم
+ *   - اگر قابل نرمال‌سازی بود → req.userPhone
+ *   - اگر نبود → 401 با PHONE_REQUIRED
+ */
 function authUser(req, res, next) {
-  const header = String(req.headers["authorization"] || "");
-  const [scheme, token] = header.split(" ");
+  const fromQuery = normalizePhone(req.query?.phone);
+  const fromBody = normalizePhone(req.body?.phone);
+  const phone = fromQuery || fromBody;
 
-  const secret =
-    process.env.APP_JWT_SECRET ||
-    process.env.OTP_JWT_SECRET ||
-    process.env.JWT_SECRET ||
-    "";
-
-  const isDev = process.env.NODE_ENV !== "production";
-
-  // 1) مسیر نرمال با Bearer token
-  if (scheme === "Bearer" && token && secret) {
-    try {
-      const payload = jwt.verify(token, secret);
-      const phone = normalizePhone(payload.phone);
-      if (!phone) {
-        return res.status(401).json({ ok: false, error: "INVALID_TOKEN_PHONE" });
-      }
-      req.userPhone = phone;
-      req.userTokenPayload = payload;
-      return next();
-    } catch (e) {
-      console.error("[users] token verify error:", e.message);
-      if (!isDev) {
-        return res.status(401).json({ ok: false, error: "TOKEN_INVALID" });
-      }
-      // dev → ادامه می‌دهیم و بای‌پس را امتحان می‌کنیم
-    }
+  if (!phone) {
+    console.warn("[users.authUser] missing or invalid phone in query/body", {
+      queryPhone: req.query?.phone,
+      bodyPhone: req.body?.phone,
+    });
+    return res.status(401).json({ ok: false, error: "PHONE_REQUIRED" });
   }
 
-  // 2) ---------- DEV_BYPASS ----------
-  if (isDev) {
-    const fromQuery = normalizePhone(req.query?.phone);
-    const fromBody = normalizePhone(req.body?.phone);
-    const phone = fromQuery || fromBody;
-    if (phone) {
-      console.warn("[users][authUser] DEV_BYPASS → using phone =", phone);
-      req.userPhone = phone;
-      req.userTokenPayload = { phone, devBypass: true };
-      return next();
-    }
-  }
-
-  // 3) هیچ توکنی نداریم و نمی‌توانیم بای‌پس کنیم
-  if (!secret && !isDev) {
-    console.error("[users] APP_JWT_SECRET not set");
-    return res
-      .status(500)
-      .json({ ok: false, error: "SERVER_MISCONFIGURED" });
-  }
-
-  return res.status(401).json({ ok: false, error: "NO_TOKEN" });
+  req.userPhone = phone;
+  return next();
 }
 
 /* ---------- GET /api/users/me ---------- */
+/**
+ * اپ تو:
+ *   GET https://qoqnoos.app/api/users/me?phone=09...
+ * اینجا فقط شماره را می‌گیرد و رکورد را برمی‌گرداند.
+ */
 router.get("/me", authUser, async (req, res) => {
   try {
     const phone = req.userPhone;
     const user = await prisma.user.findUnique({
       where: { phone },
     });
+
     console.log("[users.me] phone =", phone, "→ user =", JSON.stringify(user, null, 2));
+
     return res.json({
       ok: true,
       data: user || null,
@@ -100,7 +73,9 @@ router.get("/me", authUser, async (req, res) => {
 });
 
 /* ---------- POST /api/users/upsert ----------
-   پروفایل‌ویزارد و ادیت پروفایل (با توکن / DEV_BYPASS)
+   پروفایل‌ویزارد و ادیت پروفایل
+   اپ تو:
+   POST https://qoqnoos.app/api/users/upsert  (body شامل phone و بقیه فیلدها)
 ------------------------------------------------ */
 router.post("/upsert", authUser, async (req, res) => {
   try {
@@ -111,10 +86,10 @@ router.post("/upsert", authUser, async (req, res) => {
       gender,
       birthDate,
       profileCompleted,
-      avatarUrl,      // در Prisma نداریم
+      avatarUrl,      // در Prisma نداریم، نادیده می‌گیریم
       plan,
       planExpiresAt,
-      lastLoginAt,    // در Prisma نداریم
+      lastLoginAt,    // در Prisma نداریم، نادیده می‌گیریم
     } = req.body || {};
 
     console.log("[users.upsert] HIT phone =", phone, "body =", req.body);
@@ -122,7 +97,7 @@ router.post("/upsert", authUser, async (req, res) => {
     const birthDateValue = parseDateOrNull(birthDate);
     const planExpiresValue = parseDateOrNull(planExpiresAt);
 
-    // 👇 فقط وقتی فیلدها واقعا پر هستن، تو update می‌ذاریم
+    // فقط وقتی فیلدها واقعا پر هستن، تو update می‌ذاریم
     const updateData = {};
 
     if (typeof fullName === "string" && fullName.trim().length > 0) {
@@ -149,7 +124,7 @@ router.post("/upsert", authUser, async (req, res) => {
       updateData.planExpiresAt = planExpiresValue;
     }
 
-    // اگر هیچ آپدیتی نیست، فقط برگردون
+    // اگر هیچ آپدیتی نیست، فقط همان رکورد فعلی را برگردان
     if (Object.keys(updateData).length === 0) {
       const existing = await prisma.user.findUnique({ where: { phone } });
       console.log("[users.upsert] NO_UPDATE phone =", phone, "existing =", existing);
@@ -161,7 +136,10 @@ router.post("/upsert", authUser, async (req, res) => {
       create: {
         phone,
         fullName: typeof fullName === "string" ? fullName.trim() : "",
-        gender: typeof gender === "string" && gender.trim().length > 0 ? gender.trim() : null,
+        gender:
+          typeof gender === "string" && gender.trim().length > 0
+            ? gender.trim()
+            : null,
         birthDate: birthDateValue,
         profileCompleted: !!profileCompleted,
         plan: plan || "free",
@@ -185,7 +163,8 @@ router.post("/upsert", authUser, async (req, res) => {
 });
 
 /* ---------- POST /api/users ----------
-   کال از pay/verify (بدون توکن)
+   کال از pay/verify (بدون middleware authUser)
+   اینجا هم با شماره موبایل کار می‌کنیم
 ------------------------------------------------ */
 router.post("/", async (req, res) => {
   try {
@@ -212,7 +191,6 @@ router.post("/", async (req, res) => {
     const birthDateValue = parseDateOrNull(birthDate);
     const planExpiresValue = parseDateOrNull(planExpiresAt);
 
-    // ⚠️ اینجا هم مثل بالا: فقط اگر واقعا مقدار معنادار داریم، آپدیت کن
     const updateData = {};
 
     if (typeof fullName === "string" && fullName.trim().length > 0) {
@@ -241,7 +219,10 @@ router.post("/", async (req, res) => {
       create: {
         phone,
         fullName: typeof fullName === "string" ? fullName.trim() : "",
-        gender: typeof gender === "string" && gender.trim().length > 0 ? gender.trim() : null,
+        gender:
+          typeof gender === "string" && gender.trim().length > 0
+            ? gender.trim()
+            : null,
         birthDate: birthDateValue,
         profileCompleted: !!profileCompleted,
         plan: plan || "free",

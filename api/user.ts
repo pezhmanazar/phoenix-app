@@ -36,9 +36,39 @@ async function doJson<T>(
   init?: RequestInit
 ): Promise<ApiResp<T>> {
   try {
-    const res = await fetch(input, init);
-    const text = await res.text();
+    // 1) هدرهای قبلی را جمع می‌کنیم
+    const baseHeaders: Record<string, string> = {};
 
+    if (init?.headers) {
+      // اگر قبلاً هدر داشتیم (مثلاً Content-Type) حفظشان می‌کنیم
+      if (init.headers instanceof Headers) {
+        init.headers.forEach((v, k) => {
+          baseHeaders[k] = v;
+        });
+      } else if (Array.isArray(init.headers)) {
+        for (const [k, v] of init.headers as [string, string][]) {
+          baseHeaders[k] = v;
+        }
+      } else {
+        Object.assign(baseHeaders, init.headers as Record<string, string>);
+      }
+    }
+
+    // 2) توکن سشن را از AsyncStorage می‌خوانیم
+    const sessionToken = await AsyncStorage.getItem("session_v1");
+    if (sessionToken) {
+      // هر دو نوع هدر را می‌فرستیم تا با هر میدل‌وری‌ای سازگار باشد
+      baseHeaders["Authorization"] = `Bearer ${sessionToken}`;
+      baseHeaders["x-session-token"] = sessionToken;
+    }
+
+    // 3) درخواست را با هدرهای نهایی می‌فرستیم
+    const res = await fetch(input, {
+      ...init,
+      headers: baseHeaders,
+    });
+
+    const text = await res.text();
     let json: any = {};
     try {
       json = text ? JSON.parse(text) : {};
@@ -60,7 +90,6 @@ async function doJson<T>(
     if (typeof json === "object" && json && "ok" in json && "data" in json) {
       return json as ApiResp<T>;
     }
-
     return { ok: true, data: json as T };
   } catch (e: any) {
     return { ok: false, error: e?.message || "NETWORK_ERROR" };
