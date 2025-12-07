@@ -1,5 +1,6 @@
 // routes/auth.js
-const express = require("express");
+import express from "express";
+
 const router = express.Router();
 
 /**
@@ -9,7 +10,7 @@ const router = express.Router();
  *
  * فعلاً کد فیک برمی‌گردونیم برای تست مسیر.
  */
-router.post("/auth/send-otp", async (req, res) => {
+router.post("/send-otp", async (req, res) => {
   try {
     const { phone } = req.body || {};
     if (!phone) {
@@ -42,7 +43,7 @@ router.post("/auth/send-otp", async (req, res) => {
  * فعلاً کد را چک نمی‌کنیم و فقط پاسخ موفق تستی می‌دهیم.
  * در قدم‌های بعدی اینجا OTP واقعی + JWT را پیاده می‌کنیم.
  */
-router.post("/auth/verify-otp", async (req, res) => {
+router.post("/verify-otp", async (req, res) => {
   try {
     const { phone, code } = req.body || {};
     if (!phone || !code) {
@@ -68,4 +69,4 @@ router.post("/auth/verify-otp", async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;
