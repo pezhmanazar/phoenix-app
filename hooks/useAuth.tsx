@@ -8,19 +8,23 @@ import React, {
   useState,
 } from "react";
 import * as SecureStore from "expo-secure-store";
-import AsyncStorage from "@react-native-async-storage/async-storage"; // 👈 جدید
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SECURE_KEYS } from "@/constants/storage";
-import { sendCode as apiSendCode, verifyCode as apiVerifyCode } from "@/api/otp";
+import {
+  sendCode as apiSendCode,
+  verifyCode as apiVerifyCode,
+} from "@/api/otp";
 
 /* ==============================
    🔹 TYPES
 ============================== */
+
 type AuthState = {
   loading: boolean;
   token: string | null; // session token (بدون فیلد code)
   isAuthenticated: boolean;
   phone: string | null; // آخرین شماره در OTP flow
-  otpToken: string | null; // توکن کوتاه‌عمر از /sendCode
+  otpToken: string | null; // توکن کوتاه‌عمر از /sendCode (در صورت وجود)
 };
 
 type AuthContextValue = AuthState & {
@@ -28,7 +32,6 @@ type AuthContextValue = AuthState & {
   setPhone: (p: string | null) => Promise<void>;
   signOut: () => Promise<void>;
   refreshFromStore: () => Promise<void>;
-
   /** OTP flow */
   requestCode: (phone: string) => Promise<{ ok: true }>;
   verifyOtp: (code: string) => Promise<{ ok: true }>;
@@ -37,11 +40,13 @@ type AuthContextValue = AuthState & {
 /* ==============================
    🔹 CONTEXT
 ============================== */
+
 const AuthCtx = createContext<AuthContextValue | undefined>(undefined);
 
 /* ==============================
    🔹 SAFE SECURESTORE HELPERS
 ============================== */
+
 function assertValidKey(key: string) {
   if (!key || !/^[A-Za-z0-9._-]+$/.test(key)) {
     if (__DEV__) console.warn(`⚠️ Invalid SecureStore key: "${key}"`);
@@ -89,6 +94,7 @@ async function safeDel(key: string) {
 /* ==============================
    🔹 ONE-OFF CLEANUP
 ============================== */
+
 async function migrateBadKeysOnce() {
   const maybeBadKeys = ["auth token", "auth:token", " session", "otp token"];
   for (const k of maybeBadKeys) {
@@ -114,11 +120,9 @@ function parseJwtPayload(t?: string | null): any | null {
       .replace(/-/g, "+")
       .replace(/_/g, "/")
       .padEnd(Math.ceil(b64url.length / 4) * 4, "=");
-
     // @ts-ignore
     const atobFn = (globalThis as any).atob;
     if (!atobFn) return null;
-
     const json = atobFn(b64);
     return JSON.parse(json);
   } catch {
@@ -148,6 +152,7 @@ function withTimeout<T>(p: Promise<T>, ms = 15000) {
 /* ==============================
    🔹 PROVIDER
 ============================== */
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
     loading: true,
@@ -225,12 +230,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn("[useAuth] refused to store an OTP token in session");
       return;
     }
-
     if (state.token === t) return;
-
     await safeSet(SECURE_KEYS.SESSION, t);
     if (!mountedRef.current) return;
-
     setState((s) => ({ ...s, token: t, isAuthenticated: !!t }));
   };
 
@@ -238,7 +240,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (state.phone === p) return;
 
     await safeSet(SECURE_KEYS.OTP_PHONE, p);
-    // 👇 اضافه: برای fetchMe، شماره را در AsyncStorage هم نگه می‌داریم
+
+    // 👇 برای fetchMe، شماره را در AsyncStorage هم نگه می‌داریم
     try {
       if (p) {
         await AsyncStorage.setItem(SECURE_KEYS.OTP_PHONE, p);
@@ -263,7 +266,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     if (signingOutRef.current) return;
     signingOutRef.current = true;
-
     try {
       await Promise.all([
         safeDel(SECURE_KEYS.SESSION),
@@ -294,17 +296,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /* ==============================
       🔹 OTP ACTIONS
-  ============================== */
+   ============================== */
 
   // 1) ارسال کد
   const requestCode: AuthContextValue["requestCode"] = async (phone) => {
     if (!/^09\d{9}$/.test(phone)) throw new Error("INVALID_PHONE");
 
     const resp = await withTimeout(apiSendCode(phone), 15000);
-    if (!resp?.ok || !resp.token) throw new Error("SEND_CODE_FAILED");
+
+    // سرور ما ok برمی‌گردونه؛ ممکنه token نده
+    if (!resp?.ok) throw new Error("SEND_CODE_FAILED");
 
     await setPhone(phone);
-    await setOtpToken(resp.token); // فقط در OTP-token نگه می‌داریم، نه سشن
+
+    // اگر سرور token داد ذخیره می‌کنیم، وگرنه null
+    const maybeToken = (resp as any).token ?? null;
+    await setOtpToken(maybeToken);
+
     return { ok: true };
   };
 
@@ -312,17 +320,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const verifyOtp: AuthContextValue["verifyOtp"] = async (code) => {
     const phone =
       state.phone || (await safeGet(SECURE_KEYS.OTP_PHONE));
+
     const otpToken =
       state.otpToken ||
       (SECURE_KEYS.OTP_TOKEN
         ? await safeGet(SECURE_KEYS.OTP_TOKEN)
         : null);
 
-    if (!phone || !otpToken) throw new Error("OTP_FLOW_NOT_STARTED");
+    if (!phone) throw new Error("OTP_FLOW_NOT_STARTED");
     if (!/^\d{5,6}$/.test(String(code))) throw new Error("INVALID_CODE");
 
     const v = await withTimeout(
-      apiVerifyCode(String(phone), String(code), String(otpToken)),
+      apiVerifyCode(String(phone), String(code), String(otpToken ?? "")),
       15000
     );
 
@@ -339,10 +348,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await AsyncStorage.setItem(SECURE_KEYS.OTP_PHONE, String(phone));
       if (__DEV__)
-        console.log("[useAuth] stored phone in AsyncStorage for fetchMe:", phone);
+        console.log(
+          "[useAuth] stored phone in AsyncStorage for fetchMe:",
+          phone
+        );
     } catch (e) {
       if (__DEV__)
-        console.warn("[useAuth] failed to store phone in AsyncStorage:", e);
+        console.warn(
+          "[useAuth] failed to store phone in AsyncStorage:",
+          e
+        );
     }
 
     return { ok: true };
@@ -367,6 +382,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 /* ==============================
    🔹 HOOK
 ============================== */
+
 export const useAuth = () => {
   const ctx = useContext(AuthCtx);
   if (!ctx) throw new Error("useAuth must be used within <AuthProvider>");
