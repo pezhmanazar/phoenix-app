@@ -10,19 +10,15 @@ import { StatusBar } from "expo-status-bar";
 import React, { useMemo } from "react";
 import { PhoenixProvider, usePhoenix } from "../hooks/PhoenixContext";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { Platform } from "react-native";
-
-// ⚠️ فعلاً ترک‌پلیر غیرفعال
-// import TrackPlayer from "react-native-track-player";
-// if (Platform.OS !== "web") {
-//   // @ts-ignore
-//   TrackPlayer.registerPlaybackService(() => require("../service"));
-// }
+import { Platform, View, ActivityIndicator } from "react-native";
 
 // 🔌 ماژول‌های کانتکست‌ها
 import * as AuthModule from "../hooks/useAuth";
 import * as UserModule from "../hooks/useUser";
 import * as PlanModule from "../hooks/usePlanStatus";
+
+// برای استفاده از هوک داخل ناوبری
+import { useAuth } from "../hooks/useAuth";
 
 /**
  * این سه تا Wrapper باعث می‌شن اگر:
@@ -30,7 +26,6 @@ import * as PlanModule from "../hooks/usePlanStatus";
  *  - یا اگر default export باشن، باز هم کار کنه
  *  - و اگر به هر دلیلی پیدا نشدن، حداقل بچه‌ها بدون خطا رندر بشن
  */
-
 const AuthProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -61,12 +56,41 @@ const PlanStatusProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
   return <Comp>{children}</Comp>;
 };
 
-function RootStack() {
+// 🔹 ناوبری اصلی که به وضعیت لاگین وابسته است
+function AppNavigator() {
+  const { loading, isAuthenticated } = useAuth();
+
+  // وقتی هنوز در حال لود کردن توکن هستیم، صفحه سیاه خالی نده
+  if (loading) {
+    return (
+      <>
+        <StatusBar style="auto" />
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "#000",
+          }}
+        >
+          <ActivityIndicator color="#fff" />
+        </View>
+      </>
+    );
+  }
+
   return (
     <>
       <StatusBar style="auto" />
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        {!isAuthenticated ? (
+          // کاربر لاگین نیست → فقط گروه (auth)
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        ) : (
+          // کاربر لاگین است → تب‌ها
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        )}
+        {/* مودال عمومی اگر جایی استفاده شده */}
         <Stack.Screen name="modal" options={{ presentation: "modal" }} />
       </Stack>
     </>
@@ -79,10 +103,9 @@ function ThemeBridge() {
     () => navTheme ?? (isDark ? DarkTheme : DefaultTheme),
     [navTheme, isDark]
   );
-
   return (
     <ThemeProvider value={theme}>
-      <RootStack />
+      <AppNavigator />
     </ThemeProvider>
   );
 }
