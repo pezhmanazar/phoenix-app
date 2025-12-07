@@ -1,5 +1,5 @@
 // /api/otp.ts
-// این نسخه جدید، به جای ورسل، به بک‌اند اصلی qoqnoos.app وصل می‌شود.
+// این نسخه، OTP را از بک‌اند اصلی qoqnoos.app می‌گیرد، نه ورسل.
 
 import { toAppApi } from "@/constants/env";
 
@@ -12,7 +12,7 @@ import { toAppApi } from "@/constants/env";
  *   resp: { ok: true, data: { phone, expiresInSec, devHint? } }
  *
  * ما:
- *   همان شکل قدیمی را برای useAuth برمی‌گردانیم:
+ *   برای useAuth مثل قبل برمی‌گردانیم:
  *   { ok: true; token: string; expiresInSec: number }
  */
 export async function sendCode(phone: string) {
@@ -29,19 +29,24 @@ export async function sendCode(phone: string) {
   const json = (await res.json().catch(() => ({} as any))) as any;
 
   if (!res.ok || !json?.ok) {
+    console.log("[sendCode][ERR]", json);
     throw new Error(json?.error || "SEND_FAILED");
   }
 
   const data = json.data || {};
 
-  // قبلاً ورسل یه otpToken می‌داد، الان بک‌اند ما لازم نداره.
+  // قبلاً ورسل یه otpToken می‌داد. الان بک‌اند ما لازم نداره.
   // برای این‌که useAuth خراب نشه، یه رشته ثابت برمی‌گردونیم.
   const otpToken = "OTP_TOKEN_NOT_USED";
+
+  const expiresInSec = Number(data.expiresInSec) || 180;
+
+  console.log("[sendCode][OK]", { otpToken, expiresInSec });
 
   return {
     ok: true as const,
     token: otpToken,
-    expiresInSec: Number(data.expiresInSec) || 180,
+    expiresInSec,
   };
 }
 
@@ -54,7 +59,7 @@ export async function sendCode(phone: string) {
  *   resp: { ok: true, data: { phone, token } }
  *
  * ما:
- *   همان شکل قدیمی را به useAuth می‌دهیم:
+ *   برای useAuth مثل قبل برمی‌گردانیم:
  *   { ok: true; sessionToken: string; sessionExpiresInSec: number }
  */
 export async function verifyCode(
@@ -75,6 +80,7 @@ export async function verifyCode(
   const json = (await res.json().catch(() => ({} as any))) as any;
 
   if (!res.ok || !json?.ok) {
+    console.log("[verifyCode][ERR]", json);
     throw new Error(json?.error || "VERIFY_FAILED");
   }
 
@@ -82,6 +88,11 @@ export async function verifyCode(
 
   const sessionToken: string = data.token || "";
   const sessionExpiresInSec = 30 * 24 * 60 * 60; // ۳۰ روز
+
+  console.log("[verifyCode][OK]", {
+    sessionToken: sessionToken ? "***" : "",
+    sessionExpiresInSec,
+  });
 
   return {
     ok: true as const,
