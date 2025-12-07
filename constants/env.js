@@ -1,7 +1,7 @@
 // constants/env.js
 
 // ⬅️ این برای OTP و چیزهایی است که هنوز روی ورسل هستند
-const DEF = "https://express-js-on-vercel-wine-eight.vercel.app";
+const DEF = "https://qoqnoos.app";
 export const BACKEND_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || DEF).replace(/\/+$/, "");
 
 // ⬅️ این برای بک‌اند اصلی خودت روی سرور qoqnoos.app است
