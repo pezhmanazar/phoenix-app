@@ -7,6 +7,7 @@ import path from "path";
 import fs from "fs";
 import multer from "multer";
 import mime from "mime-types";
+import { fileURLToPath } from "url";
 
 import adminAuth from "./middleware/adminAuth.js";
 import adminRouter from "./routes/admin.js";
@@ -17,14 +18,21 @@ import usersRouter from "./routes/users.js";     // 🔹 روتر یوزرها
 import authRouter from "./routes/auth.js";       // 🔹 روتر جدید احراز هویت / OTP
 import payRouter from "./routes/pay.js";         // 🔹 روتر پرداخت / زرین‌پال (جدید)
 
+// ---------- Paths ----------
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // ---------- App ----------
 const app = express();
 const PORT = process.env.PORT || 4000;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*";
 
-app.set("trust proxy", true);
+// پوشه‌ی سایت استاتیک ققنوس
+const PUBLIC_DIR = path.join(process.cwd(), "public");
 
 // ---------- CORS & Logger ----------
+app.set("trust proxy", true);
+
 app.use(
   cors({
     origin: ALLOWED_ORIGIN,
@@ -35,6 +43,9 @@ app.use(
 );
 app.options("*", cors());
 app.use(morgan("dev"));
+
+// ---------- Static site (Phoenix website) ----------
+app.use(express.static(PUBLIC_DIR)); // /, /store.html, /contact.html, ...
 
 // ---------- Static uploads ----------
 const ROOT_UPLOAD_DIR =
@@ -158,17 +169,16 @@ const guardNoContent = (req, res, next) => {
     (Array.isArray(req.files) && req.files.length) || !!req.file;
   const hasText =
     typeof req.body?.text === "string" && req.body.text.trim().length > 0;
-
   if (!hasFile && !hasText) {
     return res.status(400).json({ ok: false, error: "no_content" });
   }
   next();
 };
 
-// ---------- Root ----------
-app.get("/", (_req, res) =>
-  res.json({ ok: true, service: "phoenix-backend" })
-);
+// ---------- Root (serve phoenix website) ----------
+app.get("/", (_req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "index.html"));
+});
 
 // ---------- ✅ PING ----------
 app.get("/api/ping", (_req, res) => {
@@ -176,7 +186,6 @@ app.get("/api/ping", (_req, res) => {
 });
 
 // ---------- Routes ----------
-
 // تیکت‌ها
 app.use("/api/tickets", ticketsRouter);
 
@@ -201,7 +210,7 @@ app.use("/api/public/ai", aiRouter);
 // 🔹 مسیرهای یوزر (me / upsert)
 app.use("/api/users", usersRouter);
 
-// 🔹 مسیرهای احراز هویت (OTP و بعداً JWT)
+// 🔹 مسیرهای احراز هویت (OTP و JWT)
 app.use("/api/auth", authRouter);
 
 // 🔹 پرداخت / زرین‌پال
