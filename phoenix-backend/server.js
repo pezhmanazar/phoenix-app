@@ -13,7 +13,8 @@ import adminRouter from "./routes/admin.js";
 import ticketsRouter from "./routes/tickets.js";
 import publicRouter from "./routes/public.js";   // روتر عمومی که /tickets هم دارد
 import aiRouter from "./routes/ai.js";           // روتر پشتیبانی هوش مصنوعی
-import usersRouter from "./routes/users.js";     // 🔹 روتر جدید یوزرها
+import usersRouter from "./routes/users.js";     // 🔹 روتر یوزرها
+import authRouter from "./routes/auth.js";       // 🔹 روتر جدید احراز هویت / OTP
 
 // ---------- App ----------
 const app = express();
@@ -91,13 +92,11 @@ const withUploadAny = (req, res, next) => {
       if (err.code === "LIMIT_FILE_SIZE") {
         return res.status(413).json({ ok: false, error: "file_too_large" });
       }
-      return res
-        .status(400)
-        .json({
-          ok: false,
-          error: err.code || "upload_error",
-          message: err.message,
-        });
+      return res.status(400).json({
+        ok: false,
+        error: err.code || "upload_error",
+        message: err.message,
+      });
     }
 
     if (Array.isArray(req.files) && req.files.length && !req.file) {
@@ -159,8 +158,10 @@ const guardNoContent = (req, res, next) => {
     (Array.isArray(req.files) && req.files.length) || !!req.file;
   const hasText =
     typeof req.body?.text === "string" && req.body.text.trim().length > 0;
-  if (!hasFile && !hasText)
+
+  if (!hasFile && !hasText) {
     return res.status(400).json({ ok: false, error: "no_content" });
+  }
   next();
 };
 
@@ -175,6 +176,8 @@ app.get("/api/ping", (_req, res) => {
 });
 
 // ---------- Routes ----------
+
+// تیکت‌ها
 app.use("/api/tickets", ticketsRouter);
 
 // فقط برای مسیرهای public که آپلود می‌فرستند، میدل‌ویر آپلود را اعمال کن
@@ -185,6 +188,7 @@ app.use(
   logUploadDebug,
   guardNoContent
 );
+
 app.use(
   "/api/public/tickets/:id/reply",
   maybeUpload,
@@ -197,6 +201,12 @@ app.use("/api/public/ai", aiRouter);
 
 // 🔹 مسیرهای یوزر (me / upsert)
 app.use("/api/users", usersRouter);
+
+// 🔹 مسیرهای احراز هویت (OTP و بعداً JWT)
+// این یعنی داخل routes/auth.js آدرس‌ها این‌طوری خواهند بود:
+// POST /api/auth/send-otp
+// POST /api/auth/verify-otp
+app.use("/api/auth", authRouter);
 
 // تمام مسیرهای عمومی
 app.use("/api/public", publicRouter);

@@ -134,9 +134,7 @@ export default function ProfileWizard() {
           if (d.birthDate) setBirthDate(String(d.birthDate));
 
           let safeAvatar: string | null =
-            (d.avatarUrl as string | undefined) ??
-            (avatarUrl || undefined) ??
-            null;
+            (d.avatarUrl as string | undefined) ?? (avatarUrl || undefined) ?? null;
 
           if (!safeAvatar && d.gender) {
             safeAvatar =
@@ -392,17 +390,17 @@ export default function ProfileWizard() {
     if (!validate()) return;
 
     const safeName = (fullName || "").trim();
-const safeAvatar = avatarUrl || "avatar:phoenix";
+    const safeAvatar = avatarUrl || "avatar:phoenix";
 
-const body: Partial<UserRecord> = {
-  fullName: safeName,
-  gender: gender ?? null,          // ✅ بدون as string
-  birthDate: birthDate || null,
-  avatarUrl: safeAvatar,
-  plan: "free",
-  profileCompleted: true,
-  lastLoginAt: new Date().toISOString(),
-};
+    const body: Partial<UserRecord> = {
+      fullName: safeName,
+      gender: gender ?? null,
+      birthDate: birthDate || null,
+      avatarUrl: safeAvatar,
+      plan: "free",
+      profileCompleted: true,
+      lastLoginAt: new Date().toISOString(),
+    };
 
     try {
       submittingRef.current = true;
@@ -410,6 +408,7 @@ const body: Partial<UserRecord> = {
       if (__DEV__)
         console.log("[profile-wizard] upsert by phone →", phone, body);
 
+      // ۱) ثبت / آپدیت یوزر در سرور
       let r = await upsertUserByPhone(phone, body);
       if (!r.ok && /NOT_FOUND|404/i.test(String(r.error))) {
         r = await upsertUserByPhone(phone, body);
@@ -420,8 +419,10 @@ const body: Partial<UserRecord> = {
         return Alert.alert("خطا", r.error || "HTTP_400");
       }
 
+      // فلگ محلی تکمیل پروفایل
       await AsyncStorage.setItem("profile_completed_flag", "1");
 
+      // ۲) یک بار از سرور me را می‌گیریم تا name/avatar دقیق را داشته باشیم
       const meResp = await getMeByPhone(phone).catch(
         () => ({ ok: false } as any)
       );
@@ -431,13 +432,13 @@ const body: Partial<UserRecord> = {
 
         const finalName = (d.fullName as string) || safeName || "کاربر";
         const finalAvatar: string =
-          (d.avatarUrl as string | undefined) ||
-          safeAvatar ||
-          "avatar:phoenix";
+          (d.avatarUrl as string | undefined) || safeAvatar || "avatar:phoenix";
 
+        // آپدیت کانتکست ققنوس
         setProfileName(finalName);
         setAvatarUrl(finalAvatar);
 
+        // ذخیره در AsyncStorage برای مصرف بعدی
         await AsyncStorage.setItem(
           "phoenix_profile",
           JSON.stringify({
@@ -450,8 +451,11 @@ const body: Partial<UserRecord> = {
         );
       }
 
-      await refresh().catch(() => {});
+      // ۳) ✅ مهم: بعد از ثبت موفق، useUser را مجبور کن از سرور دوباره me را بکشد
+      if (__DEV__) console.log("[profile-wizard] calling useUser.refresh(force)");
+      await refresh({ force: true }).catch(() => {});
 
+      // ۴) بعدش برو داخل تب‌ها
       if (!redirectedRef.current) {
         redirectedRef.current = true;
         router.replace("/(tabs)");
@@ -476,7 +480,7 @@ const body: Partial<UserRecord> = {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: P.pageBg }}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined} // ⬅️ فقط iOS
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
@@ -567,8 +571,7 @@ const body: Partial<UserRecord> = {
                   }}
                 >
                   {PRESET_AVATARS.slice(0, 4).map((av) => {
-                    const selected =
-                      (avatarUrl || "avatar:phoenix") === av.id;
+                    const selected = (avatarUrl || "avatar:phoenix") === av.id;
                     return (
                       <TouchableOpacity
                         key={av.id}
@@ -582,9 +585,7 @@ const body: Partial<UserRecord> = {
                             borderRadius: 32,
                             overflow: "hidden",
                             borderWidth: selected ? 2 : 1,
-                            borderColor: selected
-                              ? P.primary
-                              : P.border,
+                            borderColor: selected ? P.primary : P.border,
                           }}
                         >
                           <Image
@@ -606,8 +607,7 @@ const body: Partial<UserRecord> = {
                   }}
                 >
                   {PRESET_AVATARS.slice(4).map((av) => {
-                    const selected =
-                      (avatarUrl || "avatar:phoenix") === av.id;
+                    const selected = (avatarUrl || "avatar:phoenix") === av.id;
                     return (
                       <TouchableOpacity
                         key={av.id}
@@ -621,9 +621,7 @@ const body: Partial<UserRecord> = {
                             borderRadius: 32,
                             overflow: "hidden",
                             borderWidth: selected ? 2 : 1,
-                            borderColor: selected
-                              ? P.primary
-                              : P.border,
+                            borderColor: selected ? P.primary : P.border,
                           }}
                         >
                           <Image
@@ -742,11 +740,7 @@ const body: Partial<UserRecord> = {
                   gap: 6,
                 }}
               >
-                <Ionicons
-                  name="call-outline"
-                  size={14}
-                  color={P.textMuted}
-                />
+                <Ionicons name="call-outline" size={14} color={P.textMuted} />
                 <Text
                   style={{
                     color: P.textMuted,
@@ -892,9 +886,7 @@ const body: Partial<UserRecord> = {
                 ).map((g) => {
                   const selected = gender === (g.key as Gender);
                   const IconComp =
-                    g.key === "other"
-                      ? MaterialCommunityIcons
-                      : Ionicons;
+                    g.key === "other" ? MaterialCommunityIcons : Ionicons;
                   const iconName =
                     g.key === "other"
                       ? ("gender-non-binary" as any)
@@ -910,9 +902,7 @@ const body: Partial<UserRecord> = {
                         flex: 1,
                         height: 48,
                         borderRadius: 12,
-                        backgroundColor: selected
-                          ? P.primarySoft
-                          : P.inputBg,
+                        backgroundColor: selected ? P.primarySoft : P.inputBg,
                         borderWidth: 2,
                         borderColor: selected ? P.primary : P.border,
                         alignItems: "center",
@@ -924,15 +914,11 @@ const body: Partial<UserRecord> = {
                       <IconComp
                         name={iconName}
                         size={18}
-                        color={
-                          selected ? P.primaryDark : P.textMuted
-                        }
+                        color={selected ? P.primaryDark : P.textMuted}
                       />
                       <Text
                         style={{
-                          color: selected
-                            ? P.primaryDark
-                            : P.textDark,
+                          color: selected ? P.primaryDark : P.textDark,
                           fontWeight: "800",
                         }}
                       >
@@ -1001,7 +987,7 @@ const body: Partial<UserRecord> = {
                     textAlign: "left",
                   }}
                 >
-                  تاریخ انتخابی (میلادی): {" "}
+                  تاریخ انتخابی (میلادی):{" "}
                   <Text
                     style={{
                       color: P.textDark,
@@ -1024,9 +1010,7 @@ const body: Partial<UserRecord> = {
                 style={{
                   height: 54,
                   borderRadius: 16,
-                  backgroundColor: saving
-                    ? P.primaryDark
-                    : P.primary,
+                  backgroundColor: saving ? P.primaryDark : P.primary,
                   alignItems: "center",
                   justifyContent: "center",
                   marginTop: 18,

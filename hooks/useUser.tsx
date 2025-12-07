@@ -43,17 +43,16 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     async (opts?: RefreshOptions) => {
       const force = opts?.force === true;
 
-      // اگر لاگین نیست یا شماره نداریم، تمیز کن و بیا بیرون
-      if (!isAuthenticated || !phone) {
+      // ❗ تغییر اصلی اینجاست:
+      // فقط اگر "شماره" نداریم، چیزی انجام نده
+      // دیگه me رو نال نمی‌کنیم و lastLoadedPhone رو پاک نمی‌کنیم
+      if (!phone) {
         if (__DEV__) {
-          console.log("[useUser.refresh] not authenticated or no phone", {
+          console.log("[useUser.refresh] no phone yet, skip", {
             isAuthenticated,
             phone,
           });
         }
-        lastLoadedPhoneRef.current = null;
-        if (!mountedRef.current) return;
-        setMe(null);
         return;
       }
 
@@ -74,13 +73,15 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       }
 
       loadingRef.current = true;
-      if (!mountedRef.current) return;
 
+      if (!mountedRef.current) return;
       setRefreshing(true);
+
       try {
         if (__DEV__) {
           console.log("[useUser.refresh] getMeByPhone(", phone, ")");
         }
+
         const resp = await getMeByPhone(phone);
 
         if (!mountedRef.current) return;
@@ -88,25 +89,31 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         if (resp.ok) {
           setMe(resp.data || null);
           lastLoadedPhoneRef.current = phone;
+
           if (__DEV__) {
             console.log("[useUser.refresh] new me =", resp.data || null);
           }
         } else {
           if (__DEV__) console.warn("[useUser.refresh] error:", resp.error);
           setMe(null);
+          lastLoadedPhoneRef.current = phone;
         }
       } catch (e) {
         if (__DEV__) console.warn("[useUser.refresh] exception:", e);
-        if (mountedRef.current) setMe(null);
+        if (mountedRef.current) {
+          setMe(null);
+        }
       } finally {
         loadingRef.current = false;
-        if (mountedRef.current) setRefreshing(false);
+        if (mountedRef.current) {
+          setRefreshing(false);
+        }
       }
     },
     [isAuthenticated, phone, me]
   );
 
-  // هنگام تغییر شماره/وضعیت لاگین، فقط یک بار رفرش کن
+  // هنگام تغییر شماره/وضعیت auth، فقط یک بار رفرش کن
   useEffect(() => {
     refresh({ force: false });
   }, [isAuthenticated, phone, refresh]);

@@ -38,7 +38,6 @@ async function doJson<T>(
   try {
     // 1) هدرهای قبلی را جمع می‌کنیم
     const baseHeaders: Record<string, string> = {};
-
     if (init?.headers) {
       // اگر قبلاً هدر داشتیم (مثلاً Content-Type) حفظشان می‌کنیم
       if (init.headers instanceof Headers) {
@@ -90,6 +89,7 @@ async function doJson<T>(
     if (typeof json === "object" && json && "ok" in json && "data" in json) {
       return json as ApiResp<T>;
     }
+
     return { ok: true, data: json as T };
   } catch (e: any) {
     return { ok: false, error: e?.message || "NETWORK_ERROR" };
@@ -118,15 +118,22 @@ export function normalizeIranPhone(v: string) {
 }
 
 /* ----------------- این سه تا برای پروفایل‌ویزارد و کار با بک‌اند لوکال ----------------- */
-
 // GET http://192.168.xxx.xxx:4000/api/users/me?phone=...
 export async function getMeByPhone(
   phone: string
 ): Promise<ApiResp<UserRecord | null>> {
   const p = normalizeIranPhone(phone);
-  const url = userUrl(`/api/users/me?phone=${encodeURIComponent(p)}`);
+  const cacheBuster = Date.now();
+  const url = userUrl(
+    `/api/users/me?phone=${encodeURIComponent(p)}&cb=${cacheBuster}`
+  );
   console.log("[user.getMeByPhone] url =", url);
-  return doJson<UserRecord | null>(url, { method: "GET" });
+  return doJson<UserRecord | null>(url, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+    },
+  });
 }
 
 // POST http://192.168.xxx.xxx:4000/api/users/upsert
@@ -168,15 +175,12 @@ export async function fetchMe(): Promise<Me | null> {
       console.log("[user.fetchMe] no stored phone");
       return null;
     }
-
     console.log("[user.fetchMe] loading me for phone =", storedPhone);
-
     const resp = await getMeByPhone(storedPhone);
     if (!resp.ok) {
       console.log("[user.fetchMe] error =", resp.error);
       return null;
     }
-
     console.log("[user.fetchMe] loaded me =", resp.data);
     return resp.data;
   } catch (e: any) {
