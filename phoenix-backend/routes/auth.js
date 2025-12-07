@@ -1,5 +1,6 @@
 // routes/auth.js
 import express from "express";
+import jwt from "jsonwebtoken"; // ⬅️ این خط جدید
 const router = express.Router();
 
 /* ---------------- Config OTP ---------------- */
@@ -210,18 +211,36 @@ router.post("/verify-otp", async (req, res) => {
     }
 
     // موفق: OTP مصرف شود
-    otpStore.delete(normalized);
-    console.log("[auth.verify-otp] SUCCESS for phone =", normalized);
+otpStore.delete(normalized);
+console.log("[auth.verify-otp] SUCCESS for phone =", normalized);
 
-    // ✅ اینجا باید سشن واقعی را بسازی؛
-    // فعلاً مثل قبل:
-    return res.json({
-      ok: true,
-      data: {
-        phone: normalized,
-        token: "FAKE_TOKEN_FOR_NOW", // اگر قبلاً JWT سشن گذاشتی، همونو اینجا بذار
-      },
-    });
+// 🔑 ساختن JWT سشن اپ
+const appSecret =
+  process.env.APP_JWT_SECRET || process.env.JWT_SECRET || "";
+const sessionExpiresInSec = 30 * 24 * 60 * 60; // ۳۰ روز
+
+let sessionToken = "FAKE_TOKEN_FOR_NOW";
+
+if (appSecret) {
+  sessionToken = jwt.sign(
+    { phone: normalized },         // می‌تونی بعداً userId هم اضافه کنی
+    appSecret,
+    { expiresIn: sessionExpiresInSec }
+  );
+} else {
+  console.warn(
+    "[auth.verify-otp] APP_JWT_SECRET missing, using fallback token"
+  );
+}
+
+return res.json({
+  ok: true,
+  data: {
+    phone: normalized,
+    token: sessionToken,
+    sessionExpiresInSec,
+  },
+});
   } catch (e) {
     console.error("[auth.verify-otp] error", e);
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
