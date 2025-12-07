@@ -10,15 +10,17 @@ import { StatusBar } from "expo-status-bar";
 import React, { useMemo } from "react";
 import { PhoenixProvider, usePhoenix } from "../hooks/PhoenixContext";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { Platform, View, ActivityIndicator } from "react-native";
+// ⚠️ فعلاً ترک‌پلیر غیرفعال
+// import TrackPlayer from "react-native-track-player";
+// if (Platform.OS !== "web") {
+//   // @ts-ignore
+//   TrackPlayer.registerPlaybackService(() => require("../service"));
+// }
 
 // 🔌 ماژول‌های کانتکست‌ها
 import * as AuthModule from "../hooks/useAuth";
 import * as UserModule from "../hooks/useUser";
 import * as PlanModule from "../hooks/usePlanStatus";
-
-// برای استفاده از هوک داخل ناوبری
-import { useAuth } from "../hooks/useAuth";
 
 /**
  * این سه تا Wrapper باعث می‌شن اگر:
@@ -56,41 +58,15 @@ const PlanStatusProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
   return <Comp>{children}</Comp>;
 };
 
-// 🔹 ناوبری اصلی که به وضعیت لاگین وابسته است
-function AppNavigator() {
-  const { loading, isAuthenticated } = useAuth();
-
-  // وقتی هنوز در حال لود کردن توکن هستیم، صفحه سیاه خالی نده
-  if (loading) {
-    return (
-      <>
-        <StatusBar style="auto" />
-        <View
-          style={{
-            flex: 1,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "#000",
-          }}
-        >
-          <ActivityIndicator color="#fff" />
-        </View>
-      </>
-    );
-  }
-
+function RootStack() {
   return (
     <>
       <StatusBar style="auto" />
       <Stack screenOptions={{ headerShown: false }}>
-        {!isAuthenticated ? (
-          // کاربر لاگین نیست → فقط گروه (auth)
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        ) : (
-          // کاربر لاگین است → تب‌ها
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        )}
-        {/* مودال عمومی اگر جایی استفاده شده */}
+        {/* ⬅️ تب‌ها مثل قبل */}
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        {/* ⬅️ گروه auth هم به استک اضافه شد تا / (auth)/login قابل رندر باشد */}
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: "modal" }} />
       </Stack>
     </>
@@ -105,7 +81,7 @@ function ThemeBridge() {
   );
   return (
     <ThemeProvider value={theme}>
-      <AppNavigator />
+      <RootStack />
     </ThemeProvider>
   );
 }

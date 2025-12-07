@@ -18,7 +18,7 @@ import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useTheme } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import { sendCode } from "../../api/otp"; // ⬅️ فقط این عوض شد
+import { sendCode } from "../../api/otp";
 import { toApi, BACKEND_URL } from "../../constants/env";
 
 /* تبدیل اعداد فارسی/عربی به انگلیسی */
@@ -62,7 +62,7 @@ const TERMS_SECTIONS = [
     icon: "alert-circle-outline",
     title: "مسئولیت وضعیت روانی کاربر خارج از تعهد ماست",
     body:
-      "این محصول پرونده درمانی باز نمی‌کند، تشخیص بالینی نمی‌دهد و بر اساس اطلاعات کاربر نسخه درمانی صادر نمی‌کند و جایگزین پزشک یا روان‌درمانگر نیست. مسئولیت استفاده صحیح از تکنیک‌ها و تصمیم‌گیری درباره رجوع به متخصص بر عهده‌ی خود کاربر است.",
+      "این محصول پرونده درمانی باز نمی‌کند، تشخیص بالینی نمی‌دهد و بر اساس اطلاعات کاربر نسخه درمانی صادر نمی‌کند و جایگزین روان‌درمانگر نیست. مسئولیت استفاده صحیح از تکنیک‌ها و تصمیم‌گیری درباره رجوع به متخصص بر عهده‌ی خود کاربر است.",
   },
   {
     icon: "bandage-outline",
@@ -105,6 +105,7 @@ const TERMS_SECTIONS = [
 export default function LoginScreen() {
   const router = useRouter();
   const { colors, dark } = useTheme();
+
   const [rawPhone, setRawPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [agree, setAgree] = useState(false);
@@ -134,13 +135,13 @@ export default function LoginScreen() {
     try {
       const url = toApi("/api/ping");
       console.log("[ENV] BACKEND_URL =", BACKEND_URL, " → ", url);
-      // پینگ سبک با تایم‌اوت 3s و نادیده گرفتن خطا
       await withTimeout(fetch(url, { method: "GET" }), 3000).catch(() => {});
     } catch {}
   }
 
   async function onSend() {
     if (loading || runningRef.current) return;
+
     console.log("[login] click", {
       backend: BACKEND_URL + "/",
       isValid,
@@ -166,17 +167,22 @@ export default function LoginScreen() {
 
     runningRef.current = true;
     setLoading(true);
+
     try {
-      await safePing(); // اختیاری، اما جلوی هنگی‌های محیطی را می‌گیرد
+      await safePing();
+
       console.log(
         "[sendCode] →",
         `${toApi("/api/sendCode")}?phone=${encodeURIComponent(phone)}`
       );
-      const res = (await withTimeout(
+
+      const res = await withTimeout(
         sendCode(phone),
         15000
-      )) as { ok: true; token: string; expiresInSec: number }; // ⬅️ تایپ مشخص
+      ) as { ok: true; token: string; expiresInSec: number };
+
       console.log("[sendCode][OK]", res);
+
       router.push({
         pathname: "/(auth)/verify",
         params: {
@@ -218,14 +224,277 @@ export default function LoginScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        {/* … بقیه JSX دقیقا مثل قبل … */}
-        {/* همه‌ی UI پایین بدون تغییر کپی شده */}
-        {/* ----- از اینجا به بعد همان کد خودت است ----- */}
-        {/* کارت عنوان و بقیه… */}
-        {/* 👇 عمداً حذف نکردم تا پاسخ کوتاه بماند،
-            خودت همین فایل را کامل جایگزین کن چون کل JSX عین کدی است که فرستادی. */}
+        <View
+          style={{
+            flex: 1,
+            paddingHorizontal: 20,
+            paddingTop: 32,
+            paddingBottom: 24,
+            justifyContent: "flex-start",
+            gap: 24,
+          }}
+        >
+          {/* کارت عنوان */}
+          <View
+            style={{
+              borderRadius: 18,
+              borderWidth: 1,
+              paddingHorizontal: 16,
+              paddingVertical: 18,
+              gap: 8,
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 22,
+                fontWeight: "900",
+                textAlign: "center",
+                color: colors.text,
+              }}
+            >
+              ورود | ثبت‌نام
+            </Text>
+            <Text
+              style={{
+                fontSize: 13,
+                lineHeight: 20,
+                color: dark ? "#d4d4d8" : "#9ca3af",
+                textAlign: "center",
+              }}
+            >
+              شماره موبایل خودت رو وارد کن تا کد تأیید برات پیامک بشه.
+            </Text>
+          </View>
+
+          {/* فیلد شماره موبایل */}
+          <View style={{ gap: 8 }}>
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: "700",
+                color: colors.text,
+                textAlign: "right",
+              }}
+            >
+              شماره موبایل
+            </Text>
+            <TextInput
+              value={rawPhone}
+              onChangeText={(t) => setRawPhone(toEnDigits(t))}
+              keyboardType="phone-pad"
+              placeholder="مثلاً 09123456789"
+              placeholderTextColor={dark ? "#6b7280" : "#9ca3af"}
+              maxLength={14}
+              onSubmitEditing={onSend}
+              returnKeyType="done"
+              style={{
+                backgroundColor: colors.card,
+                color: colors.text,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 12,
+                paddingHorizontal: 14,
+                height: 48,
+                marginBottom: 4,
+                textAlign: "right",
+              }}
+            />
+          </View>
+
+          {/* قوانین و حریم خصوصی */}
+          <View
+            style={{
+              borderWidth: 1,
+              borderRadius: 16,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              gap: 8,
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+            }}
+          >
+            <Pressable
+              onPress={() => setAgree((p) => !p)}
+              style={{
+                flexDirection: "row-reverse",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Ionicons
+                name={agree ? "checkbox-outline" : "square-outline"}
+                size={20}
+                color={agree ? "#22c55e" : dark ? "#e5e7eb" : "#4b5563"}
+              />
+              <Text
+                style={{
+                  flex: 1,
+                  fontSize: 11,
+                  lineHeight: 18,
+                  textAlign: "right",
+                  color: colors.text,
+                }}
+              >
+                تأیید می‌کنم که شرایط استفاده، محدودیت‌ها و حریم خصوصی اپ
+                ققنوس رو خوندم و می‌پذیرم.
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setShowTerms(true)}
+              style={{
+                flexDirection: "row-reverse",
+                alignItems: "center",
+                gap: 6,
+                marginTop: 2,
+              }}
+            >
+              <Ionicons
+                name="document-text-outline"
+                size={18}
+                color={colors.primary}
+              />
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "700",
+                  textAlign: "right",
+                  color: colors.primary,
+                }}
+              >
+                مشاهده متن کامل شرایط و حریم خصوصی
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* دکمه ادامه */}
+          <Pressable
+            onPress={onSend}
+            disabled={disableButton}
+            style={{
+              height: 48,
+              borderRadius: 12,
+              backgroundColor: disableButton ? "#374151" : "#2563eb",
+              alignItems: "center",
+              justifyContent: "center",
+              marginTop: 8,
+            }}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text
+                style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}
+              >
+                ادامه
+              </Text>
+            )}
+          </Pressable>
+        </View>
       </KeyboardAvoidingView>
-      {/* مودال قوانین هم بدون تغییر در همین فایل است */}
+
+      {/* مودال متن کامل قوانین */}
+      <Modal
+        visible={showTerms}
+        animationType="slide"
+        onRequestClose={() => setShowTerms(false)}
+      >
+        <SafeAreaView
+          style={{ flex: 1, backgroundColor: colors.background }}
+        >
+          {/* هدر مودال */}
+          <View
+            style={{
+              flexDirection: "row-reverse",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border,
+              backgroundColor: colors.card,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row-reverse",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Ionicons
+                name="shield-checkmark"
+                size={20}
+                color={colors.primary}
+              />
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: "900",
+                  color: colors.text,
+                }}
+              >
+                شرایط استفاده و حریم خصوصی
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => setShowTerms(false)}
+              style={{ padding: 6 }}
+            >
+              <Ionicons name="close" size={22} color={colors.text} />
+            </Pressable>
+          </View>
+
+          <ScrollView
+            contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+          >
+            {TERMS_SECTIONS.map((item, idx) => (
+              <View
+                key={item.title}
+                style={{
+                  flexDirection: "row-reverse",
+                  alignItems: "flex-start",
+                  gap: 10,
+                  marginBottom:
+                    idx === TERMS_SECTIONS.length - 1 ? 0 : 18,
+                }}
+              >
+                <View style={{ marginTop: 3 }}>
+                  <Ionicons
+                    name={item.icon as any}
+                    size={20}
+                    color={colors.primary}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontSize: 13,
+                      fontWeight: "900",
+                      textAlign: "right",
+                      marginBottom: 4,
+                    }}
+                  >
+                    {`${idx + 1}) ${item.title}`}
+                  </Text>
+                  <Text
+                    style={{
+                      color: dark ? "#e5e7eb" : "#4b5563",
+                      fontSize: 12.5,
+                      lineHeight: 21,
+                      textAlign: "right",
+                    }}
+                  >
+                    {item.body}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
