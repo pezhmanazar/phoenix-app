@@ -15,6 +15,7 @@ import publicRouter from "./routes/public.js";   // روتر عمومی که /ti
 import aiRouter from "./routes/ai.js";           // روتر پشتیبانی هوش مصنوعی
 import usersRouter from "./routes/users.js";     // 🔹 روتر یوزرها
 import authRouter from "./routes/auth.js";       // 🔹 روتر جدید احراز هویت / OTP
+import payRouter from "./routes/pay.js";         // 🔹 روتر پرداخت / زرین‌پال (جدید)
 
 // ---------- App ----------
 const app = express();
@@ -98,7 +99,6 @@ const withUploadAny = (req, res, next) => {
         message: err.message,
       });
     }
-
     if (Array.isArray(req.files) && req.files.length && !req.file) {
       req.file =
         req.files.find((f) => f.fieldname === "file") ||
@@ -188,7 +188,6 @@ app.use(
   logUploadDebug,
   guardNoContent
 );
-
 app.use(
   "/api/public/tickets/:id/reply",
   maybeUpload,
@@ -203,17 +202,17 @@ app.use("/api/public/ai", aiRouter);
 app.use("/api/users", usersRouter);
 
 // 🔹 مسیرهای احراز هویت (OTP و بعداً JWT)
-// این یعنی داخل routes/auth.js آدرس‌ها این‌طوری خواهند بود:
-// POST /api/auth/send-otp
-// POST /api/auth/verify-otp
 app.use("/api/auth", authRouter);
+
+// 🔹 پرداخت / زرین‌پال
+// /api/pay/start  و  /api/pay/verify  روی این روتر هستند
+app.use("/api/pay", payRouter);
 
 // تمام مسیرهای عمومی
 app.use("/api/public", publicRouter);
 
 // پنل ادمین
 app.use("/api/admin", adminRouter);
-
 app.get("/api/admin/me", adminAuth, (req, res) =>
   res.json({ ok: true, admin: req.admin })
 );
