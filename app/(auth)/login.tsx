@@ -18,8 +18,8 @@ import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useTheme } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import { sendCode } from "../../api/otp";
-import { toApi, BACKEND_URL } from "../../constants/env";
+import { sendCode } from "../../api/otp"; // ⬅️ OTP الان از بک‌اند خودت
+import { APP_API_URL } from "../../constants/env"; // ⬅️ دیگه از BACKEND_URL / toApi استفاده نمی‌کنیم
 
 /* تبدیل اعداد فارسی/عربی به انگلیسی */
 function toEnDigits(input: string) {
@@ -105,7 +105,6 @@ const TERMS_SECTIONS = [
 export default function LoginScreen() {
   const router = useRouter();
   const { colors, dark } = useTheme();
-
   const [rawPhone, setRawPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [agree, setAgree] = useState(false);
@@ -133,17 +132,17 @@ export default function LoginScreen() {
 
   async function safePing() {
     try {
-      const url = toApi("/api/ping");
-      console.log("[ENV] BACKEND_URL =", BACKEND_URL, " → ", url);
+      const url = `${APP_API_URL}/api/ping`;
+      console.log("[ENV] APP_API_URL =", APP_API_URL, " → ", url);
+      // پینگ سبک با تایم‌اوت 3s و نادیده گرفتن خطا
       await withTimeout(fetch(url, { method: "GET" }), 3000).catch(() => {});
     } catch {}
   }
 
   async function onSend() {
     if (loading || runningRef.current) return;
-
     console.log("[login] click", {
-      backend: BACKEND_URL + "/",
+      backend: APP_API_URL + "/",
       isValid,
       phone,
       rawPhone,
@@ -167,22 +166,17 @@ export default function LoginScreen() {
 
     runningRef.current = true;
     setLoading(true);
-
     try {
-      await safePing();
+      await safePing(); // اختیاری، اما جلوی هنگی‌های محیطی را می‌گیرد
 
-      console.log(
-        "[sendCode] →",
-        `${toApi("/api/sendCode")}?phone=${encodeURIComponent(phone)}`
-      );
+      console.log("[sendCode] via otp → /api/auth/send-otp", { phone });
 
-      const res = await withTimeout(
+      const res = (await withTimeout(
         sendCode(phone),
         15000
-      ) as { ok: true; token: string; expiresInSec: number };
+      )) as { ok: true; token: string; expiresInSec: number };
 
       console.log("[sendCode][OK]", res);
-
       router.push({
         pathname: "/(auth)/verify",
         params: {
@@ -400,9 +394,7 @@ export default function LoginScreen() {
         animationType="slide"
         onRequestClose={() => setShowTerms(false)}
       >
-        <SafeAreaView
-          style={{ flex: 1, backgroundColor: colors.background }}
-        >
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
           {/* هدر مودال */}
           <View
             style={{

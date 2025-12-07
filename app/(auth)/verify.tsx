@@ -15,7 +15,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
-import { toApi } from "../../constants/env";
 import { useAuth } from "../../hooks/useAuth";
 import { useUser } from "../../hooks/useUser";
 import {
@@ -104,28 +103,20 @@ export default function VerifyScreen() {
     setLoading(true);
 
     try {
-      const url = `${toApi("/api/verifyCode")}?phone=${encodeURIComponent(
-        phone
-      )}&code=${encodeURIComponent(enCode)}&token=${encodeURIComponent(
-        otpToken
-      )}`;
-      console.log("[verifyCode] →", url);
+      console.log("[verifyCode] via otp → /api/auth/verify-otp", {
+        phone,
+        code: enCode,
+      });
 
-      let resp: any;
-      if (typeof apiVerifyCode === "function") {
-        resp = await withTimeout(
-          apiVerifyCode(phone, enCode, otpToken),
-          15000
-        );
-      } else {
-        const r = await withTimeout(fetch(url, { method: "GET" }), 15000);
-        resp = await r.json().catch(() => ({} as any));
-      }
+      const resp = await withTimeout(
+        apiVerifyCode(phone, enCode, otpToken),
+        15000
+      );
 
       console.log("[verifyCode][OK]", resp);
 
       if (!resp?.ok) {
-        const err = String(resp?.error || "VERIFY_FAILED");
+        const err = String((resp as any)?.error || "VERIFY_FAILED");
         if (err === "TOKEN_INVALID_OR_EXPIRED") {
           Alert.alert("کد منقضی شد", "دوباره ارسال کد را بزن.");
         } else if (
@@ -141,7 +132,7 @@ export default function VerifyScreen() {
       }
 
       const sessionToken: string | undefined =
-        resp.sessionToken || resp.data?.sessionToken;
+        (resp as any).sessionToken || (resp as any).data?.sessionToken;
       if (!sessionToken) {
         Alert.alert("خطا", "توکن سشن از سرور دریافت نشد.");
         return;
@@ -150,7 +141,6 @@ export default function VerifyScreen() {
       await setToken(sessionToken);
       await setPhone(phone);
       await refresh().catch(() => {});
-
       router.replace("/(auth)/profile-wizard");
     } catch (e: any) {
       console.log("[verifyCode][ERR]", e?.message);
@@ -171,18 +161,13 @@ export default function VerifyScreen() {
 
   async function resend() {
     if (resending || secondsLeft > 0) return;
-
     setResending(true);
     try {
-      console.log(
-        "[resend] →",
-        `${toApi("/api/sendCode")}?phone=${encodeURIComponent(phone)}`
-      );
-
-      const res = await withTimeout(
+      console.log("[resend] via otp → /api/auth/send-otp", { phone });
+      const res = (await withTimeout(
         apiSendCode(phone),
         15000
-      ) as { ok: boolean; token?: string; expiresInSec?: number };
+      )) as { ok: boolean; token?: string; expiresInSec?: number };
 
       if (res?.ok && res?.token) {
         router.setParams({
@@ -332,7 +317,7 @@ export default function VerifyScreen() {
               )}
             </Pressable>
 
-            {/* تایمر انقضا */}
+            {/* تایمر انقضا زیر دکمه */}
             <Text
               style={{
                 marginTop: 8,
@@ -349,7 +334,7 @@ export default function VerifyScreen() {
 
             <View style={{ flex: 1 }} />
 
-            {/* ارسال مجدد */}
+            {/* ارسال مجدد کد – پایین صفحه */}
             <Pressable
               onPress={resend}
               disabled={resending || secondsLeft > 0}
