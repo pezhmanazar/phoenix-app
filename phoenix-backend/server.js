@@ -8,6 +8,7 @@ import fs from "fs";
 import multer from "multer";
 import mime from "mime-types";
 import { fileURLToPath } from "url";
+
 import adminAuth from "./middleware/adminAuth.js";
 import adminRouter from "./routes/admin.js";
 import ticketsRouter from "./routes/tickets.js";
@@ -31,6 +32,7 @@ const PUBLIC_DIR = path.join(process.cwd(), "public");
 
 // ---------- CORS & Logger ----------
 app.set("trust proxy", true);
+
 app.use(
   cors({
     origin: ALLOWED_ORIGIN,
@@ -108,12 +110,14 @@ const withUploadAny = (req, res, next) => {
         message: err.message,
       });
     }
+
     if (Array.isArray(req.files) && req.files.length && !req.file) {
       req.file =
         req.files.find((f) => f.fieldname === "file") ||
         req.files.find((f) => f.fieldname === "attachment") ||
         req.files[0];
     }
+
     next();
   });
 };
@@ -137,6 +141,7 @@ const logUploadDebug = (req, _res, next) => {
     console.log("⬇️ UPLOAD DEBUG", req.method, req.originalUrl);
     console.log("  content-type:", req.headers["content-type"]);
     console.log("  body:", req.body);
+
     if (Array.isArray(req.files) && req.files.length) {
       console.log(
         "  files:",
@@ -149,6 +154,7 @@ const logUploadDebug = (req, _res, next) => {
         }))
       );
     }
+
     if (req.file) {
       console.log("  file(single):", {
         field: req.file.fieldname,
@@ -174,17 +180,110 @@ const guardNoContent = (req, res, next) => {
   next();
 };
 
-// ---------- No-cache helper برای APIهای حساس ----------
-function noCache(_req, res, next) {
-  res.setHeader("Cache-Control", "no-store, max-age=0, private");
-  res.setHeader("Pragma", "no-cache");
-  res.setHeader("Expires", "0");
-  next();
-}
-
 // ---------- Root (serve phoenix website) ----------
 app.get("/", (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
+});
+
+// 🔹 صفحه‌ی پرداخت تستی روی خود qoqnoos.app
+app.get("/mock-pay", (req, res) => {
+  const authority = String(req.query.authority || "");
+  const amount = String(req.query.amount || "");
+  const phone = String(req.query.phone || "");
+
+  const html = `<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>پرداخت تستی ققنوس</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #050816;
+      color: #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .card {
+      background: #020617;
+      border-radius: 24px;
+      padding: 24px 20px;
+      max-width: 420px;
+      width: 90%;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+      text-align: center;
+      border: 1px solid #111827;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      color: #fbbf24;
+      font-weight: 900;
+    }
+    .row {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #d1d5db;
+      text-align: right;
+    }
+    .label {
+      color: #9ca3af;
+      margin-left: 4px;
+    }
+    .btns {
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .btn {
+      border-radius: 999px;
+      padding: 10px 16px;
+      font-size: 14px;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+    }
+    .btn-ok {
+      background: #16a34a;
+      color: #f9fafb;
+    }
+    .btn-cancel {
+      background: #b91c1c;
+      color: #f9fafb;
+    }
+    .hint {
+      margin-top: 16px;
+      font-size: 11px;
+      color: #9ca3af;
+      line-height: 1.8;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>پرداخت تستی</h1>
+    <div class="row"><span class="label">Authority:</span> <code>${authority}</code></div>
+    <div class="row"><span class="label">مبلغ:</span> ${amount}</div>
+    <div class="row"><span class="label">موبایل:</span> ${phone}</div>
+    <div class="btns">
+      <button class="btn btn-ok" onclick="history.back()">بازگشت به برنامه (موفق)</button>
+      <button class="btn btn-cancel" onclick="history.back()">بازگشت به برنامه (لغو)</button>
+    </div>
+    <div class="hint">
+      این صفحه فقط برای شبیه‌سازی پرداخت در حالت تستی است.
+      بعد از دیدن این صفحه می‌توانید به برنامه برگردید.
+    </div>
+  </div>
+</body>
+</html>`;
+
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(html);
 });
 
 // ---------- ✅ PING ----------
@@ -193,6 +292,7 @@ app.get("/api/ping", (_req, res) => {
 });
 
 // ---------- Routes ----------
+
 // تیکت‌ها
 app.use("/api/tickets", ticketsRouter);
 
@@ -215,14 +315,13 @@ app.use(
 // پشتیبانی هوش مصنوعی
 app.use("/api/public/ai", aiRouter);
 
-// 🔹 مسیرهای یوزر (me / upsert) – همیشه بدون کش
-app.use("/api/users", noCache, usersRouter);
+// 🔹 مسیرهای یوزر (me / upsert)
+app.use("/api/users", usersRouter);
 
 // 🔹 مسیرهای احراز هویت (OTP و JWT)
 app.use("/api/auth", authRouter);
 
 // 🔹 پرداخت / زرین‌پال
-// /api/pay/start و /api/pay/verify روی این روتر هستند
 app.use("/api/pay", payRouter);
 
 // تمام مسیرهای عمومی
@@ -230,6 +329,7 @@ app.use("/api/public", publicRouter);
 
 // پنل ادمین
 app.use("/api/admin", adminRouter);
+
 app.get("/api/admin/me", adminAuth, (req, res) =>
   res.json({ ok: true, admin: req.admin })
 );

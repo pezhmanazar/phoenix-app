@@ -11,10 +11,7 @@ const ZP_BASE =
 const ZP_CURRENCY = process.env.ZP_CURRENCY || "IRT";
 
 // برای صدا زدن /api/users/upsert روی همین بک‌اند
-// برای صدا زدن /api/users/upsert روی همین بک‌اند
-// مهم: عمداً از env استفاده نمی‌کنیم تا درخواست از داخل سرور
-// مستقیم به خود Node روی 4000 بخورد و وارد WCDN / دامنه نشود.
-const BACKEND_URL = "http://127.0.0.1:4000";
+const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:4000";
 
 // اگر amount از طرف درگاه/اپ نرسید، این رو به عنوان تست در نظر می‌گیریم
 const DEFAULT_VERIFY_AMOUNT = 10000;
@@ -88,21 +85,16 @@ async function upsertUserPlanOnServer({ phone, plan, planExpiresAt }) {
     });
     return;
   }
-
   try {
-    const base = (BACKEND_URL || "").replace(/\/+$/, "");
+    const base = BACKEND_URL.replace(/\/+$/, "");
     const targetUrl = `${base}/api/users/upsert`;
-
     const body = {
       phone,
       plan,
       planExpiresAt,
       profileCompleted: true,
     };
-
-    console.log("[pay/verify] BACKEND_URL =", BACKEND_URL);
     console.log("[pay/verify] POST →", targetUrl, body);
-
     const resp = await fetch(targetUrl, {
       method: "POST",
       headers: {
@@ -111,26 +103,19 @@ async function upsertUserPlanOnServer({ phone, plan, planExpiresAt }) {
       },
       body: JSON.stringify(body),
     });
-
     const text = await resp.text();
-    console.log(
-      "[pay/verify] upsertUserPlanOnServer resp.status =",
-      resp.status
-    );
-    console.log("[pay/verify] upsertUserPlanOnServer resp.body =", text);
-
     if (!resp.ok) {
       console.error(
         "[pay/verify] upsertUserPlanOnServer non-OK:",
         resp.status,
         text
       );
-      return;
+    } else {
+      console.log(
+        "[pay/verify] user plan updated via backend /api/users/upsert:",
+        text
+      );
     }
-
-    console.log(
-      "[pay/verify] user plan updated via backend /api/users/upsert"
-    );
   } catch (e) {
     console.error("[pay/verify] upsertUserPlanOnServer error:", e);
   }
@@ -156,21 +141,26 @@ router.post("/start", async (req, res) => {
     );
 
     if (!phone) {
-      return res
-        .status(400)
-        .json({ ok: false, error: "PHONE_INVALID" });
+      return res.status(400).json({ ok: false, error: "PHONE_INVALID" });
     }
     if (!amount || amount < 1000) {
-      return res
-        .status(400)
-        .json({ ok: false, error: "AMOUNT_INVALID" });
+      return res.status(400).json({ ok: false, error: "AMOUNT_INVALID" });
     }
 
-    // اگر PAY_REAL=0 باشد → ماک برای تست
+    // 🔹 حالت ماک (تستی) – اینجا دیگه ورسل نیست، خود qoqnoos.app است
     if (!PAY_REAL) {
       const authority = `MOCK_${Math.random().toString(36).slice(2, 10)}`;
-      const gatewayUrl = "https://example.com/mock-payment";
-      console.log("[pay/start][MOCK]", { phone, amount, authority });
+
+      const baseUrl = getBaseUrl(req);
+      const params = new URLSearchParams({
+        authority,
+        amount: String(amount),
+        phone,
+      }).toString();
+      const gatewayUrl = `${baseUrl}/mock-pay?${params}`;
+
+      console.log("[pay/start][MOCK]", { phone, amount, authority, gatewayUrl });
+
       return res.json({
         ok: true,
         code: 100,
@@ -181,6 +171,7 @@ router.post("/start", async (req, res) => {
       });
     }
 
+    // 🔹 از اینجا به بعد حالت واقعی زرین‌پال
     if (!MERCHANT_ID) {
       return res
         .status(500)
@@ -196,16 +187,15 @@ router.post("/start", async (req, res) => {
       metadata: { mobile: phone },
     };
 
-    const requestUrl =
-      ZP_BASE.replace(/\/+$/, "") + "/request.json";
+    const requestUrl = ZP_BASE.replace(/\/+$/, "") + "/request.json";
 
     const zpRes = await fetch(requestUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const json = await zpRes.json().catch(() => null);
 
+    const json = await zpRes.json().catch(() => null);
     if (!zpRes.ok || !json) {
       console.error("ZARINPAL_REQUEST_FAILED", zpRes.status, json);
       return res
@@ -260,7 +250,6 @@ router.get("/verify", async (req, res) => {
 
   try {
     const q = req.query || {};
-
     const rawStatus =
       typeof q.Status === "string"
         ? q.Status
@@ -272,11 +261,8 @@ router.get("/verify", async (req, res) => {
 
     const hasGatewayStatus = rawStatus.length > 0;
     const status = hasGatewayStatus ? rawStatus.toUpperCase() : "UNDEFINED";
-
     const authority = String(q.Authority || q.authority || "");
-    const phone = q.phone
-      ? normalizeIranPhone(String(q.phone))
-      : null;
+    const phone = q.phone ? normalizeIranPhone(String(q.phone)) : null;
 
     let amount = Number(q.amount || 0);
     if (!amount || isNaN(amount)) {
@@ -308,9 +294,10 @@ router.get("/verify", async (req, res) => {
       });
     }
 
-    // MOCK mode
+    // 🔹 MOCK mode
     if (!PAY_REAL) {
       const refId = `TEST-${Date.now()}`;
+
       if (phone) {
         await upsertUserPlanOnServer({
           phone,
@@ -318,6 +305,7 @@ router.get("/verify", async (req, res) => {
           planExpiresAt,
         });
       }
+
       return res.json({
         ok: true,
         authority,
@@ -332,14 +320,14 @@ router.get("/verify", async (req, res) => {
       });
     }
 
+    // 🔹 حالت واقعی زرین‌پال
     if (!MERCHANT_ID) {
       return res
         .status(500)
         .json({ ok: false, error: "MERCHANT_ID_MISSING" });
     }
 
-    const verifyUrl =
-      ZP_BASE.replace(/\/+$/, "") + "/verify.json";
+    const verifyUrl = ZP_BASE.replace(/\/+$/, "") + "/verify.json";
     const payload = {
       merchant_id: MERCHANT_ID,
       authority,
@@ -351,8 +339,8 @@ router.get("/verify", async (req, res) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const json = await zpRes.json().catch(() => null);
 
+    const json = await zpRes.json().catch(() => null);
     if (!zpRes.ok || !json) {
       console.error("ZARINPAL_VERIFY_FAILED", zpRes.status, json);
       return res
@@ -361,7 +349,6 @@ router.get("/verify", async (req, res) => {
     }
 
     const { data, errors } = json;
-
     if (!data || (data.code !== 100 && data.code !== 101)) {
       const code = data?.code ?? errors?.code ?? "UNKNOWN";
       console.error("ZARINPAL_VERIFY_ERROR", code, json);
