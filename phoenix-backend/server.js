@@ -8,7 +8,6 @@ import fs from "fs";
 import multer from "multer";
 import mime from "mime-types";
 import { fileURLToPath } from "url";
-
 import adminAuth from "./middleware/adminAuth.js";
 import adminRouter from "./routes/admin.js";
 import ticketsRouter from "./routes/tickets.js";
@@ -32,7 +31,6 @@ const PUBLIC_DIR = path.join(process.cwd(), "public");
 
 // ---------- CORS & Logger ----------
 app.set("trust proxy", true);
-
 app.use(
   cors({
     origin: ALLOWED_ORIGIN,
@@ -169,11 +167,20 @@ const guardNoContent = (req, res, next) => {
     (Array.isArray(req.files) && req.files.length) || !!req.file;
   const hasText =
     typeof req.body?.text === "string" && req.body.text.trim().length > 0;
+
   if (!hasFile && !hasText) {
     return res.status(400).json({ ok: false, error: "no_content" });
   }
   next();
 };
+
+// ---------- No-cache helper برای APIهای حساس ----------
+function noCache(_req, res, next) {
+  res.setHeader("Cache-Control", "no-store, max-age=0, private");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  next();
+}
 
 // ---------- Root (serve phoenix website) ----------
 app.get("/", (_req, res) => {
@@ -197,6 +204,7 @@ app.use(
   logUploadDebug,
   guardNoContent
 );
+
 app.use(
   "/api/public/tickets/:id/reply",
   maybeUpload,
@@ -207,14 +215,14 @@ app.use(
 // پشتیبانی هوش مصنوعی
 app.use("/api/public/ai", aiRouter);
 
-// 🔹 مسیرهای یوزر (me / upsert)
-app.use("/api/users", usersRouter);
+// 🔹 مسیرهای یوزر (me / upsert) – همیشه بدون کش
+app.use("/api/users", noCache, usersRouter);
 
 // 🔹 مسیرهای احراز هویت (OTP و JWT)
 app.use("/api/auth", authRouter);
 
 // 🔹 پرداخت / زرین‌پال
-// /api/pay/start  و  /api/pay/verify  روی این روتر هستند
+// /api/pay/start و /api/pay/verify روی این روتر هستند
 app.use("/api/pay", payRouter);
 
 // تمام مسیرهای عمومی
