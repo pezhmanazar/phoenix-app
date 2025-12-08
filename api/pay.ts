@@ -1,5 +1,5 @@
 // api/pay.ts
-import { BACKEND_URL } from "../constants/env";
+import { BACKEND_URL as RAW_BACKEND_URL } from "../constants/env";
 
 // همون تیپ‌های user.ts
 type ApiOk<T> = { ok: true; data: T };
@@ -40,9 +40,33 @@ export type VerifyResp = {
 };
 
 // ---------- helpers ----------
+
+// این تابع مطمئن می‌شود که حتماً از دامنه درست استفاده می‌کنیم
+function getBackendBase() {
+  const base = (RAW_BACKEND_URL || "").trim();
+
+  // اگر چیزی تنظیم نشده → مستقیم qoqnoos.app
+  if (!base) return "https://qoqnoos.app";
+
+  // اگر هر نوع دامنه vercel بود → اجباری qoqnoos.app
+  if (base.includes("vercel.app")) {
+    return "https://qoqnoos.app";
+  }
+
+  // در بقیه حالت‌ها همون env
+  return base;
+}
+
 function toUrl(path: string) {
-  const base = BACKEND_URL.replace(/\/+$/, "");
-  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+  const base = getBackendBase().replace(/\/+$/, "");
+  const p = path.startsWith("/") ? path : `/${path}`;
+  const url = `${base}${p}`;
+
+  if (__DEV__) {
+    console.log("[pay.toUrl] base =", base, "path =", p, "url =", url);
+  }
+
+  return url;
 }
 
 // 🔧 این تابع را کامل همینطوری بگذار
@@ -92,7 +116,6 @@ export async function startPay(
   body: StartReq
 ): Promise<ApiResp<StartResp>> {
   const url = toUrl("/api/pay/start");
-  // مستقیماً به بک‌اند خودت می‌زند (qoqnoos.app)، نه ورسل
   return doJson<StartResp>(url, {
     method: "POST",
     body: JSON.stringify(body),
@@ -116,7 +139,6 @@ export async function verifyPay(
 
 /**
  * ⛏ نسخه کمکی: خطا را throw می‌کند و مستقیم data را برمی‌گرداند.
- * اگر دوست داشتی می‌تونی در تب‌ها از این استفاده کنی.
  */
 export async function startPayOrThrow(body: StartReq): Promise<StartResp> {
   const r = await startPay(body);
