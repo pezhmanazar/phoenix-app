@@ -88,16 +88,21 @@ async function upsertUserPlanOnServer({ phone, plan, planExpiresAt }) {
     });
     return;
   }
+
   try {
-    const base = BACKEND_URL.replace(/\/+$/, "");
+    const base = (BACKEND_URL || "").replace(/\/+$/, "");
     const targetUrl = `${base}/api/users/upsert`;
+
     const body = {
       phone,
       plan,
       planExpiresAt,
       profileCompleted: true,
     };
+
+    console.log("[pay/verify] BACKEND_URL =", BACKEND_URL);
     console.log("[pay/verify] POST →", targetUrl, body);
+
     const resp = await fetch(targetUrl, {
       method: "POST",
       headers: {
@@ -106,19 +111,26 @@ async function upsertUserPlanOnServer({ phone, plan, planExpiresAt }) {
       },
       body: JSON.stringify(body),
     });
+
     const text = await resp.text();
+    console.log(
+      "[pay/verify] upsertUserPlanOnServer resp.status =",
+      resp.status
+    );
+    console.log("[pay/verify] upsertUserPlanOnServer resp.body =", text);
+
     if (!resp.ok) {
       console.error(
         "[pay/verify] upsertUserPlanOnServer non-OK:",
         resp.status,
         text
       );
-    } else {
-      console.log(
-        "[pay/verify] user plan updated via backend /api/users/upsert:",
-        text
-      );
+      return;
     }
+
+    console.log(
+      "[pay/verify] user plan updated via backend /api/users/upsert"
+    );
   } catch (e) {
     console.error("[pay/verify] upsertUserPlanOnServer error:", e);
   }
