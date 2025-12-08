@@ -34,7 +34,9 @@ export type VerifyResp = {
   phone: string | null;
   refId: string | number;
   plan: "free" | "pro" | "vip";
+  planExpiresAt?: string | null;
   verifyCode: number;
+  canceled?: boolean;
 };
 
 // ---------- helpers ----------
@@ -90,6 +92,7 @@ export async function startPay(
   body: StartReq
 ): Promise<ApiResp<StartResp>> {
   const url = toUrl("/api/pay/start");
+  // مستقیماً به بک‌اند خودت می‌زند (qoqnoos.app)، نه ورسل
   return doJson<StartResp>(url, {
     method: "POST",
     body: JSON.stringify(body),
@@ -105,7 +108,10 @@ export async function verifyPay(
   url.searchParams.set("status", q.status);
   url.searchParams.set("amount", String(q.amount));
   url.searchParams.set("phone", q.phone);
-  return doJson<VerifyResp>(url.toString());
+
+  return doJson<VerifyResp>(url.toString(), {
+    method: "GET",
+  });
 }
 
 /**
