@@ -11,7 +11,7 @@ import { useAuth } from "./useAuth";
 import { getMeByPhone, type Me } from "../api/user";
 
 type RefreshOptions = {
-  force?: boolean; // اگر true باشد، حتی اگر me برای این شماره داریم، دوباره از سرور می‌خوانیم
+  force?: boolean;
 };
 
 type UserContextValue = {
@@ -43,80 +43,68 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     async (opts?: RefreshOptions) => {
       const force = opts?.force === true;
 
-      // ❗ تغییر اصلی اینجاست:
-      // فقط اگر "شماره" نداریم، چیزی انجام نده
-      // دیگه me رو نال نمی‌کنیم و lastLoadedPhone رو پاک نمی‌کنیم
       if (!phone) {
         if (__DEV__) {
-          console.log("[useUser.refresh] no phone yet, skip", {
-            isAuthenticated,
-            phone,
-          });
+          console.log("[useUser.refresh] no phone, skip");
         }
         return;
       }
 
-      // اگر قبلاً برای همین شماره داده داریم و force نیست، هیچی نکن
+      // اگر قبلاً load شده و force=false → هیچی
       if (!force && lastLoadedPhoneRef.current === phone && me) {
         if (__DEV__) {
-          console.log(
-            "[useUser.refresh] skip (same phone & already have me, no force)"
-          );
+          console.log("[useUser.refresh] skip (cached)");
         }
         return;
       }
 
-      // اگر ریکوئست قبلی هنوز در حال اجراست، دوباره نرو
+      // هم‌زمان فقط یک رفرش
       if (loadingRef.current) {
         if (__DEV__) console.log("[useUser.refresh] skip (already loading)");
         return;
       }
-
       loadingRef.current = true;
 
       if (!mountedRef.current) return;
       setRefreshing(true);
 
       try {
-        if (__DEV__) {
-          console.log("[useUser.refresh] getMeByPhone(", phone, ")");
-        }
+        if (__DEV__)
+          console.log("[useUser.refresh] fetching me for", phone);
 
         const resp = await getMeByPhone(phone);
 
-        if (!mountedRef.current) return;
+        // اگر خطاست، me را دست نمی‌زنیم (وضعیت قبلی را حفظ می‌کنیم)
+        if (!resp.ok) {
+          if (__DEV__)
+            console.warn("[useUser.refresh] ERROR but keep previous me", resp.error);
 
-        if (resp.ok) {
-          setMe(resp.data || null);
           lastLoadedPhoneRef.current = phone;
+          return;
+        }
 
-          if (__DEV__) {
-            console.log("[useUser.refresh] new me =", resp.data || null);
-          }
-        } else {
-          if (__DEV__) console.warn("[useUser.refresh] error:", resp.error);
-          setMe(null);
-          lastLoadedPhoneRef.current = phone;
+        // اگر داده OK بود
+        setMe(resp.data || null);
+        lastLoadedPhoneRef.current = phone;
+
+        if (__DEV__) {
+          console.log("[useUser.refresh] new me =", resp.data);
         }
       } catch (e) {
-        if (__DEV__) console.warn("[useUser.refresh] exception:", e);
-        if (mountedRef.current) {
-          setMe(null);
-        }
+        if (__DEV__)
+          console.warn("[useUser.refresh] EXCEPTION but keep previous me", e);
       } finally {
         loadingRef.current = false;
-        if (mountedRef.current) {
-          setRefreshing(false);
-        }
+        if (mountedRef.current) setRefreshing(false);
       }
     },
-    [isAuthenticated, phone, me]
+    [phone, me]
   );
 
-  // هنگام تغییر شماره/وضعیت auth، فقط یک بار رفرش کن
+  // هنگام تغییر auth → یک بار رفرش
   useEffect(() => {
     refresh({ force: false });
-  }, [isAuthenticated, phone, refresh]);
+  }, [isAuthenticated, phone]);
 
   const value: UserContextValue = {
     me,
@@ -129,8 +117,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
 export function useUser(): UserContextValue {
   const ctx = useContext(UserCtx);
-  if (!ctx) {
-    throw new Error("useUser must be used within <UserProvider>");
-  }
+  if (!ctx) throw new Error("useUser must be used within <UserProvider>");
   return ctx;
 }

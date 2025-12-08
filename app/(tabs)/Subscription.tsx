@@ -15,10 +15,11 @@ import { useRouter } from "expo-router";
 import { useAuth } from "../../hooks/useAuth";
 import { useUser } from "../../hooks/useUser";
 
-import { startPay, verifyPay } from "../../api/pay";
+import { startPay } from "../../api/pay"; // ⬅️ فقط startPay
 import * as WebBrowser from "expo-web-browser";
 import { toJalaali } from "jalaali-js";
 import { getPlanStatus } from "../../lib/plan";
+import { BACKEND_URL } from "../../constants/env"; // ⬅️ اضافه شد
 
 type PlanKey = "trial15" | "p30" | "p90" | "p180";
 
@@ -97,6 +98,53 @@ function formatJalaliDate(iso?: string | null): string | null {
     String(n).replace(/\d/g, (d) => faDigits[Number(d)]);
 
   return `${toFa(jd)} ${months[jm - 1]} ${toFa(jy)}`;
+}
+
+// ⬇️ تابع تأیید پرداخت که دقیقاً مثل curl کار می‌کند
+async function verifyPayDirect(params: {
+  authority: string;
+  status: string;
+  phone: string;
+  amount: number;
+}): Promise<any> {
+  try {
+    const base = BACKEND_URL.replace(/\/+$/, "");
+    const qs = new URLSearchParams({
+      authority: params.authority,
+      status: params.status,
+      amount: String(params.amount),
+      phone: params.phone,
+    });
+
+    const url = `${base}/api/pay/verify?${qs.toString()}`;
+    const res = await fetch(url);
+    const json = await res.json().catch(() => null);
+
+    if (!res.ok || !json) {
+      return {
+        ok: false,
+        error: `PAY_VERIFY_FAILED_${res.status}`,
+      };
+    }
+
+    if (json.ok === false) {
+      return {
+        ok: false,
+        error: json.error || "PAY_VERIFY_ERROR",
+      };
+    }
+
+    // شبیه ApiOk<T>: { ok: true, data: json }
+    return {
+      ok: true,
+      data: json,
+    };
+  } catch (e: any) {
+    return {
+      ok: false,
+      error: e?.message || "PAY_VERIFY_ERROR",
+    };
+  }
 }
 
 export default function SubscriptionScreen() {
@@ -210,7 +258,13 @@ export default function SubscriptionScreen() {
       // --- ۲) باز کردن درگاه ---
       const result = await WebBrowser.openBrowserAsync(gatewayUrl);
 
-      if (result.type === "cancel") {
+      // تشخیص اینکه پرداخت در حالت تست (MOCK) است
+      const isMock =
+        gatewayUrl.includes("example.com/mock-payment") ||
+        authority.startsWith("MOCK_");
+
+      // فقط اگر واقعی است و کاربر کنسل کرده، بیخیال شو
+      if (result.type === "cancel" && !isMock) {
         Alert.alert(
           "لغو پرداخت",
           "پرداخت توسط شما لغو شد. هر زمان خواستی می‌توانی دوباره امتحان کنی."
@@ -218,8 +272,8 @@ export default function SubscriptionScreen() {
         return;
       }
 
-      // --- ۳) تأیید پرداخت ---
-      const ver = await verifyPay({
+      // --- ۳) تأیید پرداخت – عین curl ---
+      const ver: any = await verifyPayDirect({
         authority,
         status: "OK",
         phone: phone!,
@@ -250,7 +304,10 @@ export default function SubscriptionScreen() {
       }
 
       // refId ممکنه number باشه → حتماً string کن
-      const rawRefId = (ver.data as any).refId as string | number | undefined;
+      const rawRefId = (ver.data as any).refId as
+        | string
+        | number
+        | undefined;
       const refId = rawRefId != null ? String(rawRefId) : "—";
 
       // ✅ بعد از تایید پرداخت، یوزر را از بک‌اند با force=true می‌کشیم

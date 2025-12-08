@@ -119,15 +119,19 @@ export function normalizeIranPhone(v: string) {
 
 /* ----------------- این سه تا برای پروفایل‌ویزارد و کار با بک‌اند لوکال ----------------- */
 // GET http://192.168.xxx.xxx:4000/api/users/me?phone=...
+
 export async function getMeByPhone(
   phone: string
 ): Promise<ApiResp<UserRecord | null>> {
+
   const p = normalizeIranPhone(phone);
-  const cacheBuster = Date.now();
-  const url = userUrl(
-    `/api/users/me?phone=${encodeURIComponent(p)}&cb=${cacheBuster}`
-  );
-  console.log("[user.getMeByPhone] url =", url);
+  const cacheBuster = `cb_${Date.now()}`;
+
+  // 🔥 بسیار مهم: فقط یک ? باید وجود داشته باشد
+  const url = userUrl(`/api/users/me`) + `?phone=${encodeURIComponent(p)}&${cacheBuster}`;
+
+  console.log("[user.getMeByPhone] FINAL URL =", url);
+
   return doJson<UserRecord | null>(url, {
     method: "GET",
     headers: {
