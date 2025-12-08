@@ -11,7 +11,10 @@ const ZP_BASE =
 const ZP_CURRENCY = process.env.ZP_CURRENCY || "IRT";
 
 // برای صدا زدن /api/users/upsert روی همین بک‌اند
-const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:4000";
+// برای صدا زدن /api/users/upsert روی همین بک‌اند
+// مهم: عمداً از env استفاده نمی‌کنیم تا درخواست از داخل سرور
+// مستقیم به خود Node روی 4000 بخورد و وارد WCDN / دامنه نشود.
+const BACKEND_URL = "http://127.0.0.1:4000";
 
 // اگر amount از طرف درگاه/اپ نرسید، این رو به عنوان تست در نظر می‌گیریم
 const DEFAULT_VERIFY_AMOUNT = 10000;
