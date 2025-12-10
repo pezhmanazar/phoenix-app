@@ -404,5 +404,4 @@ publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
 
 // ====================== اکسپورت‌ها ======================
 
-export { publicTicketsRouter };
-export default router;
+export { router as default, publicTicketsRouter };
