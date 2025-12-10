@@ -135,8 +135,7 @@ async function getUserIdentity() {
 async function resolveIdentity(fromUser?: UserIdentity | null) {
   if (fromUser) {
     const openedById = fromUser.phone || fromUser.id || "";
-    const openedByName =
-      fromUser.fullName || fromUser.phone || "کاربر";
+    const openedByName = fromUser.fullName || fromUser.phone || "کاربر";
     return {
       openedById: String(openedById || ""),
       openedByName: String(openedByName || "کاربر"),
@@ -1044,6 +1043,7 @@ export default function TicketDetail() {
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
+  const [checkingExisting, setCheckingExisting] = useState(false);
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
 
@@ -1144,6 +1144,51 @@ export default function TicketDetail() {
   useEffect(() => {
     fetchTicket(false);
   }, [fetchTicket]);
+
+  /* ⬇️ جدید: اگر id = tech/therapy باشد، سعی می‌کنیم تیکت باز کاربر را پیدا کنیم */
+  const tryOpenExisting = useCallback(async () => {
+    if (!typeFromParam) return;
+    try {
+      setCheckingExisting(true);
+
+      const { openedById } = await resolveIdentity(me);
+      const qs: string[] = [];
+      qs.push(`type=${encodeURIComponent(typeFromParam)}`);
+      if (openedById) {
+        qs.push(`openedById=${encodeURIComponent(openedById)}`);
+      }
+      const url =
+        `${BACKEND_URL}/api/public/tickets/open` +
+        (qs.length ? `?${qs.join("&")}` : "");
+
+      console.log("[tickets/open] GET", url);
+      const res = await fetch(url);
+      let json: any = null;
+      try {
+        json = await res.json();
+      } catch {
+        json = null;
+      }
+      console.log("[tickets/open] RES", res.status, json);
+
+      if (res.ok && json?.ok && json.ticket && json.ticket.id) {
+        const t: Ticket = json.ticket;
+        setTicket(t);
+        loadPins(t.id).then(setPins).catch(() => {});
+        router.replace(`/support/tickets/${t.id}`);
+      }
+    } catch (e) {
+      console.log("[tickets/open] error", e);
+    } finally {
+      setCheckingExisting(false);
+    }
+  }, [typeFromParam, me, router]);
+
+  useEffect(() => {
+    if (typeFromParam) {
+      tryOpenExisting();
+    }
+  }, [typeFromParam, tryOpenExisting]);
 
   useLayoutEffect(() => {
     const titleType = (ticket?.type || typeFromParam) as
@@ -1277,15 +1322,15 @@ export default function TicketDetail() {
   let badgeLabel: "FREE" | "PRO" | "EXPIRED" = "FREE";
 
   if (planView === "pro") {
-    badgeBg = "#064E3B";        // سبز تیره
+    badgeBg = "#064E3B"; // سبز تیره
     badgeTextColor = "#4ADE80"; // سبز روشن
     badgeLabel = "PRO";
   } else if (planView === "expiring") {
-    badgeBg = "#451A03";        // کهربایی تیره
+    badgeBg = "#451A03"; // کهربایی تیره
     badgeTextColor = "#FBBF24"; // زرد
     badgeLabel = "PRO";
   } else if (planView === "expired") {
-    badgeBg = "#7F1D1D";        // قرمز تیره
+    badgeBg = "#7F1D1D"; // قرمز تیره
     badgeTextColor = "#FCA5A5"; // قرمز روشن
     badgeLabel = "EXPIRED";
   }
@@ -1397,7 +1442,7 @@ export default function TicketDetail() {
     );
   }
 
-  if (!planLoaded) {
+  if (!planLoaded || checkingExisting) {
     return (
       <>
         <Stack.Screen options={{ headerShown: false }} />

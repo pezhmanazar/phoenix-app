@@ -1,101 +1,30 @@
 // app/support/real/index.tsx
-import React, { useCallback, useState } from "react";
+import React from "react";
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@react-navigation/native";
 import { useRouter, Stack } from "expo-router";
-import BACKEND_URL from "../../../constants/backend";
-import { useUser } from "../../../hooks/useUser";
 
 const DEFAULT_TITLES = {
   tech: "پشتیبانی فنی ققنوس",
   therapy: "پشتیبانی درمانی ققنوس",
 } as const;
 
-type TicketType = "tech" | "therapy";
-
 export default function RealSupport() {
   const { colors, dark } = useTheme();
   const router = useRouter();
-  const { me } = useUser();
-  const [opening, setOpening] = useState<TicketType | null>(null);
 
-  const openOrCreateTicket = useCallback(
-    async (type: TicketType) => {
-      if (!me?.phone && !me?.id) {
-        Alert.alert(
-          "نیاز به پروفایل",
-          "برای استفاده از پشتیبانی، ابتدا باید شماره موبایل و نامت در پروفایل ققنوس تکمیل شده باشد."
-        );
-        return;
-      }
-
-      const phone = me.phone || "";
-      const openedById = me.id || phone || "";
-      const openedByName = (me.fullName || phone || "کاربر").trim() || "کاربر";
-
-      setOpening(type);
-      try {
-        const res = await fetch(
-          `${BACKEND_URL}/api/public/tickets/open-or-create`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Accept: "application/json",
-            },
-            body: JSON.stringify({
-              type,
-              openedById,
-              openedByName,
-              contact: phone || openedById,
-            }),
-          }
-        );
-
-        let json: any = null;
-        try {
-          json = await res.json();
-        } catch {
-          json = null;
-        }
-
-        // اگر دسترسی درمانگر به خاطر پلن بلاک شد، بفرست روی صفحه لاک‌شده
-        if (res.status === 403 && json?.error === "therapy_requires_pro") {
-          router.push("/support/tickets/therapy");
-          return;
-        }
-
-        if (!res.ok || !json?.ok || !json.ticket?.id) {
-          throw new Error(
-            typeof json?.error === "string"
-              ? json.error
-              : "باز کردن چت ناموفق بود."
-          );
-        }
-
-        const ticketId = String(json.ticket.id);
-        router.push(`/support/tickets/${ticketId}`);
-      } catch (e: any) {
-        Alert.alert(
-          "خطا",
-          e?.message || "در باز کردن گفت‌وگو مشکلی پیش آمد. دوباره تلاش کن."
-        );
-      } finally {
-        setOpening(null);
-      }
-    },
-    [me, router]
-  );
+  const goTo = (type: "tech" | "therapy") => {
+    // 👇 فقط route را باز می‌کنیم؛ خود صفحه‌ی تیکت تیکت واقعی را می‌سازد/پیدا می‌کند
+    router.push(`/support/tickets/${type}`);
+  };
 
   const Cell = ({
     type,
@@ -103,14 +32,12 @@ export default function RealSupport() {
     iconColor,
     subtitleText,
   }: {
-    type: TicketType;
+    type: "tech" | "therapy";
     iconName: any;
     iconColor: string;
     subtitleText: string;
   }) => {
     const title = DEFAULT_TITLES[type];
-    const isLoading = opening === type;
-
     return (
       <TouchableOpacity
         activeOpacity={0.9}
@@ -118,8 +45,7 @@ export default function RealSupport() {
           styles.cell,
           { borderColor: colors.border, backgroundColor: colors.card },
         ]}
-        onPress={() => openOrCreateTicket(type)}
-        disabled={isLoading}
+        onPress={() => goTo(type)}
       >
         <View style={styles.row}>
           <Ionicons name={iconName} size={22} color={iconColor} />
@@ -141,18 +67,7 @@ export default function RealSupport() {
               —
             </Text>
           </View>
-          {/* جای ساعت / لودر */}
-          <View
-            style={{
-              width: 40,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            {isLoading ? (
-              <ActivityIndicator size="small" color={colors.text} />
-            ) : null}
-          </View>
+          <View style={{ width: 40 }} />
         </View>
         <Text
           style={[

@@ -234,6 +234,71 @@ router.patch("/:id/status", async (req, res) => {
 export const publicTicketsRouter = Router();
 
 /**
+ * Helper: پیدا کردن تیکت باز/درانتظار برای یک کاربر و نوع خاص
+ * بر اساس openedById یا contact
+ */
+async function findUserOpenTicket({ type, openedById, contact }) {
+  const tType = String(type || "").toLowerCase();
+  if (tType !== "tech" && tType !== "therapy") return null;
+
+  const or = [];
+  if (openedById) or.push({ openedById: String(openedById) });
+  if (contact) or.push({ contact: String(contact) });
+  if (!or.length) return null;
+
+  return prisma.ticket.findFirst({
+    where: {
+      type: tType,
+      status: { in: ["open", "pending"] },
+      OR: or,
+    },
+    orderBy: { createdAt: "desc" },
+    include: { messages: { orderBy: { createdAt: "asc" } } },
+  });
+}
+
+/**
+ * ✅ پیدا کردن تیکت باز/درانتظار برای کاربر
+ * GET /api/public/tickets/open?type=tech|therapy&openedById=...&contact=...
+ */
+publicTicketsRouter.get("/open", async (req, res) => {
+  try {
+    const type = String(req.query.type || "").toLowerCase();
+    const openedById = req.query.openedById
+      ? String(req.query.openedById)
+      : undefined;
+    const contact = req.query.contact ? String(req.query.contact) : undefined;
+
+    if (type !== "tech" && type !== "therapy") {
+      return res.status(400).json({ ok: false, error: "invalid_type" });
+    }
+
+    // 🔒 گارد پلن برای چت درمانگر
+    const blocked = await checkTherapyAccessOrReject({
+      res,
+      type,
+      openedById,
+      contact,
+    });
+    if (blocked) return;
+
+    const ticket = await findUserOpenTicket({ type, openedById, contact });
+    if (!ticket) {
+      return res.json({ ok: true, ticket: null });
+    }
+
+    const withDisplay = {
+      ...ticket,
+      displayTitle: ticket.openedByName || ticket.title,
+    };
+    return res.json({ ok: true, ticket: withDisplay });
+  } catch (e) {
+    console.error("public tickets/open error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+/**
  * GET /api/public/tickets/:id
  */
 publicTicketsRouter.get("/:id", async (req, res) => {
@@ -249,201 +314,6 @@ publicTicketsRouter.get("/:id", async (req, res) => {
   } catch (e) {
     console.error("public tickets/:id error:", e);
     res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
-/**
- * POST /api/public/tickets/open-or-create
- * body: { type, openedById?, openedByName?, contact? }
- * برای هر کاربر + نوع تیکت، یک تیکت پایدار می‌سازد یا همان قبلی را برمی‌گرداند.
- */
-publicTicketsRouter.post("/open-or-create", async (req, res) => {
-  try {
-    const { type, openedById, openedByName, contact } = req.body || {};
-
-    const tType = String(type || "tech").toLowerCase();
-    if (tType !== "tech" && tType !== "therapy") {
-      return res.status(400).json({ ok: false, error: "invalid_type" });
-    }
-
-    const phone = contact ? String(contact) : null;
-    const openedByIdStr = openedById ? String(openedById) : null;
-
-    if (!phone && !openedByIdStr) {
-      return res.status(400).json({ ok: false, error: "identity_required" });
-    }
-
-    // 🔒 گارد پلن درمانگر
-    const blocked = await checkTherapyAccessOrReject({
-      res,
-      type: tType,
-      openedById: openedByIdStr,
-      contact: phone,
-    });
-    if (blocked) return;
-
-    const latestName = (openedByName || "کاربر").toString().trim() || "کاربر";
-
-    // تلاش برای پیدا کردن تیکت موجود
-    const orClauses = [];
-    if (phone) orClauses.push({ contact: phone });
-    if (openedByIdStr) orClauses.push({ openedById: openedByIdStr });
-
-    let ticket = await prisma.ticket.findFirst({
-      where: {
-        type: tType,
-        OR: orClauses,
-      },
-      orderBy: { createdAt: "desc" },
-      include: { messages: { orderBy: { createdAt: "asc" } } },
-    });
-
-    if (!ticket) {
-      // اگر نبود، یک تیکت خالی می‌سازیم
-      ticket = await prisma.ticket.create({
-        data: {
-          type: tType,
-          status: "open",
-          title: latestName,
-          description: "",
-          contact: phone || openedByIdStr,
-          openedById: openedByIdStr,
-          openedByName: latestName,
-          unread: false,
-        },
-        include: { messages: { orderBy: { createdAt: "asc" } } },
-      });
-    } else {
-      // بروزرسانی نام/شماره/وضعیت اگر لازم بود
-      const dataUpdate = {};
-
-      if (latestName && latestName !== ticket.openedByName) {
-        dataUpdate.openedByName = latestName;
-        dataUpdate.title = latestName;
-      }
-      if (openedByIdStr && openedByIdStr !== ticket.openedById) {
-        dataUpdate.openedById = openedByIdStr;
-      }
-      if (phone && phone !== ticket.contact) {
-        dataUpdate.contact = phone;
-      }
-      if (ticket.status === "closed") {
-        dataUpdate.status = "open";
-      }
-
-      if (Object.keys(dataUpdate).length > 0) {
-        ticket = await prisma.ticket.update({
-          where: { id: ticket.id },
-          data: dataUpdate,
-          include: { messages: { orderBy: { createdAt: "asc" } } },
-        });
-      }
-    }
-
-    const withDisplay = {
-      ...ticket,
-      displayTitle: ticket.openedByName || ticket.title,
-    };
-    return res.json({ ok: true, ticket: withDisplay });
-  } catch (e) {
-    console.error("public tickets/open-or-create error:", e);
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
-/**
- * POST /api/public/tickets/send
- */
-publicTicketsRouter.post("/send", async (req, res) => {
-  try {
-    const { type, text, openedById, openedByName, contact } = req.body || {};
-    const msgText = (text || "").trim();
-    if (!msgText)
-      return res.status(400).json({ ok: false, error: "text_required" });
-
-    const tType = String(type || "tech").toLowerCase();
-    if (tType !== "tech" && tType !== "therapy") {
-      return res.status(400).json({ ok: false, error: "invalid_type" });
-    }
-
-    const phone = contact ? String(contact) : null;
-    const openedByIdStr = openedById ? String(openedById) : null;
-
-    // 🔒 گارد پلن برای چت درمانگر
-    const blocked = await checkTherapyAccessOrReject({
-      res,
-      type: tType,
-      openedById: openedByIdStr,
-      contact: phone,
-    });
-    if (blocked) return;
-
-    const latestName = (openedByName || "کاربر").toString().trim();
-
-    const orClauses = [];
-    if (openedByIdStr) orClauses.push({ openedById: openedByIdStr });
-    if (phone) orClauses.push({ contact: phone });
-
-    let ticket = await prisma.ticket.findFirst({
-      where: {
-        type: tType,
-        status: { in: ["open", "pending"] },
-        ...(orClauses.length ? { OR: orClauses } : {}),
-      },
-      select: { id: true, openedByName: true, title: true, contact: true },
-    });
-
-    if (!ticket) {
-      ticket = await prisma.ticket.create({
-        data: {
-          type: tType,
-          status: "open",
-          title: latestName || phone || openedByIdStr || "کاربر",
-          description: msgText.slice(0, 500),
-          contact: phone || openedByIdStr || null,
-          ...(openedByIdStr ? { openedById: openedByIdStr } : {}),
-          openedByName: latestName || "کاربر",
-          unread: true,
-        },
-        select: { id: true, openedByName: true, title: true, contact: true },
-      });
-    } else {
-      const dataUpdate = {};
-      if (latestName && latestName !== ticket.openedByName) {
-        dataUpdate.openedByName = latestName;
-        dataUpdate.title = latestName;
-      }
-      if (phone && phone !== ticket.contact) {
-        dataUpdate.contact = phone;
-      }
-      if (Object.keys(dataUpdate).length > 0) {
-        await prisma.ticket.update({
-          where: { id: ticket.id },
-          data: dataUpdate,
-        });
-      }
-    }
-
-    await prisma.message.create({
-      data: { ticketId: ticket.id, sender: "user", type: "text", text: msgText },
-    });
-
-    await prisma.ticket.update({
-      where: { id: ticket.id },
-      data: { unread: true, updatedAt: new Date() },
-    });
-
-    const fresh = await prisma.ticket.findUnique({
-      where: { id: ticket.id },
-      include: { messages: { orderBy: { createdAt: "asc" } } },
-    });
-    const withDisplay = fresh
-      ? { ...fresh, displayTitle: fresh.openedByName || fresh.title }
-      : fresh;
-    return res.json({ ok: true, ticket: withDisplay });
-  } catch (e) {
-    console.error("public tickets/send error:", e);
-    return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 
