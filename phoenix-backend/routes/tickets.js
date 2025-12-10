@@ -407,15 +407,17 @@ publicTicketsRouter.get("/open", async (req, res) => {
     if (contact) or.push({ contact: String(contact) });
 
     if (or.length === 0) {
-      return res
-        .status(400)
-        .json({ ok: false, error: "missing_identity" });
+      return res.json({
+        ok: false,
+        error: "missing_identity",
+        ticket: null,
+      });
     }
 
-    const t = await prisma.ticket.findFirst({
+    // تلاش اول: تیکتی که دقیقاً با openedById/contact و نوع موردنظر مچ می‌شود
+    let t = await prisma.ticket.findFirst({
       where: {
         type: tType,
-        // ❌ دیگه روی status فیلتر نمی‌کنیم
         OR: or,
       },
       orderBy: { createdAt: "desc" },
@@ -424,8 +426,27 @@ publicTicketsRouter.get("/open", async (req, res) => {
       },
     });
 
+    // اگر چیزی پیدا نشد، بر اساس پسوند شماره (۱۰ رقم آخر) هم امتحان می‌کنیم
+    if (!t && openedById) {
+      const phoneStr = String(openedById);
+      const suffix = phoneStr.slice(-10); // مثلا 0914... یا 914...
+
+      t = await prisma.ticket.findFirst({
+        where: {
+          type: tType,
+          openedById: {
+            endsWith: suffix,
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        include: {
+          messages: { orderBy: { createdAt: "asc" } },
+        },
+      });
+    }
+
     if (!t) {
-      // عمداً ۲۰۰ می‌دیم که CDN صفحه HTML برنگردونه
+      // عمداً ۲۰۰ می‌دهیم تا روی WCDN به HTML تبدیل نشود
       return res.json({ ok: false, error: "not_found", ticket: null });
     }
 
