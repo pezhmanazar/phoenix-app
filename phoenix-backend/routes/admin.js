@@ -496,11 +496,12 @@ router.post(
   }
 );
 
-/* ====== 👇👇👇 ایجاد ادمین فقط توسط Owner 👇👇👇 ====== */
+/* ====== 👇👇👇 ایجاد ادمین فقط توسط Owner (نسخه‌ی Postgres) 👇👇👇 ====== */
 router.post("/admins", allow("owner"), async (req, res) => {
   try {
-    const { email, name, role, password, apiKey } = req.body || {};
+    const { email, name, role, password } = req.body || {};
 
+    // اعتبارسنجی اولیه
     if (!email || !password || !role) {
       return res.status(400).json({ ok: false, error: "missing_fields" });
     }
@@ -508,40 +509,48 @@ router.post("/admins", allow("owner"), async (req, res) => {
       return res.status(400).json({ ok: false, error: "invalid_role" });
     }
 
-    const columns = await prisma.$queryRawUnsafe(`PRAGMA table_info('Admin');`);
-    const hasPasswordHash = Array.isArray(columns) && columns.some((c) => c?.name === "passwordHash");
-    const hasRole = Array.isArray(columns) && columns.some((c) => c?.name === "role");
-
-    const data = {
-      email: String(email).trim().toLowerCase(),
-      name: name ? String(name).trim() : null,
-      apiKey: apiKey && String(apiKey).trim() ? String(apiKey).trim() : null,
-      ...(hasRole ? { role: String(role) } : {}),
-      ...(hasPasswordHash ? { passwordHash: await bcrypt.hash(String(password), 10) } : {}),
-    };
-
-    if (!data.apiKey) {
-      data.apiKey = `admin-${crypto.randomBytes(8).toString("hex")}`;
+    const trimmedEmail = String(email).trim().toLowerCase();
+    const trimmedPassword = String(password);
+    if (trimmedPassword.length < 6) {
+      return res.status(400).json({ ok: false, error: "password_too_short" });
     }
 
+    const hash = await bcrypt.hash(trimmedPassword, 10);
+
+    const data = {
+      email: trimmedEmail,
+      name: name ? String(name).trim() : null,
+      role: String(role),
+      passwordHash: hash,
+      // اگر apiKey می‌خواهی برای لاگین API، می‌توانی این خط را فعال کنی:
+      // apiKey: `admin-${crypto.randomBytes(8).toString("hex")}`,
+    };
+
     const created = await prisma.admin.create({
-      data: data,
+      data,
       select: { id: true, email: true, name: true, role: true, apiKey: true },
     });
 
     return res.json({ ok: true, admin: created });
   } catch (e) {
     if (e?.code === "P2002") {
-      const target = Array.isArray(e?.meta?.target) ? e.meta.target.join(",") : String(e?.meta?.target || "");
-      if (target.includes("email")) return res.status(409).json({ ok: false, error: "email_taken" });
-      if (target.includes("apiKey")) return res.status(409).json({ ok: false, error: "api_key_taken" });
+      const target = Array.isArray(e?.meta?.target)
+        ? e.meta.target.join(",")
+        : String(e?.meta?.target || "");
+      if (target.includes("email")) {
+        return res.status(409).json({ ok: false, error: "email_taken" });
+      }
+      if (target.includes("apiKey")) {
+        return res.status(409).json({ ok: false, error: "api_key_taken" });
+      }
       return res.status(409).json({ ok: false, error: "unique_violation" });
     }
     console.error("admin/create-admin error:", e);
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-/* ====== 👆👆👆 پایان اضافه‌شده 👆👆👆 ====== */
+/* ====== 👆👆👆 پایان نسخه‌ی جدید 👆👆👆 ====== */
+
 /* ====== 👇 مدیریت ادمین‌ها (فقط owner) 👇 ====== */
 
 async function ownersCount() {
