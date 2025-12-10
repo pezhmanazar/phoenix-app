@@ -268,8 +268,9 @@ publicTicketsRouter.get("/open", async (req, res) => {
       },
     });
 
+    // 👇 این بلوک مهمه
     if (!t) {
-      // ⚠️ این‌جا عمداً ۲۰۰ می‌دیم تا WCDN صفحهٔ HTML نده
+      // این‌جا *حتماً* باید ۲۰۰ برگرده، نه ۴۰۴
       return res.json({ ok: false, error: "not_found", ticket: null });
     }
 
