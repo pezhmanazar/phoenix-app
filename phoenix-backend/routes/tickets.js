@@ -234,55 +234,41 @@ router.patch("/:id/status", async (req, res) => {
 export const publicTicketsRouter = Router();
 
 /**
- * Helper: پیدا کردن تیکت باز/درانتظار برای یک کاربر و نوع خاص
- * بر اساس openedById یا contact
- */
-async function findUserOpenTicket({ type, openedById, contact }) {
-  const tType = String(type || "").toLowerCase();
-  if (tType !== "tech" && tType !== "therapy") return null;
-
-  const or = [];
-  if (openedById) or.push({ openedById: String(openedById) });
-  if (contact) or.push({ contact: String(contact) });
-  if (!or.length) return null;
-
-  return prisma.ticket.findFirst({
-    where: {
-      type: tType,
-      status: { in: ["open", "pending"] },
-      OR: or,
-    },
-    orderBy: { createdAt: "desc" },
-    include: { messages: { orderBy: { createdAt: "asc" } } },
-  });
-}
-
-/**
- * ✅ پیدا کردن تیکت باز/درانتظار برای کاربر
- * GET /api/public/tickets/open?type=tech|therapy&openedById=...&contact=...
+ * GET /api/public/tickets/open
+ * query: ?type=tech|therapy&openedById=...&contact=...
+ * برمی‌گردونه آخرین تیکت باز/درحال‌انتظار برای این کاربر (اگر باشد)، در غیر این صورت ticket=null
  */
 publicTicketsRouter.get("/open", async (req, res) => {
   try {
-    const type = String(req.query.type || "").toLowerCase();
-    const openedById = req.query.openedById
-      ? String(req.query.openedById)
-      : undefined;
-    const contact = req.query.contact ? String(req.query.contact) : undefined;
+    const { type, openedById, contact } = req.query;
 
-    if (type !== "tech" && type !== "therapy") {
+    const tType = String(type || "tech").toLowerCase();
+    if (tType !== "tech" && tType !== "therapy") {
       return res.status(400).json({ ok: false, error: "invalid_type" });
     }
 
-    // 🔒 گارد پلن برای چت درمانگر
-    const blocked = await checkTherapyAccessOrReject({
-      res,
-      type,
-      openedById,
-      contact,
-    });
-    if (blocked) return;
+    const userKey =
+      (openedById && String(openedById)) ||
+      (contact && String(contact)) ||
+      null;
 
-    const ticket = await findUserOpenTicket({ type, openedById, contact });
+    if (!userKey) {
+      // اگر هیچ شناسه‌ای نداریم، منطقی‌ترین خروجی این است که بگوییم تیکتی نداریم
+      return res.json({ ok: true, ticket: null });
+    }
+
+    const ticket = await prisma.ticket.findFirst({
+      where: {
+        type: tType,
+        status: { in: ["open", "pending"] },
+        OR: [{ openedById: userKey }, { contact: userKey }],
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        messages: { orderBy: { createdAt: "asc" } },
+      },
+    });
+
     if (!ticket) {
       return res.json({ ok: true, ticket: null });
     }
@@ -291,6 +277,7 @@ publicTicketsRouter.get("/open", async (req, res) => {
       ...ticket,
       displayTitle: ticket.openedByName || ticket.title,
     };
+
     return res.json({ ok: true, ticket: withDisplay });
   } catch (e) {
     console.error("public tickets/open error:", e);
@@ -318,6 +305,93 @@ publicTicketsRouter.get("/:id", async (req, res) => {
 });
 
 /**
+ * POST /api/public/tickets/send
+ */
+publicTicketsRouter.post("/send", async (req, res) => {
+  try {
+    const { type, text, openedById, openedByName, contact } = req.body || {};
+    const msgText = (text || "").trim();
+    if (!msgText)
+      return res.status(400).json({ ok: false, error: "text_required" });
+
+    const tType = String(type || "tech").toLowerCase();
+    if (tType !== "tech" && tType !== "therapy") {
+      return res.status(400).json({ ok: false, error: "invalid_type" });
+    }
+
+    // 🔒 گارد پلن برای چت درمانگر
+    const blocked = await checkTherapyAccessOrReject({
+      res,
+      type: tType,
+      openedById,
+      contact,
+    });
+    if (blocked) return;
+
+    const latestName = (openedByName || "کاربر").toString().trim();
+
+    let ticket = await prisma.ticket.findFirst({
+      where: {
+        type: tType,
+        status: { in: ["open", "pending"] },
+        OR: [
+          openedById ? { openedById: String(openedById) } : null,
+          contact ? { contact: String(contact) } : null,
+        ].filter(Boolean),
+      },
+      select: { id: true, openedByName: true, title: true },
+    });
+
+    if (!ticket) {
+      ticket = await prisma.ticket.create({
+        data: {
+          type: tType,
+          status: "open",
+          title: latestName,
+          description: msgText.slice(0, 500),
+          contact: contact ?? null,
+          ...(openedById ? { openedById: String(openedById) } : {}),
+          openedByName: latestName,
+          unread: true,
+        },
+        select: { id: true, openedByName: true, title: true },
+      });
+    } else if (ticket.openedByName !== latestName) {
+      await prisma.ticket.update({
+        where: { id: ticket.id },
+        data: { openedByName: latestName, title: latestName },
+      });
+    }
+
+    await prisma.message.create({
+      data: {
+        ticketId: ticket.id,
+        sender: "user",
+        type: "text",
+        text: msgText,
+      },
+    });
+
+    await prisma.ticket.update({
+      where: { id: ticket.id },
+      data: { unread: true, updatedAt: new Date() },
+    });
+
+    const fresh = await prisma.ticket.findUnique({
+      where: { id: ticket.id },
+      include: { messages: { orderBy: { createdAt: "asc" } } },
+    });
+    const withDisplay = fresh
+      ? { ...fresh, displayTitle: fresh.openedByName || fresh.title }
+      : fresh;
+    return res.json({ ok: true, ticket: withDisplay });
+  } catch (e) {
+    console.error("public tickets/send error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+/**
  * POST /api/public/tickets/:id/reply
  */
 publicTicketsRouter.post("/:id/reply", async (req, res) => {
@@ -341,17 +415,12 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
     if (!exists)
       return res.status(404).json({ ok: false, error: "not_found" });
 
-    const phone = exists.contact || null;
-    const openedByIdStr = openedById
-      ? String(openedById)
-      : exists.openedById || null;
-
     // 🔒 گارد پلن برای چت درمانگر
     const blocked = await checkTherapyAccessOrReject({
       res,
       type: exists.type,
-      openedById: openedByIdStr,
-      contact: phone,
+      openedById: openedById || exists.openedById,
+      contact: exists.contact,
     });
     if (blocked) return;
 
@@ -430,14 +499,12 @@ publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
         ? String(req.body.openedByName)
         : undefined;
 
-    const phone = exists.contact || null;
-
     // 🔒 گارد پلن برای چت درمانگر
     const blocked = await checkTherapyAccessOrReject({
       res,
       type: exists.type,
       openedById: openedById || exists.openedById,
-      contact: phone,
+      contact: exists.contact,
     });
     if (blocked) return;
 
