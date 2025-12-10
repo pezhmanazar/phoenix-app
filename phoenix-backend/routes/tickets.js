@@ -393,74 +393,53 @@ publicTicketsRouter.post("/send", async (req, res) => {
  * POST /api/public/tickets/:id/reply
  * body: { text, openedById?, openedByName? }
  */
-publicTicketsRouter.post("/:id/reply", async (req, res) => {
+publicTicketsRouter.get("/open", async (req, res) => {
   try {
-    const id = String(req.params.id);
-    const { text, openedById, openedByName } = req.body || {};
-    const msgText = (text || "").trim();
-    if (!msgText)
-      return res.status(400).json({ ok: false, error: "text_required" });
+    const { type, openedById, contact } = req.query;
 
-    const exists = await prisma.ticket.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        type: true,
-        openedById: true,
-        openedByName: true,
-        contact: true,
+    const tType = String(type || "tech").toLowerCase();
+    if (tType !== "tech" && tType !== "therapy") {
+      return res.status(400).json({ ok: false, error: "invalid_type" });
+    }
+
+    const or = [];
+    if (openedById) or.push({ openedById: String(openedById) });
+    if (contact) or.push({ contact: String(contact) });
+
+    if (or.length === 0) {
+      return res
+        .status(400)
+        .json({ ok: false, error: "missing_identity" });
+    }
+
+    const t = await prisma.ticket.findFirst({
+      where: {
+        type: tType,
+        // ❌ دیگه روی status فیلتر نمی‌کنیم
+        OR: or,
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        messages: { orderBy: { createdAt: "asc" } },
       },
     });
-    if (!exists)
-      return res.status(404).json({ ok: false, error: "not_found" });
 
-    // 🔒 گارد پلن برای چت درمانگر
-    const blocked = await checkTherapyAccessOrReject({
-      res,
-      type: exists.type,
-      openedById: openedById || exists.openedById,
-      contact: exists.contact,
-    });
-    if (blocked) return;
-
-    const latestName = (openedByName || "").toString().trim();
-    const dataUpdate = {};
-
-    if (latestName && latestName !== exists.openedByName) {
-      dataUpdate.openedByName = latestName;
-      dataUpdate.title = latestName;
-    }
-    if (openedById && openedById !== exists.openedById) {
-      dataUpdate.openedById = String(openedById);
+    if (!t) {
+      // عمداً ۲۰۰ می‌دیم که CDN صفحه HTML برنگردونه
+      return res.json({ ok: false, error: "not_found", ticket: null });
     }
 
-    if (Object.keys(dataUpdate).length > 0) {
-      await prisma.ticket.update({
-        where: { id },
-        data: dataUpdate,
-      });
-    }
+    const withDisplay = {
+      ...t,
+      displayTitle: t.openedByName || t.title,
+    };
 
-    await prisma.message.create({
-      data: { ticketId: id, sender: "user", type: "text", text: msgText },
-    });
-
-    await prisma.ticket.update({
-      where: { id },
-      data: { unread: true, updatedAt: new Date() },
-    });
-
-    const fresh = await prisma.ticket.findUnique({
-      where: { id },
-      include: { messages: { orderBy: { createdAt: "asc" } } },
-    });
-    const withDisplay = fresh
-      ? { ...fresh, displayTitle: fresh.openedByName || fresh.title }
-      : fresh;
-    res.json({ ok: true, ticket: withDisplay });
+    return res.json({ ok: true, ticket: withDisplay });
   } catch (e) {
-    console.error("public tickets/:id/reply error:", e);
-    res.status(500).json({ ok: false, error: "internal_error" });
+    console.error("public tickets/open error:", e);
+    return res
+      .status(500)
+      .json({ ok: false, error: "internal_error" });
   }
 });
 
