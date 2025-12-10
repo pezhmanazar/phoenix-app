@@ -6,7 +6,7 @@ import { isUserPro } from "../services/planStatus.js";
 
 const prisma = new PrismaClient();
 
-// ================= helper پلن برای چت درمانگر =================
+/* ================= helper پلن برای چت درمانگر ================= */
 
 /**
  * بسته به نوع تیکت اگر therapy باشد، چک می‌کند که کاربر اجازه چت درمانگر دارد یا نه.
@@ -60,7 +60,7 @@ async function checkTherapyAccessOrReject({ res, type, openedById, contact }) {
   }
 }
 
-// ====================== روتر پنل/ادمین (قدیمی) ======================
+/* ====================== روتر پنل/ادمین (قدیمی) ====================== */
 
 const router = Router();
 
@@ -177,7 +177,7 @@ router.post("/:id/reply", async (req, res) => {
     const id = String(req.params.id);
     const { text } = req.body || {};
     if (!text)
-      return res.status(400).json({ ok: false, error: "text required" });
+      return res.status(400).json({ ok: false, error: "text_required" });
 
     const exists = await prisma.ticket.findUnique({ where: { id } });
     if (!exists)
@@ -229,10 +229,14 @@ router.patch("/:id/status", async (req, res) => {
   }
 });
 
-// ====================== روتر عمومی کاربر ======================
+/* ====================== روتر عمومی کاربر ====================== */
 
-export const publicTicketsRouter = Router();
+const publicTicketsRouter = Router();
 
+/**
+ * GET /api/public/tickets/open
+ * query: ?type=tech|therapy&openedById=...&contact=...
+ */
 publicTicketsRouter.get("/open", async (req, res) => {
   try {
     const { type, openedById, contact } = req.query;
@@ -284,8 +288,190 @@ publicTicketsRouter.get("/open", async (req, res) => {
 });
 
 /**
+ * GET /api/public/tickets/:id
+ */
+publicTicketsRouter.get("/:id", async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const t = await prisma.ticket.findUnique({
+      where: { id },
+      include: { messages: { orderBy: { createdAt: "asc" } } },
+    });
+    if (!t) return res.status(404).json({ ok: false, error: "not_found" });
+    const withDisplay = { ...t, displayTitle: t.openedByName || t.title };
+    res.json({ ok: true, ticket: withDisplay });
+  } catch (e) {
+    console.error("public tickets/:id error:", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+/**
+ * POST /api/public/tickets/send
+ * body: { type, text, openedById, openedByName, contact? }
+ */
+publicTicketsRouter.post("/send", async (req, res) => {
+  try {
+    const { type, text, openedById, openedByName, contact } = req.body || {};
+    const msgText = (text || "").trim();
+    if (!msgText)
+      return res.status(400).json({ ok: false, error: "text_required" });
+
+    const tType = String(type || "tech").toLowerCase();
+    if (tType !== "tech" && tType !== "therapy") {
+      return res.status(400).json({ ok: false, error: "invalid_type" });
+    }
+
+    // 🔒 گارد پلن برای چت درمانگر
+    const blocked = await checkTherapyAccessOrReject({
+      res,
+      type: tType,
+      openedById,
+      contact,
+    });
+    if (blocked) return;
+
+    const latestName = (openedByName || "کاربر").toString().trim();
+
+    let ticket = await prisma.ticket.findFirst({
+      where: {
+        type: tType,
+        status: { in: ["open", "pending"] },
+        OR: [
+          openedById ? { openedById: String(openedById) } : null,
+          contact ? { contact: String(contact) } : null,
+        ].filter(Boolean),
+      },
+      select: { id: true, openedByName: true, title: true },
+    });
+
+    if (!ticket) {
+      ticket = await prisma.ticket.create({
+        data: {
+          type: tType,
+          status: "open",
+          title: latestName,
+          description: msgText.slice(0, 500),
+          contact: contact ?? null,
+          ...(openedById ? { openedById: String(openedById) } : {}),
+          openedByName: latestName,
+          unread: true,
+        },
+        select: { id: true, openedByName: true, title: true },
+      });
+    } else if (ticket.openedByName !== latestName) {
+      await prisma.ticket.update({
+        where: { id: ticket.id },
+        data: { openedByName: latestName, title: latestName },
+      });
+    }
+
+    await prisma.message.create({
+      data: {
+        ticketId: ticket.id,
+        sender: "user",
+        type: "text",
+        text: msgText,
+      },
+    });
+
+    await prisma.ticket.update({
+      where: { id: ticket.id },
+      data: { unread: true, updatedAt: new Date() },
+    });
+
+    const fresh = await prisma.ticket.findUnique({
+      where: { id: ticket.id },
+      include: { messages: { orderBy: { createdAt: "asc" } } },
+    });
+    const withDisplay = fresh
+      ? { ...fresh, displayTitle: fresh.openedByName || fresh.title }
+      : fresh;
+    return res.json({ ok: true, ticket: withDisplay });
+  } catch (e) {
+    console.error("public tickets/send error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+/**
+ * POST /api/public/tickets/:id/reply
+ * body: { text, openedById?, openedByName? }
+ */
+publicTicketsRouter.post("/:id/reply", async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const { text, openedById, openedByName } = req.body || {};
+    const msgText = (text || "").trim();
+    if (!msgText)
+      return res.status(400).json({ ok: false, error: "text_required" });
+
+    const exists = await prisma.ticket.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        type: true,
+        openedById: true,
+        openedByName: true,
+        contact: true,
+      },
+    });
+    if (!exists)
+      return res.status(404).json({ ok: false, error: "not_found" });
+
+    // 🔒 گارد پلن برای چت درمانگر
+    const blocked = await checkTherapyAccessOrReject({
+      res,
+      type: exists.type,
+      openedById: openedById || exists.openedById,
+      contact: exists.contact,
+    });
+    if (blocked) return;
+
+    const latestName = (openedByName || "").toString().trim();
+    const dataUpdate = {};
+
+    if (latestName && latestName !== exists.openedByName) {
+      dataUpdate.openedByName = latestName;
+      dataUpdate.title = latestName;
+    }
+    if (openedById && openedById !== exists.openedById) {
+      dataUpdate.openedById = String(openedById);
+    }
+
+    if (Object.keys(dataUpdate).length > 0) {
+      await prisma.ticket.update({
+        where: { id },
+        data: dataUpdate,
+      });
+    }
+
+    await prisma.message.create({
+      data: { ticketId: id, sender: "user", type: "text", text: msgText },
+    });
+
+    await prisma.ticket.update({
+      where: { id },
+      data: { unread: true, updatedAt: new Date() },
+    });
+
+    const fresh = await prisma.ticket.findUnique({
+      where: { id },
+      include: { messages: { orderBy: { createdAt: "asc" } } },
+    });
+    const withDisplay = fresh
+      ? { ...fresh, displayTitle: fresh.openedByName || fresh.title }
+      : fresh;
+    res.json({ ok: true, ticket: withDisplay });
+  } catch (e) {
+    console.error("public tickets/:id/reply error:", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+/**
  * POST /api/public/tickets/:id/reply-upload
- * form-data: file? , text? , durationSec?
+ * form-data: file? , text? , durationSec? , openedById? , openedByName?
  */
 publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
   try {
@@ -402,6 +588,7 @@ publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
   }
 });
 
-// ====================== اکسپورت‌ها ======================
+/* ====================== اکسپورت‌ها ====================== */
 
-export { router as default, publicTicketsRouter };
+export default router;
+export { publicTicketsRouter };
