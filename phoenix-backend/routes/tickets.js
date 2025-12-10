@@ -7,20 +7,15 @@ import { isUserPro } from "../services/planStatus.js";
 const prisma = new PrismaClient();
 
 /* ================= helper پلن برای چت درمانگر ================= */
-
 /**
- * بسته به نوع تیکت اگر therapy باشد، چک می‌کند که کاربر اجازه چت درمانگر دارد یا نه.
- * اگر اجازه نداشته باشد:
- *   - خودش 403 برمی‌گرداند
- *   - true برمی‌گرداند (یعنی روت باید return کند و ادامه ندهد)
- * اگر اجازه داشته باشد یا تیکت فنی باشد:
- *   - false برمی‌گرداند (یعنی روت می‌تواند ادامه بدهد)
+ * اگر type = "therapy" باشد، چک می‌کند کاربر واقعا PRO/VIP هست یا نه.
+ * - اگر اجازه نداشته باشد → خودش 403 می‌دهد و true برمی‌گرداند (یعنی روت باید return کند).
+ * - اگر اجازه داشته باشد یا تیکت فنی باشد → false برمی‌گرداند.
  */
 async function checkTherapyAccessOrReject({ res, type, openedById, contact }) {
   const t = (type || "").toString().toLowerCase();
-  if (t !== "therapy") return false; // تیکت فنی است؛ نیازی به چک پلن نیست
+  if (t !== "therapy") return false; // تیکت فنی؛ نیازی به چک پلن نیست
 
-  // سعی می‌کنیم با phone یا id کاربر را پیدا کنیم
   const userKey =
     (openedById && String(openedById)) ||
     (contact && String(contact)) ||
@@ -29,13 +24,12 @@ async function checkTherapyAccessOrReject({ res, type, openedById, contact }) {
   if (!userKey) {
     res.status(403).json({
       ok: false,
-      error: "therapy_requires_pro", // کاربر مشخص نیست، اجازه نمی‌دیم
+      error: "therapy_requires_pro",
     });
     return true;
   }
 
   try {
-    // سعی می‌کنیم هم با phone هم با id پیداش کنیم
     const user = await prisma.user.findFirst({
       where: {
         OR: [{ phone: userKey }, { id: userKey }],
@@ -43,7 +37,6 @@ async function checkTherapyAccessOrReject({ res, type, openedById, contact }) {
     });
 
     if (!user || !isUserPro(user)) {
-      // یا کاربر پیدا نشد، یا پلن پرو / وی‌آی‌پی فعال ندارد
       res.status(403).json({
         ok: false,
         error: "therapy_requires_pro",
@@ -51,7 +44,6 @@ async function checkTherapyAccessOrReject({ res, type, openedById, contact }) {
       return true;
     }
 
-    // اوکی؛ اجازه داریم ادامه بدهیم
     return false;
   } catch (err) {
     console.error("[tickets] therapy access check failed:", err);
@@ -177,7 +169,7 @@ router.post("/:id/reply", async (req, res) => {
     const id = String(req.params.id);
     const { text } = req.body || {};
     if (!text)
-      return res.status(400).json({ ok: false, error: "text_required" });
+      return res.status(400).json({ ok: false, error: "text required" });
 
     const exists = await prisma.ticket.findUnique({ where: { id } });
     if (!exists)
@@ -231,11 +223,14 @@ router.patch("/:id/status", async (req, res) => {
 
 /* ====================== روتر عمومی کاربر ====================== */
 
-const publicTicketsRouter = Router();
+export const publicTicketsRouter = Router();
 
 /**
  * GET /api/public/tickets/open
- * query: ?type=tech|therapy&openedById=...&contact=...
+ * query: ?type=tech|therapy & openedById=... &/or contact=...
+ *
+ * نکتهٔ مهم: اگر تیکتی پیدا نشود، این روت **۲۰۰** برمی‌گرداند
+ * با { ok:false, error:"not_found", ticket:null } تا WCDN/فرانت قاطی نکند.
  */
 publicTicketsRouter.get("/open", async (req, res) => {
   try {
@@ -268,9 +263,8 @@ publicTicketsRouter.get("/open", async (req, res) => {
       },
     });
 
-    // 👇 این بلوک مهمه
     if (!t) {
-      // این‌جا *حتماً* باید ۲۰۰ برگرده، نه ۴۰۴
+      // عمداً status = 200
       return res.json({ ok: false, error: "not_found", ticket: null });
     }
 
@@ -309,7 +303,7 @@ publicTicketsRouter.get("/:id", async (req, res) => {
 
 /**
  * POST /api/public/tickets/send
- * body: { type, text, openedById, openedByName, contact? }
+ * body: { type, text, openedById, openedByName, contact }
  */
 publicTicketsRouter.post("/send", async (req, res) => {
   try {
@@ -472,7 +466,7 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
 
 /**
  * POST /api/public/tickets/:id/reply-upload
- * form-data: file? , text? , durationSec? , openedById? , openedByName?
+ * form-data: file? , text? , durationSec?
  */
 publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
   try {
@@ -591,5 +585,4 @@ publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
 
 /* ====================== اکسپورت‌ها ====================== */
 
-export default router;
-export { publicTicketsRouter };
+export { router as default, publicTicketsRouter };
