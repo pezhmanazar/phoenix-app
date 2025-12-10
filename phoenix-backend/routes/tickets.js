@@ -231,13 +231,6 @@ router.patch("/:id/status", async (req, res) => {
 
 // ====================== روتر عمومی کاربر ======================
 
-export const publicTicketsRouter = Router();
-
-/**
- * GET /api/public/tickets/open
- * query: ?type=tech|therapy&openedById=...&contact=...
- * برمی‌گردونه آخرین تیکت باز/درحال‌انتظار برای این کاربر (اگر باشد)، در غیر این صورت ticket=null
- */
 publicTicketsRouter.get("/open", async (req, res) => {
   try {
     const { type, openedById, contact } = req.query;
@@ -247,21 +240,21 @@ publicTicketsRouter.get("/open", async (req, res) => {
       return res.status(400).json({ ok: false, error: "invalid_type" });
     }
 
-    const userKey =
-      (openedById && String(openedById)) ||
-      (contact && String(contact)) ||
-      null;
+    const or = [];
+    if (openedById) or.push({ openedById: String(openedById) });
+    if (contact) or.push({ contact: String(contact) });
 
-    if (!userKey) {
-      // اگر هیچ شناسه‌ای نداریم، منطقی‌ترین خروجی این است که بگوییم تیکتی نداریم
-      return res.json({ ok: true, ticket: null });
+    if (or.length === 0) {
+      return res
+        .status(400)
+        .json({ ok: false, error: "missing_identity" });
     }
 
-    const ticket = await prisma.ticket.findFirst({
+    const t = await prisma.ticket.findFirst({
       where: {
         type: tType,
         status: { in: ["open", "pending"] },
-        OR: [{ openedById: userKey }, { contact: userKey }],
+        OR: or,
       },
       orderBy: { createdAt: "desc" },
       include: {
@@ -269,19 +262,22 @@ publicTicketsRouter.get("/open", async (req, res) => {
       },
     });
 
-    if (!ticket) {
-      return res.json({ ok: true, ticket: null });
+    if (!t) {
+      // ⚠️ این‌جا عمداً ۲۰۰ می‌دیم تا WCDN صفحهٔ HTML نده
+      return res.json({ ok: false, error: "not_found", ticket: null });
     }
 
     const withDisplay = {
-      ...ticket,
-      displayTitle: ticket.openedByName || ticket.title,
+      ...t,
+      displayTitle: t.openedByName || t.title,
     };
 
     return res.json({ ok: true, ticket: withDisplay });
   } catch (e) {
     console.error("public tickets/open error:", e);
-    return res.status(500).json({ ok: false, error: "internal_error" });
+    return res
+      .status(500)
+      .json({ ok: false, error: "internal_error" });
   }
 });
 
