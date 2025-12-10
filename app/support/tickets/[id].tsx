@@ -588,40 +588,53 @@ function Composer({
   };
 
   const createTicketIfNeeded = async (textFallback: string) => {
-    // اگر تیکت هنوز ساخته نشده (ورود از /support/tickets/therapy)
-    if (!ticketType) return ticketId;
+  // اگر id واقعی داریم (نه tech/therapy) همون رو استفاده کن
+  if (!ticketType) return ticketId;
 
-    const { openedById, openedByName } = await getUserIdentity();
-    const res = await fetch(`${BACKEND_URL}/api/public/tickets/send`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({
-        type: ticketType,
-        text:
-          textFallback && textFallback.trim()
-            ? textFallback.trim()
-            : "ضمیمه",
-        openedById,
-        openedByName,
-      }),
-    });
+  const { openedById, openedByName } = await getUserIdentity();
 
-    const json = await res.json().catch(() => null);
-    if (!res.ok || !json?.ok) {
-      const msg = extractErrorMessage(json?.error, "ساخت تیکت ناموفق بود");
-      throw new Error(msg);
-    }
+  const res = await fetch(`${BACKEND_URL}/api/public/tickets/send`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      type: ticketType,
+      text:
+        textFallback && textFallback.trim()
+          ? textFallback.trim()
+          : "ضمیمه",
+      openedById,
+      openedByName,
+    }),
+  });
 
-    const newId: string =
-      (json.ticket && json.ticket.id) || json.ticketId || json.id || "";
-    if (!newId) throw new Error("شناسهٔ تیکت در پاسخ نبود");
+  let json: any = null;
+  try {
+    json = await res.json();
+  } catch {
+    // اگر JSON نبود، لاگ بگیر که ببینیم دقیقا چی برگشته
+    console.log("DEBUG /api/public/tickets/send raw response not json");
+  }
 
-    onTicketCreated?.(String(newId));
-    return String(newId);
-  };
+  if (!res.ok || !json?.ok) {
+    const msg = extractErrorMessage(json?.error, "ساخت تیکت ناموفق بود");
+    console.log("DEBUG /api/public/tickets/send error", res.status, json);
+    throw new Error(msg);
+  }
+
+  const newId =
+    (json.ticket && json.ticket.id) || json.ticketId || json.id;
+
+  if (!newId || typeof newId !== "string") {
+    console.log("DEBUG /api/public/tickets/send invalid id", json);
+    throw new Error("ساخت تیکت انجام شد اما شناسهٔ تیکت از سرور برنگشت.");
+  }
+
+  onTicketCreated?.(newId);
+  return newId;
+};
 
   const sendText = async () => {
     if (!hasText) return;
