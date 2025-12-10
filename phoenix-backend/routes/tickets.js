@@ -562,6 +562,5 @@ publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
   }
 });
 
-/* ====================== اکسپورت‌ها ====================== */
-
-export { router as default, publicTicketsRouter };
+// ====================== اکسپورت‌ها ======================
+export default router;
