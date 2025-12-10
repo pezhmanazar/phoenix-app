@@ -1174,20 +1174,66 @@ export default function TicketDetail() {
     }, [syncPlanView])
   );
 
-  const fetchTicket = useCallback(
+  // رفرش تیکت، ترجیحاً از روت public/open (همیشه آخرین وضعیت را می‌دهد)
+  const reloadTicket = useCallback(
     async (silent: boolean = false) => {
-      // اگر id=tech/therapy باشه، یعنی هنوز تیکت واقعی نداریم
-      if (typeFromParam) {
-        if (!silent) setLoading(false);
-        return;
-      }
+      const effectiveType = (ticket?.type || typeFromParam) as
+        | "tech"
+        | "therapy"
+        | null;
+
       try {
         if (!silent) setLoading(true);
-        const res = await fetch(`${BACKEND_URL}/api/tickets/${id}`);
-        const json = await res.json();
-        if (json?.ok && json.ticket) {
-          const t = normalizeTicketFromServer(json.ticket);
-          setTicket(t);
+
+        if (effectiveType) {
+          // برای چت‌های tech/therapy از public/tickets/open استفاده می‌کنیم
+          const { openedById } = await resolveIdentity(me);
+          const qs: string[] = [
+            `type=${encodeURIComponent(effectiveType)}`,
+          ];
+          if (openedById) {
+            qs.push(`openedById=${encodeURIComponent(openedById)}`);
+          }
+          const url =
+            `${BACKEND_URL}/api/public/tickets/open` +
+            (qs.length ? `?${qs.join("&")}` : "");
+
+          console.log("[tickets/reload - open] GET", url);
+          const res = await fetch(url);
+          let json: any = null;
+          try {
+            json = await res.json();
+          } catch {
+            json = null;
+          }
+          console.log("[tickets/reload - open] RES", res.status, json);
+
+          if (res.ok && json?.ok && json.ticket) {
+            const t = normalizeTicketFromServer(json.ticket);
+            setTicket(t);
+            // اگر روی تیکت واقعی هستیم، پین‌ها را هم دوباره لود کن
+            if (!typeFromParam) {
+              loadPins(t.id).then(setPins).catch(() => {});
+            }
+          }
+        } else {
+          // فallback: فقط بر اساس id (سناریوهای قدیمی یا غیر therapy/tech)
+          const res = await fetch(`${BACKEND_URL}/api/tickets/${id}`);
+          let json: any = null;
+          try {
+            json = await res.json();
+          } catch {
+            json = null;
+          }
+          console.log("[tickets/reload - byId] RES", res.status, json);
+
+          if (json?.ok && json.ticket) {
+            const t = normalizeTicketFromServer(json.ticket);
+            setTicket(t);
+          }
+        }
+
+        if (!silent) {
           setTimeout(() => {
             scrollRef.current?.scrollToEnd({ animated: true });
           }, 0);
@@ -1196,12 +1242,13 @@ export default function TicketDetail() {
         if (!silent) setLoading(false);
       }
     },
-    [id, typeFromParam]
+    [id, ticket?.type, typeFromParam, me]
   );
 
   useEffect(() => {
-    fetchTicket(false);
-  }, [fetchTicket]);
+    // لود اولیه
+    reloadTicket(false);
+  }, [reloadTicket]);
 
   /* اگر id = tech/therapy باشد، سعی می‌کنیم تیکت باز کاربر را پیدا کنیم */
   const tryOpenExisting = useCallback(async () => {
@@ -1863,7 +1910,8 @@ export default function TicketDetail() {
               loadPins(newId).then(setPins);
             }}
             onSent={() => {
-              fetchTicket(true);
+              // بعد از هر ارسال، از public/open آخرین وضعیت را می‌گیریم
+              reloadTicket(true);
               requestAnimationFrame(() =>
                 scrollRef.current?.scrollToEnd({ animated: true })
               );
