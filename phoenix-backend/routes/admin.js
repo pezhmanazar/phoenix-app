@@ -496,38 +496,33 @@ router.post(
   }
 );
 
-/* ====== 👇👇👇 ایجاد ادمین فقط توسط Owner (نسخه‌ی Postgres) 👇👇👇 ====== */
+/* ====== 👇👇👇 ایجاد ادمین فقط توسط Owner 👇👇👇 ====== */
 router.post("/admins", allow("owner"), async (req, res) => {
   try {
     const { email, name, role, password } = req.body || {};
 
-    // اعتبارسنجی اولیه
+    // اعتبارسنجی ورودی
     if (!email || !password || !role) {
       return res.status(400).json({ ok: false, error: "missing_fields" });
     }
-    if (!["owner", "manager", "agent"].includes(String(role))) {
+    const roleStr = String(role);
+    if (!["owner", "manager", "agent"].includes(roleStr)) {
       return res.status(400).json({ ok: false, error: "invalid_role" });
     }
 
-    const trimmedEmail = String(email).trim().toLowerCase();
-    const trimmedPassword = String(password);
-    if (trimmedPassword.length < 6) {
-      return res.status(400).json({ ok: false, error: "password_too_short" });
-    }
-
-    const hash = await bcrypt.hash(trimmedPassword, 10);
-
-    const data = {
-      email: trimmedEmail,
-      name: name ? String(name).trim() : null,
-      role: String(role),
-      passwordHash: hash,
-      // اگر apiKey می‌خواهی برای لاگین API، می‌توانی این خط را فعال کنی:
-      // apiKey: `admin-${crypto.randomBytes(8).toString("hex")}`,
-    };
+    const emailNorm = String(email).trim().toLowerCase();
+    const nameNorm = name ? String(name).trim() : null;
+    const passwordHash = await bcrypt.hash(String(password), 10);
+    const apiKey = `admin-${crypto.randomBytes(8).toString("hex")}`;
 
     const created = await prisma.admin.create({
-      data,
+      data: {
+        email: emailNorm,
+        name: nameNorm,
+        role: roleStr,
+        passwordHash,
+        apiKey,
+      },
       select: { id: true, email: true, name: true, role: true, apiKey: true },
     });
 
@@ -549,7 +544,7 @@ router.post("/admins", allow("owner"), async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-/* ====== 👆👆👆 پایان نسخه‌ی جدید 👆👆👆 ====== */
+/* ====== 👆👆👆 پایان اضافه‌شده 👆👆👆 ====== */
 
 /* ====== 👇 مدیریت ادمین‌ها (فقط owner) 👇 ====== */
 
