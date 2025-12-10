@@ -108,6 +108,63 @@ function detectType(m?: string | null, url?: string | null): MessageType {
   return "text";
 }
 
+/* نرمالایزر سراسری برای تیکت که از سرور می‌آید */
+function normalizeTicketFromServer(raw: any): Ticket {
+  if (!raw) {
+    throw new Error("normalizeTicketFromServer: empty ticket");
+  }
+
+  const safeStatus =
+    raw.status === "pending" || raw.status === "closed" ? raw.status : "open";
+  const safeType = raw.type === "therapy" ? "therapy" : "tech";
+
+  const messages: Message[] = Array.isArray(raw.messages)
+    ? raw.messages.map((m: any) => {
+        const fileUrl =
+          typeof m.fileUrl === "string" && m.fileUrl.length > 0
+            ? m.fileUrl
+            : null;
+        const mime =
+          typeof m.mime === "string" && m.mime.length > 0 ? m.mime : null;
+        const durationSec =
+          typeof m.durationSec === "number" && !Number.isNaN(m.durationSec)
+            ? m.durationSec
+            : null;
+
+        const type: MessageType =
+          (m.type as MessageType) ?? detectType(m.mime, m.fileUrl);
+
+        return {
+          id: String(m.id),
+          ticketId: String(m.ticketId ?? raw.id),
+          sender: m.sender === "admin" ? "admin" : "user",
+          type,
+          text:
+            m.text !== undefined && m.text !== null
+              ? String(m.text)
+              : null,
+          fileUrl,
+          mime,
+          durationSec,
+          ts: m.ts ?? m.createdAt ?? null,
+          createdAt: m.createdAt ?? null,
+        };
+      })
+    : [];
+
+  return {
+    id: String(raw.id),
+    title: String(raw.title ?? ""),
+    description: String(raw.description ?? ""),
+    contact: raw.contact ?? null,
+    status: safeStatus,
+    type: safeType,
+    createdAt: String(raw.createdAt ?? new Date().toISOString()),
+    updatedAt: String(raw.updatedAt ?? raw.createdAt ?? new Date().toISOString()),
+    messages,
+  };
+}
+
 /* گرفتن نام/شناسه کاربر از استوریج (فallback قدیمی) */
 async function getUserIdentity() {
   try {
@@ -1128,8 +1185,9 @@ export default function TicketDetail() {
         if (!silent) setLoading(true);
         const res = await fetch(`${BACKEND_URL}/api/tickets/${id}`);
         const json = await res.json();
-        if (json?.ok) {
-          setTicket(json.ticket);
+        if (json?.ok && json.ticket) {
+          const t = normalizeTicketFromServer(json.ticket);
+          setTicket(t);
           setTimeout(() => {
             scrollRef.current?.scrollToEnd({ animated: true });
           }, 0);
@@ -1145,7 +1203,7 @@ export default function TicketDetail() {
     fetchTicket(false);
   }, [fetchTicket]);
 
-  /* ⬇️ جدید: اگر id = tech/therapy باشد، سعی می‌کنیم تیکت باز کاربر را پیدا کنیم */
+  /* اگر id = tech/therapy باشد، سعی می‌کنیم تیکت باز کاربر را پیدا کنیم */
   const tryOpenExisting = useCallback(async () => {
     if (!typeFromParam) return;
     try {
@@ -1172,7 +1230,7 @@ export default function TicketDetail() {
       console.log("[tickets/open] RES", res.status, json);
 
       if (res.ok && json?.ok && json.ticket && json.ticket.id) {
-        const t: Ticket = json.ticket;
+        const t: Ticket = normalizeTicketFromServer(json.ticket);
         setTicket(t);
         loadPins(t.id).then(setPins).catch(() => {});
         router.replace(`/support/tickets/${t.id}`);
