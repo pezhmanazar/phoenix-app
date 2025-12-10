@@ -75,6 +75,13 @@ type Ticket = {
 
 type PlanView = "free" | "pro" | "expiring" | "expired";
 
+/* برای پاس دادن کاربر به Composer */
+type UserIdentity = {
+  id?: string;
+  phone?: string;
+  fullName?: string | null;
+};
+
 /* تشخیص نوع پیام بر اساس mime یا url */
 function detectType(m?: string | null, url?: string | null): MessageType {
   const mime = (m || "").toLowerCase();
@@ -101,7 +108,7 @@ function detectType(m?: string | null, url?: string | null): MessageType {
   return "text";
 }
 
-/* گرفتن نام/شناسه کاربر از استوریج */
+/* گرفتن نام/شناسه کاربر از استوریج (فallback قدیمی) */
 async function getUserIdentity() {
   try {
     const keys = ["user_profile", "profile", "me", "phoenix_profile"];
@@ -122,6 +129,20 @@ async function getUserIdentity() {
   } catch {
     return { openedById: "", openedByName: "کاربر" };
   }
+}
+
+/* ترجیح: استفاده از me؛ در صورت نبود، fallback به getUserIdentity */
+async function resolveIdentity(fromUser?: UserIdentity | null) {
+  if (fromUser) {
+    const openedById = fromUser.phone || fromUser.id || "";
+    const openedByName =
+      fromUser.fullName || fromUser.phone || "کاربر";
+    return {
+      openedById: String(openedById || ""),
+      openedByName: String(openedByName || "کاربر"),
+    };
+  }
+  return await getUserIdentity();
 }
 
 /* خواندن پیام خطا */
@@ -472,6 +493,7 @@ function Composer({
   ticketId,
   ticketType,
   isPro,
+  user,
   onTicketCreated,
   onSent,
   onMeasureHeight,
@@ -479,6 +501,7 @@ function Composer({
   ticketId: string;
   ticketType?: "tech" | "therapy" | null;
   isPro: boolean;
+  user?: UserIdentity | null;
   onTicketCreated?: (newId: string) => void;
   onSent: () => void;
   onMeasureHeight?: (h: number) => void;
@@ -587,14 +610,14 @@ function Composer({
     setRecMs(0);
   };
 
- const createTicketIfNeeded = async (textFallback: string) => {
+  const createTicketIfNeeded = async (textFallback: string) => {
     // اگر id واقعی داریم (نه tech/therapy) همون رو استفاده کن
     if (!ticketType) return ticketId;
 
-    const { openedById, openedByName } = await getUserIdentity();
+    const { openedById, openedByName } = await resolveIdentity(user);
 
     const payload = {
-      type: ticketType,                     // "tech" | "therapy"
+      type: ticketType, // "tech" | "therapy"
       text:
         textFallback && textFallback.trim()
           ? textFallback.trim()
@@ -678,7 +701,7 @@ function Composer({
         return;
       }
 
-      const { openedById, openedByName } = await getUserIdentity();
+      const { openedById, openedByName } = await resolveIdentity(user);
       const res = await fetch(
         `${BACKEND_URL}/api/public/tickets/${targetId}/reply`,
         {
@@ -717,7 +740,7 @@ function Composer({
   const buildForm = async () => {
     const fd = new FormData();
 
-    const { openedById, openedByName } = await getUserIdentity();
+    const { openedById, openedByName } = await resolveIdentity(user);
     fd.append("openedById", String(openedById || ""));
     fd.append("openedByName", String(openedByName || "کاربر"));
 
@@ -1413,21 +1436,21 @@ export default function TicketDetail() {
   const renderMessage = (m: Message) => {
     const mine = m.sender === "admin";
     const alignSelf: ViewStyle["alignSelf"] = mine
-  ? rtl
-    ? "flex-start"
-    : "flex-end"
-  : rtl
-  ? "flex-end"
-  : "flex-start";
+      ? rtl
+        ? "flex-start"
+        : "flex-end"
+      : rtl
+      ? "flex-end"
+      : "flex-start";
 
-const bubbleStyle: ViewStyle[] = [
-  styles.msg,
-  {
-    borderColor: colors.border,
-    backgroundColor: mine ? colors.primary : colors.background,
-    alignSelf,
-  },
-];
+    const bubbleStyle: ViewStyle[] = [
+      styles.msg,
+      {
+        borderColor: colors.border,
+        backgroundColor: mine ? colors.primary : colors.background,
+        alignSelf,
+      },
+    ];
     const textColor = { color: mine ? "#fff" : colors.text };
     const darkBubble = mine;
     const fullURL = m.fileUrl ? `${BACKEND_URL}${m.fileUrl}` : undefined;
@@ -1731,6 +1754,7 @@ const bubbleStyle: ViewStyle[] = [
             ticketId={String(id)}
             ticketType={typeFromParam}
             isPro={isProPlan}
+            user={me}
             onTicketCreated={(newId) => {
               router.replace(`/support/tickets/${newId}`);
               loadPins(newId).then(setPins);

@@ -12,9 +12,11 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import BACKEND_URL from "../../../constants/backend";
+import { useUser } from "../../../hooks/useUser";
 
 type Ticket = {
   id: string;
@@ -22,19 +24,23 @@ type Ticket = {
   description: string;
   contact?: string | null;
   status: "open" | "pending" | "closed";
-  type: "tech" | "therapy"; // ⬅️ اضافه شد
+  type: "tech" | "therapy";
   createdAt: string;
   updatedAt: string;
 };
+
+type TicketType = "tech" | "therapy";
 
 export default function TicketList() {
   const { colors } = useTheme();
   const router = useRouter();
   const rtl = I18nManager.isRTL;
+  const { me } = useUser();
 
   const [data, setData] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [opening, setOpening] = useState<TicketType | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -45,7 +51,8 @@ export default function TicketList() {
           .slice()
           .sort(
             (a: Ticket, b: Ticket) =>
-              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+              new Date(b.createdAt).getTime() -
+              new Date(a.createdAt).getTime()
           );
         setData(sorted);
       }
@@ -69,6 +76,73 @@ export default function TicketList() {
     fetchData();
   };
 
+  const openOrCreateTicket = useCallback(
+    async (type: TicketType) => {
+      if (!me?.phone && !me?.id) {
+        Alert.alert(
+          "نیاز به پروفایل",
+          "برای استفاده از پشتیبانی، ابتدا باید شماره موبایل و نامت در پروفایل ققنوس تکمیل شده باشد."
+        );
+        return;
+      }
+
+      const phone = me.phone || "";
+      const openedById = me.id || phone || "";
+      const openedByName = (me.fullName || phone || "کاربر").trim() || "کاربر";
+
+      setOpening(type);
+      try {
+        const res = await fetch(
+          `${BACKEND_URL}/api/public/tickets/open-or-create`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: JSON.stringify({
+              type,
+              openedById,
+              openedByName,
+              contact: phone || openedById,
+            }),
+          }
+        );
+
+        let json: any = null;
+        try {
+          json = await res.json();
+        } catch {
+          json = null;
+        }
+
+        if (res.status === 403 && json?.error === "therapy_requires_pro") {
+          router.push("/support/tickets/therapy");
+          return;
+        }
+
+        if (!res.ok || !json?.ok || !json.ticket?.id) {
+          throw new Error(
+            typeof json?.error === "string"
+              ? json.error
+              : "باز کردن چت ناموفق بود."
+          );
+        }
+
+        const ticketId = String(json.ticket.id);
+        router.push(`/support/tickets/${ticketId}`);
+      } catch (e: any) {
+        Alert.alert(
+          "خطا",
+          e?.message || "در باز کردن گفت‌وگو مشکلی پیش آمد. دوباره تلاش کن."
+        );
+      } finally {
+        setOpening(null);
+      }
+    },
+    [me, router]
+  );
+
   const renderItem = ({ item }: { item: Ticket }) => {
     const statusColor =
       item.status === "closed"
@@ -76,10 +150,8 @@ export default function TicketList() {
         : item.status === "pending"
         ? "#F59E0B"
         : colors.primary;
-
     const typeLabel = item.type === "therapy" ? "درمانگر" : "فنی";
     const typeColor = item.type === "therapy" ? "#A855F7" : "#3B82F6";
-
     return (
       <TouchableOpacity
         onPress={() => router.push(`/support/tickets/${item.id}`)}
@@ -107,7 +179,6 @@ export default function TicketList() {
         >
           <Ionicons name="pricetags-outline" size={18} color={colors.text} />
         </View>
-
         <View style={{ flex: 1 }}>
           <Text
             style={{ color: colors.text, fontWeight: "800" }}
@@ -119,7 +190,6 @@ export default function TicketList() {
             {item.description}
           </Text>
         </View>
-
         <View
           style={{
             alignItems: rtl ? "flex-start" : "flex-end",
@@ -145,7 +215,6 @@ export default function TicketList() {
                 : "بسته"}
             </Text>
           </View>
-
           {/* نوع تیکت */}
           <View
             style={{
@@ -166,31 +235,39 @@ export default function TicketList() {
     );
   };
 
-  // ⬇️ فقط اضافه شده: دکمه‌های شروع چت که تیکت نمی‌سازند و صرفاً Route را باز می‌کنند
-  const HeaderActions = () => (
+  const HeaderActions = ({
+    onOpen,
+  }: {
+    onOpen: (type: TicketType) => void;
+  }) => (
     <View style={[styles.actionsRow, { direction: rtl ? "rtl" : "ltr" }]}>
       <TouchableOpacity
-        onPress={() => router.push("/support/tickets/tech")}
+        onPress={() => onOpen("tech")}
         style={[
           styles.actionChip,
           { borderColor: "#2563EB33", backgroundColor: "#2563EB22" },
         ]}
         activeOpacity={0.9}
+        disabled={opening === "tech"}
       >
         <Ionicons name="hardware-chip-outline" size={16} color="#93C5FD" />
-        <Text style={styles.actionText}>پشتیبانی فنی</Text>
+        <Text style={styles.actionText}>
+          {opening === "tech" ? "در حال باز کردن…" : "پشتیبانی فنی"}
+        </Text>
       </TouchableOpacity>
-
       <TouchableOpacity
-        onPress={() => router.push("/support/tickets/therapy")}
+        onPress={() => onOpen("therapy")}
         style={[
           styles.actionChip,
           { borderColor: "#7C3AED33", backgroundColor: "#7C3AED22" },
         ]}
         activeOpacity={0.9}
+        disabled={opening === "therapy"}
       >
         <Ionicons name="heart-circle-outline" size={16} color="#D8B4FE" />
-        <Text style={styles.actionText}>ارتباط با درمانگر</Text>
+        <Text style={styles.actionText}>
+          {opening === "therapy" ? "در حال باز کردن…" : "ارتباط با درمانگر"}
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -211,7 +288,9 @@ export default function TicketList() {
             gap: 10,
             direction: rtl ? "rtl" : "ltr",
           }}
-          ListHeaderComponent={<HeaderActions />}
+          ListHeaderComponent={
+            <HeaderActions onOpen={openOrCreateTicket} />
+          }
           data={data}
           keyExtractor={(it) => it.id}
           renderItem={renderItem}
@@ -252,7 +331,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  // ⬇️ افزوده‌ها
   actionsRow: {
     flexDirection: "row",
     justifyContent: "space-between",

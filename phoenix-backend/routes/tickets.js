@@ -253,6 +253,105 @@ publicTicketsRouter.get("/:id", async (req, res) => {
 });
 
 /**
+ * POST /api/public/tickets/open-or-create
+ * body: { type, openedById?, openedByName?, contact? }
+ * برای هر کاربر + نوع تیکت، یک تیکت پایدار می‌سازد یا همان قبلی را برمی‌گرداند.
+ */
+publicTicketsRouter.post("/open-or-create", async (req, res) => {
+  try {
+    const { type, openedById, openedByName, contact } = req.body || {};
+
+    const tType = String(type || "tech").toLowerCase();
+    if (tType !== "tech" && tType !== "therapy") {
+      return res.status(400).json({ ok: false, error: "invalid_type" });
+    }
+
+    const phone = contact ? String(contact) : null;
+    const openedByIdStr = openedById ? String(openedById) : null;
+
+    if (!phone && !openedByIdStr) {
+      return res.status(400).json({ ok: false, error: "identity_required" });
+    }
+
+    // 🔒 گارد پلن درمانگر
+    const blocked = await checkTherapyAccessOrReject({
+      res,
+      type: tType,
+      openedById: openedByIdStr,
+      contact: phone,
+    });
+    if (blocked) return;
+
+    const latestName = (openedByName || "کاربر").toString().trim() || "کاربر";
+
+    // تلاش برای پیدا کردن تیکت موجود
+    const orClauses = [];
+    if (phone) orClauses.push({ contact: phone });
+    if (openedByIdStr) orClauses.push({ openedById: openedByIdStr });
+
+    let ticket = await prisma.ticket.findFirst({
+      where: {
+        type: tType,
+        OR: orClauses,
+      },
+      orderBy: { createdAt: "desc" },
+      include: { messages: { orderBy: { createdAt: "asc" } } },
+    });
+
+    if (!ticket) {
+      // اگر نبود، یک تیکت خالی می‌سازیم
+      ticket = await prisma.ticket.create({
+        data: {
+          type: tType,
+          status: "open",
+          title: latestName,
+          description: "",
+          contact: phone || openedByIdStr,
+          openedById: openedByIdStr,
+          openedByName: latestName,
+          unread: false,
+        },
+        include: { messages: { orderBy: { createdAt: "asc" } } },
+      });
+    } else {
+      // بروزرسانی نام/شماره/وضعیت اگر لازم بود
+      const dataUpdate = {};
+
+      if (latestName && latestName !== ticket.openedByName) {
+        dataUpdate.openedByName = latestName;
+        dataUpdate.title = latestName;
+      }
+      if (openedByIdStr && openedByIdStr !== ticket.openedById) {
+        dataUpdate.openedById = openedByIdStr;
+      }
+      if (phone && phone !== ticket.contact) {
+        dataUpdate.contact = phone;
+      }
+      if (ticket.status === "closed") {
+        dataUpdate.status = "open";
+      }
+
+      if (Object.keys(dataUpdate).length > 0) {
+        ticket = await prisma.ticket.update({
+          where: { id: ticket.id },
+          data: dataUpdate,
+          include: { messages: { orderBy: { createdAt: "asc" } } },
+        });
+      }
+    }
+
+    const withDisplay = {
+      ...ticket,
+      displayTitle: ticket.openedByName || ticket.title,
+    };
+    return res.json({ ok: true, ticket: withDisplay });
+  } catch (e) {
+    console.error("public tickets/open-or-create error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+/**
  * POST /api/public/tickets/send
  */
 publicTicketsRouter.post("/send", async (req, res) => {
@@ -267,27 +366,31 @@ publicTicketsRouter.post("/send", async (req, res) => {
       return res.status(400).json({ ok: false, error: "invalid_type" });
     }
 
+    const phone = contact ? String(contact) : null;
+    const openedByIdStr = openedById ? String(openedById) : null;
+
     // 🔒 گارد پلن برای چت درمانگر
     const blocked = await checkTherapyAccessOrReject({
       res,
       type: tType,
-      openedById,
-      contact,
+      openedById: openedByIdStr,
+      contact: phone,
     });
     if (blocked) return;
 
     const latestName = (openedByName || "کاربر").toString().trim();
 
+    const orClauses = [];
+    if (openedByIdStr) orClauses.push({ openedById: openedByIdStr });
+    if (phone) orClauses.push({ contact: phone });
+
     let ticket = await prisma.ticket.findFirst({
       where: {
         type: tType,
         status: { in: ["open", "pending"] },
-        OR: [
-          openedById ? { openedById: String(openedById) } : null,
-          contact ? { contact: String(contact) } : null,
-        ].filter(Boolean),
+        ...(orClauses.length ? { OR: orClauses } : {}),
       },
-      select: { id: true, openedByName: true, title: true },
+      select: { id: true, openedByName: true, title: true, contact: true },
     });
 
     if (!ticket) {
@@ -295,20 +398,30 @@ publicTicketsRouter.post("/send", async (req, res) => {
         data: {
           type: tType,
           status: "open",
-          title: latestName,
+          title: latestName || phone || openedByIdStr || "کاربر",
           description: msgText.slice(0, 500),
-          contact: contact ?? null,
-          ...(openedById ? { openedById: String(openedById) } : {}),
-          openedByName: latestName,
+          contact: phone || openedByIdStr || null,
+          ...(openedByIdStr ? { openedById: openedByIdStr } : {}),
+          openedByName: latestName || "کاربر",
           unread: true,
         },
-        select: { id: true, openedByName: true, title: true },
+        select: { id: true, openedByName: true, title: true, contact: true },
       });
-    } else if (ticket.openedByName !== latestName) {
-      await prisma.ticket.update({
-        where: { id: ticket.id },
-        data: { openedByName: latestName, title: latestName },
-      });
+    } else {
+      const dataUpdate = {};
+      if (latestName && latestName !== ticket.openedByName) {
+        dataUpdate.openedByName = latestName;
+        dataUpdate.title = latestName;
+      }
+      if (phone && phone !== ticket.contact) {
+        dataUpdate.contact = phone;
+      }
+      if (Object.keys(dataUpdate).length > 0) {
+        await prisma.ticket.update({
+          where: { id: ticket.id },
+          data: dataUpdate,
+        });
+      }
     }
 
     await prisma.message.create({
@@ -358,12 +471,17 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
     if (!exists)
       return res.status(404).json({ ok: false, error: "not_found" });
 
+    const phone = exists.contact || null;
+    const openedByIdStr = openedById
+      ? String(openedById)
+      : exists.openedById || null;
+
     // 🔒 گارد پلن برای چت درمانگر
     const blocked = await checkTherapyAccessOrReject({
       res,
       type: exists.type,
-      openedById: openedById || exists.openedById,
-      contact: exists.contact,
+      openedById: openedByIdStr,
+      contact: phone,
     });
     if (blocked) return;
 
@@ -442,12 +560,14 @@ publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
         ? String(req.body.openedByName)
         : undefined;
 
+    const phone = exists.contact || null;
+
     // 🔒 گارد پلن برای چت درمانگر
     const blocked = await checkTherapyAccessOrReject({
       res,
       type: exists.type,
       openedById: openedById || exists.openedById,
-      contact: exists.contact,
+      contact: phone,
     });
     if (blocked) return;
 
