@@ -587,54 +587,79 @@ function Composer({
     setRecMs(0);
   };
 
-  const createTicketIfNeeded = async (textFallback: string) => {
-  // اگر id واقعی داریم (نه tech/therapy) همون رو استفاده کن
-  if (!ticketType) return ticketId;
+ const createTicketIfNeeded = async (textFallback: string) => {
+    // اگر id واقعی داریم (نه tech/therapy) همون رو استفاده کن
+    if (!ticketType) return ticketId;
 
-  const { openedById, openedByName } = await getUserIdentity();
+    const { openedById, openedByName } = await getUserIdentity();
 
-  const res = await fetch(`${BACKEND_URL}/api/public/tickets/send`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({
-      type: ticketType,
+    const payload = {
+      type: ticketType,                     // "tech" | "therapy"
       text:
         textFallback && textFallback.trim()
           ? textFallback.trim()
           : "ضمیمه",
       openedById,
       openedByName,
-    }),
-  });
+    };
 
-  let json: any = null;
-  try {
-    json = await res.json();
-  } catch {
-    // اگر JSON نبود، لاگ بگیر که ببینیم دقیقا چی برگشته
-    console.log("DEBUG /api/public/tickets/send raw response not json");
-  }
+    console.log(
+      "[tickets/send] REQUEST",
+      `${BACKEND_URL}/api/public/tickets/send`,
+      payload
+    );
 
-  if (!res.ok || !json?.ok) {
-    const msg = extractErrorMessage(json?.error, "ساخت تیکت ناموفق بود");
-    console.log("DEBUG /api/public/tickets/send error", res.status, json);
-    throw new Error(msg);
-  }
+    const res = await fetch(`${BACKEND_URL}/api/public/tickets/send`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
 
-  const newId =
-    (json.ticket && json.ticket.id) || json.ticketId || json.id;
+    let json: any = null;
+    try {
+      json = await res.json();
+    } catch (e) {
+      console.log(
+        "[tickets/send] ERROR parsing JSON",
+        res.status,
+        res.headers.get("content-type")
+      );
+      throw new Error("پاسخ سرور قابل خواندن نیست (JSON نبود).");
+    }
 
-  if (!newId || typeof newId !== "string") {
-    console.log("DEBUG /api/public/tickets/send invalid id", json);
-    throw new Error("ساخت تیکت انجام شد اما شناسهٔ تیکت از سرور برنگشت.");
-  }
+    console.log("[tickets/send] RESPONSE", res.status, json);
 
-  onTicketCreated?.(newId);
-  return newId;
-};
+    if (!res.ok || !json?.ok) {
+      const serverErr =
+        typeof json?.error === "string"
+          ? json.error
+          : undefined;
+      const msg =
+        serverErr && serverErr.trim().length
+          ? serverErr
+          : "ساخت تیکت ناموفق بود";
+      throw new Error(msg);
+    }
+
+    const newId: unknown =
+      (json.ticket && json.ticket.id) || json.ticketId || json.id;
+
+    if (!newId || typeof newId !== "string") {
+      console.log(
+        "[tickets/send] invalid id in response",
+        JSON.stringify(json, null, 2)
+      );
+      throw new Error(
+        "ساخت تیکت انجام شد اما شناسهٔ تیکت از سرور برنگشت."
+      );
+    }
+
+    onTicketCreated?.(newId);
+    return newId;
+  };
 
   const sendText = async () => {
     if (!hasText) return;
