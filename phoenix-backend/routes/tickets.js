@@ -229,8 +229,7 @@ export const publicTicketsRouter = Router();
  * GET /api/public/tickets/open
  * query: ?type=tech|therapy & openedById=... &/or contact=...
  *
- * نکتهٔ مهم: اگر تیکتی پیدا نشود، این روت **۲۰۰** برمی‌گرداند
- * با { ok:false, error:"not_found", ticket:null } تا WCDN/فرانت قاطی نکند.
+ * اگر تیکتی پیدا نشود → ۲۰۰ با { ok:false, error:"not_found", ticket:null }
  */
 publicTicketsRouter.get("/open", async (req, res) => {
   try {
@@ -246,9 +245,11 @@ publicTicketsRouter.get("/open", async (req, res) => {
     if (contact) or.push({ contact: String(contact) });
 
     if (or.length === 0) {
-      return res
-        .status(400)
-        .json({ ok: false, error: "missing_identity" });
+      return res.json({
+        ok: false,
+        error: "missing_identity",
+        ticket: null,
+      });
     }
 
     const t = await prisma.ticket.findFirst({
@@ -264,7 +265,6 @@ publicTicketsRouter.get("/open", async (req, res) => {
     });
 
     if (!t) {
-      // عمداً status = 200
       return res.json({ ok: false, error: "not_found", ticket: null });
     }
 
@@ -328,22 +328,17 @@ publicTicketsRouter.post("/send", async (req, res) => {
 
     const latestName = (openedByName || "کاربر").toString().trim();
 
-    const or = [];
-    if (openedById) or.push({ openedById: String(openedById) });
-    if (contact) or.push({ contact: String(contact) });
-
-    let ticket = null;
-
-    if (or.length > 0) {
-      ticket = await prisma.ticket.findFirst({
-        where: {
-          type: tType,
-          status: { in: ["open", "pending"] },
-          OR: or,
-        },
-        select: { id: true, openedByName: true, title: true },
-      });
-    }
+    let ticket = await prisma.ticket.findFirst({
+      where: {
+        type: tType,
+        status: { in: ["open", "pending"] },
+        OR: [
+          openedById ? { openedById: String(openedById) } : null,
+          contact ? { contact: String(contact) } : null,
+        ].filter(Boolean),
+      },
+      select: { id: true, openedByName: true, title: true },
+    });
 
     if (!ticket) {
       ticket = await prisma.ticket.create({
@@ -397,10 +392,18 @@ publicTicketsRouter.post("/send", async (req, res) => {
 /**
  * POST /api/public/tickets/:id/reply
  * body: { text, openedById?, openedByName? }
+ *
+ * این روت قبلا اشتباهی دوباره /open بود؛ همین باعث می‌شد پیام جدید ذخیره نشود.
  */
 publicTicketsRouter.post("/:id/reply", async (req, res) => {
   try {
     const id = String(req.params.id);
+    const { text, openedById, openedByName } = req.body || {};
+
+    const msgText = (text || "").trim();
+    if (!msgText) {
+      return res.status(400).json({ ok: false, error: "text_required" });
+    }
 
     const exists = await prisma.ticket.findUnique({
       where: { id },
@@ -417,24 +420,6 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
       return res.status(404).json({ ok: false, error: "not_found" });
     }
 
-    const rawText =
-      typeof req.body?.text === "string" ? req.body.text.trim() : "";
-    if (!rawText) {
-      return res
-        .status(400)
-        .json({ ok: false, error: "text_required" });
-    }
-
-    const openedById =
-      req.body?.openedById !== undefined && req.body.openedById !== null
-        ? String(req.body.openedById)
-        : undefined;
-
-    const openedByName =
-      req.body?.openedByName !== undefined && req.body.openedByName !== null
-        ? String(req.body.openedByName)
-        : undefined;
-
     // 🔒 گارد پلن برای چت درمانگر
     const blocked = await checkTherapyAccessOrReject({
       res,
@@ -444,21 +429,24 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
     });
     if (blocked) return;
 
-    // اگر لازم بود openedById / openedByName را آپدیت کن
-    const dataUpdate = {};
-    if (
-      openedByName &&
-      openedByName.trim() &&
-      openedByName.trim() !== exists.openedByName
-    ) {
-      dataUpdate.openedByName = openedByName.trim();
-      dataUpdate.title = openedByName.trim();
+    const latestName = (openedByName || exists.openedByName || "کاربر")
+      .toString()
+      .trim();
+
+    const updateData = {};
+    if (latestName && latestName !== exists.openedByName) {
+      updateData.openedByName = latestName;
+      updateData.title = latestName;
     }
     if (openedById && openedById !== exists.openedById) {
-      dataUpdate.openedById = openedById;
+      updateData.openedById = String(openedById);
     }
-    if (Object.keys(dataUpdate).length > 0) {
-      await prisma.ticket.update({ where: { id }, data: dataUpdate });
+
+    if (Object.keys(updateData).length > 0) {
+      await prisma.ticket.update({
+        where: { id },
+        data: updateData,
+      });
     }
 
     await prisma.message.create({
@@ -466,11 +454,7 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
         ticketId: id,
         sender: "user",
         type: "text",
-        text: rawText,
-        fileUrl: null,
-        mime: null,
-        size: null,
-        durationSec: null,
+        text: msgText,
       },
     });
 
@@ -491,9 +475,7 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
     return res.json({ ok: true, ticket: withDisplay });
   } catch (e) {
     console.error("public tickets/:id/reply error:", e);
-    return res
-      .status(500)
-      .json({ ok: false, error: "internal_error" });
+    return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 
@@ -522,11 +504,11 @@ publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
       typeof req.body?.text === "string" ? req.body.text.trim() : "";
     const hasText = rawText.length > 0;
 
-    const openedById =
+    const openedByIdBody =
       req.body?.openedById !== undefined && req.body.openedById !== null
         ? String(req.body.openedById)
         : undefined;
-    const openedByName =
+    const openedByNameBody =
       req.body?.openedByName !== undefined && req.body.openedByName !== null
         ? String(req.body.openedByName)
         : undefined;
@@ -535,23 +517,22 @@ publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
     const blocked = await checkTherapyAccessOrReject({
       res,
       type: exists.type,
-      openedById: openedById || exists.openedById,
+      openedById: openedByIdBody || exists.openedById,
       contact: exists.contact,
     });
     if (blocked) return;
 
-    // آپدیت نام/آیدی اگر لازم بود
     const dataUpdate = {};
     if (
-      openedByName &&
-      openedByName.trim() &&
-      openedByName.trim() !== exists.openedByName
+      openedByNameBody &&
+      openedByNameBody.trim() &&
+      openedByNameBody.trim() !== exists.openedByName
     ) {
-      dataUpdate.openedByName = openedByName.trim();
-      dataUpdate.title = openedByName.trim();
+      dataUpdate.openedByName = openedByNameBody.trim();
+      dataUpdate.title = openedByNameBody.trim();
     }
-    if (openedById && openedById !== exists.openedById) {
-      dataUpdate.openedById = openedById;
+    if (openedByIdBody && openedByIdBody !== exists.openedById) {
+      dataUpdate.openedById = openedByIdBody;
     }
     if (Object.keys(dataUpdate).length > 0) {
       await prisma.ticket.update({ where: { id }, data: dataUpdate });
