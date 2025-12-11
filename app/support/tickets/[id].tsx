@@ -1132,8 +1132,8 @@ export default function TicketDetail() {
       }
       try {
         if (!silent) setLoading(true);
-        const url = `${BACKEND_URL}/api/public/tickets/${id}`;
-        console.log("[tickets/reload - byId] GET", url);
+        const url = `${BACKEND_URL}/api/public/tickets/${id}?ts=${Date.now()}`;
+console.log("[tickets/reload - byId] GET", url);
         const res = await fetch(url);
         let json: any = null;
         try {
@@ -1166,13 +1166,15 @@ export default function TicketDetail() {
 
       const { openedById } = await resolveIdentity(me);
       const qs: string[] = [];
-      qs.push(`type=${encodeURIComponent(typeFromParam)}`);
-      if (openedById) {
-        qs.push(`openedById=${encodeURIComponent(openedById)}`);
-      }
-      const url =
-        `${BACKEND_URL}/api/public/tickets/open` +
-        (qs.length ? `?${qs.join("&")}` : "");
+    qs.push(`type=${encodeURIComponent(typeFromParam)}`);
+    if (openedById) {
+      qs.push(`openedById=${encodeURIComponent(openedById)}`);
+    }
+    qs.push(`ts=${Date.now()}`);
+
+    const url =
+      `${BACKEND_URL}/api/public/tickets/open` +
+      (qs.length ? `?${qs.join("&")}` : "");
 
       console.log("[tickets/open] GET", url);
       const res = await fetch(url);
