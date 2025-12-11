@@ -1080,9 +1080,10 @@ export default function TicketDetail() {
 
   const typeFromParam = parseTicketType(id);
 
-  const [ticket, setTicket] = useState<Ticket | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [checkingExisting, setCheckingExisting] = useState(false);
+const [ticket, setTicket] = useState<Ticket | null>(null);
+const [loading, setLoading] = useState(true);
+// ⭐ اگر id = "tech" یا "therapy" باشد، از همان رندر اول checkingExisting = true
+const [checkingExisting, setCheckingExisting] = useState(!!typeFromParam);
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
 
@@ -1394,11 +1395,6 @@ console.log("[tickets/reload - byId] GET", url);
   let badgeTextColor = "#E5E7EB";
   let badgeLabel: "FREE" | "PRO" | "EXPIRED" = "FREE";
 
-  // یک فلگ واحد برای همهٔ حالت‌های لودینگ اولیه
-  // لودینگ اولیه فقط وقتی که روی alias هستیم (id = "tech" | "therapy")
-  // یعنی فقط زمانی که باید هم پلن را چک کنیم هم تیکت باز کاربر را پیدا کنیم
-  const isInitialLoading =
-    !!typeFromParam && (!planLoaded || checkingExisting);
 
   if (planView === "pro") {
     badgeBg = "#064E3B"; // سبز تیره
@@ -1520,23 +1516,70 @@ console.log("[tickets/reload - byId] GET", url);
       </KeyboardAvoidingView>
     );
   }
-
-  // یک صفحهٔ لودینگ واحد برای همهٔ حالت‌ها
-  if (isInitialLoading) {
+// ⭐ لودر وقتی id فقط نوع تیکت است (tech/therapy) و در حال چک کردن تیکت باز کاربر هستیم
+  if (typeFromParam && checkingExisting) {
     return (
-      <>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : -1}
+      >
         <Stack.Screen options={{ headerShown: false }} />
-        <SafeAreaView
-          style={{
-            flex: 1,
-            backgroundColor: colors.background,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Text style={{ color: "#8E8E93" }}>در حال بارگذاری گفتگو…</Text>
+
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+          <View
+            style={{
+              flex: 1,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <ActivityIndicator color={colors.primary} />
+            <Text
+              style={{
+                marginTop: 8,
+                color: colors.text,
+                fontSize: 12,
+              }}
+            >
+              در حال آماده‌سازی گفتگو…
+            </Text>
+          </View>
         </SafeAreaView>
-      </>
+      </KeyboardAvoidingView>
+    );
+  } 
+  // ⭐ لودر فقط وقتی: id واقعی تیکت داریم (نه tech/therapy) + هنوز در حال لود اولیه‌ایم
+  if (!typeFromParam && loading && !ticket) {
+    return (
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : -1}
+      >
+        <Stack.Screen options={{ headerShown: false }} />
+
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+          <View
+            style={{
+              flex: 1,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <ActivityIndicator color={colors.primary} />
+            <Text
+              style={{
+                marginTop: 8,
+                color: colors.text,
+                fontSize: 12,
+              }}
+            >
+              در حال بارگذاری گفتگو…
+            </Text>
+          </View>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
     );
   }
 

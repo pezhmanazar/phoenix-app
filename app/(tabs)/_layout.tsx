@@ -5,13 +5,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
 import BACKEND_URL from "../../constants/backend";
 import { useUser } from "../../hooks/useUser";
+import { AppState, AppStateStatus, View, Text } from "react-native";
 
-// ===== helpers برای unread =====
-const SEEN_KEY = (type: "tech" | "therapy") =>
-  `support:lastSeenAdmin:${type}`;
+/* ===== helpers برای unread ===== */
+const SEEN_KEY = (type: "tech" | "therapy") => `support:lastSeenAdmin:${type}`;
 
 type Message = {
   id: string;
@@ -38,14 +37,17 @@ async function countUnreadForType(
   openedById: string
 ): Promise<number> {
   try {
-    if (!openedById) return 0;
+    if (!openedById) {
+      console.log("[tabs/_layout] countUnread", type, "→ no openedById");
+      return 0;
+    }
 
     const qs: string[] = [];
     qs.push(`type=${encodeURIComponent(type)}`);
     qs.push(`openedById=${encodeURIComponent(openedById)}`);
     qs.push(`ts=${Date.now()}`);
-
     const url = `${BACKEND_URL}/api/public/tickets/open?${qs.join("&")}`;
+
     console.log("[tabs/_layout] countUnread", type, url);
 
     const res = await fetch(url);
@@ -56,27 +58,48 @@ async function countUnreadForType(
       json = null;
     }
 
-    if (!res.ok || !json?.ok || !json.ticket) return 0;
+    if (!res.ok || !json?.ok || !json.ticket) {
+      console.log(
+        "[tabs/_layout] countUnread",
+        type,
+        "→ no ticket / not ok",
+        res.status
+      );
+      return 0;
+    }
 
     const t: TicketWithMessages = json.ticket;
     const msgs = Array.isArray(t.messages) ? t.messages : [];
     const adminMsgs = msgs.filter((m) => m.sender === "admin");
-    if (!adminMsgs.length) return 0;
-
     const lastSeenId = await AsyncStorage.getItem(SEEN_KEY(type));
-    if (!lastSeenId) return adminMsgs.length;
 
-    const idx = adminMsgs.findIndex((m) => m.id === lastSeenId);
-    if (idx === -1) return adminMsgs.length;
+    const result = (() => {
+      if (!adminMsgs.length) return 0;
+      if (!lastSeenId) return adminMsgs.length;
+      const idx = adminMsgs.findIndex((m) => m.id === lastSeenId);
+      if (idx === -1) return adminMsgs.length;
+      return Math.max(0, adminMsgs.length - (idx + 1));
+    })();
 
-    return Math.max(0, adminMsgs.length - (idx + 1));
+    console.log(
+      "[tabs/_layout] countUnread result",
+      type,
+      "adminMsgs=",
+      adminMsgs.length,
+      "lastSeenId=",
+      lastSeenId,
+      "→",
+      result
+    );
+
+    return result;
   } catch (e) {
     console.log("[tabs/_layout] countUnread error", type, e);
     return 0;
   }
 }
 
-// ===== خود layout تب‌ها =====
+/* ===== خود layout تب‌ها ===== */
 export default function TabsLayout() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -88,6 +111,7 @@ export default function TabsLayout() {
     try {
       const openedById = getOpenedById(me);
       if (!openedById) {
+        console.log("[tabs/_layout] refreshUnread: no openedById");
         setUnreadCount(0);
         return;
       }
@@ -97,33 +121,78 @@ export default function TabsLayout() {
         countUnreadForType("tech", openedById),
       ]);
 
-      setUnreadCount(therapyUnread + techUnread);
+      const total = therapyUnread + techUnread;
+
+      console.log(
+        "[tabs/_layout] refreshUnread raw → therapy=",
+        therapyUnread,
+        "tech=",
+        techUnread,
+        "total=",
+        total
+      );
+
+      setUnreadCount((prev) => {
+        if (prev !== total) {
+          console.log("[tabs/_layout] refreshUnread APPLY →", total);
+        }
+        return total;
+      });
     } catch (e) {
       console.log("[tabs/_layout] refreshUnread error", e);
     }
   }, [me]);
 
+  // mount + هر ۵ ثانیه + برگشت از background
   useEffect(() => {
     let cancelled = false;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const appState = { current: AppState.currentState as AppStateStatus };
 
     const run = async () => {
       if (cancelled) return;
       await refreshUnread();
     };
 
-    run(); // بار اول
+    // بار اول
+    run();
 
-    const id = setInterval(run, 15000); // هر ۱۵ ثانیه
+    // هر ۵ ثانیه یک‌بار
+    intervalId = setInterval(run, 5000);
+
+    // وقتی اپ از background → active میاد
+    const sub = AppState.addEventListener("change", (nextState) => {
+      const prevState = appState.current;
+      appState.current = nextState;
+      if (
+        prevState.match(/inactive|background/) &&
+        nextState === "active"
+      ) {
+        console.log(
+          "[tabs/_layout] AppState active → refreshUnread()"
+        );
+        run();
+      }
+    });
 
     return () => {
       cancelled = true;
-      clearInterval(id);
+      if (intervalId) clearInterval(intervalId);
+      sub.remove();
     };
   }, [refreshUnread]);
 
+  // وقتی me لود/عوض می‌شود
+  useEffect(() => {
+    if (!me) return;
+    console.log("[tabs/_layout] me changed → refreshUnread()");
+    refreshUnread();
+  }, [me, refreshUnread]);
+
   return (
     <Tabs
-      initialRouteName="Pelekan" // تب پیش‌فرض
+      initialRouteName="Pelekan"
       screenOptions={{
         headerShown: false,
         tabBarHideOnKeyboard: true,
@@ -184,16 +253,36 @@ export default function TabsLayout() {
         options={{
           title: "پناه",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="shield" color={color} size={size} />
+            <View style={{ position: "relative" }}>
+              <Ionicons name="shield" color={color} size={size} />
+              {unreadCount > 0 && (
+                <View
+                  style={{
+                    position: "absolute",
+                    top: -4,
+                    right: -10,
+                    minWidth: 18,
+                    height: 18,
+                    borderRadius: 9,
+                    backgroundColor: "#EF4444",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingHorizontal: 3,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#fff",
+                      fontSize: 10,
+                      fontWeight: "900",
+                    }}
+                  >
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </View>
           ),
-          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
-          tabBarBadgeStyle: {
-            backgroundColor: "#EF4444",
-            color: "#fff",
-            fontWeight: "900",
-            minWidth: 18,
-            height: 18,
-          },
         }}
       />
 
@@ -217,7 +306,7 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* تب مخفی اشتراک – فقط از کد بهش ناوبری می‌کنیم */}
+      {/* تب مخفی اشتراک */}
       <Tabs.Screen
         name="Subscription"
         options={{
