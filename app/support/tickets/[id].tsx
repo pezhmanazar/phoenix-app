@@ -774,11 +774,38 @@ function Composer({
   };
 
   const tryPost = async (url: string, fd: FormData) => {
-    const res = await fetch(url, { method: "POST", body: fd });
+    console.log("[tickets/upload] POST", url);
+
+    const res = await fetch(url, {
+      method: "POST",
+      body: fd,
+    });
+
+    let rawText = "";
+    try {
+      rawText = await res.text();
+    } catch (e) {
+      console.log("[tickets/upload] ERROR reading body", url, e);
+    }
+
     let json: any = null;
     try {
-      json = await res.json();
-    } catch {}
+      // اگر بدنه JSON بود، تبدیلش کن
+      json = rawText ? JSON.parse(rawText) : null;
+    } catch {
+      // اگر JSON نبود، json همون null می‌مونه
+      json = null;
+    }
+
+    console.log(
+      "[tickets/upload] RES",
+      url,
+      "status=",
+      res.status,
+      "body=",
+      rawText
+    );
+
     return { res, json };
   };
 
@@ -789,20 +816,24 @@ function Composer({
     try {
       setSending(true);
 
+      // اگر تیکت alias بود (tech/therapy) اول تیکت بساز
       let targetId = ticketId;
       if (ticketType) {
         const firstText = hasText ? text.trim() : "ضمیمه";
         targetId = await createTicketIfNeeded(firstText);
       }
 
+      // فرم اصلی
       const fd = await buildForm();
+
+      // ⭐️ تلاش اول: /reply-upload
       let { res, json } = await tryPost(
         `${BACKEND_URL}/api/public/tickets/${targetId}/reply-upload`,
         fd
       );
 
-      // fallback برای سرور قدیمی
-      if (res.status === 404 || json?.error === "not_found") {
+      // ⭐️ اگر هر جور خطایی داشت (نه فقط 404)، یک بار هم /reply را امتحان کن
+      if (!res.ok || !json?.ok) {
         const fd2 = await buildForm();
         ({ res, json } = await tryPost(
           `${BACKEND_URL}/api/public/tickets/${targetId}/reply`,
@@ -810,6 +841,7 @@ function Composer({
         ));
       }
 
+      // اگر بعد از هر دو تلاش هنوز خراب بود → ارور واقعی را نمایش بده
       if (!res.ok || !json?.ok) {
         const msg = extractErrorMessage(json?.error, "ارسال ناموفق");
         throw new Error(msg);

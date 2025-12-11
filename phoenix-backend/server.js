@@ -11,7 +11,7 @@ import { fileURLToPath } from "url";
 
 import adminAuth from "./middleware/adminAuth.js";
 import adminRouter from "./routes/admin.js";
-import ticketsRouter, { publicTicketsRouter } from "./routes/tickets.js";
+import ticketsRouter from "./routes/tickets.js";
 import publicRouter from "./routes/public.js";   // روتر عمومی که /tickets هم دارد
 import aiRouter from "./routes/ai.js";           // روتر پشتیبانی هوش مصنوعی
 import usersRouter from "./routes/users.js";     // 🔹 روتر یوزرها
@@ -292,10 +292,9 @@ app.get("/api/ping", (_req, res) => {
 });
 
 // ---------- Routes ----------
-
-// تیکت‌ها
+// تیکت‌ها (ادمین)
 app.use("/api/tickets", ticketsRouter);
-app.use("/api/public/tickets", publicTicketsRouter);
+
 // فقط برای مسیرهای public که آپلود می‌فرستند، میدل‌ویر آپلود را اعمال کن
 app.use(
   "/api/public/tickets/:id/reply-upload",

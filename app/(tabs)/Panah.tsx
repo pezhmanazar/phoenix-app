@@ -13,25 +13,104 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme, useFocusEffect } from "@react-navigation/native";
+import {
+  useTheme,
+  useFocusEffect,
+  useNavigation,
+} from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useUser } from "../../hooks/useUser";
 import { getPlanStatus, PRO_FLAG_KEY } from "../../lib/plan";
+import BACKEND_URL from "../../constants/backend";
 
 const { height } = Dimensions.get("window");
 
 type PlanView = "free" | "pro" | "expired";
 
+type Message = {
+  id: string;
+  sender: "user" | "admin";
+  text?: string | null;
+  createdAt?: string;
+};
+
+type TicketWithMessages = {
+  id: string;
+  type: "tech" | "therapy";
+  updatedAt: string;
+  messages: Message[];
+};
+
+const SEEN_KEY = (type: "tech" | "therapy") =>
+  `support:lastSeenAdmin:${type}`;
+
+function getOpenedById(me: any) {
+  const phone = me?.phone;
+  const id = me?.id;
+  return String(phone || id || "").trim();
+}
+
+async function countUnreadForType(
+  type: "tech" | "therapy",
+  openedById: string
+): Promise<number> {
+  try {
+    if (!openedById) return 0;
+
+    const qs: string[] = [];
+    qs.push(`type=${encodeURIComponent(type)}`);
+    qs.push(`openedById=${encodeURIComponent(openedById)}`);
+    qs.push(`ts=${Date.now()}`);
+
+    const url = `${BACKEND_URL}/api/public/tickets/open?${qs.join("&")}`;
+    console.log("[panah] countUnread", type, url);
+
+    const res = await fetch(url);
+    let json: any = null;
+    try {
+      json = await res.json();
+    } catch {
+      json = null;
+    }
+
+    if (!res.ok || !json?.ok || !json.ticket) return 0;
+
+    const t: TicketWithMessages = json.ticket;
+    const msgs = Array.isArray(t.messages) ? t.messages : [];
+    const adminMsgs = msgs.filter((m) => m.sender === "admin");
+    if (!adminMsgs.length) return 0;
+
+    const lastSeenId = await AsyncStorage.getItem(SEEN_KEY(type));
+
+    // اگر هیچ‌وقت این چت باز نشده → همهٔ پیام‌های ادمین نخوانده‌اند
+    if (!lastSeenId) return adminMsgs.length;
+
+    const idx = adminMsgs.findIndex((m) => m.id === lastSeenId);
+
+    // اگر شناسه پیدا نشد → همه را نخوانده فرض کن
+    if (idx === -1) return adminMsgs.length;
+
+    // تعداد پیام‌های بعد از آخرین پیام دیده‌شده
+    return Math.max(0, adminMsgs.length - (idx + 1));
+  } catch (e) {
+    console.log("[panah] countUnread error", type, e);
+    return 0;
+  }
+}
+
 export default function Panah() {
   const { colors } = useTheme();
   const router = useRouter();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { me } = useUser();
 
   const [planView, setPlanView] = useState<PlanView>("free");
   const [daysLeft, setDaysLeft] = useState<number | null>(null);
   const [loadingPlan, setLoadingPlan] = useState(true);
+
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const isProPlan = planView === "pro";
   const isNearExpire =
@@ -50,7 +129,6 @@ export default function Panah() {
 
         if (status.rawExpiresAt) {
           if (status.isExpired) {
-            // اگر قبلاً پرو/وی‌آی‌پی بوده و حالا منقضی شده → expired
             view =
               status.rawPlan === "pro" || status.rawPlan === "vip"
                 ? "expired"
@@ -66,16 +144,6 @@ export default function Panah() {
 
         setPlanView(view);
         setDaysLeft(localDaysLeft ?? null);
-
-        //console.log("PANAH INIT", {
-          //rawPlan: status.rawPlan,
-         // rawExpiresAt: status.rawExpiresAt,
-         // isExpired: status.isExpired,
-        //  daysLeft: status.daysLeft,
-         // flag,
-         // planView: view,
-         // localDaysLeft,
-        //});
       } catch (e) {
         console.log("PANAH INIT ERR", e);
         setPlanView("free");
@@ -86,7 +154,7 @@ export default function Panah() {
     })();
   }, [me]);
 
-  /** هر بار تب پناه فوکوس می‌گیرد → دوباره محاسبه (با فلگ پرو) */
+  /** هر بار تب پناه فوکوس می‌گیرد → دوباره محاسبه پلن (با فلگ پرو) */
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
@@ -117,16 +185,9 @@ export default function Panah() {
           if (!cancelled) {
             setPlanView(view);
             setDaysLeft(localDaysLeft ?? null);
-            //console.log("PANAH FOCUS", {
-              //flag,
-              //planView: view,
-              //localDaysLeft,
-              //daysLeftReal: status.daysLeft,
-              //isExpired: status.isExpired,
-           // });
           }
         } catch (e) {
-          //console.log("PANAH FOCUS ERR", e);
+          console.log("PANAH FOCUS ERR", e);
         }
       })();
       return () => {
@@ -135,22 +196,53 @@ export default function Panah() {
     }, [me])
   );
 
-  // 🎯 سیستم بج هماهنگ با تب Subscription:
-  // FREE: پس‌زمینه تیره، متن روشن
-  // PRO: سبز تیره + متن سبز نئونی
-  // PRO نزدیک انقضا (از روی daysLeft): قهوه‌ای تیره + متن زرد
-  // EXPIRED: قرمز تیره + متن صورتی روشن
+  /** هر بار فوکوس → تعداد پیام‌های نخوانده (ادمین) را حساب کن و در unreadCount بگذار */
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      const loadUnread = async () => {
+        const openedById = getOpenedById(me);
+        if (!openedById) {
+          if (!cancelled) setUnreadCount(0);
+          return;
+        }
+
+        const [therapyUnread, techUnread] = await Promise.all([
+          countUnreadForType("therapy", openedById),
+          countUnreadForType("tech", openedById),
+        ]);
+
+        if (!cancelled) {
+          setUnreadCount(therapyUnread + techUnread);
+        }
+      };
+
+      loadUnread();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [me])
+  );
+
+  /** تنظیم بج تب پناه بر اساس unreadCount */
+  useEffect(() => {
+    (navigation as any)?.setOptions?.({
+      tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+    });
+  }, [navigation, unreadCount]);
+
+  // 🎯 سیستم بج پلن هماهنگ با تب Subscription
   let badgeBg = "#111827";
   let badgeTextColor = "#E5E7EB";
   let badgeLabel: "FREE" | "PRO" | "EXPIRED" = "FREE";
 
   if (planView === "pro") {
     if (isNearExpire) {
-      // پرو نزدیک انقضا
       badgeBg = "#451A03";
       badgeTextColor = "#FBBF24";
     } else {
-      // پرو عادی
       badgeBg = "#064E3B";
       badgeTextColor = "#4ADE80";
     }
@@ -193,6 +285,7 @@ export default function Panah() {
         <Text style={[styles.headerTitle, { color: colors.text }]}>
           پنــــــــاه
         </Text>
+
         <View style={{ flexDirection: "row-reverse", alignItems: "center" }}>
           {isNearExpire && (
             <Text
@@ -206,6 +299,7 @@ export default function Panah() {
               {daysLeft} روز تا پایان اشتراک
             </Text>
           )}
+
           <View
             style={[
               styles.badge,
@@ -238,6 +332,7 @@ export default function Panah() {
           <Ionicons name="list" size={28} color="#7C2D12" />
           <Text style={styles.bigBtnText}>پشتیبان واقعی</Text>
         </TouchableOpacity>
+
         <TouchableOpacity
           activeOpacity={0.9}
           style={[styles.bigBtn, styles.aiSupport]}
@@ -254,6 +349,7 @@ export default function Panah() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
+
   header: {
     borderBottomWidth: 1,
     paddingHorizontal: 16,
@@ -263,6 +359,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   headerTitle: { fontSize: 18, fontWeight: "900" },
+
   badge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -272,6 +369,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "900",
   },
+
   fullArea: {
     justifyContent: "space-between",
     paddingHorizontal: 16,
