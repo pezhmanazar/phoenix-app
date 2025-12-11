@@ -108,7 +108,7 @@ function detectType(m?: string | null, url?: string | null): MessageType {
   return "text";
 }
 
-/* گرفتن نام/شناسه کاربر از استوریج (فَallback قدیمی) */
+/* گرفتن نام/شناسه کاربر از استوریج (فallback قدیمی) */
 async function getUserIdentity() {
   try {
     const keys = ["user_profile", "profile", "me", "phoenix_profile"];
@@ -495,13 +495,15 @@ function Composer({
   user,
   onTicketCreated,
   onSent,
+  onMeasureHeight,
 }: {
   ticketId: string;
   ticketType?: "tech" | "therapy" | null;
   isPro: boolean;
   user?: UserIdentity | null;
-  onTicketCreated?: (newId: string) => void;
-  onSent: () => void;
+  onTicketCreated?: (newId: string, fullTicket?: Ticket | null) => void;
+  onSent: (updatedTicket?: Ticket | null) => void;
+  onMeasureHeight?: (h: number) => void;
 }) {
   const { colors, dark } = useTheme();
 
@@ -531,6 +533,9 @@ function Composer({
     );
     return true;
   };
+
+  const onLayout = (e: any) =>
+    onMeasureHeight?.(Math.max(64, e.nativeEvent.layout.height || 0));
 
   const pickImage = async () => {
     if (planGuard()) return;
@@ -605,13 +610,13 @@ function Composer({
   };
 
   const createTicketIfNeeded = async (textFallback: string) => {
-    // اگر ticketType داریم یعنی از /support/tickets/therapy اومدیم
+    // اگر id واقعی داریم (نه tech/therapy) همون رو استفاده کن
     if (!ticketType) return ticketId;
 
     const { openedById, openedByName } = await resolveIdentity(user);
 
     const payload = {
-      type: ticketType,
+      type: ticketType, // "tech" | "therapy"
       text:
         textFallback && textFallback.trim()
           ? textFallback.trim()
@@ -674,7 +679,8 @@ function Composer({
       );
     }
 
-    onTicketCreated?.(newId);
+    const fullTicket: Ticket | null = json.ticket ?? null;
+    onTicketCreated?.(newId, fullTicket);
     return newId;
   };
 
@@ -687,17 +693,16 @@ function Composer({
       const textPayload = text.trim();
 
       let targetId = ticketId;
-
       if (ticketType) {
-        // حالت ورود از route = therapy/tech → اول تیکت بساز
+        // اگر صفحه برای نوع تیکت است (tech/therapy)، اول تیکت بساز
         targetId = await createTicketIfNeeded(textPayload);
         setText("");
-        onSent();
+        // createTicketIfNeeded خودش onTicketCreated را صدا می‌زند
+        onSent(); // برای اینکه reload نهایی انجام شود
         return;
       }
 
       const { openedById, openedByName } = await resolveIdentity(user);
-
       const res = await fetch(
         `${BACKEND_URL}/api/public/tickets/${targetId}/reply`,
         {
@@ -724,8 +729,10 @@ function Composer({
         throw new Error(msg);
       }
 
+      const updatedTicket: Ticket | null = json.ticket ?? null;
+
       setText("");
-      onSent();
+      onSent(updatedTicket);
     } catch (e: any) {
       const msg = extractErrorMessage(e, "خطا در ارسال متن");
       alert(msg);
@@ -783,7 +790,6 @@ function Composer({
       setSending(true);
 
       let targetId = ticketId;
-
       if (ticketType) {
         const firstText = hasText ? text.trim() : "ضمیمه";
         targetId = await createTicketIfNeeded(firstText);
@@ -809,9 +815,11 @@ function Composer({
         throw new Error(msg);
       }
 
+      const updatedTicket: Ticket | null = json.ticket ?? null;
+
       setText("");
       resetAttachments();
-      onSent();
+      onSent(updatedTicket);
     } catch (e: any) {
       const msg = extractErrorMessage(e, "خطا در ارسال فایل/ویس");
       alert(msg);
@@ -821,7 +829,7 @@ function Composer({
   };
 
   return (
-    <View style={styles.composerWrap}>
+    <View style={styles.composerWrap} onLayout={onLayout}>
       <TextInput
         value={text}
         onChangeText={setText}
@@ -837,7 +845,7 @@ function Composer({
         ]}
         multiline
         textAlignVertical="top"
-        scrollEnabled
+        scrollEnabled={true}
       />
 
       {image || recURI ? (
@@ -1039,10 +1047,6 @@ export default function TicketDetail() {
   const [planLoaded, setPlanLoaded] = useState(false);
 
   const typeFromParam = parseTicketType(id);
-  // شناسهٔ واقعی تیکت (uuid). اگر از route `therapy` بیایم، اول null است.
-  const [effectiveId, setEffectiveId] = useState<string | null>(
-    typeFromParam ? null : id ? String(id) : null
-  );
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1055,6 +1059,21 @@ export default function TicketDetail() {
   const msgPositions = useRef<Record<string, number>>({});
   const [pins, setPins] = useState<string[]>([]);
 
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => {}
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => {}
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
   /* سنک وضعیت پلن از روی me (با استفاده از getPlanStatus + PRO_FLAG_KEY) */
   const syncPlanView = useCallback(async () => {
     try {
@@ -1065,6 +1084,7 @@ export default function TicketDetail() {
       let view: PlanView = "free";
 
       if (status.rawExpiresAt) {
+        // پلن تاریخ انقضا دارد
         if (
           status.isExpired &&
           (status.rawPlan === "pro" || status.rawPlan === "vip")
@@ -1082,11 +1102,12 @@ export default function TicketDetail() {
           view = "free";
         }
       } else {
+        // بدون تاریخ انقضا → فقط بر اساس isPro یا فلگ لوکال
         view = status.isPro || flagIsPro ? "pro" : "free";
       }
 
       setPlanView(view);
-    } catch {
+    } catch (e) {
       setPlanView("free");
     } finally {
       setPlanLoaded(true);
@@ -1103,46 +1124,41 @@ export default function TicketDetail() {
     }, [syncPlanView])
   );
 
-  // اگر route از uuid به uuid جدید عوض شد، effectiveId را sync کن
-  useEffect(() => {
-    if (!typeFromParam && id && id !== effectiveId) {
-      setEffectiveId(String(id));
-    }
-  }, [id, typeFromParam, effectiveId]);
-
   const fetchTicket = useCallback(
     async (silent: boolean = false) => {
-      if (!effectiveId) {
+      if (typeFromParam) {
         if (!silent) setLoading(false);
         return;
       }
       try {
         if (!silent) setLoading(true);
-        const url = `${BACKEND_URL}/api/public/tickets/${effectiveId}`;
+        const url = `${BACKEND_URL}/api/public/tickets/${id}`;
         console.log("[tickets/reload - byId] GET", url);
         const res = await fetch(url);
-        const json = await res.json();
-        console.log("[tickets/reload - byId] RES", res.status, json?.ok);
+        let json: any = null;
+        try {
+          json = await res.json();
+        } catch {}
+        console.log(
+          "[tickets/reload - byId] RES",
+          res.status,
+          json?.ok ? "ok" : "not-ok"
+        );
         if (json?.ok && json.ticket) {
           setTicket(json.ticket);
-          setTimeout(() => {
-            scrollRef.current?.scrollToEnd({ animated: true });
-          }, 0);
         }
-      } catch (e) {
-        console.log("[tickets/reload - byId] error", e);
       } finally {
         if (!silent) setLoading(false);
       }
     },
-    [effectiveId]
+    [id, typeFromParam]
   );
 
   useEffect(() => {
     fetchTicket(false);
   }, [fetchTicket]);
 
-  /* اگر id=tech/therapy باشد، سعی می‌کنیم تیکت باز کاربر را پیدا کنیم */
+  /* اگر id = tech/therapy باشد، سعی می‌کنیم تیکت باز کاربر را پیدا کنیم */
   const tryOpenExisting = useCallback(async () => {
     if (!typeFromParam) return;
     try {
@@ -1171,7 +1187,6 @@ export default function TicketDetail() {
       if (res.ok && json?.ok && json.ticket && json.ticket.id) {
         const t: Ticket = json.ticket;
         setTicket(t);
-        setEffectiveId(t.id);
         loadPins(t.id).then(setPins).catch(() => {});
         router.replace(`/support/tickets/${t.id}`);
       }
@@ -1208,7 +1223,7 @@ export default function TicketDetail() {
     let rafId: number;
     const scrollSmoothToEnd = () => {
       scrollRef.current?.scrollToEnd({ animated: true });
-      if (++tries < 4) rafId = requestAnimationFrame(scrollSmoothToEnd);
+      if (++tries < 8) rafId = requestAnimationFrame(scrollSmoothToEnd);
     };
     rafId = requestAnimationFrame(scrollSmoothToEnd);
     didInitialScroll.current = true;
@@ -1218,15 +1233,15 @@ export default function TicketDetail() {
   }, [ticket?.messages?.length]);
 
   useEffect(() => {
-    if (effectiveId) loadPins(effectiveId).then(setPins);
-  }, [effectiveId]);
+    if (!typeFromParam && id) loadPins(id).then(setPins);
+  }, [id, typeFromParam]);
 
   const togglePin = async (mid: string) => {
-    if (!effectiveId) return;
+    if (typeFromParam || !id) return;
     const exist = pins.includes(mid);
     const next = exist ? pins.filter((x) => x !== mid) : [...pins, mid];
     setPins(next);
-    await savePins(effectiveId, next);
+    await savePins(id, next);
   };
 
   const jumpToMessage = (mid: string) => {
@@ -1320,16 +1335,16 @@ export default function TicketDetail() {
   let badgeLabel: "FREE" | "PRO" | "EXPIRED" = "FREE";
 
   if (planView === "pro") {
-    badgeBg = "#064E3B";
-    badgeTextColor = "#4ADE80";
+    badgeBg = "#064E3B"; // سبز تیره
+    badgeTextColor = "#4ADE80"; // سبز روشن
     badgeLabel = "PRO";
   } else if (planView === "expiring") {
-    badgeBg = "#451A03";
-    badgeTextColor = "#FBBF24";
+    badgeBg = "#451A03"; // کهربایی تیره
+    badgeTextColor = "#FBBF24"; // زرد
     badgeLabel = "PRO";
   } else if (planView === "expired") {
-    badgeBg = "#7F1D1D";
-    badgeTextColor = "#FCA5A5";
+    badgeBg = "#7F1D1D"; // قرمز تیره
+    badgeTextColor = "#FCA5A5"; // قرمز روشن
     badgeLabel = "EXPIRED";
   }
 
@@ -1350,6 +1365,7 @@ export default function TicketDetail() {
         <Stack.Screen options={{ headerShown: false }} />
 
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+          {/* Header: عنوان راست، بج چپ عنوان */}
           <View
             style={[styles.customHeader, { borderBottomColor: colors.border }]}
           >
@@ -1457,7 +1473,7 @@ export default function TicketDetail() {
     );
   }
 
-  if (!typeFromParam && !effectiveId && loading) {
+  if ((loading && !typeFromParam) || (!ticket && !typeFromParam && loading)) {
     return (
       <>
         <Stack.Screen options={{ headerShown: false }} />
@@ -1622,8 +1638,6 @@ export default function TicketDetail() {
 
   const hasMessages = !!ticket?.messages?.length;
 
-  const chatIdForComposer = effectiveId || String(id);
-
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
@@ -1633,6 +1647,7 @@ export default function TicketDetail() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+        {/* Header مشترک: عنوان راست، بج چپ عنوان */}
         <View
           style={[styles.customHeader, { borderBottomColor: colors.border }]}
         >
@@ -1676,8 +1691,6 @@ export default function TicketDetail() {
                 </Text>
               </View>
             )}
-
-            {statusChip}
           </View>
 
           <View style={{ width: 32 }} />
@@ -1769,20 +1782,52 @@ export default function TicketDetail() {
           ]}
           pointerEvents="box-none"
         >
+          {chatType === "therapy" && !isProPlan && (
+            <View
+              style={{
+                marginBottom: 8,
+                padding: 10,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.card,
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.text,
+                  fontSize: 12,
+                  textAlign: "right",
+                  lineHeight: 18,
+                }}
+              >
+                ارسال پیام به درمانگر ققنوس فقط برای کاربرانی فعاله که اشتراک
+                PRO را از تب «پرداخت» فعال کرده‌اند. اگر فعلاً اشتراک نداری،
+                می‌تونی از پشتیبانی فنی یا پشتیبان هوشمند استفاده کنی.
+              </Text>
+            </View>
+          )}
+
           <Composer
-            ticketId={chatIdForComposer}
+            ticketId={String(id)}
             ticketType={typeFromParam}
             isPro={isProPlan}
             user={me}
-            onTicketCreated={(newId) => {
-              console.log("[tickets] onTicketCreated", newId);
-              setEffectiveId(newId);
-              loadPins(newId).then(setPins);
+            onTicketCreated={(newId, fullTicket) => {
               router.replace(`/support/tickets/${newId}`);
-              fetchTicket(true);
+              if (fullTicket) {
+                setTicket(fullTicket);
+              } else {
+                fetchTicket(true);
+              }
+              loadPins(newId).then(setPins);
             }}
-            onSent={() => {
-              fetchTicket(true);
+            onSent={(updatedTicket) => {
+              if (updatedTicket) {
+                setTicket(updatedTicket);
+              } else {
+                fetchTicket(true);
+              }
               requestAnimationFrame(() =>
                 scrollRef.current?.scrollToEnd({ animated: true })
               );
