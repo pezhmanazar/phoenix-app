@@ -1202,9 +1202,12 @@ console.log("[tickets/reload - byId] GET", url);
 
       console.log("[tickets/poll] start polling for ticket updates");
 
+      // 🔹 همین اولِ فوکوس، یک بار فوراً تیکت را ریلود کن
+      fetchTicket(true); // silent = true → بدون لودر فول‌اسکرین
+
       const interval = setInterval(() => {
-        fetchTicket(true); // silent = true → لودر فول‌اسکرین نیاور
-      }, 8000); // هر ۸ ثانیه یک بار
+        fetchTicket(true); // هر ۸ ثانیه یک‌بار آپدیت
+      }, 8000);
 
       return () => {
         console.log("[tickets/poll] stop polling");
@@ -1212,7 +1215,7 @@ console.log("[tickets/reload - byId] GET", url);
       };
     }, [id, typeFromParam, fetchTicket])
   );
-
+  
   /* اگر id = tech/therapy باشد، سعی می‌کنیم تیکت باز کاربر را پیدا کنیم */
   const tryOpenExisting = useCallback(async () => {
     if (!typeFromParam) return;
