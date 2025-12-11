@@ -6,6 +6,9 @@ import { isUserPro } from "../services/planStatus.js";
 
 const prisma = new PrismaClient();
 
+const UPLOAD_ROOT =
+  process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
+
 /* ================= helper پلن برای چت درمانگر ================= */
 /**
  * اگر type = "therapy" باشد، چک می‌کند کاربر واقعا PRO/VIP هست یا نه.
@@ -548,8 +551,14 @@ publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
     if (f) {
       mime = f.mimetype || null;
       size = typeof f.size === "number" ? f.size : null;
-      const filename = path.basename(f.path || f.filename || "");
-      fileUrl = filename ? `/uploads/${filename}` : null;
+
+      // مسیر نسبی فایل نسبت به ریشه‌ی uploads، مثل "2025/xxxxx.m4a"
+      const relPath = path
+        .relative(UPLOAD_ROOT, f.path || "")
+        .replace(/\\/g, "/");
+
+      fileUrl = relPath ? `/uploads/${relPath}` : null;
+
       const mt = (mime || "").toLowerCase();
       if (mt.startsWith("audio/")) messageType = "voice";
       else if (mt.startsWith("image/")) messageType = "image";

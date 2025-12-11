@@ -1,9 +1,14 @@
 // routes/public.js
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
+import path from "path";
 
 const router = Router();
 const prisma = new PrismaClient();
+
+// همان منطق server.js برای روت آپلودها
+const UPLOAD_ROOT =
+  process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
 
 /* helper: type detection for file messages */
 const detectType = (mimetype = "", filename = "") => {
@@ -335,20 +340,25 @@ router.post("/tickets/:id/reply-upload", async (req, res) => {
     }
 
     const f = req.file;
-    let messageType = "text";
-    let fileUrl = null;
-    let mime = null;
-    let durationSec = null;
+  let messageType = "text";
+  let fileUrl = null;
+  let mime = null;
+  let durationSec = null;
 
-    if (f) {
-      fileUrl = `/uploads/${f.filename}`;
-      mime = f.mimetype || null;
-      messageType = detectType(f.mimetype, f.originalname);
-      if (typeof req.body?.durationSec === "string") {
-        const n = Number(req.body.durationSec);
-        if (Number.isFinite(n) && n >= 0) durationSec = Math.round(n);
-      }
+  if (f) {
+    // مسیر نسبی فایل نسبت به ریشه‌ی uploads
+    const relPath = path
+      .relative(UPLOAD_ROOT, f.path)
+      .replace(/\\/g, "/"); // برای ویندوز هم امن باشد
+    fileUrl = `/uploads/${relPath}`;
+
+    mime = f.mimetype || null;
+    messageType = detectType(f.mimetype, f.originalname);
+    if (typeof req.body?.durationSec === "string") {
+      const n = Number(req.body.durationSec);
+      if (Number.isFinite(n) && n >= 0) durationSec = Math.round(n);
     }
+  }
 
     const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
     if (!f && !text) return res.status(400).json({ ok: false, error: "no_content" });
