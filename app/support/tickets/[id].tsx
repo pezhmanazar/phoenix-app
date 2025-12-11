@@ -1158,6 +1158,29 @@ console.log("[tickets/reload - byId] GET", url);
     fetchTicket(false);
   }, [fetchTicket]);
 
+  // 🔁 پولینگ برای دریافت پیام‌های جدید (مثلاً وقتی ادمین از پنل جواب می‌دهد)
+  useFocusEffect(
+    useCallback(() => {
+      // اگر هنوز روی alias هستیم (id = "tech" یا "therapy")، صبر می‌کنیم تا
+      // router.replace روی id واقعی انجام شود
+      if (typeFromParam) return;
+
+      // اگر هنوز هیچ تیکتی لود نشده، کاری نکن
+      if (!id) return;
+
+      console.log("[tickets/poll] start polling for ticket updates");
+
+      const interval = setInterval(() => {
+        fetchTicket(true); // silent = true → لودر فول‌اسکرین نیاور
+      }, 8000); // هر ۸ ثانیه یک بار
+
+      return () => {
+        console.log("[tickets/poll] stop polling");
+        clearInterval(interval);
+      };
+    }, [id, typeFromParam, fetchTicket])
+  );
+
   /* اگر id = tech/therapy باشد، سعی می‌کنیم تیکت باز کاربر را پیدا کنیم */
   const tryOpenExisting = useCallback(async () => {
     if (!typeFromParam) return;
@@ -1337,10 +1360,10 @@ console.log("[tickets/reload - byId] GET", url);
   let badgeLabel: "FREE" | "PRO" | "EXPIRED" = "FREE";
 
   // یک فلگ واحد برای همهٔ حالت‌های لودینگ اولیه
+  // لودینگ اولیه فقط وقتی که روی alias هستیم (id = "tech" | "therapy")
+  // یعنی فقط زمانی که باید هم پلن را چک کنیم هم تیکت باز کاربر را پیدا کنیم
   const isInitialLoading =
-    !planLoaded || // هنوز وضعیت پلن آماده نشده
-    checkingExisting || // داریم تیکت باز کاربر را (برای therapy/tech alias) چک می‌کنیم
-    (!typeFromParam && loading && !ticket); // وقتی id واقعی است و تیکت هنوز لود نشده
+    !!typeFromParam && (!planLoaded || checkingExisting);
 
   if (planView === "pro") {
     badgeBg = "#064E3B"; // سبز تیره
