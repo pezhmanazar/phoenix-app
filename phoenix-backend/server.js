@@ -292,8 +292,10 @@ app.get("/api/ping", (_req, res) => {
 });
 
 // ---------- Routes ----------
-// تیکت‌ها (ادمین)
+// تیکت‌ها
 app.use("/api/tickets", ticketsRouter);
+// ❌ روتر عمومی قدیمی رو برای مسیر /api/public/tickets غیرفعال کردیم
+// app.use("/api/public/tickets", publicTicketsRouter);
 
 // فقط برای مسیرهای public که آپلود می‌فرستند، میدل‌ویر آپلود را اعمال کن
 app.use(
@@ -303,7 +305,6 @@ app.use(
   logUploadDebug,
   guardNoContent
 );
-
 app.use(
   "/api/public/tickets/:id/reply",
   maybeUpload,
