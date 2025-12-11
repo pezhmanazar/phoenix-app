@@ -1336,6 +1336,12 @@ console.log("[tickets/reload - byId] GET", url);
   let badgeTextColor = "#E5E7EB";
   let badgeLabel: "FREE" | "PRO" | "EXPIRED" = "FREE";
 
+  // یک فلگ واحد برای همهٔ حالت‌های لودینگ اولیه
+  const isInitialLoading =
+    !planLoaded || // هنوز وضعیت پلن آماده نشده
+    checkingExisting || // داریم تیکت باز کاربر را (برای therapy/tech alias) چک می‌کنیم
+    (!typeFromParam && loading && !ticket); // وقتی id واقعی است و تیکت هنوز لود نشده
+
   if (planView === "pro") {
     badgeBg = "#064E3B"; // سبز تیره
     badgeTextColor = "#4ADE80"; // سبز روشن
@@ -1457,7 +1463,8 @@ console.log("[tickets/reload - byId] GET", url);
     );
   }
 
-  if (!planLoaded || checkingExisting) {
+  // یک صفحهٔ لودینگ واحد برای همهٔ حالت‌ها
+  if (isInitialLoading) {
     return (
       <>
         <Stack.Screen options={{ headerShown: false }} />
@@ -1469,25 +1476,7 @@ console.log("[tickets/reload - byId] GET", url);
             justifyContent: "center",
           }}
         >
-          <Text style={{ color: "#8E8E93" }}>در حال آماده‌سازی…</Text>
-        </SafeAreaView>
-      </>
-    );
-  }
-
-  if ((loading && !typeFromParam) || (!ticket && !typeFromParam && loading)) {
-    return (
-      <>
-        <Stack.Screen options={{ headerShown: false }} />
-        <SafeAreaView
-          style={{
-            flex: 1,
-            backgroundColor: colors.background,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Text style={{ color: "#8E8E93" }}>در حال بارگذاری</Text>
+          <Text style={{ color: "#8E8E93" }}>در حال بارگذاری گفتگو…</Text>
         </SafeAreaView>
       </>
     );
