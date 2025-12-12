@@ -223,7 +223,6 @@ router.get("/verify", async (req, res) => {
 
   try {
     const q = req.query || {};
-
     const rawStatus =
       typeof q.Status === "string"
         ? q.Status
@@ -235,9 +234,11 @@ router.get("/verify", async (req, res) => {
 
     const hasGatewayStatus = rawStatus.length > 0;
     const status = hasGatewayStatus ? rawStatus.toUpperCase() : "UNDEFINED";
-    const authority = String(q.Authority || q.authority || "");
+    const authority = String(q.Authority || q.authority || "").trim();
 
-    if (!authority) return res.status(400).json({ ok: false, error: "INVALID_VERIFY_INPUT" });
+    if (!authority) {
+      return res.status(400).json({ ok: false, error: "INVALID_VERIFY_INPUT" });
+    }
 
     const sub = await prisma.subscription.findFirst({
       where: { authority },
@@ -245,19 +246,19 @@ router.get("/verify", async (req, res) => {
     });
 
     if (!sub) {
-      return res.status(400).json({ ok: false, error: "SUBSCRIPTION_NOT_FOUND" });
+      return res.status(404).json({ ok: false, error: "SUBSCRIPTION_NOT_FOUND", authority });
     }
 
     const amount = sub.amount;
-    const months = sub.months;
-    const plan = sub.plan;
-    const phone = sub.user?.phone ? normalizeIranPhone(String(sub.user.phone)) : null;
-    const planExpiresAt = calcPlanExpiresAt(months);
+    const plan = sub.plan || "pro";
+    const months = sub.months || 1;
+    const planExpiresAt = sub.expiresAt ? new Date(sub.expiresAt).toISOString() : null;
+    const phone = sub.user?.phone || null;
 
     if (hasGatewayStatus && status !== "OK") {
-      await prisma.subscription.updateMany({
-        where: { authority },
-        data: { status: "canceled" },
+      await prisma.subscription.update({
+        where: { id: sub.id },
+        data: { status: "canceled", refId: "CANCELED" },
       });
 
       return res.json({
@@ -277,16 +278,14 @@ router.get("/verify", async (req, res) => {
     if (!PAY_REAL) {
       const refId = `TEST-${Date.now()}`;
 
-      await prisma.subscription.updateMany({
-        where: { authority },
-        data: {
-          refId,
-          status: "active",
-          expiresAt: new Date(planExpiresAt),
-        },
+      await prisma.subscription.update({
+        where: { id: sub.id },
+        data: { status: "active", refId },
       });
 
-      if (phone) await upsertUserPlanOnServer({ phone, plan, planExpiresAt });
+      if (phone && planExpiresAt) {
+        await upsertUserPlanOnServer({ phone, plan, planExpiresAt });
+      }
 
       return res.json({
         ok: true,
@@ -302,7 +301,9 @@ router.get("/verify", async (req, res) => {
       });
     }
 
-    if (!MERCHANT_ID) return res.status(500).json({ ok: false, error: "MERCHANT_ID_MISSING" });
+    if (!MERCHANT_ID) {
+      return res.status(500).json({ ok: false, error: "MERCHANT_ID_MISSING" });
+    }
 
     const verifyUrl = ZP_API_BASE.replace(/\/+$/, "") + "/verify.json";
     const payload = { merchant_id: MERCHANT_ID, authority, amount };
@@ -331,9 +332,9 @@ router.get("/verify", async (req, res) => {
       const code = data?.code ?? errors?.code ?? "UNKNOWN";
       console.error("[pay/verify] ZARINPAL_VERIFY_ERROR", { code, json });
 
-      await prisma.subscription.updateMany({
-        where: { authority },
-        data: { status: "canceled" },
+      await prisma.subscription.update({
+        where: { id: sub.id },
+        data: { status: "canceled", refId: "VERIFY_FAILED" },
       });
 
       return res.status(502).json({ ok: false, error: `ZP_VERIFY_ERROR_${code}` });
@@ -341,25 +342,14 @@ router.get("/verify", async (req, res) => {
 
     const refId = String(data.ref_id || "");
 
-    await prisma.subscription.updateMany({
-      where: { authority },
-      data: {
-        refId: refId || "VERIFIED",
-        status: "active",
-        expiresAt: new Date(planExpiresAt),
-      },
+    await prisma.subscription.update({
+      where: { id: sub.id },
+      data: { status: "active", refId },
     });
 
-    await prisma.user.update({
-      where: { id: sub.userId },
-      data: {
-        plan,
-        planExpiresAt: new Date(planExpiresAt),
-        profileCompleted: true,
-      },
-    });
-
-    if (phone) await upsertUserPlanOnServer({ phone, plan, planExpiresAt });
+    if (phone && planExpiresAt) {
+      await upsertUserPlanOnServer({ phone, plan, planExpiresAt });
+    }
 
     return res.json({
       ok: true,
