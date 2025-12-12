@@ -116,7 +116,7 @@ router.post("/start", async (req, res) => {
     const phone = normalizeIranPhone(String(body.phone || ""));
     const amount = Number(body.amount || 0);
     const description = String(body.description || "پرداخت اشتراک ققنوس");
-    const callback = String(body.callback || `${getBaseUrl(req)}/api/pay/verify`);
+    const callback = `${getBaseUrl(req)}/api/pay/verify`;
 
     if (!phone) return res.status(400).json({ ok: false, error: "PHONE_INVALID" });
     if (!amount || amount < 1000) return res.status(400).json({ ok: false, error: "AMOUNT_INVALID" });
