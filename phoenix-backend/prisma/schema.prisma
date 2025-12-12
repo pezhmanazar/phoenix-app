@@ -138,20 +138,25 @@ model User {
 }
 
 model Subscription {
-  id        String               @id @default(uuid())
-  userId    String
-  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String             @id @default(uuid())
 
-  authority String               // کد زرین‌پال
-  refId     String               // ref_id زرین‌پال
+  userId    String?
+  user      User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  phone     String
+  authority String             @unique
+  refId     String?
+
   amount    Int
   months    Int
-  plan      String               // فعلاً "pro" نگه می‌داریم
-  status    SubscriptionStatus   @default(active)
+  plan      String
+  status    SubscriptionStatus @default(pending)
+
   expiresAt DateTime
 
   createdAt DateTime @default(now())
+  paidAt    DateTime?
 
   @@index([userId])
-  @@index([authority])
+  @@index([phone])
 }
