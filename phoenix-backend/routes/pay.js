@@ -25,6 +25,7 @@ const ZP_CURRENCY = (process.env.ZP_CURRENCY || process.env.ZARINPAL_CURRENCY ||
 const BACKEND_URL = (process.env.BACKEND_URL || "http://127.0.0.1:4000").trim();
 const PAY_CALLBACK_URL = (process.env.PAY_CALLBACK_URL || "").trim();
 
+const PAY_RESULT_URL = (process.env.PAY_RESULT_URL || "").trim();
 const PAY_RESULT_BASE = (process.env.PAY_RESULT_BASE || "https://qoqnoos.app/pay").trim();
 const APP_DEEPLINK_BASE = (process.env.APP_DEEPLINK_BASE || "phoenix://pay/result").trim();
 
@@ -73,7 +74,9 @@ function buildResultUrl({ ok, authority }) {
     ok: ok ? "1" : "0",
     authority: authority || "",
   }).toString();
-  return `https://qoqnoos.app/api/pay/pay-result?${params}`;
+
+  const base = (PAY_RESULT_URL || `${PAY_RESULT_BASE.replace(/\/+$/, "")}/pay-result`).replace(/\/+$/, "");
+  return `${base}?${params}`;
 }
 
 function buildDeepLink({ ok, authority }) {
@@ -128,7 +131,7 @@ router.post("/start", async (req, res) => {
       months: body.months,
     });
 
-    const callback = PAY_REAL ? PAY_CALLBACK_URL : (body.callback || "");
+    const callback = PAY_REAL ? PAY_CALLBACK_URL : (String(body.callback || "") || `${req.protocol}://${req.get("host")}/api/pay/verify`);
     if (PAY_REAL && !callback) return res.status(500).json({ ok: false, error: "PAY_CALLBACK_URL_MISSING" });
 
     const user = await prisma.user.upsert({
