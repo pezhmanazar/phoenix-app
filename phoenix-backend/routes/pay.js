@@ -484,4 +484,36 @@ router.get("/pay-result", async (req, res) => {
 </html>`);
 });
 
+router.get("/status", async (req, res) => {
+  setCORS(res);
+  try {
+    const authority = String(req.query.authority || "").trim();
+    if (!authority) return res.status(400).json({ ok: false, error: "AUTHORITY_REQUIRED" });
+
+    const sub = await prisma.subscription.findFirst({
+      where: { authority },
+      include: { user: true },
+    });
+
+    if (!sub) return res.status(404).json({ ok: false, error: "SUBSCRIPTION_NOT_FOUND" });
+
+    return res.json({
+      ok: true,
+      authority: sub.authority,
+      status: sub.status,
+      refId: sub.refId,
+      amount: sub.amount,
+      plan: sub.plan,
+      months: sub.months,
+      expiresAt: sub.expiresAt ? new Date(sub.expiresAt).toISOString() : null,
+      phone: sub.user?.phone || null,
+      userPlan: sub.user?.plan || null,
+      userPlanExpiresAt: sub.user?.planExpiresAt ? new Date(sub.user.planExpiresAt).toISOString() : null,
+    });
+  } catch (e) {
+    console.error("PAY_STATUS_ERR", e);
+    return res.status(500).json({ ok: false, error: e?.message || "SERVER_ERROR" });
+  }
+});
+
 export default router;
