@@ -118,7 +118,7 @@ router.post("/start", async (req, res) => {
     const description = String(body.description || "پرداخت اشتراک ققنوس");
     const callback =
   process.env.ZARINPAL_CALLBACK_URL ||
-  `${getBaseUrl(req)}/api/pay/verify`;
+  "https://qoqnoos.app/api/pay/verify";
 
     if (!phone) return res.status(400).json({ ok: false, error: "PHONE_INVALID" });
     if (!amount || amount < 1000) return res.status(400).json({ ok: false, error: "AMOUNT_INVALID" });
