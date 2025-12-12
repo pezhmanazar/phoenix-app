@@ -446,13 +446,40 @@ router.get("/pay-result", async (req, res) => {
   </div>
 
   <script>
-    (function(){
-      var a = document.getElementById("openApp");
-      if(!a) return;
-      setTimeout(function(){ window.location.href = a.getAttribute("href"); }, 350);
-      setTimeout(function(){ window.location.href = "${fallback}"; }, 2500);
-    })();
-  </script>
+  (function () {
+    var a = document.getElementById("openApp");
+    if (!a) return;
+
+    var fallback = "https://qoqnoos.app";
+    var deeplink = a.getAttribute("href");
+
+    function isMobile() {
+      var ua = navigator.userAgent || "";
+      return /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+    }
+
+    if (!isMobile()) {
+      // Desktop: no auto-redirect
+      return;
+    }
+
+    var opened = false;
+
+    document.addEventListener("visibilitychange", function () {
+      if (document.hidden) opened = true;
+    });
+
+    setTimeout(function () {
+      window.location.href = deeplink;
+    }, 250);
+
+    setTimeout(function () {
+      if (!opened && !document.hidden) {
+        window.location.href = fallback;
+      }
+    }, 7000);
+  })();
+</script>
 </body>
 </html>`);
 });
