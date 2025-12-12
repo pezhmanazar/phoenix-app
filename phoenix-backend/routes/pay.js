@@ -4,7 +4,7 @@ import { PrismaClient } from "@prisma/client";
 const router = express.Router();
 const prisma = new PrismaClient();
 
-const PAY_REAL = String(process.env.PAY_REAL || "").trim() === "1";
+const PAY_REAL = process.env.PAY_REAL === "1";
 
 const MERCHANT_ID =
   (process.env.MERCHANT_ID || "").trim() ||
@@ -20,12 +20,12 @@ const ZP_GATEWAY_BASE =
   (process.env.ZARINPAL_GATEWAY_BASE || "").trim() ||
   "https://payment.zarinpal.com/pg/StartPay/";
 
-const ZP_CURRENCY = String(
-  process.env.ZP_CURRENCY || process.env.ZARINPAL_CURRENCY || "IRT"
-).trim();
+const ZP_CURRENCY = (process.env.ZP_CURRENCY || process.env.ZARINPAL_CURRENCY || "IRT").trim();
 
-const BACKEND_URL = (process.env.BACKEND_URL || "http://127.0.0.1:4000").trim();
 const PAY_CALLBACK_URL = (process.env.PAY_CALLBACK_URL || "").trim();
+
+const APP_SUCCESS_REDIRECT = (process.env.PAY_SUCCESS_REDIRECT || "").trim();
+const APP_CANCEL_REDIRECT = (process.env.PAY_CANCEL_REDIRECT || "").trim();
 
 function setCORS(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -44,78 +44,63 @@ function normalizeIranPhone(v = "") {
 }
 
 function getBaseUrl(req) {
-  const proto = String(req.headers["x-forwarded-proto"] || req.protocol || "https");
-  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "");
+  const proto = (req.headers["x-forwarded-proto"] || req.protocol || "https").toString();
+  const host = (req.headers["x-forwarded-host"] || req.headers.host || "").toString();
   return `${proto}://${host}`;
-}
-
-function calcExpiresAtByMonths(months) {
-  const m = Number(months) > 0 ? Number(months) : 1;
-  const d = new Date();
-  d.setMonth(d.getMonth() + m);
-  return d;
 }
 
 function resolvePlanFromInput({ amount, plan, days, months }) {
   const p = String(plan || "pro").trim() || "pro";
 
-  const mm = Number(months);
-  if (mm > 0) return { plan: p, months: mm };
+  const m = Number(months);
+  if (Number.isFinite(m) && m > 0) return { plan: p, months: m };
 
-  const dd = Number(days);
-  if (dd > 0) {
-    if (dd >= 180) return { plan: p, months: 6 };
-    if (dd >= 90) return { plan: p, months: 3 };
+  const d = Number(days);
+  if (Number.isFinite(d) && d > 0) {
+    if (d >= 180) return { plan: p, months: 6 };
+    if (d >= 90) return { plan: p, months: 3 };
+    if (d >= 30) return { plan: p, months: 1 };
     return { plan: p, months: 1 };
   }
 
-  const a = Number(amount);
-  if (a === 399000 || a === 10000) return { plan: "pro", months: 1 };
-  if (a === 899000) return { plan: "pro", months: 3 };
-  if (a === 1199000) return { plan: "pro", months: 6 };
+  if (amount === 399000 || amount === 10000) return { plan: "pro", months: 1 };
+  if (amount === 899000) return { plan: "pro", months: 3 };
+  if (amount === 1199000) return { plan: "pro", months: 6 };
+
   return { plan: p, months: 1 };
 }
 
-async function upsertUserPlanOnServer({ phone, plan, planExpiresAt }) {
-  if (!phone || !plan || !planExpiresAt) return;
-  const normalized = normalizeIranPhone(phone);
-  if (!normalized) return;
-
-  try {
-    const base = BACKEND_URL.replace(/\/+$/, "");
-    const targetUrl = `${base}/api/users/upsert`;
-    const body = { phone: normalized, plan, planExpiresAt, profileCompleted: true };
-
-    const resp = await fetch(targetUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Requested-With": "phoenix-pay-verify",
-      },
-      body: JSON.stringify(body),
-    });
-
-    const text = await resp.text();
-    if (!resp.ok) {
-      console.error("[pay/verify] upsert non-ok", resp.status, text);
-    }
-  } catch (e) {
-    console.error("[pay/verify] upsert error", e);
-  }
+function calcExpiresAtFromMonths(months) {
+  const now = new Date();
+  const d = new Date(now);
+  d.setMonth(d.getMonth() + Number(months || 1));
+  return d;
 }
 
+function buildRedirectUrl(base, params) {
+  if (!base) return "";
+  const u = new URL(base);
+  Object.entries(params).forEach(([k, v]) => {
+    if (v === undefined || v === null) return;
+    u.searchParams.set(k, String(v));
+  });
+  return u.toString();
+}
+
+/* -------------------- POST /api/pay/start -------------------- */
 router.post("/start", async (req, res) => {
   setCORS(res);
   if (req.method === "OPTIONS") return res.status(204).end();
 
   try {
     const body = req.body || {};
+
     const phone = normalizeIranPhone(String(body.phone || ""));
     const amount = Number(body.amount || 0);
-    const description = String(body.description || "پرداخت اشتراک ققنوس");
+    const description = String(body.description || "Phoenix Subscription").trim() || "Phoenix Subscription";
 
     if (!phone) return res.status(400).json({ ok: false, error: "PHONE_INVALID" });
-    if (!amount || amount < 1000) return res.status(400).json({ ok: false, error: "AMOUNT_INVALID" });
+    if (!Number.isFinite(amount) || amount < 1000) return res.status(400).json({ ok: false, error: "AMOUNT_INVALID" });
 
     const { plan, months } = resolvePlanFromInput({
       amount,
@@ -124,13 +109,13 @@ router.post("/start", async (req, res) => {
       months: body.months,
     });
 
-    const expiresAt = calcExpiresAtByMonths(months);
+    const expiresAt = calcExpiresAtFromMonths(months);
 
-    const callback = PAY_REAL
+    const callbackUrl = PAY_REAL
       ? PAY_CALLBACK_URL
-      : (String(body.callback || "").trim() || `${getBaseUrl(req)}/api/pay/verify`);
+      : String(body.callback || "").trim() || `${getBaseUrl(req)}/api/pay/verify`;
 
-    if (PAY_REAL && !callback) {
+    if (PAY_REAL && !callbackUrl) {
       return res.status(500).json({ ok: false, error: "PAY_CALLBACK_URL_MISSING" });
     }
 
@@ -142,8 +127,10 @@ router.post("/start", async (req, res) => {
 
     if (!PAY_REAL) {
       const authority = `MOCK_${Math.random().toString(36).slice(2, 10)}`;
-      const params = new URLSearchParams({ Status: "OK", Authority: authority }).toString();
-      const gatewayUrl = `${getBaseUrl(req)}/api/pay/verify?${params}`;
+      const gatewayUrl = `${getBaseUrl(req)}/mock-pay?${new URLSearchParams({
+        Authority: authority,
+        Status: "OK",
+      }).toString()}`;
 
       await prisma.subscription.create({
         data: {
@@ -168,7 +155,7 @@ router.post("/start", async (req, res) => {
       merchant_id: MERCHANT_ID,
       amount,
       description,
-      callback_url: callback,
+      callback_url: callbackUrl,
       currency: ZP_CURRENCY,
       metadata: { mobile: phone },
     };
@@ -182,7 +169,7 @@ router.post("/start", async (req, res) => {
     const json = await zpRes.json().catch(() => null);
 
     if (!zpRes.ok || !json) {
-      console.error("[pay/start] request failed", { status: zpRes.status, requestUrl, payload, response: json });
+      console.error("[pay/start] ZARINPAL_REQUEST_FAILED", { status: zpRes.status, requestUrl, payload, response: json });
       return res.status(502).json({ ok: false, error: "ZARINPAL_REQUEST_FAILED" });
     }
 
@@ -190,12 +177,12 @@ router.post("/start", async (req, res) => {
 
     if (!data || data.code !== 100) {
       const code = data?.code ?? errors?.code ?? "UNKNOWN";
-      console.error("[pay/start] zarinpal error", { code, json });
+      console.error("[pay/start] ZARINPAL_ERROR", { code, json });
       return res.status(502).json({ ok: false, error: `ZP_ERROR_${code}` });
     }
 
     const authority = String(data.authority || "").trim();
-    const gatewayUrl = `${ZP_GATEWAY_BASE}${authority}`;
+    if (!authority) return res.status(502).json({ ok: false, error: "ZP_AUTHORITY_MISSING" });
 
     await prisma.subscription.create({
       data: {
@@ -210,19 +197,22 @@ router.post("/start", async (req, res) => {
       },
     });
 
-    return res.json({ ok: true, code: 100, authority, gatewayUrl, description });
+    const gatewayUrl = `${ZP_GATEWAY_BASE}${authority}`;
+    return res.json({ ok: true, code: data.code, authority, gatewayUrl, description });
   } catch (e) {
-    console.error("[pay/start] err", e);
+    console.error("[pay/start] SERVER_ERROR", e);
     return res.status(500).json({ ok: false, error: e?.message || "SERVER_ERROR" });
   }
 });
 
+/* -------------------- GET /api/pay/verify -------------------- */
 router.get("/verify", async (req, res) => {
   setCORS(res);
   if (req.method === "OPTIONS") return res.status(204).end();
 
   try {
     const q = req.query || {};
+
     const rawStatus =
       typeof q.Status === "string"
         ? q.Status
@@ -245,24 +235,45 @@ router.get("/verify", async (req, res) => {
 
     if (!sub) return res.status(404).json({ ok: false, error: "SUBSCRIPTION_NOT_FOUND", authority });
 
-    const amount = Number(sub.amount);
-    const plan = String(sub.plan || "pro");
-    const planExpiresAt = sub.expiresAt ? new Date(sub.expiresAt).toISOString() : null;
-    const phone = sub.user?.phone ? normalizeIranPhone(sub.user.phone) : null;
+    const phone = sub.user?.phone || null;
+
+    if (sub.status === "active") {
+      const okUrl = buildRedirectUrl(APP_SUCCESS_REDIRECT, {
+        authority,
+        status: "OK",
+        refId: sub.refId,
+      });
+      if (okUrl) return res.redirect(302, okUrl);
+
+      return res.json({
+        ok: true,
+        authority,
+        status: hasGatewayStatus ? status : "OK",
+        amount: sub.amount,
+        phone,
+        refId: sub.refId,
+        plan: sub.plan,
+        planExpiresAt: new Date(sub.expiresAt).toISOString(),
+        verifyCode: 100,
+        canceled: false,
+        alreadyApplied: true,
+      });
+    }
 
     if (hasGatewayStatus && status !== "OK") {
-      if (sub.status !== "canceled") {
-        await prisma.subscription.update({
-          where: { id: sub.id },
-          data: { status: "canceled", refId: "CANCELED" },
-        });
-      }
+      await prisma.subscription.update({
+        where: { id: sub.id },
+        data: { status: "canceled", refId: "CANCELED" },
+      });
+
+      const cancelUrl = buildRedirectUrl(APP_CANCEL_REDIRECT, { authority, status });
+      if (cancelUrl) return res.redirect(302, cancelUrl);
 
       return res.json({
         ok: true,
         authority,
         status,
-        amount,
+        amount: sub.amount,
         phone,
         refId: null,
         plan: "free",
@@ -273,26 +284,30 @@ router.get("/verify", async (req, res) => {
     }
 
     if (!PAY_REAL) {
-      const refId = sub.refId && sub.refId !== "PENDING" ? sub.refId : `TEST-${Date.now()}`;
+      const refId = `TEST-${Date.now()}`;
 
-      if (sub.status !== "active") {
-        await prisma.subscription.update({
-          where: { id: sub.id },
-          data: { status: "active", refId },
-        });
-      }
+      await prisma.subscription.update({
+        where: { id: sub.id },
+        data: { status: "active", refId },
+      });
 
-      if (phone && planExpiresAt) await upsertUserPlanOnServer({ phone, plan, planExpiresAt });
+      await prisma.user.update({
+        where: { id: sub.userId },
+        data: { plan: sub.plan, planExpiresAt: sub.expiresAt, profileCompleted: true },
+      });
+
+      const okUrl = buildRedirectUrl(APP_SUCCESS_REDIRECT, { authority, status: "OK", refId });
+      if (okUrl) return res.redirect(302, okUrl);
 
       return res.json({
         ok: true,
         authority,
         status: hasGatewayStatus ? status : "OK",
-        amount,
+        amount: sub.amount,
         phone,
         refId,
-        plan,
-        planExpiresAt,
+        plan: sub.plan,
+        planExpiresAt: new Date(sub.expiresAt).toISOString(),
         verifyCode: 100,
         canceled: false,
       });
@@ -300,24 +315,8 @@ router.get("/verify", async (req, res) => {
 
     if (!MERCHANT_ID) return res.status(500).json({ ok: false, error: "MERCHANT_ID_MISSING" });
 
-    if (sub.status === "active" && sub.refId && sub.refId !== "PENDING") {
-      return res.json({
-        ok: true,
-        authority,
-        status: hasGatewayStatus ? status : "OK",
-        amount,
-        phone,
-        refId: sub.refId,
-        plan,
-        planExpiresAt,
-        verifyCode: 100,
-        canceled: false,
-        alreadyVerified: true,
-      });
-    }
-
     const verifyUrl = ZP_API_BASE.replace(/\/+$/, "") + "/verify.json";
-    const payload = { merchant_id: MERCHANT_ID, authority, amount };
+    const payload = { merchant_id: MERCHANT_ID, authority, amount: sub.amount };
 
     const zpRes = await fetch(verifyUrl, {
       method: "POST",
@@ -328,7 +327,7 @@ router.get("/verify", async (req, res) => {
     const json = await zpRes.json().catch(() => null);
 
     if (!zpRes.ok || !json) {
-      console.error("[pay/verify] failed", { status: zpRes.status, verifyUrl, payload, response: json });
+      console.error("[pay/verify] ZARINPAL_VERIFY_FAILED", { status: zpRes.status, verifyUrl, payload, response: json });
       return res.status(502).json({ ok: false, error: "ZARINPAL_VERIFY_FAILED" });
     }
 
@@ -336,41 +335,49 @@ router.get("/verify", async (req, res) => {
 
     if (!data || (data.code !== 100 && data.code !== 101)) {
       const code = data?.code ?? errors?.code ?? "UNKNOWN";
-      console.error("[pay/verify] error", { code, json });
+      console.error("[pay/verify] ZP_VERIFY_ERROR", { code, json });
 
-      if (sub.status !== "canceled") {
-        await prisma.subscription.update({
-          where: { id: sub.id },
-          data: { status: "canceled", refId: "VERIFY_FAILED" },
-        });
-      }
+      await prisma.subscription.update({
+        where: { id: sub.id },
+        data: { status: "canceled", refId: "VERIFY_FAILED" },
+      });
 
       return res.status(502).json({ ok: false, error: `ZP_VERIFY_ERROR_${code}` });
     }
 
-    const refId = String(data.ref_id || "").trim() || "NO_REF_ID";
+    const refId = String(data.ref_id || "").trim() || "PAID";
 
     await prisma.subscription.update({
       where: { id: sub.id },
       data: { status: "active", refId },
     });
 
-    if (phone && planExpiresAt) await upsertUserPlanOnServer({ phone, plan, planExpiresAt });
+    await prisma.user.update({
+      where: { id: sub.userId },
+      data: { plan: sub.plan, planExpiresAt: sub.expiresAt, profileCompleted: true },
+    });
+
+    const okUrl = buildRedirectUrl(APP_SUCCESS_REDIRECT, {
+      authority,
+      status: "OK",
+      refId,
+    });
+    if (okUrl) return res.redirect(302, okUrl);
 
     return res.json({
       ok: true,
       authority,
       status: hasGatewayStatus ? status : "OK",
-      amount,
+      amount: sub.amount,
       phone,
       refId,
-      plan,
-      planExpiresAt,
+      plan: sub.plan,
+      planExpiresAt: new Date(sub.expiresAt).toISOString(),
       verifyCode: data.code,
       canceled: false,
     });
   } catch (e) {
-    console.error("[pay/verify] err", e);
+    console.error("[pay/verify] SERVER_ERROR", e);
     return res.status(500).json({ ok: false, error: e?.message || "SERVER_ERROR" });
   }
 });
