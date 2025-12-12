@@ -69,10 +69,11 @@ function resolvePlanFromInput({ amount, plan, days, months }) {
 }
 
 function buildResultUrl({ ok, authority }) {
-  const base = PAY_RESULT_BASE.replace(/\/+$/, "");
-  const path = ok ? "success" : "failed";
-  const params = new URLSearchParams({ authority }).toString();
-  return `${base}/${path}?${params}`;
+  const params = new URLSearchParams({
+    ok: ok ? "1" : "0",
+    authority: authority || "",
+  }).toString();
+  return `https://qoqnoos.app/api/pay/pay-result?${params}`;
 }
 
 function buildDeepLink({ ok, authority }) {
