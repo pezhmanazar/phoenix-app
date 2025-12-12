@@ -63,12 +63,11 @@ function RootStack() {
     <>
       <StatusBar style="auto" />
       <Stack screenOptions={{ headerShown: false }}>
-        {/* ⬅️ تب‌ها مثل قبل */}
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        {/* ⬅️ گروه auth هم به استک اضافه شد تا / (auth)/login قابل رندر باشد */}
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: "modal" }} />
-      </Stack>
+  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+  <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+  <Stack.Screen name="pay" options={{ headerShown: false }} />
+  <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+</Stack>
     </>
   );
 }
