@@ -17,6 +17,7 @@ import aiRouter from "./routes/ai.js";           // روتر پشتیبانی ه
 import usersRouter from "./routes/users.js";     // 🔹 روتر یوزرها
 import authRouter from "./routes/auth.js";       // 🔹 روتر جدید احراز هویت / OTP
 import payRouter from "./routes/pay.js";         // 🔹 روتر پرداخت / زرین‌پال (جدید)
+import paymentsRouter from "./routes/payments.js";
 
 // ---------- Paths ----------
 const __filename = fileURLToPath(import.meta.url);
@@ -59,7 +60,7 @@ app.use(
   "/uploads",
   express.static(ROOT_UPLOAD_DIR, { maxAge: "1y", index: false })
 );
-
+app.use("/api/payments", paymentsRouter);
 // ---------- Multer (store in /uploads/<YYYY>) ----------
 const storage = multer.diskStorage({
   destination: (_, __, cb) => {
