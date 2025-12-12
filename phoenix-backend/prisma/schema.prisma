@@ -109,6 +109,7 @@ model AiMemory {
 /* ----------- User + Subscription برای اپ ققنوس ----------- */
 
 enum SubscriptionStatus {
+  pending
   active
   expired
   canceled
