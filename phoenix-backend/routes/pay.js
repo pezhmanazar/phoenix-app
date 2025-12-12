@@ -309,25 +309,147 @@ router.get("/verify", async (req, res) => {
 
 router.get("/pay-result", async (req, res) => {
   setCORS(res);
+
+  const ok = String(req.query.ok || "") === "1";
   const authority = String(req.query.authority || "").trim();
-  const ok = String(req.query.ok || "").trim() === "1";
-  const deepLink = authority ? buildDeepLink({ ok, authority }) : APP_DEEPLINK_BASE;
+
+  const title = ok ? "پرداخت موفق" : "پرداخت ناموفق";
+  const subtitle = ok
+    ? "اشتراک شما فعال شد. می‌توانید به اپ برگردید."
+    : "اگر مبلغی کسر شده، معمولاً تا چند دقیقه برگشت می‌خورد. دوباره تلاش کنید.";
+
+  const deepLink = `phoenix://pay/result?ok=${ok ? "1" : "0"}&authority=${encodeURIComponent(authority)}`;
+  const fallback = "https://qoqnoos.app";
 
   res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.end(`<!doctype html>
-<html>
+  return res.send(`<!doctype html>
+<html lang="fa" dir="rtl">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Phoenix Pay</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Phoenix Pay</title>
+  <meta name="theme-color" content="#0b0f14" />
+  <style>
+    :root{
+      --bg:#0b0f14; --card:#111824; --text:#e8eef7; --muted:#a7b3c6;
+      --line:rgba(255,255,255,.08);
+      --gold:#D4AF37; --accent:#E98A15;
+      --ok:#19c37d; --bad:#ff5a6a;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+      background:radial-gradient(900px 600px at 15% 10%, rgba(212,175,55,.14), transparent 55%),
+                 radial-gradient(900px 600px at 85% 0%, rgba(233,138,21,.14), transparent 55%),
+                 var(--bg);
+      color:var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      padding:24px;
+    }
+    .wrap{width:min(520px, 100%)}
+    .card{
+      background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+      border:1px solid var(--line);
+      border-radius:18px;
+      padding:22px;
+      box-shadow: 0 18px 45px rgba(0,0,0,.35);
+      position:relative;
+      overflow:hidden;
+    }
+    .bar{
+      height:4px; border-radius:999px;
+      background:linear-gradient(90deg, var(--gold), var(--accent));
+      opacity:.9; margin-bottom:16px;
+    }
+    .row{display:flex; gap:14px; align-items:center}
+    .badge{
+      width:44px; height:44px; border-radius:14px;
+      display:grid; place-items:center;
+      background:rgba(255,255,255,.06);
+      border:1px solid var(--line);
+      flex:0 0 auto;
+    }
+    .icon{
+      width:18px; height:18px; border-radius:999px;
+      background:${ok ? "var(--ok)" : "var(--bad)"};
+      box-shadow: 0 0 0 6px ${ok ? "rgba(25,195,125,.18)" : "rgba(255,90,106,.18)"};
+    }
+    h1{margin:0; font-size:22px; letter-spacing:-.2px}
+    p{margin:6px 0 0; color:var(--muted); line-height:1.7; font-size:14px}
+    .kv{
+      margin-top:16px; padding:12px 14px;
+      border:1px solid var(--line);
+      border-radius:14px;
+      background:rgba(0,0,0,.18);
+      display:flex; justify-content:space-between; gap:10px; align-items:center;
+      font-size:13px;
+    }
+    .kv span{color:var(--muted)}
+    code{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size:12px;
+      color:#fff;
+      word-break:break-all;
+    }
+    .btns{display:flex; gap:10px; margin-top:16px; flex-wrap:wrap}
+    a.btn{
+      display:inline-flex; align-items:center; justify-content:center;
+      padding:12px 14px;
+      border-radius:14px;
+      text-decoration:none;
+      font-weight:700;
+      font-size:14px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.06);
+      color:var(--text);
+      transition:transform .06s ease, background .2s ease;
+      flex:1 1 160px;
+    }
+    a.btn.primary{
+      background:linear-gradient(90deg, rgba(212,175,55,.18), rgba(233,138,21,.18));
+      border-color:rgba(212,175,55,.28);
+    }
+    a.btn:active{transform:scale(.99)}
+    .hint{margin-top:12px; font-size:12px; color:rgba(231,238,247,.65)}
+    .hint a{color:rgba(231,238,247,.85)}
+  </style>
 </head>
-<body style="font-family: sans-serif; padding: 24px;">
-<h2>${ok ? "پرداخت موفق" : "پرداخت ناموفق"}</h2>
-<p>${authority ? "کد پیگیری: " + authority : ""}</p>
-<p><a href="${deepLink}">بازگشت به اپ</a></p>
-<script>
-setTimeout(function(){ window.location.href = ${JSON.stringify(deepLink)}; }, 300);
-</script>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="bar"></div>
+      <div class="row">
+        <div class="badge"><div class="icon"></div></div>
+        <div>
+          <h1>${title}</h1>
+          <p>${subtitle}</p>
+        </div>
+      </div>
+
+      <div class="kv">
+        <span>کد پیگیری</span>
+        <code>${authority || "-"}</code>
+      </div>
+
+      <div class="btns">
+        <a class="btn primary" href="${deepLink}" id="openApp">بازگشت به اپ</a>
+        <a class="btn" href="${fallback}">صفحه اصلی</a>
+      </div>
+
+      <div class="hint">
+        اگر اپ باز نشد، اپ را نصب/آپدیت کنید یا از داخل مرورگر گوشی دوباره روی «بازگشت به اپ» بزنید.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      var a = document.getElementById("openApp");
+      if(!a) return;
+      setTimeout(function(){ window.location.href = a.getAttribute("href"); }, 350);
+      setTimeout(function(){ window.location.href = "${fallback}"; }, 2500);
+    })();
+  </script>
 </body>
 </html>`);
 });
