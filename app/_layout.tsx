@@ -85,21 +85,24 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if (!fontsLoaded) return;
+  if (!fontsLoaded) return;
 
-    // سراسری کردن فونت (برای اینکه TS گیر نده با any می‌زنیم)
-    (Text as any).defaultProps = (Text as any).defaultProps || {};
-    (Text as any).defaultProps.style = [
-      { fontFamily: "Anjoman-Regular" },
-      (Text as any).defaultProps.style,
-    ];
+  const oldTextRender = (Text as any).render;
+  (Text as any).render = function (...args: any[]) {
+    const origin = oldTextRender.call(this, ...args);
+    return React.cloneElement(origin, {
+      style: [{ fontFamily: "Anjoman-Regular" }, origin.props.style],
+    });
+  };
 
-    (TextInput as any).defaultProps = (TextInput as any).defaultProps || {};
-    (TextInput as any).defaultProps.style = [
-      { fontFamily: "Anjoman-Regular" },
-      (TextInput as any).defaultProps.style,
-    ];
-  }, [fontsLoaded]);
+  const oldInputRender = (TextInput as any).render;
+  (TextInput as any).render = function (...args: any[]) {
+    const origin = oldInputRender.call(this, ...args);
+    return React.cloneElement(origin, {
+      style: [{ fontFamily: "Anjoman-Regular" }, origin.props.style],
+    });
+  };
+}, [fontsLoaded]);
 
   if (!fontsLoaded) return null;
 
