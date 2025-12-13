@@ -174,7 +174,7 @@ export default function PayResultScreen() {
     } else if (status === "canceled" || initialOk === false) {
       // ✅ قرمز برای ناموفق
       title = "پرداخت ناموفق";
-      subtitle = "پرداخت تایید نشد. اگر مبلغی کم شده، معمولاً برگشت می‌خورد.";
+      subtitle = "پرداخت تایید نشد. اگر مبلغی کم شده، معمولاً برگشت ميخوره.";
       icon = "close-circle-outline";
       bar = RED;
       cardBorder = "rgba(248,113,113,0.35)";

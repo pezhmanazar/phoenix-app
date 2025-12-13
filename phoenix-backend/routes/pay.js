@@ -455,7 +455,7 @@ router.get("/pay-result", async (req, res) => {
       </div>
 
       <div class="btns">
-        <a class="btn" href="#" id="openApp">${ok ? "رفتن به اشتراک" : "بازگشت به قـــقنوس"}</a>
+        <a class="btn" href="#" id="openApp">${ok ? "بازگشت به قـــقنوس" : "بازگشت به قـــقنوس"}</a>
       </div>
 
       <div class="hint">
