@@ -63,8 +63,8 @@ function resolvePlanFromInput({ amount, plan, days, months }) {
     return { plan: p, months: 1 };
   }
 
-  if (amount === 399000 || amount === 10000) return { plan: "pro", months: 1 };
-  if (amount === 899000) return { plan: "pro", months: 3 };
+  if (amount === 39900 || amount === 10000) return { plan: "pro", months: 1 };
+  if (amount === 89900) return { plan: "pro", months: 3 };
   if (amount === 1199000) return { plan: "pro", months: 6 };
   return { plan: p, months: 1 };
 }
