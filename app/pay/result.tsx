@@ -90,12 +90,11 @@ const j = (await r.json()) as PayStatusResp;
     if (!data || data.ok !== true) return;
     if (data.status !== "pending") return;
 
-    if (pollRef.current >= 4) return; // نهایتاً 4 بار
-    pollRef.current += 1;
+    if (pollRef.current >= 20) return; // حداکثر ~۱ دقیقه
 
-    const t = setTimeout(() => {
-      fetchStatus();
-    }, 1500);
+const t = setTimeout(() => {
+  fetchStatus();
+}, 3000); // هر ۳ ثانیه
 
     return () => clearTimeout(t);
   }, [data?.ok, (data as any)?.status]);

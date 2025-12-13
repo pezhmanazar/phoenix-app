@@ -209,29 +209,30 @@ const start = await startPay({
       }
 
       // --- ۲) باز کردن درگاه ---
-      const result = await WebBrowser.openBrowserAsync(gatewayUrl);
+await WebBrowser.openBrowserAsync(gatewayUrl);
 
-      // تشخیص MOCK (برای حالت‌های تست)
-      const isMock =
-        authority.startsWith("MOCK_") ||
-        gatewayUrl.includes("example.com/mock-payment") ||
-        gatewayUrl.includes("pay-test");
+/**
+ * ❗️نکته حیاتی:
+ * به cancel / result مرورگر کاری نداریم.
+ * کاربر ممکنه:
+ * - دکمه «بازگشت به اپ» بزنه
+ * - ضربدر بزنه
+ * - مرورگر رو ببنده
+ *
+ * در همه حالت‌ها:
+ * اپ میره صفحه نتیجه و خودش وضعیت رو پولینگ می‌کنه
+ */
+router.replace(
+  {
+    pathname: "/pay/result",
+    params: {
+      authority, // 👈 کلید اصلی
+    },
+  } as any
+);
 
-      // اگر کاربر واقعاً کنسل کرد و MOCK نبود → تمام
-      if (result.type === "cancel" && !isMock) {
-        Alert.alert(
-          "لغو پرداخت",
-          "پرداخت توسط شما لغو شد. هر زمان خواستی می‌توانی دوباره امتحان کنی."
-        );
-        return;
-      }
-
-      // ✅ ۳) اینجا دیگه verifyPay نداریم
-      // می‌ریم صفحه نتیجه داخل اپ تا خودش /api/pay/status رو چک کنه
-      router.push({
-        pathname: "/pay/result",
-        params: { authority },
-      } as any);
+// ⛔️ ادامه‌ی handleBuy نباید اجرا شود
+return;
 
       // (اختیاری) اگر می‌خوای همون لحظه یک پیام هم بدی:
       // setPayResult({ visible: true, success: true, refId: null, message: "در حال بررسی نتیجه پرداخت..." });
