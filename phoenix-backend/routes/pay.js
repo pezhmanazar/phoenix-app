@@ -273,13 +273,13 @@ router.get("/verify", async (req, res) => {
     const sub = await prisma.subscription.findFirst({ where: { authority }, include: { user: true } });
     if (!sub) return res.status(404).json({ ok: false, error: "SUBSCRIPTION_NOT_FOUND", authority });
 
-    // ✅ NEW: Idempotency (اگر این authority قبلاً تعیین تکلیف شده، دوباره کاری نکن)
-    if (sub.status === "active") {
-      return res.redirect(302, buildResultUrl({ ok: true, authority }));
-    }
-    if (sub.status === "canceled" || sub.status === "expired") {
-      return res.redirect(302, buildResultUrl({ ok: false, authority }));
-    }
+    // ✅ NEW: Idempotency (اگر این authority قبلاً finalize شده، دوباره کاری نکن)
+if (sub.status === "active" || (sub.refId && sub.refId !== "PENDING")) {
+  return res.redirect(302, buildResultUrl({ ok: true, authority }));
+}
+if (sub.status === "canceled" || sub.status === "expired") {
+  return res.redirect(302, buildResultUrl({ ok: false, authority }));
+}
 
     const amount = sub.amount;
     const plan = sub.plan || "pro";
