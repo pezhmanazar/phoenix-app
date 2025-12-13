@@ -83,9 +83,9 @@ function buildResultUrl({ ok, authority }) {
   return `${base}?${params}`;
 }
 
-// ✅ UPDATED: دیپ‌لینک درست برای اپ (می‌خورد به app/pay/index.tsx)
+// ✅ UPDATED: دیپ‌لینک درست برای Expo Router (path واقعی)
 function buildDeepLink({ ok, authority }) {
-  const base = `${APP_SCHEME}://pay`;
+  const base = `${APP_SCHEME}:///pay`; // ✅ سه اسلش
   const params = new URLSearchParams({
     authority: authority || "",
     status: ok ? "success" : "failed",
@@ -93,10 +93,11 @@ function buildDeepLink({ ok, authority }) {
   return `${base}?${params}`;
 }
 
-// ✅ NEW: intent لینک صحیح برای اندروید با scheme درست + package
+// ✅ UPDATED: intent لینک درست برای اندروید (path واقعی)
 function buildAndroidIntentLink({ ok, authority }) {
-  const pathAndQuery = `pay?authority=${encodeURIComponent(authority || "")}&status=${ok ? "success" : "failed"}`;
-  return `intent://${pathAndQuery}#Intent;scheme=${APP_SCHEME};package=${ANDROID_PACKAGE};end`;
+  const q = `authority=${encodeURIComponent(authority || "")}&status=${ok ? "success" : "failed"}`;
+  // ✅ سه اسلش قبل از pay یعنی path، نه host
+  return `intent:///pay?${q}#Intent;scheme=${encodeURIComponent(APP_SCHEME)};package=${encodeURIComponent(ANDROID_PACKAGE)};end`;
 }
 
 async function upsertUserPlanOnServer({ phone, plan, planExpiresAt }) {
