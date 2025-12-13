@@ -27,7 +27,11 @@ const PAY_CALLBACK_URL = (process.env.PAY_CALLBACK_URL || "").trim();
 
 const PAY_RESULT_URL = (process.env.PAY_RESULT_URL || "").trim();
 const PAY_RESULT_BASE = (process.env.PAY_RESULT_BASE || "https://qoqnoos.app/pay").trim();
-const APP_DEEPLINK_BASE = (process.env.APP_DEEPLINK_BASE || "phoenix://pay/result").trim();
+
+// ✅ NEW: باید با app.json یکی باشد
+const APP_SCHEME = (process.env.APP_SCHEME || "phoenixapp").trim();
+// ✅ NEW: پکیج اندروید (برای intent)
+const ANDROID_PACKAGE = (process.env.ANDROID_PACKAGE || "com.pezhman.phoenix").trim();
 
 function setCORS(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -79,13 +83,20 @@ function buildResultUrl({ ok, authority }) {
   return `${base}?${params}`;
 }
 
+// ✅ UPDATED: دیپ‌لینک درست برای اپ (می‌خورد به app/pay/index.tsx)
 function buildDeepLink({ ok, authority }) {
-  const base = APP_DEEPLINK_BASE.replace(/\/+$/, "");
+  const base = `${APP_SCHEME}://pay`;
   const params = new URLSearchParams({
-    authority,
+    authority: authority || "",
     status: ok ? "success" : "failed",
   }).toString();
   return `${base}?${params}`;
+}
+
+// ✅ NEW: intent لینک صحیح برای اندروید با scheme درست + package
+function buildAndroidIntentLink({ ok, authority }) {
+  const pathAndQuery = `pay?authority=${encodeURIComponent(authority || "")}&status=${ok ? "success" : "failed"}`;
+  return `intent://${pathAndQuery}#Intent;scheme=${APP_SCHEME};package=${ANDROID_PACKAGE};end`;
 }
 
 async function upsertUserPlanOnServer({ phone, plan, planExpiresAt }) {
@@ -321,14 +332,13 @@ router.get("/pay-result", async (req, res) => {
     ? "اشتراک شما فعال شد. در حال بازگشت به اپ…"
     : "اگر مبلغی کسر شده، معمولاً تا چند دقیقه برگشت می‌خورد. دوباره تلاش کنید.";
 
-  // ✅ دیپ‌لینک اپ (همانی که اپ می‌فهمد)
+  // ✅ دیپ‌لینک اپ (درست)
   const deepLink = buildDeepLink({ ok, authority });
 
-  // ✅ intent (برای Android) - قوی‌تر از phoenix://
-  // اگر packageName را بعداً دادی، می‌تونیم اینجا اضافه کنیم.
-  const intentLink = `intent://pay/result?authority=${encodeURIComponent(authority)}&status=${ok ? "success" : "failed"}#Intent;scheme=phoenix;end`;
+  // ✅ intent لینک درست برای اندروید (scheme + package صحیح)
+  const intentLink = buildAndroidIntentLink({ ok, authority });
 
-  const fallback = "https://qoqnoos.app";
+  const fallback = "https://qoqnoos.app/";
 
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   return res.send(`<!doctype html>
@@ -472,19 +482,24 @@ router.get("/pay-result", async (req, res) => {
       return /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
     }
 
+    function tryCloseLikeX() {
+      try { window.close(); } catch(e) {}
+      try { history.back(); } catch(e) {}
+      // در بعضی مرورگرها اگر history.back جواب نده، می‌مونیم همونجا (این محدودیت مرورگره)
+    }
+
     function openApp() {
-      // Android: intent first (stronger)
+      // Android: intent اولویت دارد
       if (isAndroid()) {
         window.location.href = intentLink;
       } else {
         window.location.href = deepLink;
       }
 
-      // اگر اپ باز نشد، مثل ضربدر عمل کن (تا حدی که مرورگر اجازه بده)
+      // اگر اپ باز نشد، نقش ضربدر
       setTimeout(function () {
         if (!document.hidden) {
-          try { window.close(); } catch(e) {}
-          try { history.back(); } catch(e) {}
+          tryCloseLikeX();
         }
       }, 1200);
     }
@@ -494,10 +509,11 @@ router.get("/pay-result", async (req, res) => {
       openApp();
     });
 
-    // Auto-try on mobile
-    if (isMobile()) {
-      setTimeout(openApp, 300);
-    }
+    // Auto-try فقط روی موبایل (اما همین auto-try می‌تونه اذیت کنه)
+    // ✅ پیشنهاد: فعلاً auto-try رو خاموش کن که کاربر کنترل داشته باشه.
+    // اگر خواستی دوباره روشنش می‌کنیم.
+    // if (isMobile()) { setTimeout(openApp, 300); }
+
   })();
   </script>
 </body>
