@@ -118,12 +118,20 @@ const params = useLocalSearchParams();
     refId: null,
     message: null,
   });
+  const handledFromPayRef = useRef(false);
 
   // هر بار ورود به تب → فقط از سرور می‌خوانیم
   useFocusEffect(
   useCallback(() => {
-    refresh({ force: true }).catch(() => {});
-    return () => {};
+    // اگر از پرداخت برگشته و هنوز هندل نشده
+    if (params?._fromPay && !handledFromPayRef.current) {
+      handledFromPayRef.current = true;
+      refresh({ force: true }).catch(() => {});
+      return;
+    }
+
+    // حالت عادی ورود به تب
+    refresh().catch(() => {});
   }, [refresh, params?._fromPay])
 );
 
