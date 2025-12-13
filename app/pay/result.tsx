@@ -4,6 +4,7 @@ import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useUser } from "@/hooks/useUser";
 import { toApi } from "@/constants/env"; // بهتر از هاردکد
+
 type PayStatusResp =
   | { ok: false; error: string }
   | {
@@ -19,12 +20,14 @@ type PayStatusResp =
       userPlan: string | null;
       userPlanExpiresAt: string | null;
     };
+
 export default function PayResultScreen() {
   const params = useLocalSearchParams();
   const authority = String(params.authority || "").trim();
   const okParam = String(params.ok || "").trim(); // "1" | "0"
   const statusParam = String(params.status || "").trim(); // "success" | "failed"
   const { refresh } = useUser();
+
   const initialOk = useMemo(() => {
     if (okParam === "1") return true;
     if (okParam === "0") return false;
@@ -32,11 +35,13 @@ export default function PayResultScreen() {
     if (statusParam.toLowerCase() === "failed") return false;
     return null;
   }, [okParam, statusParam]);
+
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<PayStatusResp | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const handledSuccessRef = useRef(false);
   const pollRef = useRef(0);
+
   async function fetchStatus() {
     if (!authority) {
       setErr("AUTHORITY_MISSING");
@@ -67,10 +72,12 @@ export default function PayResultScreen() {
       setLoading(false);
     }
   }
+
   // اولین بار
   useEffect(() => {
     fetchStatus();
   }, [authority]);
+
   // اگر pending بود، چندبار سبک پول کن
   useEffect(() => {
     if (!data || data.ok !== true) return;
@@ -82,6 +89,7 @@ export default function PayResultScreen() {
     }, 3000);
     return () => clearTimeout(t);
   }, [data?.ok, (data as any)?.status]);
+
   // اگر active شد: refresh(force) و برو Subscription
   useEffect(() => {
     if (!data || data.ok !== true) return;
@@ -99,6 +107,7 @@ export default function PayResultScreen() {
       } as any);
     })();
   }, [data, refresh]);
+
   const title = (() => {
     if (loading) return "در حال بررسی پرداخت…";
     if (err) return "مشکل در بررسی پرداخت";
@@ -109,6 +118,7 @@ export default function PayResultScreen() {
     if (data.status === "expired") return "پرداخت منقضی شده";
     return "وضعیت پرداخت";
   })();
+
   const subtitle = (() => {
     if (loading) return "چند ثانیه صبر کنید.";
     if (err) return "یک بار «بررسی مجدد» بزنید. اگر ادامه داشت، دوباره از داخل اپ پرداخت کنید.";
@@ -119,12 +129,17 @@ export default function PayResultScreen() {
     if (data.status === "expired") return "این پرداخت منقضی شده. لطفاً دوباره پرداخت کنید.";
     return "";
   })();
+
   const bg = "#0b0f14";
   const card = "#111824";
   const line = "rgba(255,255,255,0.08)";
   const text = "#e8eef7";
   const muted = "#a7b3c6";
   const showAuthority = authority || (data && data.ok === true ? data.authority : "");
+
+  const isActive = !!data && data.ok === true && data.status === "active";
+  const isPending = !!data && data.ok === true && data.status === "pending";
+
   return (
     <View style={{ flex: 1, backgroundColor: bg, padding: 20, justifyContent: "center" }}>
       <View style={{ backgroundColor: card, borderRadius: 18, borderWidth: 1, borderColor: line, padding: 18 }}>
@@ -134,6 +149,7 @@ export default function PayResultScreen() {
         <Text style={{ color: muted, fontSize: 14, lineHeight: 22, textAlign: "right", marginBottom: 14 }}>
           {subtitle}
         </Text>
+
         <View style={{ borderWidth: 1, borderColor: line, borderRadius: 14, padding: 12, marginBottom: 14 }}>
           <Text style={{ color: muted, fontSize: 12, textAlign: "right" }}>کد پیگیری</Text>
           <Text style={{ color: text, fontSize: 13, marginTop: 6, textAlign: "right" }}>
@@ -148,29 +164,37 @@ export default function PayResultScreen() {
             </>
           ) : null}
         </View>
+
         {loading ? (
           <View style={{ paddingVertical: 8 }}>
             <ActivityIndicator />
           </View>
         ) : null}
+
+        {/* ✅ تغییر اصلی: وقتی active شد فقط یک دکمه داشته باشیم */}
         <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-          <Pressable
-            onPress={() => {
-              pollRef.current = 0;
-              fetchStatus();
-            }}
-            style={{
-              flex: 1,
-              paddingVertical: 12,
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: line,
-              alignItems: "center",
-              backgroundColor: "rgba(255,255,255,0.06)",
-            }}
-          >
-            <Text style={{ color: text, fontWeight: "800" }}>بررسی مجدد</Text>
-          </Pressable>
+          {isActive ? null : (
+            <Pressable
+              onPress={() => {
+                pollRef.current = 0;
+                fetchStatus();
+              }}
+              style={{
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: line,
+                alignItems: "center",
+                backgroundColor: "rgba(255,255,255,0.06)",
+              }}
+            >
+              <Text style={{ color: text, fontWeight: "800" }}>
+                بررسی مجدد
+              </Text>
+            </Pressable>
+          )}
+
           <Pressable
             onPress={() => router.replace("/(tabs)/Subscription")}
             style={{
@@ -183,9 +207,12 @@ export default function PayResultScreen() {
               backgroundColor: "rgba(212,175,55,0.12)",
             }}
           >
-            <Text style={{ color: text, fontWeight: "800" }}>رفتن به اشتراک</Text>
+            <Text style={{ color: text, fontWeight: "800" }}>
+              رفتن به اشتراک
+            </Text>
           </Pressable>
         </View>
+
         <Text style={{ color: "rgba(231,238,247,0.65)", fontSize: 12, marginTop: 12, textAlign: "right" }}>
           اگر از مرورگر دسکتاپ این صفحه را می‌بینید، دیپ‌لینک اجرا نمی‌شود. برای تست واقعی، روی موبایل انجام دهید.
         </Text>

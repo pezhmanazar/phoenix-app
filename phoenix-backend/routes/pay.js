@@ -318,10 +318,11 @@ router.get("/pay-result", async (req, res) => {
 
   const title = ok ? "پرداخت موفق" : "پرداخت ناموفق";
   const subtitle = ok
-    ? "اشتراک شما فعال شد. می‌توانید به اپ برگردید."
+    ? "اشتراک شما فعال شد. در حال بازگشت به اپ…"
     : "اگر مبلغی کسر شده، معمولاً تا چند دقیقه برگشت می‌خورد. دوباره تلاش کنید.";
 
-  const deepLink = `phoenix://pay/result?ok=${ok ? "1" : "0"}&authority=${encodeURIComponent(authority)}`;
+  // ✅ دیپ‌لینک استاندارد مطابق اپ (authority + status)
+  const deepLink = buildDeepLink({ ok, authority });
   const fallback = "https://qoqnoos.app";
 
   res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -435,12 +436,16 @@ router.get("/pay-result", async (req, res) => {
       </div>
 
       <div class="btns">
-        <a class="btn primary" href="${deepLink}" id="openApp">بازگشت به اپ</a>
-        <a class="btn" href="${fallback}">صفحه اصلی</a>
+        ${
+          ok
+            ? `<a class="btn primary" href="${deepLink}" id="openApp">رفتن به اشتراک</a>`
+            : `<a class="btn primary" href="${deepLink}" id="openApp">بازگشت به اپ</a>
+               <a class="btn" href="${fallback}">صفحه اصلی</a>`
+        }
       </div>
 
       <div class="hint">
-        اگر اپ باز نشد، اپ را نصب/آپدیت کنید یا از داخل مرورگر گوشی دوباره روی «بازگشت به اپ» بزنید.
+        اگر اپ باز نشد، اپ را نصب/آپدیت کنید و دوباره همین دکمه را بزنید.
       </div>
     </div>
   </div>
@@ -450,7 +455,6 @@ router.get("/pay-result", async (req, res) => {
     var a = document.getElementById("openApp");
     if (!a) return;
 
-    var fallback = "https://qoqnoos.app";
     var deeplink = a.getAttribute("href");
 
     function isMobile() {
@@ -458,23 +462,37 @@ router.get("/pay-result", async (req, res) => {
       return /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
     }
 
-    if (!isMobile()) {
-      // Desktop: no auto-redirect
-      return;
+    // ✅ مثل ضربدر عمل کردن (تا حدی که مرورگر اجازه بده)
+    function tryCloseLikeX() {
+      try { window.close(); } catch (e) {}
+      try { history.back(); } catch (e) {}
     }
 
-    var opened = false;
-
-    document.addEventListener("visibilitychange", function () {
-      if (document.hidden) opened = true;
-    });
-
-    setTimeout(function () {
+    function openApp() {
+      // تلاش ۱: مستقیم
       window.location.href = deeplink;
-    }, 250);
 
+      // اگر اپ باز نشد، بعد کمی مثل ضربدر عمل کن
+      setTimeout(function () {
+        // اگر هنوز صفحه قابل دیدنه، یعنی احتمالاً اپ باز نشده
+        if (!document.hidden) {
+          tryCloseLikeX();
+        }
+      }, 1200);
+    }
+
+    // روی موبایل، اتومات هم تلاش کن
+    if (isMobile()) {
+      setTimeout(openApp, 250);
+    }
+
+    // کلیک روی دکمه هم همین کار رو بکنه
+    a.addEventListener("click", function (e) {
+      e.preventDefault();
+      openApp();
+    });
   })();
-</script>
+  </script>
 </body>
 </html>`);
 });
