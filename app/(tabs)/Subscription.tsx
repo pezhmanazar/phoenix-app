@@ -119,16 +119,24 @@ const params = useLocalSearchParams();
     message: null,
   });
   const handledFromPayRef = useRef(false);
+  const [waitingForPayRefresh, setWaitingForPayRefresh] = useState(false);
 
   // هر بار ورود به تب → فقط از سرور می‌خوانیم
   useFocusEffect(
   useCallback(() => {
     // اگر از پرداخت برگشته و هنوز هندل نشده
     if (params?._fromPay && !handledFromPayRef.current) {
-      handledFromPayRef.current = true;
-      refresh({ force: true }).catch(() => {});
-      return;
-    }
+  handledFromPayRef.current = true;
+  setWaitingForPayRefresh(true);
+
+  refresh({ force: true })
+    .catch(() => {})
+    .finally(() => {
+      setWaitingForPayRefresh(false);
+    });
+
+  return;
+}
 
     // حالت عادی ورود به تب
     refresh().catch(() => {});
@@ -231,14 +239,10 @@ await WebBrowser.openBrowserAsync(gatewayUrl);
  * در همه حالت‌ها:
  * اپ میره صفحه نتیجه و خودش وضعیت رو پولینگ می‌کنه
  */
-router.replace(
-  {
-    pathname: "/pay/result",
-    params: {
-      authority, // 👈 کلید اصلی
-    },
-  } as any
-);
+router.replace({
+  pathname: "/(tabs)/Subscription",
+  params: { _fromPay: "1" },
+} as any);
 
 // ⛔️ ادامه‌ی handleBuy نباید اجرا شود
 return;
@@ -351,7 +355,7 @@ return;
               }}
             >
               <View style={{ flex: 1, marginLeft: 12 }}>
-                {refreshing ? (
+                {refreshing || waitingForPayRefresh ? (
                   <Text style={{ color: "#9CA3AF", fontSize: 12, marginTop: 4 }}>
                     در حال به‌روزرسانی…
                   </Text>
