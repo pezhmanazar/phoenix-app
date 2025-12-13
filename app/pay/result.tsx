@@ -96,7 +96,7 @@ const t = setTimeout(() => {
       } catch {}
       router.replace({
         pathname: "/(tabs)/Subscription",
-        params: { _fromPay: Date.now().toString() },
+        params: { _fromPay: "1" },
       } as any);
     })();
   }, [data, refresh]);
