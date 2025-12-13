@@ -260,15 +260,28 @@ router.get("/verify", async (req, res) => {
     if (!authority) return res.status(400).json({ ok: false, error: "INVALID_VERIFY_INPUT" });
 
     const sub = await prisma.subscription.findFirst({ where: { authority }, include: { user: true } });
-    if (!sub) return res.status(404).json({ ok: false, error: "SUBSCRIPTION_NOT_FOUND" });
+if (!sub) return res.status(404).json({ ok: false, error: "SUBSCRIPTION_NOT_FOUND" });
 
-    // ✅ Idempotency: این authority فقط یک بار باید اثر داشته باشد
-    if (sub.status === "active") {
-      return res.redirect(302, buildResultUrl({ ok: true, authority }));
-    }
-    if (sub.status === "canceled" || sub.status === "expired") {
-      return res.redirect(302, buildResultUrl({ ok: false, authority }));
-    }
+// ✅ قفل اتمیک: فقط اگر هنوز pending است اجازه ادامه بده
+const locked = await prisma.subscription.updateMany({
+  where: { id: sub.id, status: "pending" },
+  data: { status: "pending" }, // بدون تغییر واقعی دیتا؛ فقط قفل منطقی
+});
+
+if (locked.count === 0) {
+  // یعنی قبلاً پردازش شده/کنسل شده/اکتیو شده
+  const latest = await prisma.subscription.findUnique({ where: { authority } });
+  const ok = latest?.status === "active";
+  return res.redirect(302, buildResultUrl({ ok, authority }));
+}
+
+// ✅ از اینجا به بعد خیالت راحت: فقط یکی از درخواست‌ها وارد این مسیر می‌شود
+if (sub.status === "active") {
+  return res.redirect(302, buildResultUrl({ ok: true, authority }));
+}
+if (sub.status === "canceled" || sub.status === "expired") {
+  return res.redirect(302, buildResultUrl({ ok: false, authority }));
+}
 
     const amount = sub.amount;
     const plan = sub.plan || "pro";
