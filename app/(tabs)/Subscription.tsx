@@ -15,7 +15,7 @@ import { useRouter } from "expo-router";
 import { useAuth } from "../../hooks/useAuth";
 import { useUser } from "../../hooks/useUser";
 
-import { startPay, verifyPay } from "../../api/pay"; // ⬅️ start + verify فقط از اینجا
+import { startPay } from "../../api/pay"; // ✅ فقط startPay
 import * as WebBrowser from "expo-web-browser";
 import { toJalaali } from "jalaali-js";
 import { getPlanStatus } from "../../lib/plan";
@@ -47,8 +47,8 @@ const plans: PlanOption[] = [
     key: "p30",
     title: "اشتراک ۳۰ روزه",
     subtitle: "یک ماه همراهی کامل ققنوس",
-    price: "۳۹۹,۰۰۰ تومان",
-    amount: 399000,
+    price: "۱,۰۰۰ تومان (تست)",
+    amount: 1000,
     badge: "پرفروش‌ترین",
     badgeType: "best",
   },
@@ -56,8 +56,8 @@ const plans: PlanOption[] = [
     key: "p90",
     title: "اشتراک ۹۰ روزه",
     subtitle: "سه ماه مسیر عمیق‌تر درمان",
-    price: "۸۹۹,۰۰۰ تومان",
-    amount: 899000,
+    price: "۲,۰۰۰ تومان (تست)",
+    amount: 2000,
     badge: "به‌صرفه‌ترین",
     badgeType: "value",
   },
@@ -65,8 +65,8 @@ const plans: PlanOption[] = [
     key: "p180",
     title: "اشتراک ۱۸۰ روزه",
     subtitle: "شش ماه برنامه‌ی کامل ققنوس",
-    price: "۱,۱۹۹,۰۰۰ تومان",
-    amount: 1199000,
+    price: "۳,۰۰۰ تومان (تست)",
+    amount: 3000,
     badge: "کامل‌ترین",
     badgeType: "premium",
   },
@@ -142,8 +142,7 @@ export default function SubscriptionScreen() {
     daysRemaining = 0;
   } else if (status.isPro) {
     // پرو یا VIP فعال
-    const d =
-      typeof status.daysLeft === "number" ? status.daysLeft : null;
+    const d = typeof status.daysLeft === "number" ? status.daysLeft : null;
     if (d != null && d > 0 && d <= 7) {
       planView = "expiring";
       daysRemaining = d;
@@ -181,17 +180,20 @@ export default function SubscriptionScreen() {
 
     try {
       // --- ۱) شروع پرداخت ---
-      const start = await startPay({
-        phone: phone!,
-        amount: option.amount,
-      });
+      const months =
+  option.key === "p30" ? 1 :
+  option.key === "p90" ? 3 :
+  option.key === "p180" ? 6 : 1;
 
-      // فقط روی ok نارویینگ کن
+const start = await startPay({
+  phone: phone!,
+  amount: option.amount,
+  months,        // ✅ خیلی مهم
+  plan: "pro",   // ✅ صریح
+});
+
       if (!start.ok) {
-        Alert.alert(
-          "خطا",
-          start.error || "در اتصال به سرور مشکلی پیش آمد."
-        );
+        Alert.alert("خطا", start.error || "در اتصال به سرور مشکلی پیش آمد.");
         return;
       }
 
@@ -209,13 +211,13 @@ export default function SubscriptionScreen() {
       // --- ۲) باز کردن درگاه ---
       const result = await WebBrowser.openBrowserAsync(gatewayUrl);
 
-      // تشخیص MOCK (هم برای ورسل قدیمی هم برای ققنوس)
+      // تشخیص MOCK (برای حالت‌های تست)
       const isMock =
         authority.startsWith("MOCK_") ||
         gatewayUrl.includes("example.com/mock-payment") ||
         gatewayUrl.includes("pay-test");
 
-      // فقط اگر واقعی است و کاربر کنسل کرده، بیخیال شو
+      // اگر کاربر واقعاً کنسل کرد و MOCK نبود → تمام
       if (result.type === "cancel" && !isMock) {
         Alert.alert(
           "لغو پرداخت",
@@ -224,49 +226,16 @@ export default function SubscriptionScreen() {
         return;
       }
 
-      // --- ۳) تأیید پرداخت – از طریق api/pay.ts (همون که با curl تست کردی) ---
-      const ver: any = await verifyPay({
-        authority,
-        status: "OK",
-        phone: phone!,
-        amount: option.amount!,
-      });
+      // ✅ ۳) اینجا دیگه verifyPay نداریم
+      // می‌ریم صفحه نتیجه داخل اپ تا خودش /api/pay/status رو چک کنه
+      router.push({
+        pathname: "/pay/result",
+        params: { authority },
+      } as any);
 
-      if (!ver.ok) {
-        setPayResult({
-          visible: true,
-          success: false,
-          refId: null,
-          message:
-            ver.error ||
-            "وضعیت پرداخت مشخص نشد. اگر مبلغ از حسابت کم شده، چند دقیقه بعد وضعیت اشتراک را دوباره چک کن.",
-        });
-        return;
-      }
+      // (اختیاری) اگر می‌خوای همون لحظه یک پیام هم بدی:
+      // setPayResult({ visible: true, success: true, refId: null, message: "در حال بررسی نتیجه پرداخت..." });
 
-      if (!ver.data) {
-        setPayResult({
-          visible: true,
-          success: false,
-          refId: null,
-          message:
-            "وضعیت پرداخت مشخص نشد. اگر مبلغ از حسابت کم شده، چند دقیقه بعد وضعیت اشتراک را دوباره چک کن.",
-        });
-        return;
-      }
-
-      const rawRefId = (ver.data as any).refId as string | number | undefined;
-      const refId = rawRefId != null ? String(rawRefId) : "—";
-
-      // ✅ بعد از تایید پرداخت، یوزر را از بک‌اند با force=true می‌کشیم
-      await refresh({ force: true }).catch(() => {});
-
-      setPayResult({
-        visible: true,
-        success: true,
-        refId,
-        message: "پرداخت با موفقیت انجام شد و اشتراک ققنوس برات فعال شده.",
-      });
     } catch (e: any) {
       setPayResult({
         visible: true,
@@ -371,16 +340,9 @@ export default function SubscriptionScreen() {
                 justifyContent: "space-between",
               }}
             >
-              <View
-                style={{
-                  flex: 1,
-                  marginLeft: 12,
-                }}
-              >
+              <View style={{ flex: 1, marginLeft: 12 }}>
                 {refreshing ? (
-                  <Text
-                    style={{ color: "#9CA3AF", fontSize: 12, marginTop: 4 }}
-                  >
+                  <Text style={{ color: "#9CA3AF", fontSize: 12, marginTop: 4 }}>
                     در حال به‌روزرسانی…
                   </Text>
                 ) : isProActive ? (
@@ -409,19 +371,18 @@ export default function SubscriptionScreen() {
                       </Text>
                     )}
 
-                    {typeof daysRemaining === "number" &&
-                      daysRemaining > 0 && (
-                        <Text
-                          style={{
-                            color: isAlmostExpired ? "#FBBF24" : "#D1FAE5",
-                            fontSize: 11,
-                            marginTop: 2,
-                            textAlign: "right",
-                          }}
-                        >
-                          {toFaNum(daysRemaining)} روز از اشتراکت باقی مانده.
-                        </Text>
-                      )}
+                    {typeof daysRemaining === "number" && daysRemaining > 0 && (
+                      <Text
+                        style={{
+                          color: isAlmostExpired ? "#FBBF24" : "#D1FAE5",
+                          fontSize: 11,
+                          marginTop: 2,
+                          textAlign: "right",
+                        }}
+                      >
+                        {toFaNum(daysRemaining)} روز از اشتراکت باقی مانده.
+                      </Text>
+                    )}
                   </>
                 ) : planView === "expired" ? (
                   <>
@@ -468,9 +429,8 @@ export default function SubscriptionScreen() {
                       textAlign: "right",
                     }}
                   >
-                    در حال حاضر روی پلن رایگان هستی. با فعال‌کردن اشتراک به
-                    همهٔ دوره‌ها، پاکسازی‌ها و برنامه‌های روزانه دسترسی پیدا
-                    می‌کنی.
+                    در حال حاضر روی پلن رایگان هستی. با فعال‌کردن اشتراک به همهٔ
+                    دوره‌ها، پاکسازی‌ها و برنامه‌های روزانه دسترسی پیدا می‌کنی.
                   </Text>
                 )}
               </View>
@@ -484,13 +444,7 @@ export default function SubscriptionScreen() {
                   backgroundColor: badgeBg,
                 }}
               >
-                <Text
-                  style={{
-                    color: badgeTextColor,
-                    fontSize: 13,
-                    fontWeight: "900",
-                  }}
-                >
+                <Text style={{ color: badgeTextColor, fontSize: 13, fontWeight: "900" }}>
                   {badgeLabel}
                 </Text>
               </View>
@@ -536,20 +490,8 @@ export default function SubscriptionScreen() {
                   marginBottom: 6,
                 }}
               >
-                <Ionicons
-                  name="checkmark-circle"
-                  size={18}
-                  color="#10B981"
-                  style={{ marginLeft: 6 }}
-                />
-                <Text
-                  style={{
-                    color: "#D1D5DB",
-                    fontSize: 12,
-                    textAlign: "right",
-                    flex: 1,
-                  }}
-                >
+                <Ionicons name="checkmark-circle" size={18} color="#10B981" style={{ marginLeft: 6 }} />
+                <Text style={{ color: "#D1D5DB", fontSize: 12, textAlign: "right", flex: 1 }}>
                   {item}
                 </Text>
               </View>
@@ -673,14 +615,7 @@ export default function SubscriptionScreen() {
                     )}
                   </View>
 
-                  <Text
-                    style={{
-                      color: "#9CA3AF",
-                      fontSize: 12,
-                      marginTop: 4,
-                      textAlign: "right",
-                    }}
-                  >
+                  <Text style={{ color: "#9CA3AF", fontSize: 12, marginTop: 4, textAlign: "right" }}>
                     {p.subtitle}
                   </Text>
 
@@ -722,13 +657,7 @@ export default function SubscriptionScreen() {
                       ) : (
                         <>
                           <Ionicons name="card" size={16} color="#fff" />
-                          <Text
-                            style={{
-                              color: "#FFFFFF",
-                              fontSize: 12,
-                              fontWeight: "800",
-                            }}
-                          >
+                          <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "800" }}>
                             {ctaLabel}
                           </Text>
                         </>
@@ -752,64 +681,33 @@ export default function SubscriptionScreen() {
               gap: 8,
             }}
           >
-            <View
-              style={{ flexDirection: "row-reverse", alignItems: "center" }}
-            >
+            <View style={{ flexDirection: "row-reverse", alignItems: "center" }}>
               <Ionicons name="shield-checkmark" size={18} color="#22C55E" />
-              <Text
-                style={{
-                  color: "#E5E7EB",
-                  fontSize: 12,
-                  marginRight: 6,
-                  textAlign: "right",
-                  flex: 1,
-                }}
-              >
+              <Text style={{ color: "#E5E7EB", fontSize: 12, marginRight: 6, textAlign: "right", flex: 1 }}>
                 حریم خصوصی و اطلاعاتت داخل ققنوس کاملاً محرمانه‌ست.
               </Text>
             </View>
 
-            <View
-              style={{ flexDirection: "row-reverse", alignItems: "center" }}
-            >
+            <View style={{ flexDirection: "row-reverse", alignItems: "center" }}>
               <Ionicons name="lock-closed" size={18} color="#60A5FA" />
-              <Text
-                style={{
-                  color: "#E5E7EB",
-                  fontSize: 12,
-                  marginRight: 6,
-                  textAlign: "right",
-                  flex: 1,
-                }}
-              >
+              <Text style={{ color: "#E5E7EB", fontSize: 12, marginRight: 6, textAlign: "right", flex: 1 }}>
                 پرداخت از طریق درگاه امن و معتبر انجام میشه.
               </Text>
             </View>
 
-            <View
-              style={{ flexDirection: "row-reverse", alignItems: "center" }}
-            >
+            <View style={{ flexDirection: "row-reverse", alignItems: "center" }}>
               <Ionicons name="help-circle" size={18} color="#F97316" />
-              <Text
-                style={{
-                  color: "#9CA3AF",
-                  fontSize: 11,
-                  marginRight: 6,
-                  textAlign: "right",
-                  flex: 1,
-                  flexWrap: "wrap",
-                }}
-              >
+              <Text style={{ color: "#9CA3AF", fontSize: 11, marginRight: 6, textAlign: "right", flex: 1, flexWrap: "wrap" }}>
                 این محصول یک ابزار کمک‌درمانی برای رهایی از زخم جداییه.
               </Text>
             </View>
           </View>
 
-          {/* اسپیسِر پایین برای اینکه زیر تب‌بار نره */}
+          {/* اسپیسِر پایین */}
           <View style={{ height: 80 }} />
         </ScrollView>
 
-        {/* بنر نتیجه پرداخت (موفق / ناموفق) */}
+        {/* بنر نتیجه پرداخت (همون قبلی—فقط برای خطاهای شبکه) */}
         {payResult.visible && (
           <View
             style={{
@@ -832,68 +730,29 @@ export default function SubscriptionScreen() {
                 paddingHorizontal: 16,
               }}
             >
-              <View
-                style={{
-                  flexDirection: "row-reverse",
-                  alignItems: "center",
-                  marginBottom: 8,
-                }}
-              >
+              <View style={{ flexDirection: "row-reverse", alignItems: "center", marginBottom: 8 }}>
                 <Ionicons
-                  name={
-                    payResult.success ? "checkmark-circle" : "close-circle"
-                  }
+                  name={payResult.success ? "checkmark-circle" : "close-circle"}
                   size={28}
                   color={payResult.success ? "#22C55E" : "#F97373"}
                   style={{ marginLeft: 8 }}
                 />
-                <Text
-                  style={{
-                    color: "#F9FAFB",
-                    fontSize: 18,
-                    fontWeight: "900",
-                    textAlign: "right",
-                    flex: 1,
-                  }}
-                >
+                <Text style={{ color: "#F9FAFB", fontSize: 18, fontWeight: "900", textAlign: "right", flex: 1 }}>
                   {payResult.success ? "پرداخت موفق" : "پرداخت ناموفق"}
                 </Text>
               </View>
 
               {payResult.refId && (
                 <View style={{ marginTop: 4 }}>
-                  <Text
-                    style={{
-                      color: "#9CA3AF",
-                      fontSize: 12,
-                      textAlign: "right",
-                    }}
-                  >
-                    کد رهگیری:
-                  </Text>
-                  <Text
-                    style={{
-                      color: "#E5E7EB",
-                      fontSize: 14,
-                      fontWeight: "800",
-                      marginTop: 2,
-                      textAlign: "left",
-                    }}
-                  >
+                  <Text style={{ color: "#9CA3AF", fontSize: 12, textAlign: "right" }}>کد رهگیری:</Text>
+                  <Text style={{ color: "#E5E7EB", fontSize: 14, fontWeight: "800", marginTop: 2, textAlign: "left" }}>
                     {payResult.refId}
                   </Text>
                 </View>
               )}
 
               {payResult.message && (
-                <Text
-                  style={{
-                    color: "#D1D5DB",
-                    fontSize: 12,
-                    textAlign: "right",
-                    marginTop: 8,
-                  }}
-                >
+                <Text style={{ color: "#D1D5DB", fontSize: 12, textAlign: "right", marginTop: 8 }}>
                   {payResult.message}
                 </Text>
               )}
@@ -901,9 +760,6 @@ export default function SubscriptionScreen() {
               <TouchableOpacity
                 onPress={() => {
                   setPayResult((prev) => ({ ...prev, visible: false }));
-                  if (payResult.success) {
-                    router.replace("/(tabs)/Phoenix");
-                  }
                 }}
                 style={{
                   alignSelf: "flex-start",
@@ -911,17 +767,11 @@ export default function SubscriptionScreen() {
                   paddingHorizontal: 14,
                   paddingVertical: 6,
                   borderRadius: 999,
-                  backgroundColor: payResult.success ? "#2563EB" : "#4B5563",
+                  backgroundColor: "#4B5563",
                 }}
               >
-                <Text
-                  style={{
-                    color: "#E5E7EB",
-                    fontSize: 13,
-                    fontWeight: "800",
-                  }}
-                >
-                  ادامه
+                <Text style={{ color: "#E5E7EB", fontSize: 13, fontWeight: "800" }}>
+                  بستن
                 </Text>
               </TouchableOpacity>
             </View>

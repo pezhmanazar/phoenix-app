@@ -473,11 +473,6 @@ router.get("/pay-result", async (req, res) => {
       window.location.href = deeplink;
     }, 250);
 
-    setTimeout(function () {
-      if (!opened && !document.hidden) {
-        window.location.href = fallback;
-      }
-    }, 7000);
   })();
 </script>
 </body>

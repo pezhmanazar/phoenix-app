@@ -10,6 +10,11 @@ export type StartReq = {
   phone: string;
   amount: number;
   description?: string;
+
+  // ✅ اضافه شد برای تست و تعیین مدت
+  months?: number;
+  plan?: "pro" | "vip" | "free";
+  days?: number; // اختیاری (اگر یه روز خواستی بفرستی)
 };
 
 export type StartResp = {

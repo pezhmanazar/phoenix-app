@@ -56,7 +56,17 @@ export default function PayResultScreen() {
 
       const url = toApi(`/api/pay/status?authority=${encodeURIComponent(authority)}`);
       const r = await fetch(url, { method: "GET" });
-      const j = (await r.json()) as PayStatusResp;
+
+const ct = r.headers.get("content-type") || "";
+if (!ct.includes("application/json")) {
+  const text = await r.text();
+  console.log("[pay/result] NON_JSON_RESPONSE:", r.status, ct, text.slice(0, 200));
+  setErr("NON_JSON_RESPONSE");
+  setLoading(false);
+  return;
+}
+
+const j = (await r.json()) as PayStatusResp;
 
       setData(j);
 
