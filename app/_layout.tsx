@@ -7,27 +7,18 @@ import {
 } from "@react-navigation/native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
+import { Text, TextInput } from "react-native";
+import { useFonts } from "expo-font";
+
 import { PhoenixProvider, usePhoenix } from "../hooks/PhoenixContext";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-// ⚠️ فعلاً ترک‌پلیر غیرفعال
-// import TrackPlayer from "react-native-track-player";
-// if (Platform.OS !== "web") {
-//   // @ts-ignore
-//   TrackPlayer.registerPlaybackService(() => require("../service"));
-// }
 
 // 🔌 ماژول‌های کانتکست‌ها
 import * as AuthModule from "../hooks/useAuth";
 import * as UserModule from "../hooks/useUser";
 import * as PlanModule from "../hooks/usePlanStatus";
 
-/**
- * این سه تا Wrapper باعث می‌شن اگر:
- *  - AuthProvider / UserProvider / PlanStatusProvider به صورت named export باشن، هم کار کنه
- *  - یا اگر default export باشن، باز هم کار کنه
- *  - و اگر به هر دلیلی پیدا نشدن، حداقل بچه‌ها بدون خطا رندر بشن
- */
 const AuthProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -63,11 +54,11 @@ function RootStack() {
     <>
       <StatusBar style="auto" />
       <Stack screenOptions={{ headerShown: false }}>
-  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-  <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-  <Stack.Screen name="pay" options={{ headerShown: false }} />
-  <Stack.Screen name="modal" options={{ presentation: "modal" }} />
-</Stack>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="pay" options={{ headerShown: false }} />
+        <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+      </Stack>
     </>
   );
 }
@@ -78,6 +69,7 @@ function ThemeBridge() {
     () => navTheme ?? (isDark ? DarkTheme : DefaultTheme),
     [navTheme, isDark]
   );
+
   return (
     <ThemeProvider value={theme}>
       <RootStack />
@@ -86,6 +78,31 @@ function ThemeBridge() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    "Anjoman-Regular": require("../assets/fonts/Anjoman-Regular.ttf"),
+    "Anjoman-Medium": require("../assets/fonts/Anjoman-Medium.ttf"),
+    "Anjoman-Bold": require("../assets/fonts/Anjoman-Bold.ttf"),
+  });
+
+  useEffect(() => {
+    if (!fontsLoaded) return;
+
+    // سراسری کردن فونت (برای اینکه TS گیر نده با any می‌زنیم)
+    (Text as any).defaultProps = (Text as any).defaultProps || {};
+    (Text as any).defaultProps.style = [
+      { fontFamily: "Anjoman-Regular" },
+      (Text as any).defaultProps.style,
+    ];
+
+    (TextInput as any).defaultProps = (TextInput as any).defaultProps || {};
+    (TextInput as any).defaultProps.style = [
+      { fontFamily: "Anjoman-Regular" },
+      (TextInput as any).defaultProps.style,
+    ];
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) return null;
+
   return (
     <SafeAreaProvider>
       <PhoenixProvider>
