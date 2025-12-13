@@ -76,9 +76,11 @@ export default function PayResultScreen() {
     if (!data || data.ok !== true) return;
     if (data.status !== "pending") return;
     if (pollRef.current >= 20) return; // حداکثر ~۱ دقیقه
-    const t = setTimeout(() => {
-      fetchStatus();
-    }, 3000); // هر ۳ ثانیه
+    pollRef.current += 1;
+
+const t = setTimeout(() => {
+  fetchStatus();
+}, 3000);
     return () => clearTimeout(t);
   }, [data?.ok, (data as any)?.status]);
   // اگر active شد: refresh(force) و برو Subscription
@@ -154,7 +156,10 @@ export default function PayResultScreen() {
         ) : null}
         <View style={{ flexDirection: "row-reverse", gap: 10 }}>
           <Pressable
-            onPress={() => fetchStatus()}
+            onPress={() => {
+  pollRef.current = 0;
+  fetchStatus();
+}}
             style={{
               flex: 1,
               paddingVertical: 12,

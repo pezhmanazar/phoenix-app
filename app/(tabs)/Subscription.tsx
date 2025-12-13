@@ -102,7 +102,7 @@ function formatJalaliDate(iso?: string | null): string | null {
 export default function SubscriptionScreen() {
   const { colors } = useTheme();
   const router = useRouter();
-const params = useLocalSearchParams();
+  const params = useLocalSearchParams();
   const { phone, isAuthenticated } = useAuth();
   const { me, refresh, refreshing } = useUser() as any;
 
@@ -123,25 +123,30 @@ const params = useLocalSearchParams();
 
   // هر بار ورود به تب → فقط از سرور می‌خوانیم
   useFocusEffect(
-  useCallback(() => {
-    // اگر از پرداخت برگشته و هنوز هندل نشده
-    if (params?._fromPay && !handledFromPayRef.current) {
-  handledFromPayRef.current = true;
-  setWaitingForPayRefresh(true);
+    useCallback(() => {
+      const fromPay = String((params as any)?._fromPay || "") === "1";
 
-  refresh({ force: true })
-    .catch(() => {})
-    .finally(() => {
-      setWaitingForPayRefresh(false);
-    });
+      if (fromPay && !handledFromPayRef.current) {
+        handledFromPayRef.current = true;
+        setWaitingForPayRefresh(true);
 
-  return;
-}
+        refresh({ force: true })
+          .catch(() => {})
+          .finally(() => {
+            setTimeout(() => {
+              refresh({ force: true })
+                .catch(() => {})
+                .finally(() => setWaitingForPayRefresh(false));
+            }, 600);
+          });
 
-    // حالت عادی ورود به تب
-    refresh().catch(() => {});
-  }, [refresh, params?._fromPay])
-);
+        return () => {};
+      }
+
+      refresh().catch(() => {});
+      return () => {};
+    }, [refresh, params])
+  );
 
   // 🔍 منبع واحد وضعیت پلن: فقط دیتابیس (getPlanStatus)
   const status = getPlanStatus(me);
@@ -198,16 +203,16 @@ const params = useLocalSearchParams();
     try {
       // --- ۱) شروع پرداخت ---
       const months =
-  option.key === "p30" ? 1 :
-  option.key === "p90" ? 3 :
-  option.key === "p180" ? 6 : 1;
+        option.key === "p30" ? 1 :
+        option.key === "p90" ? 3 :
+        option.key === "p180" ? 6 : 1;
 
-const start = await startPay({
-  phone: phone!,
-  amount: option.amount,
-  months,        // ✅ خیلی مهم
-  plan: "pro",   // ✅ صریح
-});
+      const start = await startPay({
+        phone: phone!,
+        amount: option.amount,
+        months,        // ✅ خیلی مهم
+        plan: "pro",   // ✅ صریح
+      });
 
       if (!start.ok) {
         Alert.alert("خطا", start.error || "در اتصال به سرور مشکلی پیش آمد.");
@@ -226,26 +231,30 @@ const start = await startPay({
       }
 
       // --- ۲) باز کردن درگاه ---
-await WebBrowser.openBrowserAsync(gatewayUrl);
+      await WebBrowser.openBrowserAsync(gatewayUrl);
 
-/**
- * ❗️نکته حیاتی:
- * به cancel / result مرورگر کاری نداریم.
- * کاربر ممکنه:
- * - دکمه «بازگشت به اپ» بزنه
- * - ضربدر بزنه
- * - مرورگر رو ببنده
- *
- * در همه حالت‌ها:
- * اپ میره صفحه نتیجه و خودش وضعیت رو پولینگ می‌کنه
- */
-router.replace({
-  pathname: "/(tabs)/Subscription",
-  params: { _fromPay: "1" },
-} as any);
+      /**
+       * ❗️نکته حیاتی:
+       * به cancel / result مرورگر کاری نداریم.
+       * کاربر ممکنه:
+       * - دکمه «بازگشت به اپ» بزنه
+       * - ضربدر بزنه
+       * - مرورگر رو ببنده
+       *
+       * در همه حالت‌ها:
+       * اپ میره صفحه نتیجه و خودش وضعیت رو پولینگ می‌کنه
+       */
+      router.replace(
+        {
+          pathname: "/pay/result",
+          params: {
+            authority, // 👈 کلید اصلی
+          },
+        } as any
+      );
 
-// ⛔️ ادامه‌ی handleBuy نباید اجرا شود
-return;
+      // ⛔️ ادامه‌ی handleBuy نباید اجرا شود
+      return;
 
       // (اختیاری) اگر می‌خوای همون لحظه یک پیام هم بدی:
       // setPayResult({ visible: true, success: true, refId: null, message: "در حال بررسی نتیجه پرداخت..." });
