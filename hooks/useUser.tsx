@@ -24,13 +24,16 @@ const UserCtx = createContext<UserContextValue | undefined>(undefined);
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
   const { phone, isAuthenticated } = useAuth();
-
   const [me, setMe] = useState<Me | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const mountedRef = useRef(true);
   const loadingRef = useRef(false);
   const lastLoadedPhoneRef = useRef<string | null>(null);
+
+  // ✅ NEW: زمان آخرین fetch برای TTL کش
+  const lastFetchAtRef = useRef<number>(0);
+  const CACHE_TTL_MS = 2000; // ✅ NEW: ۲ ثانیه (برای ریسِ بعد از verify)
 
   useEffect(() => {
     mountedRef.current = true;
@@ -43,17 +46,28 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     async (opts?: RefreshOptions) => {
       const force = opts?.force === true;
 
-      if (!phone) {
+      // ✅ NEW: اگر لاگین نیستیم، me رو پاک کن و کش رو ریست کن
+      if (!isAuthenticated || !phone) {
         if (__DEV__) {
-          console.log("[useUser.refresh] no phone, skip");
+          console.log("[useUser.refresh] not authenticated or no phone, skip");
         }
+        lastLoadedPhoneRef.current = null;
+        lastFetchAtRef.current = 0;
+        if (mountedRef.current) setMe(null);
         return;
       }
 
-      // اگر قبلاً load شده و force=false → هیچی
-      if (!force && lastLoadedPhoneRef.current === phone && me) {
+      // ✅ NEW: کش فقط تا وقتی معتبره که TTL نگذشته باشه
+      const now = Date.now();
+      const cacheFresh =
+        lastLoadedPhoneRef.current === phone &&
+        !!me &&
+        now - lastFetchAtRef.current < CACHE_TTL_MS;
+
+      // اگر قبلاً load شده و force=false و کش هنوز تازه است → هیچی
+      if (!force && cacheFresh) {
         if (__DEV__) {
-          console.log("[useUser.refresh] skip (cached)");
+          console.log("[useUser.refresh] skip (cached ttl)");
         }
         return;
       }
@@ -63,29 +77,30 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         if (__DEV__) console.log("[useUser.refresh] skip (already loading)");
         return;
       }
-      loadingRef.current = true;
 
-      if (!mountedRef.current) return;
-      setRefreshing(true);
+      loadingRef.current = true;
+      if (mountedRef.current) setRefreshing(true);
 
       try {
-        if (__DEV__)
-          console.log("[useUser.refresh] fetching me for", phone);
+        if (__DEV__) console.log("[useUser.refresh] fetching me for", phone);
 
         const resp = await getMeByPhone(phone);
 
         // اگر خطاست، me را دست نمی‌زنیم (وضعیت قبلی را حفظ می‌کنیم)
+        // ✅ FIX: روی خطا lastLoadedPhoneRef رو آپدیت نکن که گیر کش نشی
         if (!resp.ok) {
           if (__DEV__)
-            console.warn("[useUser.refresh] ERROR but keep previous me", resp.error);
-
-          lastLoadedPhoneRef.current = phone;
+            console.warn(
+              "[useUser.refresh] ERROR but keep previous me",
+              resp.error
+            );
           return;
         }
 
         // اگر داده OK بود
-        setMe(resp.data || null);
+        if (mountedRef.current) setMe(resp.data || null);
         lastLoadedPhoneRef.current = phone;
+        lastFetchAtRef.current = Date.now(); // ✅ NEW: مهر زمان برای TTL
 
         if (__DEV__) {
           console.log("[useUser.refresh] new me =", resp.data);
@@ -98,7 +113,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         if (mountedRef.current) setRefreshing(false);
       }
     },
-    [phone, me]
+    [phone, me, isAuthenticated]
   );
 
   // هنگام تغییر auth → یک بار رفرش

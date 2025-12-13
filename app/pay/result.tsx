@@ -77,10 +77,9 @@ export default function PayResultScreen() {
     if (data.status !== "pending") return;
     if (pollRef.current >= 20) return; // حداکثر ~۱ دقیقه
     pollRef.current += 1;
-
-const t = setTimeout(() => {
-  fetchStatus();
-}, 3000);
+    const t = setTimeout(() => {
+      fetchStatus();
+    }, 3000);
     return () => clearTimeout(t);
   }, [data?.ok, (data as any)?.status]);
   // اگر active شد: refresh(force) و برو Subscription
@@ -96,7 +95,7 @@ const t = setTimeout(() => {
       } catch {}
       router.replace({
         pathname: "/(tabs)/Subscription",
-        params: { _fromPay: "1" },
+        params: { _forceReloadUser: Date.now().toString() },
       } as any);
     })();
   }, [data, refresh]);
@@ -157,9 +156,9 @@ const t = setTimeout(() => {
         <View style={{ flexDirection: "row-reverse", gap: 10 }}>
           <Pressable
             onPress={() => {
-  pollRef.current = 0;
-  fetchStatus();
-}}
+              pollRef.current = 0;
+              fetchStatus();
+            }}
             style={{
               flex: 1,
               paddingVertical: 12,
