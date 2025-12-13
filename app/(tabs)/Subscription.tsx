@@ -227,19 +227,16 @@ export default function SubscriptionScreen() {
         return;
       }
 
-      // --- ۲) باز کردن درگاه ---
-      await WebBrowser.openBrowserAsync(gatewayUrl);
+      // --- ۲) باز کردن درگاه (✅ Auth Session برای اینکه بعد از دیپ‌لینک تب خودش بسته بشه) ---
+      const redirectUrl = "phoenix://pay/result"; // ✅ باید با APP_DEEPLINK_BASE هم‌راستا باشد
+
+      await WebBrowser.openAuthSessionAsync(gatewayUrl, redirectUrl);
 
       /**
        * ❗️نکته حیاتی:
-       * به cancel / result مرورگر کاری نداریم.
-       * کاربر ممکنه:
-       * - دکمه «بازگشت به اپ» بزنه
-       * - ضربدر بزنه
-       * - مرورگر رو ببنده
-       *
-       * در همه حالت‌ها:
-       * اپ میره صفحه نتیجه و خودش وضعیت رو پولینگ می‌کنه
+       * ما به نتیجه‌ی openAuthSessionAsync وابسته نمی‌شیم.
+       * همین که سشن بسته شد (موفق/ناموفق/لغو)،
+       * می‌ریم صفحه‌ی نتیجه داخل اپ تا وضعیت رو از سرور چک کنه.
        */
       router.replace(
         {

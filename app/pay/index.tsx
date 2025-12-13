@@ -3,20 +3,21 @@ import { useEffect, useRef } from "react";
 import { View, ActivityIndicator } from "react-native";
 import * as Linking from "expo-linking";
 import { router } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 
 export default function PayCallback() {
   const handled = useRef(false);
 
   useEffect(() => {
-    const go = (url: string) => {
+    const go = async (url: string) => {
       if (!url || handled.current) return;
 
       const parsed = Linking.parse(url);
       const qp = (parsed.queryParams || {}) as Record<string, any>;
 
-      // زرین‌پال معمولاً Status/Authority می‌دهد
+      // authority ممکنه با Authority بیاد
       const authority = String(qp.authority || qp.Authority || "").trim();
-      const ok = String(qp.ok || "").trim(); // "1" | "0" (اگر از وب بیاید)
+      const ok = String(qp.ok || "").trim(); // "1" | "0"
       const status = String(qp.status || qp.Status || "").trim(); // "OK"|"NOK" یا "success"|"failed"
 
       if (!authority) return;
@@ -30,7 +31,12 @@ export default function PayCallback() {
 
       handled.current = true;
 
-      // ✅ بدون قرمز شدن تایپ‌اسکریپت (Typed Routes بعضی وقت‌ها /pay/result رو نمی‌شناسه)
+      // ✅ مهم: به محض اینکه دیپ‌لینک خورد، مرورگر رو ببند
+      try {
+        WebBrowser.dismissBrowser();
+      } catch {}
+
+      // رفتن به صفحه نتیجه داخل اپ
       router.replace({
         pathname: "/pay/result",
         params: {
