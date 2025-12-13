@@ -20,7 +20,11 @@ const ZP_GATEWAY_BASE =
   (process.env.ZARINPAL_GATEWAY_BASE || "").trim() ||
   "https://payment.zarinpal.com/pg/StartPay/";
 
-const ZP_CURRENCY = (process.env.ZP_CURRENCY || process.env.ZARINPAL_CURRENCY || "IRT").trim();
+const ZP_CURRENCY = (
+  process.env.ZP_CURRENCY ||
+  process.env.ZARINPAL_CURRENCY ||
+  "IRT"
+).trim();
 
 const BACKEND_URL = (process.env.BACKEND_URL || "http://127.0.0.1:4000").trim();
 const PAY_CALLBACK_URL = (process.env.PAY_CALLBACK_URL || "").trim();
@@ -28,7 +32,7 @@ const PAY_CALLBACK_URL = (process.env.PAY_CALLBACK_URL || "").trim();
 const PAY_RESULT_URL = (process.env.PAY_RESULT_URL || "").trim();
 const PAY_RESULT_BASE = (process.env.PAY_RESULT_BASE || "https://qoqnoos.app/pay").trim();
 
-// ✅ NEW: باید با app.json یکی باشد
+// ✅ NEW: باید با app.json یکی باشد (scheme)
 const APP_SCHEME = (process.env.APP_SCHEME || "phoenixapp").trim();
 // ✅ NEW: پکیج اندروید (برای intent)
 const ANDROID_PACKAGE = (process.env.ANDROID_PACKAGE || "com.pezhman.phoenix").trim();
@@ -79,13 +83,17 @@ function buildResultUrl({ ok, authority }) {
     authority: authority || "",
   }).toString();
 
-  const base = (PAY_RESULT_URL || `${PAY_RESULT_BASE.replace(/\/+$/, "")}/pay-result`).replace(/\/+$/, "");
+  const base = (PAY_RESULT_URL || `${PAY_RESULT_BASE.replace(/\/+$/, "")}/pay-result`).replace(
+    /\/+$/,
+    ""
+  );
   return `${base}?${params}`;
 }
 
-// ✅ UPDATED: دیپ‌لینک درست برای Expo Router (path واقعی)
+// ✅ UPDATED: دیپ‌لینک درست برای اپ (می‌خورد به app/pay/index.tsx)
 function buildDeepLink({ ok, authority }) {
-  const base = `${APP_SCHEME}:///pay`; // ✅ سه اسلش
+  // اپ: phoenixapp://pay?authority=...&status=success|failed
+  const base = `${APP_SCHEME}://pay`;
   const params = new URLSearchParams({
     authority: authority || "",
     status: ok ? "success" : "failed",
@@ -93,11 +101,14 @@ function buildDeepLink({ ok, authority }) {
   return `${base}?${params}`;
 }
 
-// ✅ UPDATED: intent لینک درست برای اندروید (path واقعی)
+// ✅ NEW: intent لینک صحیح برای اندروید با scheme درست + package
 function buildAndroidIntentLink({ ok, authority }) {
-  const q = `authority=${encodeURIComponent(authority || "")}&status=${ok ? "success" : "failed"}`;
-  // ✅ سه اسلش قبل از pay یعنی path، نه host
-  return `intent:///pay?${q}#Intent;scheme=${encodeURIComponent(APP_SCHEME)};package=${encodeURIComponent(ANDROID_PACKAGE)};end`;
+  const pathAndQuery = `pay?authority=${encodeURIComponent(authority || "")}&status=${
+    ok ? "success" : "failed"
+  }`;
+  return `intent://${pathAndQuery}#Intent;scheme=${encodeURIComponent(
+    APP_SCHEME
+  )};package=${encodeURIComponent(ANDROID_PACKAGE)};end`;
 }
 
 async function upsertUserPlanOnServer({ phone, plan, planExpiresAt }) {
@@ -143,7 +154,10 @@ router.post("/start", async (req, res) => {
       months: body.months,
     });
 
-    const callback = PAY_REAL ? PAY_CALLBACK_URL : (String(body.callback || "") || `${req.protocol}://${req.get("host")}/api/pay/verify`);
+    const callback = PAY_REAL
+      ? PAY_CALLBACK_URL
+      : String(body.callback || "") || `${req.protocol}://${req.get("host")}/api/pay/verify`;
+
     if (PAY_REAL && !callback) return res.status(500).json({ ok: false, error: "PAY_CALLBACK_URL_MISSING" });
 
     const user = await prisma.user.upsert({
@@ -193,7 +207,12 @@ router.post("/start", async (req, res) => {
     const json = await zpRes.json().catch(() => null);
 
     if (!zpRes.ok || !json) {
-      console.error("[pay/start] ZARINPAL_REQUEST_FAILED", { status: zpRes.status, requestUrl, payload, response: json });
+      console.error("[pay/start] ZARINPAL_REQUEST_FAILED", {
+        status: zpRes.status,
+        requestUrl,
+        payload,
+        response: json,
+      });
       return res.status(502).json({ ok: false, error: "ZARINPAL_REQUEST_FAILED" });
     }
 
@@ -236,9 +255,7 @@ router.get("/verify", async (req, res) => {
     const q = req.query || {};
 
     const rawStatus =
-      typeof q.Status === "string" ? q.Status :
-      typeof q.status === "string" ? q.status :
-      "";
+      typeof q.Status === "string" ? q.Status : typeof q.status === "string" ? q.status : "";
 
     const hasGatewayStatus = rawStatus.length > 0;
     const status = hasGatewayStatus ? rawStatus.toUpperCase() : "UNDEFINED";
@@ -291,7 +308,12 @@ router.get("/verify", async (req, res) => {
     const json = await zpRes.json().catch(() => null);
 
     if (!zpRes.ok || !json) {
-      console.error("[pay/verify] ZARINPAL_VERIFY_FAILED", { status: zpRes.status, verifyUrl, payload, response: json });
+      console.error("[pay/verify] ZARINPAL_VERIFY_FAILED", {
+        status: zpRes.status,
+        verifyUrl,
+        payload,
+        response: json,
+      });
       await prisma.subscription.update({ where: { id: sub.id }, data: { status: "canceled", refId: "VERIFY_FAILED" } });
       return res.redirect(302, buildResultUrl({ ok: false, authority }));
     }
@@ -330,8 +352,8 @@ router.get("/pay-result", async (req, res) => {
 
   const title = ok ? "پرداخت موفق" : "پرداخت ناموفق";
   const subtitle = ok
-    ? "اشتراک شما فعال شد. در حال بازگشت به اپ…"
-    : "اگر مبلغی کسر شده، معمولاً تا چند دقیقه برگشت می‌خورد. دوباره تلاش کنید.";
+    ? "پرداخت انجام شد. برای ادامه روی «رفتن به اشتراک» بزن."
+    : "پرداخت تایید نشد. اگر مبلغی کسر شده، معمولاً تا چند دقیقه برگشت می‌خورد. دوباره تلاش کن.";
 
   // ✅ دیپ‌لینک اپ (درست)
   const deepLink = buildDeepLink({ ok, authority });
@@ -455,12 +477,12 @@ router.get("/pay-result", async (req, res) => {
           ok
             ? `<a class="btn primary" href="#" id="openApp">رفتن به اشتراک</a>`
             : `<a class="btn primary" href="#" id="openApp">بازگشت به اپ</a>
-               <a class="btn" href="${fallback}">صفحه اصلی</a>`
+               <a class="btn" href="${fallback}">رفتن به سایت</a>`
         }
       </div>
 
       <div class="hint">
-        اگر اپ باز نشد، اپ را نصب/آپدیت کنید و دوباره روی دکمه بزنید.
+        اگر اپ باز نشد، اپ را نصب/آپدیت کن و دوباره روی دکمه بزن.
       </div>
     </div>
   </div>
@@ -478,31 +500,19 @@ router.get("/pay-result", async (req, res) => {
       return /Android/i.test(ua);
     }
 
-    function isMobile() {
-      var ua = navigator.userAgent || "";
-      return /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
-    }
-
     function tryCloseLikeX() {
       try { window.close(); } catch(e) {}
       try { history.back(); } catch(e) {}
-      // در بعضی مرورگرها اگر history.back جواب نده، می‌مونیم همونجا (این محدودیت مرورگره)
     }
 
     function openApp() {
-      // Android: intent اولویت دارد
-      if (isAndroid()) {
-        window.location.href = intentLink;
-      } else {
-        window.location.href = deepLink;
-      }
+      if (isAndroid()) window.location.href = intentLink;
+      else window.location.href = deepLink;
 
-      // اگر اپ باز نشد، نقش ضربدر
+      // تلاش برای بستن تب مثل ضربدر (محدودیت مرورگره، ولی این بهترینِ ممکنه)
       setTimeout(function () {
-        if (!document.hidden) {
-          tryCloseLikeX();
-        }
-      }, 1200);
+        if (!document.hidden) tryCloseLikeX();
+      }, 900);
     }
 
     btn.addEventListener("click", function(e){
@@ -510,11 +520,7 @@ router.get("/pay-result", async (req, res) => {
       openApp();
     });
 
-    // Auto-try فقط روی موبایل (اما همین auto-try می‌تونه اذیت کنه)
-    // ✅ پیشنهاد: فعلاً auto-try رو خاموش کن که کاربر کنترل داشته باشه.
-    // اگر خواستی دوباره روشنش می‌کنیم.
-    // if (isMobile()) { setTimeout(openApp, 300); }
-
+    // ✅ مهم: هیچ auto-redirect نداریم (کنترل دست کاربر)
   })();
   </script>
 </body>
