@@ -352,8 +352,8 @@ router.get("/pay-result", async (req, res) => {
 
   const title = ok ? "پرداخت موفق" : "پرداخت ناموفق";
   const subtitle = ok
-    ? "اشتراک شما فعال شد. می‌توانید به ققنوس برگردید."
-    : "پرداخت تایید نشد. اگر مبلغی کم شده، معمولاً تا چند دقیقه برگشت می‌خورد.";
+    ? "اشتراک شما فعال شد. می‌تونید به ققنوس برگردید."
+    : "پرداخت تایید نشد. اگر مبلغی کم شده، معمولاً تا چند دقیقه برگشت ميخوره.";
 
   const deepLink = buildDeepLink({ ok, authority });
   const intentLink = buildAndroidIntentLink({ ok, authority });
@@ -455,11 +455,11 @@ router.get("/pay-result", async (req, res) => {
       </div>
 
       <div class="btns">
-        <a class="btn" href="#" id="openApp">${ok ? "رفتن به اشتراک" : "بازگشت به ققنوس"}</a>
+        <a class="btn" href="#" id="openApp">${ok ? "رفتن به اشتراک" : "بازگشت به قـــقنوس"}</a>
       </div>
 
       <div class="hint">
-        اگر اپ باز نشد، اپ را نصب/آپدیت کنید و دوباره روی دکمه بزنید.
+        اگر اپ باز نشد، اپ رو آپدیت کنید و دوباره روی دکمه بزنید.
       </div>
     </div>
   </div>
