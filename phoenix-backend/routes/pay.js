@@ -1,3 +1,4 @@
+//phoenix-app\phoenix-backend\routes\pay.js
 import express from "express";
 import { PrismaClient } from "@prisma/client";
 
@@ -59,7 +60,7 @@ function calcPlanExpiresAtFromNow(months) {
   return d;
 }
 
-// ✅ NEW: (برای وقتی کاربر هنوز اشتراک فعال دارد) تمدید از روی baseDate
+// ✅ برای تمدید از روی baseDate
 function calcPlanExpiresAtFromBase(baseDate, months) {
   const d = new Date(baseDate);
   d.setMonth(d.getMonth() + Number(months || 1));
@@ -97,9 +98,7 @@ function buildResultUrl({ ok, authority }) {
   return `${base}?${params}`;
 }
 
-// ✅ UPDATED: دیپ‌لینک درست برای اپ (می‌خورد به app/pay/index.tsx)
 function buildDeepLink({ ok, authority }) {
-  // اپ: phoenixapp://pay?authority=...&status=success|failed
   const base = `${APP_SCHEME}://pay`;
   const params = new URLSearchParams({
     authority: authority || "",
@@ -108,14 +107,11 @@ function buildDeepLink({ ok, authority }) {
   return `${base}?${params}`;
 }
 
-// ✅ NEW: intent لینک صحیح برای اندروید با scheme درست + package
 function buildAndroidIntentLink({ ok, authority }) {
-  const pathAndQuery = `pay?authority=${encodeURIComponent(authority || "")}&status=${
-    ok ? "success" : "failed"
-  }`;
-  return `intent://${pathAndQuery}#Intent;scheme=${encodeURIComponent(
-    APP_SCHEME
-  )};package=${encodeURIComponent(ANDROID_PACKAGE)};end`;
+  const pathAndQuery = `pay?authority=${encodeURIComponent(authority || "")}&status=${ok ? "success" : "failed"}`;
+  return `intent://${pathAndQuery}#Intent;scheme=${encodeURIComponent(APP_SCHEME)};package=${encodeURIComponent(
+    ANDROID_PACKAGE
+  )};end`;
 }
 
 async function upsertUserPlanOnServer({ phone, plan, planExpiresAt }) {
@@ -140,6 +136,8 @@ async function upsertUserPlanOnServer({ phone, plan, planExpiresAt }) {
     console.error("[pay/verify] upsertUserPlanOnServer error:", e);
   }
 }
+
+/* ========================= START ========================= */
 
 router.post("/start", async (req, res) => {
   setCORS(res);
@@ -180,6 +178,7 @@ router.post("/start", async (req, res) => {
       await prisma.subscription.create({
         data: {
           userId: user.id,
+          phone, // ✅ مطابق Prisma (اجباری)
           authority,
           refId: "PENDING",
           amount,
@@ -237,6 +236,7 @@ router.post("/start", async (req, res) => {
     await prisma.subscription.create({
       data: {
         userId: user.id,
+        phone, // ✅ مطابق Prisma (اجباری)
         authority,
         refId: "PENDING",
         amount,
@@ -254,6 +254,8 @@ router.post("/start", async (req, res) => {
   }
 });
 
+/* ========================= VERIFY ========================= */
+
 router.get("/verify", async (req, res) => {
   setCORS(res);
   if (req.method === "OPTIONS") return res.status(204).end();
@@ -261,9 +263,7 @@ router.get("/verify", async (req, res) => {
   try {
     const q = req.query || {};
 
-    const rawStatus =
-      typeof q.Status === "string" ? q.Status : typeof q.status === "string" ? q.status : "";
-
+    const rawStatus = typeof q.Status === "string" ? q.Status : typeof q.status === "string" ? q.status : "";
     const hasGatewayStatus = rawStatus.length > 0;
     const status = hasGatewayStatus ? rawStatus.toUpperCase() : "UNDEFINED";
 
@@ -273,29 +273,29 @@ router.get("/verify", async (req, res) => {
     const sub = await prisma.subscription.findFirst({ where: { authority }, include: { user: true } });
     if (!sub) return res.status(404).json({ ok: false, error: "SUBSCRIPTION_NOT_FOUND", authority });
 
-    // ✅ NEW: Idempotency (اگر این authority قبلاً finalize شده، دوباره کاری نکن)
-if (sub.status === "active" || (sub.refId && sub.refId !== "PENDING")) {
-  return res.redirect(302, buildResultUrl({ ok: true, authority }));
-}
-if (sub.status === "canceled" || sub.status === "expired") {
-  return res.redirect(302, buildResultUrl({ ok: false, authority }));
-}
+    // ✅ Idempotency: لینک قدیمی/تکراری فقط ریدایرکت، بدون تغییر
+    if (sub.status === "active") {
+      return res.redirect(302, buildResultUrl({ ok: true, authority }));
+    }
+    if (sub.status === "canceled" || sub.status === "expired") {
+      return res.redirect(302, buildResultUrl({ ok: false, authority }));
+    }
 
     const amount = sub.amount;
     const plan = sub.plan || "pro";
     const months = sub.months || 1;
-    const phone = sub.user?.phone || null;
+    const phone = sub.user?.phone || sub.phone || null;
 
+    // ❌ پرداخت ناموفق: فقط اگر هنوز pending بود cancel کن
     if (hasGatewayStatus && status !== "OK") {
-      await prisma.subscription.update({
-        where: { id: sub.id },
+      await prisma.subscription.updateMany({
+        where: { id: sub.id, status: "pending" },
         data: { status: "canceled", refId: "CANCELED" },
       });
-
       return res.redirect(302, buildResultUrl({ ok: false, authority }));
     }
 
-    // ✅ NEW: محاسبه تاریخ انقضا برای تمدید (اگر هنوز فعال است، از همان تاریخ ادامه بده)
+    // ✅ پایه تمدید: اگر کاربر هنوز اشتراک فعال دارد از همان تاریخ ادامه بده
     const now = new Date();
     const userCurrentExpire = sub.user?.planExpiresAt ? new Date(sub.user.planExpiresAt) : null;
     const base =
@@ -303,20 +303,27 @@ if (sub.status === "canceled" || sub.status === "expired") {
         ? userCurrentExpire
         : now;
 
+    // ================= MOCK =================
     if (!PAY_REAL) {
       const refId = `TEST-${Date.now()}`;
       const planExpiresAtDate = calcPlanExpiresAtFromBase(base, months);
 
-      await prisma.subscription.update({
-        where: { id: sub.id },
-        data: { status: "active", refId, expiresAt: planExpiresAtDate },
+      // ✅ ضد race: فقط اگر pending بود، active کن
+      const upd = await prisma.subscription.updateMany({
+        where: { id: sub.id, status: "pending" },
+        data: { status: "active", refId, expiresAt: planExpiresAtDate, paidAt: new Date() },
       });
 
-      if (phone) await upsertUserPlanOnServer({ phone, plan, planExpiresAt: planExpiresAtDate.toISOString() });
+      // اگر قبلاً توسط درخواست دیگری finalize شده بود
+      if (upd.count === 0) {
+        return res.redirect(302, buildResultUrl({ ok: true, authority }));
+      }
 
+      if (phone) await upsertUserPlanOnServer({ phone, plan, planExpiresAt: planExpiresAtDate.toISOString() });
       return res.redirect(302, buildResultUrl({ ok: true, authority }));
     }
 
+    // ================= REAL =================
     if (!MERCHANT_ID) return res.status(500).json({ ok: false, error: "MERCHANT_ID_MISSING" });
 
     const verifyUrl = ZP_API_BASE.replace(/\/+$/, "") + "/verify.json";
@@ -337,7 +344,12 @@ if (sub.status === "canceled" || sub.status === "expired") {
         payload,
         response: json,
       });
-      await prisma.subscription.update({ where: { id: sub.id }, data: { status: "canceled", refId: "VERIFY_FAILED" } });
+
+      await prisma.subscription.updateMany({
+        where: { id: sub.id, status: "pending" },
+        data: { status: "canceled", refId: "VERIFY_FAILED" },
+      });
+
       return res.redirect(302, buildResultUrl({ ok: false, authority }));
     }
 
@@ -346,17 +358,30 @@ if (sub.status === "canceled" || sub.status === "expired") {
     if (!data || (data.code !== 100 && data.code !== 101)) {
       const code = data?.code ?? errors?.code ?? "UNKNOWN";
       console.error("[pay/verify] ZARINPAL_VERIFY_ERROR", { code, json });
-      await prisma.subscription.update({ where: { id: sub.id }, data: { status: "canceled", refId: "VERIFY_FAILED" } });
+
+      await prisma.subscription.updateMany({
+        where: { id: sub.id, status: "pending" },
+        data: { status: "canceled", refId: "VERIFY_FAILED" },
+      });
+
       return res.redirect(302, buildResultUrl({ ok: false, authority }));
     }
 
     const refId = String(data.ref_id || "");
     const planExpiresAtDate = calcPlanExpiresAtFromBase(base, months);
 
-    await prisma.subscription.update({
-      where: { id: sub.id },
-      data: { status: "active", refId, expiresAt: planExpiresAtDate },
+    // ✅ ضد race + idempotent: فقط اگر pending بود فعال کن
+    const upd = await prisma.subscription.updateMany({
+      where: { id: sub.id, status: "pending" },
+      data: { status: "active", refId, expiresAt: planExpiresAtDate, paidAt: new Date() },
     });
+
+    if (upd.count === 0) {
+      // یعنی قبلاً finalize شده (active یا canceled شده بود)
+      // چون بالاتر active/canceled/expired رو هندل کردیم،
+      // اینجا عملاً یعنی در لحظه‌ی مسابقه درخواست دیگر برده.
+      return res.redirect(302, buildResultUrl({ ok: true, authority }));
+    }
 
     if (phone) await upsertUserPlanOnServer({ phone, plan, planExpiresAt: planExpiresAtDate.toISOString() });
 
@@ -366,6 +391,8 @@ if (sub.status === "canceled" || sub.status === "expired") {
     return res.status(500).json({ ok: false, error: e?.message || "SERVER_ERROR" });
   }
 });
+
+/* ========================= PAY-RESULT ========================= */
 
 router.get("/pay-result", async (req, res) => {
   setCORS(res);
@@ -380,8 +407,6 @@ router.get("/pay-result", async (req, res) => {
 
   const deepLink = buildDeepLink({ ok, authority });
   const intentLink = buildAndroidIntentLink({ ok, authority });
-
-  const fallback = "https://qoqnoos.app/";
 
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   return res.send(`<!doctype html>
@@ -420,7 +445,7 @@ router.get("/pay-result", async (req, res) => {
       overflow:hidden;
     }
     .glow1,.glow2{
-      position:absolute; border-radius:999px; filter: blur(0px);
+      position:absolute; border-radius:999px;
       opacity:.9; pointer-events:none;
     }
     .glow1{ width:260px; height:260px; left:-120px; top:-120px; background:rgba(212,175,55,.12); }
@@ -522,6 +547,8 @@ router.get("/pay-result", async (req, res) => {
 </html>`);
 });
 
+/* ========================= STATUS ========================= */
+
 router.get("/status", async (req, res) => {
   setCORS(res);
   try {
@@ -544,9 +571,10 @@ router.get("/status", async (req, res) => {
       plan: sub.plan,
       months: sub.months,
       expiresAt: sub.expiresAt ? new Date(sub.expiresAt).toISOString() : null,
-      phone: sub.user?.phone || null,
+      phone: sub.user?.phone || sub.phone || null,
       userPlan: sub.user?.plan || null,
       userPlanExpiresAt: sub.user?.planExpiresAt ? new Date(sub.user.planExpiresAt).toISOString() : null,
+      paidAt: sub.paidAt ? new Date(sub.paidAt).toISOString() : null,
     });
   } catch (e) {
     console.error("PAY_STATUS_ERR", e);
