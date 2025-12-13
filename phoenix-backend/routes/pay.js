@@ -352,13 +352,10 @@ router.get("/pay-result", async (req, res) => {
 
   const title = ok ? "پرداخت موفق" : "پرداخت ناموفق";
   const subtitle = ok
-    ? "پرداخت انجام شد. برای ادامه روی «رفتن به اشتراک» بزن."
-    : "پرداخت تایید نشد. اگر مبلغی کسر شده، معمولاً تا چند دقیقه برگشت می‌خورد. دوباره تلاش کن.";
+    ? "اشتراک شما فعال شد. می‌توانید به ققنوس برگردید."
+    : "پرداخت تایید نشد. اگر مبلغی کم شده، معمولاً تا چند دقیقه برگشت می‌خورد.";
 
-  // ✅ دیپ‌لینک اپ (درست)
   const deepLink = buildDeepLink({ ok, authority });
-
-  // ✅ intent لینک درست برای اندروید (scheme + package صحیح)
   const intentLink = buildAndroidIntentLink({ ok, authority });
 
   const fallback = "https://qoqnoos.app/";
@@ -373,10 +370,11 @@ router.get("/pay-result", async (req, res) => {
   <meta name="theme-color" content="#0b0f14" />
   <style>
     :root{
-      --bg:#0b0f14; --card:#111824; --text:#e8eef7; --muted:#a7b3c6;
-      --line:rgba(255,255,255,.08);
+      --bg:#0b0f14; --text:#e8eef7; --muted:#a7b3c6;
+      --line:rgba(255,255,255,.10);
       --gold:#D4AF37; --accent:#E98A15;
-      --ok:#19c37d; --bad:#ff5a6a;
+      --ok:#22c55e; --bad:#f87171;
+      --cardOk:#0b1220; --cardBad:#120b0f;
     }
     *{box-sizing:border-box}
     body{
@@ -390,99 +388,78 @@ router.get("/pay-result", async (req, res) => {
     }
     .wrap{width:min(520px, 100%)}
     .card{
-      background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
-      border:1px solid var(--line);
-      border-radius:18px;
+      background:${ok ? "var(--cardOk)" : "var(--cardBad)"};
+      border:1px solid ${ok ? "rgba(212,175,55,.35)" : "rgba(248,113,113,.35)"};
+      border-radius:22px;
       padding:22px;
       box-shadow: 0 18px 45px rgba(0,0,0,.35);
       position:relative;
       overflow:hidden;
     }
+    .glow1,.glow2{
+      position:absolute; border-radius:999px; filter: blur(0px);
+      opacity:.9; pointer-events:none;
+    }
+    .glow1{ width:260px; height:260px; left:-120px; top:-120px; background:rgba(212,175,55,.12); }
+    .glow2{ width:280px; height:280px; right:-140px; bottom:-140px; background:${ok ? "rgba(34,197,94,.10)" : "rgba(248,113,113,.10)"}; }
+
     .bar{
       height:4px; border-radius:999px;
-      background:linear-gradient(90deg, var(--gold), var(--accent));
-      opacity:.9; margin-bottom:16px;
+      background:${ok ? "linear-gradient(90deg, var(--gold), var(--ok))" : "var(--bad)"};
+      margin-bottom:16px;
     }
     .row{display:flex; gap:14px; align-items:center}
     .badge{
-      width:44px; height:44px; border-radius:14px;
+      width:48px; height:48px; border-radius:18px;
       display:grid; place-items:center;
-      background:rgba(255,255,255,.06);
+      background:rgba(255,255,255,.05);
       border:1px solid var(--line);
       flex:0 0 auto;
     }
-    .icon{
+    .dot{
       width:18px; height:18px; border-radius:999px;
       background:${ok ? "var(--ok)" : "var(--bad)"};
-      box-shadow: 0 0 0 6px ${ok ? "rgba(25,195,125,.18)" : "rgba(255,90,106,.18)"};
+      box-shadow: 0 0 0 7px ${ok ? "rgba(34,197,94,.18)" : "rgba(248,113,113,.18)"};
     }
     h1{margin:0; font-size:22px; letter-spacing:-.2px}
     p{margin:6px 0 0; color:var(--muted); line-height:1.7; font-size:14px}
-    .kv{
-      margin-top:16px; padding:12px 14px;
-      border:1px solid var(--line);
-      border-radius:14px;
-      background:rgba(0,0,0,.18);
-      display:flex; justify-content:space-between; gap:10px; align-items:center;
-      font-size:13px;
-    }
-    .kv span{color:var(--muted)}
-    code{
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      font-size:12px;
-      color:#fff;
-      word-break:break-all;
-    }
+
     .btns{display:flex; gap:10px; margin-top:16px; flex-wrap:wrap}
     a.btn{
       display:inline-flex; align-items:center; justify-content:center;
       padding:12px 14px;
-      border-radius:14px;
+      border-radius:16px;
       text-decoration:none;
-      font-weight:700;
+      font-weight:800;
       font-size:14px;
-      border:1px solid var(--line);
-      background:rgba(255,255,255,.06);
+      border:1px solid ${ok ? "rgba(34,197,94,.35)" : "rgba(248,113,113,.35)"};
+      background:${ok ? "rgba(34,197,94,.14)" : "rgba(248,113,113,.14)"};
       color:var(--text);
-      transition:transform .06s ease, background .2s ease;
-      flex:1 1 160px;
+      flex:1 1 220px;
     }
-    a.btn.primary{
-      background:linear-gradient(90deg, rgba(212,175,55,.18), rgba(233,138,21,.18));
-      border-color:rgba(212,175,55,.28);
-    }
-    a.btn:active{transform:scale(.99)}
     .hint{margin-top:12px; font-size:12px; color:rgba(231,238,247,.65)}
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
+      <div class="glow1"></div><div class="glow2"></div>
       <div class="bar"></div>
+
       <div class="row">
-        <div class="badge"><div class="icon"></div></div>
+        <div class="badge"><div class="dot"></div></div>
         <div>
           <h1>${title}</h1>
           <p>${subtitle}</p>
         </div>
       </div>
 
-      <div class="kv">
-        <span>کد پیگیری</span>
-        <code>${authority || "-"}</code>
-      </div>
-
       <div class="btns">
-        ${
-          ok
-            ? `<a class="btn primary" href="#" id="openApp">رفتن به اشتراک</a>`
-            : `<a class="btn primary" href="#" id="openApp">بازگشت به اپ</a>
-               <a class="btn" href="${fallback}">رفتن به سایت</a>`
-        }
+        <a class="btn" href="#" id="openApp">${ok ? "رفتن به اشتراک" : "بازگشت به ققنوس"}</a>
       </div>
 
       <div class="hint">
-        اگر اپ باز نشد، اپ را نصب/آپدیت کن و دوباره روی دکمه بزن.
+        اگر اپ باز نشد، اپ را نصب/آپدیت کنید و دوباره روی دکمه بزنید.
       </div>
     </div>
   </div>
@@ -500,27 +477,22 @@ router.get("/pay-result", async (req, res) => {
       return /Android/i.test(ua);
     }
 
-    function tryCloseLikeX() {
-      try { window.close(); } catch(e) {}
-      try { history.back(); } catch(e) {}
-    }
-
     function openApp() {
       if (isAndroid()) window.location.href = intentLink;
       else window.location.href = deepLink;
 
-      // تلاش برای بستن تب مثل ضربدر (محدودیت مرورگره، ولی این بهترینِ ممکنه)
       setTimeout(function () {
-        if (!document.hidden) tryCloseLikeX();
-      }, 900);
+        if (!document.hidden) {
+          try { window.close(); } catch(e) {}
+          try { history.back(); } catch(e) {}
+        }
+      }, 1200);
     }
 
     btn.addEventListener("click", function(e){
       e.preventDefault();
       openApp();
     });
-
-    // ✅ مهم: هیچ auto-redirect نداریم (کنترل دست کاربر)
   })();
   </script>
 </body>

@@ -4,7 +4,7 @@ import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useUser } from "@/hooks/useUser";
-import { toApi } from "@/constants/env"; // بهتر از هاردکد
+import { toApi } from "@/constants/env";
 
 type PayStatusResp =
   | { ok: false; error: string }
@@ -25,8 +25,8 @@ type PayStatusResp =
 export default function PayResultScreen() {
   const params = useLocalSearchParams();
   const authority = String(params.authority || "").trim();
-  const okParam = String(params.ok || "").trim(); // "1" | "0"
-  const statusParam = String(params.status || "").trim(); // "success" | "failed"
+  const okParam = String(params.ok || "").trim();
+  const statusParam = String(params.status || "").trim();
 
   const { refresh } = useUser();
 
@@ -51,7 +51,6 @@ export default function PayResultScreen() {
       setLoading(false);
       return;
     }
-
     try {
       setLoading(true);
       setErr(null);
@@ -81,16 +80,14 @@ export default function PayResultScreen() {
     }
   }
 
-  // اولین بار
   useEffect(() => {
     fetchStatus();
   }, [authority]);
 
-  // اگر pending بود، چندبار سبک پول کن
   useEffect(() => {
     if (!data || data.ok !== true) return;
     if (data.status !== "pending") return;
-    if (pollRef.current >= 20) return; // حداکثر ~۱ دقیقه
+    if (pollRef.current >= 20) return;
     pollRef.current += 1;
 
     const t = setTimeout(() => {
@@ -100,22 +97,19 @@ export default function PayResultScreen() {
     return () => clearTimeout(t);
   }, [data?.ok, (data as any)?.status]);
 
-  // اگر active شد: refresh(force) (ولی دیگه خودکار به Subscription نرو)
   useEffect(() => {
     if (!data || data.ok !== true) return;
     if (data.status !== "active") return;
     if (handledSuccessRef.current) return;
 
     handledSuccessRef.current = true;
-
     (async () => {
       try {
-        await refresh({ force: true }); // ✅ مهم
+        await refresh({ force: true });
       } catch {}
     })();
   }, [data, refresh]);
 
-  // ---------- UI helpers ----------
   const status = (() => {
     if (loading) return "loading";
     if (err) return "error";
@@ -124,94 +118,143 @@ export default function PayResultScreen() {
   })();
 
   const ui = useMemo(() => {
+    // Brand palette
+    const GOLD = "#D4AF37";
+    const ORANGE = "#E98A15";
+    const GREEN = "#22C55E";
+    const RED = "#F87171";
+
     // defaults
     let title = "در حال بررسی پرداخت…";
-    let subtitle = "چند ثانیه صبر کنید.";
+    let subtitle = "چند ثانیه صبر کن.";
     let icon: any = "hourglass-outline";
-    let accent = "#60A5FA"; // blue
-    let badge = "در حال بررسی";
+    let bar = "rgba(255,255,255,0.18)";
+    let cardBorder = "rgba(255,255,255,0.12)";
+    let cardBg = "#0f172a";
+    let btnBg = "rgba(255,255,255,0.06)";
+    let btnBorder = "rgba(255,255,255,0.12)";
+    let btnText = "#E8EEF7";
 
     if (status === "error") {
-      title = "مشکل در بررسی پرداخت";
-      subtitle =
-        "یک بار «بررسی مجدد» بزن. اگر ادامه داشت، از داخل اپ دوباره پرداخت کن.";
+      title = "خطا در بررسی پرداخت";
+      subtitle = "دوباره تلاش کن. اگر ادامه داشت، از داخل اپ پرداخت را تکرار کن.";
       icon = "warning-outline";
-      accent = "#FBBF24"; // amber
-      badge = "خطا";
+      bar = "rgba(251,191,36,0.95)";
+      cardBorder = "rgba(251,191,36,0.25)";
+      btnBg = "rgba(251,191,36,0.12)";
+      btnBorder = "rgba(251,191,36,0.25)";
     } else if (status === "unknown") {
       title = "وضعیت نامشخص";
-      subtitle = "اطلاعات کافی نیست. «بررسی مجدد» را امتحان کن.";
+      subtitle = "اطلاعات کافی نیست. یکبار دیگر بررسی کن.";
       icon = "help-circle-outline";
-      accent = "#A78BFA"; // purple
-      badge = "نامشخص";
+      bar = "rgba(167,139,250,0.95)";
+      cardBorder = "rgba(167,139,250,0.25)";
+      btnBg = "rgba(167,139,250,0.12)";
+      btnBorder = "rgba(167,139,250,0.25)";
     } else if (status === "pending") {
       title = "در انتظار تایید";
-      subtitle = "اگر همین الان از درگاه برگشتی، چند ثانیه دیگه دوباره چک می‌کنیم.";
+      subtitle = "اگر همین الان از درگاه برگشتی، چند ثانیه دیگه خودکار دوباره چک می‌کنیم.";
       icon = "time-outline";
-      accent = "#FBBF24"; // amber
-      badge = "Pending";
+      bar = "rgba(251,191,36,0.95)";
+      cardBorder = "rgba(251,191,36,0.25)";
+      btnBg = "rgba(251,191,36,0.12)";
+      btnBorder = "rgba(251,191,36,0.25)";
     } else if (status === "active") {
+      // ✅ طلایی + سبز (حس ققنوس)
       title = "پرداخت موفق ✅";
-      subtitle = "اشتراک فعال شد. حالا برو صفحه اشتراک.";
+      subtitle = "اشتراک فعال شد. حالا برگرد به ققنوس.";
       icon = "checkmark-circle-outline";
-      accent = "#22C55E"; // green
-      badge = "Success";
-    } else if (status === "canceled") {
-      title = "پرداخت ناموفق / لغو شده";
+      // gradient حسش رو با دو لایه می‌سازیم (بدون linear-gradient)
+      bar = GOLD;
+      cardBg = "#0b1220";
+      cardBorder = "rgba(212,175,55,0.35)";
+      btnBg = "rgba(34,197,94,0.16)";
+      btnBorder = "rgba(34,197,94,0.35)";
+      btnText = "#E8EEF7";
+    } else if (status === "canceled" || initialOk === false) {
+      // ✅ قرمز برای ناموفق
+      title = "پرداخت ناموفق";
       subtitle = "پرداخت تایید نشد. اگر مبلغی کم شده، معمولاً برگشت می‌خورد.";
       icon = "close-circle-outline";
-      accent = "#F87171"; // red
-      badge = "Failed";
+      bar = RED;
+      cardBorder = "rgba(248,113,113,0.35)";
+      cardBg = "#120b0f";
+      btnBg = "rgba(248,113,113,0.14)";
+      btnBorder = "rgba(248,113,113,0.35)";
     } else if (status === "expired") {
-      title = "پرداخت منقضی شده";
+      title = "پرداخت منقضی شد";
       subtitle = "این پرداخت منقضی شده. لطفاً دوباره پرداخت کن.";
       icon = "ban-outline";
-      accent = "#FB7185"; // rose
-      badge = "Expired";
+      bar = ORANGE;
+      cardBorder = "rgba(233,138,21,0.35)";
+      btnBg = "rgba(233,138,21,0.14)";
+      btnBorder = "rgba(233,138,21,0.35)";
     }
 
-    // کمک از initialOk (اگر دیتا دیر بیاد)
-    if (initialOk === false && status === "loading") {
-      title = "پرداخت ناموفق";
-      subtitle = "در حال بررسی جزئیات…";
-      icon = "close-circle-outline";
-      accent = "#F87171";
-      badge = "Failed";
-    }
-
-    return { title, subtitle, icon, accent, badge };
+    return {
+      title,
+      subtitle,
+      icon,
+      bar,
+      cardBorder,
+      cardBg,
+      btnBg,
+      btnBorder,
+      btnText,
+    };
   }, [status, initialOk]);
 
   const bg = "#0b0f14";
-  const card = "#0f172a";
-  const line = "rgba(255,255,255,0.10)";
   const text = "#e8eef7";
   const muted = "rgba(231,238,247,0.70)";
-
-  const showAuthority = authority || (data && data.ok === true ? data.authority : "");
-  const showRefId = data && data.ok === true ? data.refId : null;
+  const lineSoft = "rgba(255,255,255,0.08)";
 
   const isSuccess = status === "active";
-  const showRetry = !isSuccess; // ✅ موفق → فقط یک دکمه
+  const showRetry = !isSuccess; // موفق → فقط یک دکمه
 
   return (
     <View style={{ flex: 1, backgroundColor: bg, padding: 20, justifyContent: "center" }}>
       <View
         style={{
-          backgroundColor: card,
-          borderRadius: 22,
+          backgroundColor: ui.cardBg,
+          borderRadius: 24,
           borderWidth: 1,
-          borderColor: line,
+          borderColor: ui.cardBorder,
           padding: 18,
+          overflow: "hidden",
         }}
       >
-        {/* Top Bar */}
+        {/* subtle glow (brand vibe) */}
+        <View
+          style={{
+            position: "absolute",
+            top: -90,
+            left: -90,
+            width: 220,
+            height: 220,
+            borderRadius: 220,
+            backgroundColor: "rgba(212,175,55,0.10)",
+          }}
+        />
+        <View
+          style={{
+            position: "absolute",
+            bottom: -110,
+            right: -110,
+            width: 260,
+            height: 260,
+            borderRadius: 260,
+            backgroundColor: isSuccess ? "rgba(34,197,94,0.10)" : "rgba(248,113,113,0.08)",
+          }}
+        />
+
+        {/* Top bar */}
         <View
           style={{
             height: 4,
             borderRadius: 999,
-            backgroundColor: ui.accent,
-            opacity: 0.9,
+            backgroundColor: ui.bar,
+            opacity: 0.95,
             marginBottom: 14,
           }}
         />
@@ -220,69 +263,38 @@ export default function PayResultScreen() {
         <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
           <View
             style={{
-              width: 44,
-              height: 44,
-              borderRadius: 16,
+              width: 48,
+              height: 48,
+              borderRadius: 18,
               borderWidth: 1,
-              borderColor: line,
+              borderColor: lineSoft,
               backgroundColor: "rgba(255,255,255,0.04)",
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <Ionicons name={ui.icon} size={22} color={ui.accent} />
+            <Ionicons name={ui.icon} size={24} color={text} />
           </View>
 
           <View style={{ flex: 1 }}>
-            <Text style={{ color: text, fontSize: 20, fontWeight: "900", textAlign: "right" }}>
+            <Text style={{ color: text, fontSize: 21, fontWeight: "900", textAlign: "right" }}>
               {ui.title}
             </Text>
             <Text style={{ color: muted, fontSize: 13, lineHeight: 20, textAlign: "right", marginTop: 4 }}>
               {ui.subtitle}
             </Text>
           </View>
-
-          <View
-            style={{
-              paddingHorizontal: 10,
-              paddingVertical: 6,
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: line,
-              backgroundColor: "rgba(255,255,255,0.04)",
-            }}
-          >
-            <Text style={{ color: ui.accent, fontSize: 12, fontWeight: "900" }}>
-              {ui.badge}
-            </Text>
-          </View>
         </View>
 
-        {/* Details */}
-        <View style={{ marginTop: 14, borderWidth: 1, borderColor: line, borderRadius: 16, padding: 12 }}>
-          <Text style={{ color: muted, fontSize: 12, textAlign: "right" }}>کد پیگیری (Authority)</Text>
-          <Text style={{ color: text, fontSize: 13, marginTop: 6, textAlign: "right" }}>
-            {showAuthority || "-"}
-          </Text>
-
-          {showRefId ? (
-            <>
-              <Text style={{ color: muted, fontSize: 12, textAlign: "right", marginTop: 10 }}>RefId</Text>
-              <Text style={{ color: text, fontSize: 13, marginTop: 6, textAlign: "right" }}>
-                {String(showRefId)}
-              </Text>
-            </>
-          ) : null}
-        </View>
-
+        {/* Loading */}
         {loading ? (
-          <View style={{ paddingVertical: 12 }}>
+          <View style={{ paddingVertical: 14 }}>
             <ActivityIndicator />
           </View>
         ) : null}
 
         {/* Buttons */}
-        <View style={{ flexDirection: "row-reverse", gap: 10, marginTop: 12 }}>
+        <View style={{ flexDirection: "row-reverse", gap: 10, marginTop: 14 }}>
           {showRetry ? (
             <Pressable
               onPress={() => {
@@ -294,7 +306,7 @@ export default function PayResultScreen() {
                 paddingVertical: 12,
                 borderRadius: 16,
                 borderWidth: 1,
-                borderColor: line,
+                borderColor: lineSoft,
                 alignItems: "center",
                 backgroundColor: "rgba(255,255,255,0.06)",
               }}
@@ -305,31 +317,35 @@ export default function PayResultScreen() {
 
           <Pressable
             onPress={() => {
-              // ✅ موفق: برو اشتراک (و یکبار هم force refresh یوزر)
+              // ✅ موفق → برو اشتراک
+              // ✅ ناموفق → برگرد به ققنوس (منطقی‌ترین: همین تب اشتراک)
               router.replace({
                 pathname: "/(tabs)/Subscription",
-                params: { _forceReloadUser: Date.now().toString() },
+                params: isSuccess ? { _forceReloadUser: Date.now().toString() } : {},
               } as any);
             }}
             style={{
-              flex: showRetry ? 1 : 1,
+              flex: 1,
               paddingVertical: 12,
               borderRadius: 16,
               borderWidth: 1,
-              borderColor: isSuccess ? "rgba(34,197,94,0.35)" : "rgba(212,175,55,0.28)",
+              borderColor: ui.btnBorder,
               alignItems: "center",
-              backgroundColor: isSuccess ? "rgba(34,197,94,0.14)" : "rgba(212,175,55,0.12)",
+              backgroundColor: ui.btnBg,
             }}
           >
-            <Text style={{ color: text, fontWeight: "900" }}>
-              {isSuccess ? "رفتن به اشتراک" : "رفتن به اشتراک"}
+            <Text style={{ color: ui.btnText, fontWeight: "900" }}>
+              {isSuccess ? "رفتن به اشتراک" : "بازگشت به ققنوس"}
             </Text>
           </Pressable>
         </View>
 
-        <Text style={{ color: "rgba(231,238,247,0.55)", fontSize: 11, marginTop: 12, textAlign: "right" }}>
-          نکته: اگر از دسکتاپ این صفحه را می‌بینی، دیپ‌لینک اجرا نمی‌شود. تست واقعی روی موبایل انجام بده.
-        </Text>
+        {/* tiny note only on error-ish */}
+        {status === "error" ? (
+          <Text style={{ color: "rgba(231,238,247,0.55)", fontSize: 11, marginTop: 12, textAlign: "right" }}>
+            اگر این خطا تکرار شد، یکبار اپ را ببند و دوباره باز کن.
+          </Text>
+        ) : null}
       </View>
     </View>
   );
