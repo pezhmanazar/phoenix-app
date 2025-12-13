@@ -59,6 +59,13 @@ function calcPlanExpiresAtFromNow(months) {
   return d;
 }
 
+// ✅ NEW: (برای وقتی کاربر هنوز اشتراک فعال دارد) تمدید از روی baseDate
+function calcPlanExpiresAtFromBase(baseDate, months) {
+  const d = new Date(baseDate);
+  d.setMonth(d.getMonth() + Number(months || 1));
+  return d;
+}
+
 function resolvePlanFromInput({ amount, plan, days, months }) {
   const p = String(plan || "pro");
   if (Number(months) > 0) return { plan: p, months: Number(months) };
@@ -266,6 +273,14 @@ router.get("/verify", async (req, res) => {
     const sub = await prisma.subscription.findFirst({ where: { authority }, include: { user: true } });
     if (!sub) return res.status(404).json({ ok: false, error: "SUBSCRIPTION_NOT_FOUND", authority });
 
+    // ✅ NEW: Idempotency (اگر این authority قبلاً تعیین تکلیف شده، دوباره کاری نکن)
+    if (sub.status === "active") {
+      return res.redirect(302, buildResultUrl({ ok: true, authority }));
+    }
+    if (sub.status === "canceled" || sub.status === "expired") {
+      return res.redirect(302, buildResultUrl({ ok: false, authority }));
+    }
+
     const amount = sub.amount;
     const plan = sub.plan || "pro";
     const months = sub.months || 1;
@@ -280,9 +295,17 @@ router.get("/verify", async (req, res) => {
       return res.redirect(302, buildResultUrl({ ok: false, authority }));
     }
 
+    // ✅ NEW: محاسبه تاریخ انقضا برای تمدید (اگر هنوز فعال است، از همان تاریخ ادامه بده)
+    const now = new Date();
+    const userCurrentExpire = sub.user?.planExpiresAt ? new Date(sub.user.planExpiresAt) : null;
+    const base =
+      userCurrentExpire && !isNaN(userCurrentExpire.getTime()) && userCurrentExpire.getTime() > now.getTime()
+        ? userCurrentExpire
+        : now;
+
     if (!PAY_REAL) {
       const refId = `TEST-${Date.now()}`;
-      const planExpiresAtDate = calcPlanExpiresAtFromNow(months);
+      const planExpiresAtDate = calcPlanExpiresAtFromBase(base, months);
 
       await prisma.subscription.update({
         where: { id: sub.id },
@@ -328,7 +351,7 @@ router.get("/verify", async (req, res) => {
     }
 
     const refId = String(data.ref_id || "");
-    const planExpiresAtDate = calcPlanExpiresAtFromNow(months);
+    const planExpiresAtDate = calcPlanExpiresAtFromBase(base, months);
 
     await prisma.subscription.update({
       where: { id: sub.id },
@@ -455,7 +478,7 @@ router.get("/pay-result", async (req, res) => {
       </div>
 
       <div class="btns">
-        <a class="btn" href="#" id="openApp">${ok ? "بازگشت به قـــقنوس" : "بازگشت به قـــقنوس"}</a>
+        <a class="btn" href="#" id="openApp">بازگشت به قـــقنوس</a>
       </div>
 
       <div class="hint">
