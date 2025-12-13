@@ -1,4 +1,4 @@
-//phoenix-app/phoenix-backend/routes/pay.js
+// phoenix-app/phoenix-backend/routes/pay.js
 import express from "express";
 import { PrismaClient } from "@prisma/client";
 
@@ -33,9 +33,9 @@ const PAY_CALLBACK_URL = (process.env.PAY_CALLBACK_URL || "").trim();
 const PAY_RESULT_URL = (process.env.PAY_RESULT_URL || "").trim();
 const PAY_RESULT_BASE = (process.env.PAY_RESULT_BASE || "https://qoqnoos.app/pay").trim();
 
-// باید با app.json یکی باشد
+// باید با app.json یکی باشد (scheme)
 const APP_SCHEME = (process.env.APP_SCHEME || "phoenixapp").trim();
-// پکیج اندروید
+// پکیج اندروید (برای intent)
 const ANDROID_PACKAGE = (process.env.ANDROID_PACKAGE || "com.pezhman.phoenix").trim();
 
 function setCORS(res) {
@@ -54,13 +54,6 @@ function normalizeIranPhone(v = "") {
   return "";
 }
 
-function calcPlanExpiresAtFromNow(months) {
-  const d = new Date();
-  d.setMonth(d.getMonth() + Number(months || 1));
-  return d;
-}
-
-// تمدید از روی baseDate (وقتی هنوز اشتراک فعاله)
 function calcPlanExpiresAtFromBase(baseDate, months) {
   const d = new Date(baseDate);
   d.setMonth(d.getMonth() + Number(months || 1));
@@ -79,9 +72,11 @@ function resolvePlanFromInput({ amount, plan, days, months }) {
     return { plan: p, months: 1 };
   }
 
+  // نگاشت‌های نمونه (اگر مبلغ‌ها را عوض کردی، اینجا هم عوض کن)
   if (amount === 399000 || amount === 10000) return { plan: "pro", months: 1 };
   if (amount === 899000) return { plan: "pro", months: 3 };
   if (amount === 1199000) return { plan: "pro", months: 6 };
+
   return { plan: p, months: 1 };
 }
 
@@ -96,6 +91,7 @@ function buildResultUrl({ ok, authority }) {
 }
 
 function buildDeepLink({ ok, authority }) {
+  // phoenixapp://pay?authority=...&status=success|failed
   const base = `${APP_SCHEME}://pay`;
   const params = new URLSearchParams({
     authority: authority || "",
@@ -116,6 +112,7 @@ async function upsertUserPlanOnServer({ phone, plan, planExpiresAt }) {
   try {
     const base = BACKEND_URL.replace(/\/+$/, "");
     const targetUrl = `${base}/api/users/upsert`;
+
     const body = { phone, plan, planExpiresAt, profileCompleted: true };
 
     const resp = await fetch(targetUrl, {
@@ -128,9 +125,7 @@ async function upsertUserPlanOnServer({ phone, plan, planExpiresAt }) {
     });
 
     const text = await resp.text();
-    if (!resp.ok) {
-      console.error("[pay/verify] upsertUserPlanOnServer non-OK:", resp.status, text);
-    }
+    if (!resp.ok) console.error("[pay/verify] upsertUserPlanOnServer non-OK:", resp.status, text);
   } catch (e) {
     console.error("[pay/verify] upsertUserPlanOnServer error:", e);
   }
@@ -168,24 +163,21 @@ router.post("/start", async (req, res) => {
       create: { phone, plan: "free", profileCompleted: true },
     });
 
-    // ✅ مهم: expiresAt تو schema اجباریه
-    const initialExpiresAt = calcPlanExpiresAtFromNow(months);
-
     if (!PAY_REAL) {
       const authority = `MOCK_${Math.random().toString(36).slice(2, 10)}`;
       const gatewayUrl = `https://example.com/mock/${authority}`;
 
       await prisma.subscription.create({
         data: {
-          userId: user.id || null,
-          phone, // ✅ مطابق Prisma schema
+          userId: user.id,
+          phone,
           authority,
           refId: "PENDING",
           amount,
           months,
           plan,
           status: "pending",
-          expiresAt: initialExpiresAt,
+          expiresAt: calcPlanExpiresAtFromBase(new Date(), months),
         },
       });
 
@@ -230,15 +222,15 @@ router.post("/start", async (req, res) => {
 
     await prisma.subscription.create({
       data: {
-        userId: user.id || null,
-        phone, // ✅ مطابق Prisma schema
+        userId: user.id,
+        phone,
         authority,
         refId: "PENDING",
         amount,
         months,
         plan,
         status: "pending",
-        expiresAt: initialExpiresAt,
+        expiresAt: calcPlanExpiresAtFromBase(new Date(), months),
       },
     });
 
@@ -257,7 +249,9 @@ router.get("/verify", async (req, res) => {
     const q = req.query || {};
 
     const rawStatus =
-      typeof q.Status === "string" ? q.Status : typeof q.status === "string" ? q.status : "";
+      typeof q.Status === "string" ? q.Status :
+      typeof q.status === "string" ? q.status :
+      "";
 
     const hasGatewayStatus = rawStatus.length > 0;
     const status = hasGatewayStatus ? rawStatus.toUpperCase() : "UNDEFINED";
@@ -268,7 +262,7 @@ router.get("/verify", async (req, res) => {
     const sub = await prisma.subscription.findFirst({ where: { authority }, include: { user: true } });
     if (!sub) return res.status(404).json({ ok: false, error: "SUBSCRIPTION_NOT_FOUND" });
 
-    // ✅ Idempotency: authority فقط یک بار اثر دارد
+    // ✅ Idempotency: این authority فقط یک بار باید اثر داشته باشد
     if (sub.status === "active") {
       return res.redirect(302, buildResultUrl({ ok: true, authority }));
     }
@@ -279,44 +273,43 @@ router.get("/verify", async (req, res) => {
     const amount = sub.amount;
     const plan = sub.plan || "pro";
     const months = sub.months || 1;
-    const phone = sub.user?.phone || sub.phone || null;
+    const phone = (sub.phone || sub.user?.phone || "").trim();
 
-    // اگر درگاه status NOK داد
+    // اگر از درگاه برگشته و OK نیست => فقط اگر pending بود کنسل کن
     if (hasGatewayStatus && status !== "OK") {
       await prisma.subscription.updateMany({
-        where: { authority, status: "pending" },
+        where: { id: sub.id, status: "pending" },
         data: { status: "canceled", refId: "CANCELED" },
       });
       return res.redirect(302, buildResultUrl({ ok: false, authority }));
     }
 
-    // ✅ تمدید: اگر هنوز فعاله از planExpiresAt ادامه بده، وگرنه از now
+    // ✅ تمدید: اگر user.planExpiresAt هنوز در آینده است از همان ادامه بده، وگرنه از الان
     const now = new Date();
-    const userCurrentExpire =
-      sub.user?.planExpiresAt ? new Date(sub.user.planExpiresAt) : null;
-
+    const userCurrentExpire = sub.user?.planExpiresAt ? new Date(sub.user.planExpiresAt) : null;
     const base =
-      userCurrentExpire &&
-      !isNaN(userCurrentExpire.getTime()) &&
-      userCurrentExpire.getTime() > now.getTime()
+      userCurrentExpire && !isNaN(userCurrentExpire.getTime()) && userCurrentExpire.getTime() > now.getTime()
         ? userCurrentExpire
         : now;
 
+    const planExpiresAtDate = calcPlanExpiresAtFromBase(base, months);
+
     if (!PAY_REAL) {
       const refId = `TEST-${Date.now()}`;
-      const planExpiresAtDate = calcPlanExpiresAtFromBase(base, months);
 
-      await prisma.subscription.update({
-        where: { id: sub.id },
-        data: { status: "active", refId, expiresAt: planExpiresAtDate, paidAt: new Date() },
+      // فقط اگر هنوز pending بود اکتیو کن (ضد دوباره‌کاری)
+      const upd = await prisma.subscription.updateMany({
+        where: { id: sub.id, status: "pending" },
+        data: {
+          status: "active",
+          refId,
+          expiresAt: planExpiresAtDate,
+          paidAt: new Date(),
+        },
       });
 
-      if (phone) {
-        await upsertUserPlanOnServer({
-          phone,
-          plan,
-          planExpiresAt: planExpiresAtDate.toISOString(),
-        });
+      if (upd.count > 0 && phone) {
+        await upsertUserPlanOnServer({ phone, plan, planExpiresAt: planExpiresAtDate.toISOString() });
       }
 
       return res.redirect(302, buildResultUrl({ ok: true, authority }));
@@ -338,7 +331,7 @@ router.get("/verify", async (req, res) => {
     if (!zpRes.ok || !json) {
       console.error("[pay/verify] ZARINPAL_VERIFY_FAILED", { status: zpRes.status, verifyUrl, payload, response: json });
       await prisma.subscription.updateMany({
-        where: { authority, status: "pending" },
+        where: { id: sub.id, status: "pending" },
         data: { status: "canceled", refId: "VERIFY_FAILED" },
       });
       return res.redirect(302, buildResultUrl({ ok: false, authority }));
@@ -350,26 +343,28 @@ router.get("/verify", async (req, res) => {
       const code = data?.code ?? errors?.code ?? "UNKNOWN";
       console.error("[pay/verify] ZARINPAL_VERIFY_ERROR", { code, json });
       await prisma.subscription.updateMany({
-        where: { authority, status: "pending" },
+        where: { id: sub.id, status: "pending" },
         data: { status: "canceled", refId: "VERIFY_FAILED" },
       });
       return res.redirect(302, buildResultUrl({ ok: false, authority }));
     }
 
     const refId = String(data.ref_id || "");
-    const planExpiresAtDate = calcPlanExpiresAtFromBase(base, months);
 
-    await prisma.subscription.update({
-      where: { id: sub.id },
-      data: { status: "active", refId, expiresAt: planExpiresAtDate, paidAt: new Date() },
+    // ✅ finalize فقط اگر pending بود
+    const upd = await prisma.subscription.updateMany({
+      where: { id: sub.id, status: "pending" },
+      data: {
+        status: "active",
+        refId: refId || "PAID",
+        expiresAt: planExpiresAtDate,
+        paidAt: new Date(),
+      },
     });
 
-    if (phone) {
-      await upsertUserPlanOnServer({
-        phone,
-        plan,
-        planExpiresAt: planExpiresAtDate.toISOString(),
-      });
+    // فقط اگر واقعاً همین دفعه finalize شد، پلن کاربر را آپدیت کن
+    if (upd.count > 0 && phone) {
+      await upsertUserPlanOnServer({ phone, plan, planExpiresAt: planExpiresAtDate.toISOString() });
     }
 
     return res.redirect(302, buildResultUrl({ ok: true, authority }));
@@ -429,13 +424,9 @@ router.get("/pay-result", async (req, res) => {
       position:relative;
       overflow:hidden;
     }
-    .glow1,.glow2{
-      position:absolute; border-radius:999px;
-      opacity:.9; pointer-events:none;
-    }
+    .glow1,.glow2{ position:absolute; border-radius:999px; opacity:.9; pointer-events:none; }
     .glow1{ width:260px; height:260px; left:-120px; top:-120px; background:rgba(212,175,55,.12); }
     .glow2{ width:280px; height:280px; right:-140px; bottom:-140px; background:${ok ? "rgba(34,197,94,.10)" : "rgba(248,113,113,.10)"}; }
-
     .bar{
       height:4px; border-radius:999px;
       background:${ok ? "linear-gradient(90deg, var(--gold), var(--ok))" : "var(--bad)"};
@@ -456,7 +447,6 @@ router.get("/pay-result", async (req, res) => {
     }
     h1{margin:0; font-size:22px; letter-spacing:-.2px}
     p{margin:6px 0 0; color:var(--muted); line-height:1.7; font-size:14px}
-
     .btns{display:flex; gap:10px; margin-top:16px; flex-wrap:wrap}
     a.btn{
       display:inline-flex; align-items:center; justify-content:center;
@@ -554,7 +544,8 @@ router.get("/status", async (req, res) => {
       plan: sub.plan,
       months: sub.months,
       expiresAt: sub.expiresAt ? new Date(sub.expiresAt).toISOString() : null,
-      phone: sub.user?.phone || sub.phone || null,
+      paidAt: sub.paidAt ? new Date(sub.paidAt).toISOString() : null,
+      phone: sub.phone || null,
       userPlan: sub.user?.plan || null,
       userPlanExpiresAt: sub.user?.planExpiresAt ? new Date(sub.user.planExpiresAt).toISOString() : null,
     });
