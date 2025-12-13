@@ -321,8 +321,13 @@ router.get("/pay-result", async (req, res) => {
     ? "اشتراک شما فعال شد. در حال بازگشت به اپ…"
     : "اگر مبلغی کسر شده، معمولاً تا چند دقیقه برگشت می‌خورد. دوباره تلاش کنید.";
 
-  // ✅ دیپ‌لینک استاندارد مطابق اپ (authority + status)
+  // ✅ دیپ‌لینک اپ (همانی که اپ می‌فهمد)
   const deepLink = buildDeepLink({ ok, authority });
+
+  // ✅ intent (برای Android) - قوی‌تر از phoenix://
+  // اگر packageName را بعداً دادی، می‌تونیم اینجا اضافه کنیم.
+  const intentLink = `intent://pay/result?authority=${encodeURIComponent(authority)}&status=${ok ? "success" : "failed"}#Intent;scheme=phoenix;end`;
+
   const fallback = "https://qoqnoos.app";
 
   res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -415,7 +420,6 @@ router.get("/pay-result", async (req, res) => {
     }
     a.btn:active{transform:scale(.99)}
     .hint{margin-top:12px; font-size:12px; color:rgba(231,238,247,.65)}
-    .hint a{color:rgba(231,238,247,.85)}
   </style>
 </head>
 <body>
@@ -438,59 +442,62 @@ router.get("/pay-result", async (req, res) => {
       <div class="btns">
         ${
           ok
-            ? `<a class="btn primary" href="${deepLink}" id="openApp">رفتن به اشتراک</a>`
-            : `<a class="btn primary" href="${deepLink}" id="openApp">بازگشت به اپ</a>
+            ? `<a class="btn primary" href="#" id="openApp">رفتن به اشتراک</a>`
+            : `<a class="btn primary" href="#" id="openApp">بازگشت به اپ</a>
                <a class="btn" href="${fallback}">صفحه اصلی</a>`
         }
       </div>
 
       <div class="hint">
-        اگر اپ باز نشد، اپ را نصب/آپدیت کنید و دوباره همین دکمه را بزنید.
+        اگر اپ باز نشد، اپ را نصب/آپدیت کنید و دوباره روی دکمه بزنید.
       </div>
     </div>
   </div>
 
   <script>
   (function () {
-    var a = document.getElementById("openApp");
-    if (!a) return;
+    var btn = document.getElementById("openApp");
+    if (!btn) return;
 
-    var deeplink = a.getAttribute("href");
+    var deepLink = ${JSON.stringify(deepLink)};
+    var intentLink = ${JSON.stringify(intentLink)};
+
+    function isAndroid() {
+      var ua = navigator.userAgent || "";
+      return /Android/i.test(ua);
+    }
 
     function isMobile() {
       var ua = navigator.userAgent || "";
       return /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
     }
 
-    // ✅ مثل ضربدر عمل کردن (تا حدی که مرورگر اجازه بده)
-    function tryCloseLikeX() {
-      try { window.close(); } catch (e) {}
-      try { history.back(); } catch (e) {}
-    }
-
     function openApp() {
-      // تلاش ۱: مستقیم
-      window.location.href = deeplink;
+      // Android: intent first (stronger)
+      if (isAndroid()) {
+        window.location.href = intentLink;
+      } else {
+        window.location.href = deepLink;
+      }
 
-      // اگر اپ باز نشد، بعد کمی مثل ضربدر عمل کن
+      // اگر اپ باز نشد، مثل ضربدر عمل کن (تا حدی که مرورگر اجازه بده)
       setTimeout(function () {
-        // اگر هنوز صفحه قابل دیدنه، یعنی احتمالاً اپ باز نشده
         if (!document.hidden) {
-          tryCloseLikeX();
+          try { window.close(); } catch(e) {}
+          try { history.back(); } catch(e) {}
         }
       }, 1200);
     }
 
-    // روی موبایل، اتومات هم تلاش کن
-    if (isMobile()) {
-      setTimeout(openApp, 250);
-    }
-
-    // کلیک روی دکمه هم همین کار رو بکنه
-    a.addEventListener("click", function (e) {
+    btn.addEventListener("click", function(e){
       e.preventDefault();
       openApp();
     });
+
+    // Auto-try on mobile
+    if (isMobile()) {
+      setTimeout(openApp, 300);
+    }
   })();
   </script>
 </body>
