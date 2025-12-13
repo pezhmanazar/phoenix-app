@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useUser } from "@/hooks/useUser";
 import { toApi } from "@/constants/env"; // بهتر از هاردکد
 
@@ -26,6 +27,7 @@ export default function PayResultScreen() {
   const authority = String(params.authority || "").trim();
   const okParam = String(params.ok || "").trim(); // "1" | "0"
   const statusParam = String(params.status || "").trim(); // "success" | "failed"
+
   const { refresh } = useUser();
 
   const initialOk = useMemo(() => {
@@ -39,6 +41,7 @@ export default function PayResultScreen() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<PayStatusResp | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
   const handledSuccessRef = useRef(false);
   const pollRef = useRef(0);
 
@@ -48,11 +51,14 @@ export default function PayResultScreen() {
       setLoading(false);
       return;
     }
+
     try {
       setLoading(true);
       setErr(null);
+
       const url = toApi(`/api/pay/status?authority=${encodeURIComponent(authority)}`);
       const r = await fetch(url, { method: "GET" });
+
       const ct = r.headers.get("content-type") || "";
       if (!ct.includes("application/json")) {
         const text = await r.text();
@@ -61,8 +67,10 @@ export default function PayResultScreen() {
         setLoading(false);
         return;
       }
+
       const j = (await r.json()) as PayStatusResp;
       setData(j);
+
       if (!r.ok || !j || (j as any).ok !== true) {
         setErr((j as any)?.error || `HTTP_${r.status}`);
       }
@@ -84,96 +92,198 @@ export default function PayResultScreen() {
     if (data.status !== "pending") return;
     if (pollRef.current >= 20) return; // حداکثر ~۱ دقیقه
     pollRef.current += 1;
+
     const t = setTimeout(() => {
       fetchStatus();
     }, 3000);
+
     return () => clearTimeout(t);
   }, [data?.ok, (data as any)?.status]);
 
-  // اگر active شد: refresh(force) و برو Subscription
+  // اگر active شد: refresh(force) (ولی دیگه خودکار به Subscription نرو)
   useEffect(() => {
     if (!data || data.ok !== true) return;
     if (data.status !== "active") return;
     if (handledSuccessRef.current) return;
+
     handledSuccessRef.current = true;
+
     (async () => {
       try {
-        // نکته کلیدی: force حتماً true
-        await refresh({ force: true });
+        await refresh({ force: true }); // ✅ مهم
       } catch {}
-      router.replace({
-        pathname: "/(tabs)/Subscription",
-        params: { _forceReloadUser: Date.now().toString() },
-      } as any);
     })();
   }, [data, refresh]);
 
-  const title = (() => {
-    if (loading) return "در حال بررسی پرداخت…";
-    if (err) return "مشکل در بررسی پرداخت";
-    if (!data || data.ok !== true) return "نامشخص";
-    if (data.status === "active") return "پرداخت موفق";
-    if (data.status === "pending") return "در انتظار تایید";
-    if (data.status === "canceled") return "پرداخت ناموفق / لغو شده";
-    if (data.status === "expired") return "پرداخت منقضی شده";
-    return "وضعیت پرداخت";
+  // ---------- UI helpers ----------
+  const status = (() => {
+    if (loading) return "loading";
+    if (err) return "error";
+    if (!data || data.ok !== true) return "unknown";
+    return data.status; // pending|active|expired|canceled
   })();
 
-  const subtitle = (() => {
-    if (loading) return "چند ثانیه صبر کنید.";
-    if (err) return "یک بار «بررسی مجدد» بزنید. اگر ادامه داشت، دوباره از داخل اپ پرداخت کنید.";
-    if (!data || data.ok !== true) return "اطلاعات کافی نیست.";
-    if (data.status === "active") return "اشتراک شما فعال شد. در حال بازگشت به اپ…";
-    if (data.status === "pending") return "اگر همین الان از درگاه برگشتید، چند ثانیه بعد دوباره چک می‌کنیم.";
-    if (data.status === "canceled") return "پرداخت تایید نشد. اگر مبلغی کم شده، معمولاً برگشت می‌خورد.";
-    if (data.status === "expired") return "این پرداخت منقضی شده. لطفاً دوباره پرداخت کنید.";
-    return "";
-  })();
+  const ui = useMemo(() => {
+    // defaults
+    let title = "در حال بررسی پرداخت…";
+    let subtitle = "چند ثانیه صبر کنید.";
+    let icon: any = "hourglass-outline";
+    let accent = "#60A5FA"; // blue
+    let badge = "در حال بررسی";
+
+    if (status === "error") {
+      title = "مشکل در بررسی پرداخت";
+      subtitle =
+        "یک بار «بررسی مجدد» بزن. اگر ادامه داشت، از داخل اپ دوباره پرداخت کن.";
+      icon = "warning-outline";
+      accent = "#FBBF24"; // amber
+      badge = "خطا";
+    } else if (status === "unknown") {
+      title = "وضعیت نامشخص";
+      subtitle = "اطلاعات کافی نیست. «بررسی مجدد» را امتحان کن.";
+      icon = "help-circle-outline";
+      accent = "#A78BFA"; // purple
+      badge = "نامشخص";
+    } else if (status === "pending") {
+      title = "در انتظار تایید";
+      subtitle = "اگر همین الان از درگاه برگشتی، چند ثانیه دیگه دوباره چک می‌کنیم.";
+      icon = "time-outline";
+      accent = "#FBBF24"; // amber
+      badge = "Pending";
+    } else if (status === "active") {
+      title = "پرداخت موفق ✅";
+      subtitle = "اشتراک فعال شد. حالا برو صفحه اشتراک.";
+      icon = "checkmark-circle-outline";
+      accent = "#22C55E"; // green
+      badge = "Success";
+    } else if (status === "canceled") {
+      title = "پرداخت ناموفق / لغو شده";
+      subtitle = "پرداخت تایید نشد. اگر مبلغی کم شده، معمولاً برگشت می‌خورد.";
+      icon = "close-circle-outline";
+      accent = "#F87171"; // red
+      badge = "Failed";
+    } else if (status === "expired") {
+      title = "پرداخت منقضی شده";
+      subtitle = "این پرداخت منقضی شده. لطفاً دوباره پرداخت کن.";
+      icon = "ban-outline";
+      accent = "#FB7185"; // rose
+      badge = "Expired";
+    }
+
+    // کمک از initialOk (اگر دیتا دیر بیاد)
+    if (initialOk === false && status === "loading") {
+      title = "پرداخت ناموفق";
+      subtitle = "در حال بررسی جزئیات…";
+      icon = "close-circle-outline";
+      accent = "#F87171";
+      badge = "Failed";
+    }
+
+    return { title, subtitle, icon, accent, badge };
+  }, [status, initialOk]);
 
   const bg = "#0b0f14";
-  const card = "#111824";
-  const line = "rgba(255,255,255,0.08)";
+  const card = "#0f172a";
+  const line = "rgba(255,255,255,0.10)";
   const text = "#e8eef7";
-  const muted = "#a7b3c6";
-  const showAuthority = authority || (data && data.ok === true ? data.authority : "");
+  const muted = "rgba(231,238,247,0.70)";
 
-  const isActive = !!data && data.ok === true && data.status === "active";
-  const isPending = !!data && data.ok === true && data.status === "pending";
+  const showAuthority = authority || (data && data.ok === true ? data.authority : "");
+  const showRefId = data && data.ok === true ? data.refId : null;
+
+  const isSuccess = status === "active";
+  const showRetry = !isSuccess; // ✅ موفق → فقط یک دکمه
 
   return (
     <View style={{ flex: 1, backgroundColor: bg, padding: 20, justifyContent: "center" }}>
-      <View style={{ backgroundColor: card, borderRadius: 18, borderWidth: 1, borderColor: line, padding: 18 }}>
-        <Text style={{ color: text, fontSize: 20, fontWeight: "800", marginBottom: 6, textAlign: "right" }}>
-          {title}
-        </Text>
-        <Text style={{ color: muted, fontSize: 14, lineHeight: 22, textAlign: "right", marginBottom: 14 }}>
-          {subtitle}
-        </Text>
+      <View
+        style={{
+          backgroundColor: card,
+          borderRadius: 22,
+          borderWidth: 1,
+          borderColor: line,
+          padding: 18,
+        }}
+      >
+        {/* Top Bar */}
+        <View
+          style={{
+            height: 4,
+            borderRadius: 999,
+            backgroundColor: ui.accent,
+            opacity: 0.9,
+            marginBottom: 14,
+          }}
+        />
 
-        <View style={{ borderWidth: 1, borderColor: line, borderRadius: 14, padding: 12, marginBottom: 14 }}>
-          <Text style={{ color: muted, fontSize: 12, textAlign: "right" }}>کد پیگیری</Text>
+        {/* Header */}
+        <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+          <View
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: line,
+              backgroundColor: "rgba(255,255,255,0.04)",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Ionicons name={ui.icon} size={22} color={ui.accent} />
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: text, fontSize: 20, fontWeight: "900", textAlign: "right" }}>
+              {ui.title}
+            </Text>
+            <Text style={{ color: muted, fontSize: 13, lineHeight: 20, textAlign: "right", marginTop: 4 }}>
+              {ui.subtitle}
+            </Text>
+          </View>
+
+          <View
+            style={{
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: line,
+              backgroundColor: "rgba(255,255,255,0.04)",
+            }}
+          >
+            <Text style={{ color: ui.accent, fontSize: 12, fontWeight: "900" }}>
+              {ui.badge}
+            </Text>
+          </View>
+        </View>
+
+        {/* Details */}
+        <View style={{ marginTop: 14, borderWidth: 1, borderColor: line, borderRadius: 16, padding: 12 }}>
+          <Text style={{ color: muted, fontSize: 12, textAlign: "right" }}>کد پیگیری (Authority)</Text>
           <Text style={{ color: text, fontSize: 13, marginTop: 6, textAlign: "right" }}>
             {showAuthority || "-"}
           </Text>
-          {data && data.ok === true ? (
+
+          {showRefId ? (
             <>
-              <Text style={{ color: muted, fontSize: 12, textAlign: "right", marginTop: 10 }}>وضعیت</Text>
+              <Text style={{ color: muted, fontSize: 12, textAlign: "right", marginTop: 10 }}>RefId</Text>
               <Text style={{ color: text, fontSize: 13, marginTop: 6, textAlign: "right" }}>
-                {data.status} {data.refId ? ` | refId: ${data.refId}` : ""}
+                {String(showRefId)}
               </Text>
             </>
           ) : null}
         </View>
 
         {loading ? (
-          <View style={{ paddingVertical: 8 }}>
+          <View style={{ paddingVertical: 12 }}>
             <ActivityIndicator />
           </View>
         ) : null}
 
-        {/* ✅ تغییر اصلی: وقتی active شد فقط یک دکمه داشته باشیم */}
-        <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-          {isActive ? null : (
+        {/* Buttons */}
+        <View style={{ flexDirection: "row-reverse", gap: 10, marginTop: 12 }}>
+          {showRetry ? (
             <Pressable
               onPress={() => {
                 pollRef.current = 0;
@@ -182,39 +292,43 @@ export default function PayResultScreen() {
               style={{
                 flex: 1,
                 paddingVertical: 12,
-                borderRadius: 14,
+                borderRadius: 16,
                 borderWidth: 1,
                 borderColor: line,
                 alignItems: "center",
                 backgroundColor: "rgba(255,255,255,0.06)",
               }}
             >
-              <Text style={{ color: text, fontWeight: "800" }}>
-                بررسی مجدد
-              </Text>
+              <Text style={{ color: text, fontWeight: "900" }}>بررسی مجدد</Text>
             </Pressable>
-          )}
+          ) : null}
 
           <Pressable
-            onPress={() => router.replace("/(tabs)/Subscription")}
+            onPress={() => {
+              // ✅ موفق: برو اشتراک (و یکبار هم force refresh یوزر)
+              router.replace({
+                pathname: "/(tabs)/Subscription",
+                params: { _forceReloadUser: Date.now().toString() },
+              } as any);
+            }}
             style={{
-              flex: 1,
+              flex: showRetry ? 1 : 1,
               paddingVertical: 12,
-              borderRadius: 14,
+              borderRadius: 16,
               borderWidth: 1,
-              borderColor: "rgba(212,175,55,0.28)",
+              borderColor: isSuccess ? "rgba(34,197,94,0.35)" : "rgba(212,175,55,0.28)",
               alignItems: "center",
-              backgroundColor: "rgba(212,175,55,0.12)",
+              backgroundColor: isSuccess ? "rgba(34,197,94,0.14)" : "rgba(212,175,55,0.12)",
             }}
           >
-            <Text style={{ color: text, fontWeight: "800" }}>
-              رفتن به اشتراک
+            <Text style={{ color: text, fontWeight: "900" }}>
+              {isSuccess ? "رفتن به اشتراک" : "رفتن به اشتراک"}
             </Text>
           </Pressable>
         </View>
 
-        <Text style={{ color: "rgba(231,238,247,0.65)", fontSize: 12, marginTop: 12, textAlign: "right" }}>
-          اگر از مرورگر دسکتاپ این صفحه را می‌بینید، دیپ‌لینک اجرا نمی‌شود. برای تست واقعی، روی موبایل انجام دهید.
+        <Text style={{ color: "rgba(231,238,247,0.55)", fontSize: 11, marginTop: 12, textAlign: "right" }}>
+          نکته: اگر از دسکتاپ این صفحه را می‌بینی، دیپ‌لینک اجرا نمی‌شود. تست واقعی روی موبایل انجام بده.
         </Text>
       </View>
     </View>
