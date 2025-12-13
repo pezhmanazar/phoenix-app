@@ -161,8 +161,8 @@ export default function PayResultScreen() {
       btnBorder = "rgba(251,191,36,0.25)";
     } else if (status === "active") {
       // ✅ طلایی + سبز (حس ققنوس)
-      title = "پرداخت موفق ✅";
-      subtitle = "اشتراک فعال شد. حالا برگرد به ققنوس.";
+      title = "پرداخت مــوفق";
+      subtitle = "اشتراکت فعال شد. حالا برگرد به ققنوس.";
       icon = "checkmark-circle-outline";
       // gradient حسش رو با دو لایه می‌سازیم (بدون linear-gradient)
       bar = GOLD;
@@ -335,7 +335,7 @@ export default function PayResultScreen() {
             }}
           >
             <Text style={{ color: ui.btnText, fontWeight: "900" }}>
-              {isSuccess ? "رفتن به اشتراک" : "بازگشت به ققنوس"}
+              {isSuccess ? "بازگشت به ققنوس" : "بازگشت به ققنوس"}
             </Text>
           </Pressable>
         </View>
