@@ -5,6 +5,15 @@ import * as Linking from "expo-linking";
 import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 
+const API_BASE = "https://qoqnoos.app"; // ✅ دامنه اصلی شما
+
+type PayStatusResp = {
+  ok: boolean;
+  authority?: string;
+  status?: string; // "pending" | "active" | "canceled" | ...
+  refId?: string | null;
+};
+
 export default function PayCallback() {
   const handled = useRef(false);
 
@@ -20,7 +29,11 @@ export default function PayCallback() {
       const ok = String(qp.ok || "").trim(); // "1" | "0"
       const status = String(qp.status || qp.Status || "").trim(); // "OK"|"NOK" یا "success"|"failed"
 
-      if (!authority) return;
+      if (!authority) {
+        // ✅ اگر لینک خراب بود، گیر نکنیم
+        router.replace("/(tabs)/Subscription" as any);
+        return;
+      }
 
       // نرمال‌سازی status به success/failed
       let normalizedStatus = "";
@@ -36,7 +49,59 @@ export default function PayCallback() {
         WebBrowser.dismissBrowser();
       } catch {}
 
-      // رفتن به صفحه نتیجه داخل اپ
+      // ✅ NEW: یک بار از سرور بپرس authority الان چه وضعیتی داره
+      // اگر قبلاً active/canceled شده بود، مستقیم نتیجه درست رو نشان بده
+      try {
+        const resp = await fetch(
+          `${API_BASE}/api/pay/status?authority=${encodeURIComponent(authority)}`,
+          {
+            method: "GET",
+            headers: { "X-Requested-With": "phoenix-pay-status" },
+          }
+        );
+
+        const js = (await resp.json().catch(() => null)) as PayStatusResp | null;
+
+        if (resp.ok && js?.ok && js?.status) {
+          const st = String(js.status).toLowerCase();
+
+          // حالت‌های قطعی: active / canceled
+          if (st === "active") {
+            router.replace({
+              pathname: "/pay/result",
+              params: {
+                authority,
+                ok: "1",
+                status: "success",
+              },
+            } as any);
+            return;
+          }
+
+          if (st === "canceled" || st === "expired") {
+            router.replace({
+              pathname: "/pay/result",
+              params: {
+                authority,
+                ok: "0",
+                status: "failed",
+              },
+            } as any);
+            return;
+          }
+
+          // pending یا هر چیز نامشخص: بذار صفحه نتیجه خودش پولینگ کنه
+          router.replace({
+            pathname: "/pay/result",
+            params: { authority },
+          } as any);
+          return;
+        }
+      } catch {
+        // هیچ
+      }
+
+      // ✅ FALLBACK: اگر status چک نشد، مثل قبل برو نتیجه
       router.replace({
         pathname: "/pay/result",
         params: {
@@ -50,6 +115,12 @@ export default function PayCallback() {
     // 1) وقتی اپ از طریق دیپ‌لینک باز می‌شود
     Linking.getInitialURL().then((u) => {
       if (typeof u === "string") go(u);
+      else {
+        // ✅ اگر هیچ لینکی نبود، گیر نکنیم
+        setTimeout(() => {
+          if (!handled.current) router.replace("/(tabs)/Subscription" as any);
+        }, 700);
+      }
     });
 
     // 2) وقتی اپ باز است و لینک جدید می‌رسد
@@ -61,7 +132,14 @@ export default function PayCallback() {
   }, []);
 
   return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#000" }}>
+    <View
+      style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#000",
+      }}
+    >
       <ActivityIndicator />
     </View>
   );
