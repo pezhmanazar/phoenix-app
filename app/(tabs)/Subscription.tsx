@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme, useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../hooks/useAuth";
 import { useUser } from "../../hooks/useUser";
 
@@ -102,6 +102,7 @@ function formatJalaliDate(iso?: string | null): string | null {
 export default function SubscriptionScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+const params = useLocalSearchParams();
   const { phone, isAuthenticated } = useAuth();
   const { me, refresh, refreshing } = useUser() as any;
 
@@ -120,11 +121,11 @@ export default function SubscriptionScreen() {
 
   // هر بار ورود به تب → فقط از سرور می‌خوانیم
   useFocusEffect(
-    useCallback(() => {
-      refresh().catch(() => {});
-      return () => {};
-    }, [refresh])
-  );
+  useCallback(() => {
+    refresh({ force: true }).catch(() => {});
+    return () => {};
+  }, [refresh, params?._fromPay])
+);
 
   // 🔍 منبع واحد وضعیت پلن: فقط دیتابیس (getPlanStatus)
   const status = getPlanStatus(me);
