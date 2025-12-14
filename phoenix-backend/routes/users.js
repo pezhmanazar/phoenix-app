@@ -72,38 +72,29 @@ router.get("/me", authUser, async (req, res) => {
   }
 });
 
-/* ---------- DELETE /api/users/me ---------- */
-/**
- * حذف کامل حساب کاربری
- * DELETE /api/users/me?phone=09...
- */
-router.delete("/me", authUser, async (req, res) => {
+/* ---------- POST /api/users/me/delete ----------
+   حذف کامل کاربر از DB (به‌جای DELETE چون WCDN DELETE را می‌بُرد)
+   POST https://qoqnoos.app/api/users/me/delete?phone=09...
+   یا body: { phone: "09..." }
+------------------------------------------------ */
+router.post("/me/delete", authUser, async (req, res) => {
   try {
     const phone = req.userPhone;
 
-    console.log("[users.delete] phone =", phone);
-
-    const user = await prisma.user.findUnique({
-      where: { phone },
-    });
-
-    if (!user) {
-      return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+    // اگر کاربر وجود نداشت، ok=true برگردون که اپ گیر نکنه
+    const existing = await prisma.user.findUnique({ where: { phone } });
+    if (!existing) {
+      return res.json({ ok: true, data: { deleted: false, reason: "not_found" } });
     }
 
-    // اگر وابستگی‌های دیگه داری (Subscription / Payment / ...)
-    // اینجا باید به ترتیب پاک شوند
+    await prisma.user.delete({ where: { phone } });
 
-    await prisma.user.delete({
-      where: { phone },
-    });
-
-    console.log("[users.delete] SUCCESS phone =", phone);
-
-    return res.json({ ok: true });
+    return res.json({ ok: true, data: { deleted: true } });
   } catch (e) {
-    console.error("[users.delete] error:", e);
-    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+    console.error("[users.me.delete] error:", e);
+    const code = e?.code ? String(e.code) : "";
+    const errorLabel = code && code.startsWith("P") ? `PRISMA_${code}` : "SERVER_ERROR";
+    return res.status(500).json({ ok: false, error: errorLabel });
   }
 });
 
