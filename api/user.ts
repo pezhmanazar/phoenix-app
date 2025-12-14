@@ -53,6 +53,10 @@ async function doJson<T>(
       }
     }
 
+    baseHeaders["Cache-Control"] = "no-cache";
+    baseHeaders["Pragma"] = "no-cache";
+    baseHeaders["x-cache-bust"] = String(Date.now());
+
     // 2) توکن سشن را از AsyncStorage می‌خوانیم
     const sessionToken = await AsyncStorage.getItem("session_v1");
     if (sessionToken) {
@@ -168,11 +172,12 @@ export async function resetUserByPhone(
 }
 
 // DELETE /api/users/delete?phone=...
-export async function deleteMeByPhone(phone: string): Promise<ApiResp<{ ok: true }>> {
+export async function deleteMeByPhone(phone: string): Promise<ApiResp<{ deleted: boolean }>> {
   const p = normalizeIranPhone(phone);
-  const url = userUrl(`/api/users/delete?phone=${encodeURIComponent(p)}`);
-  return doJson<{ ok: true }>(url, { method: "DELETE" });
+  const url = userUrl(`/api/users/me/delete?phone=${encodeURIComponent(p)}`);
+  return doJson<{ deleted: boolean }>(url, { method: "POST" });
 }
+
 /* ----------------- fetchMe برای useUser ----------------- */
 /**
  * me را واقعا از بک‌اند ققنوس می‌خواند.

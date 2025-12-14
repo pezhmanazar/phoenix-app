@@ -47,6 +47,15 @@ function authUser(req, res, next) {
   return next();
 }
 
+function noStore(res) {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.setHeader("Surrogate-Control", "no-store");
+  // برای اینکه CDNها با query های مختلف قاطی نکنن
+  res.setHeader("Vary", "Origin");
+}
+
 /* ---------- GET /api/users/me ---------- */
 /**
  * اپ تو:
@@ -55,12 +64,12 @@ function authUser(req, res, next) {
  */
 router.get("/me", authUser, async (req, res) => {
   try {
+    noStore(res); // 👈👈👈 این خط
+
     const phone = req.userPhone;
     const user = await prisma.user.findUnique({
       where: { phone },
     });
-
-    console.log("[users.me] phone =", phone, "→ user =", JSON.stringify(user, null, 2));
 
     return res.json({
       ok: true,
@@ -79,6 +88,7 @@ router.get("/me", authUser, async (req, res) => {
 ------------------------------------------------ */
 router.post("/me/delete", authUser, async (req, res) => {
   try {
+    noStore(res);
     const phone = req.userPhone;
 
     // اگر کاربر وجود نداشت، ok=true برگردون که اپ گیر نکنه
