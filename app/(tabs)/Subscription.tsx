@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme, useFocusEffect } from "@react-navigation/native";
@@ -153,10 +154,7 @@ export default function SubscriptionScreen() {
   let expireAt: string | null = status.rawExpiresAt ?? null;
 
   // اگر پلن قبلاً پرو بوده و الان تاریخش گذشته ⇒ expired
-  if (
-    status.isExpired &&
-    (status.rawPlan === "pro" || status.rawPlan === "vip")
-  ) {
+  if (status.isExpired && (status.rawPlan === "pro" || status.rawPlan === "vip")) {
     planView = "expired";
     daysRemaining = 0;
   } else if (status.isPro) {
@@ -227,17 +225,10 @@ export default function SubscriptionScreen() {
         return;
       }
 
-      // --- ۲) باز کردن درگاه (✅ Auth Session برای اینکه بعد از دیپ‌لینک تب خودش بسته بشه) ---
+      // --- ۲) باز کردن درگاه ---
       const redirectUrl = "phoenix://pay/result"; // ✅ باید با APP_DEEPLINK_BASE هم‌راستا باشد
-
       await WebBrowser.openAuthSessionAsync(gatewayUrl, redirectUrl);
 
-      /**
-       * ❗️نکته حیاتی:
-       * ما به نتیجه‌ی openAuthSessionAsync وابسته نمی‌شیم.
-       * همین که سشن بسته شد (موفق/ناموفق/لغو)،
-       * می‌ریم صفحه‌ی نتیجه داخل اپ تا وضعیت رو از سرور چک کنه.
-       */
       router.replace(
         {
           pathname: "/pay/result",
@@ -247,11 +238,7 @@ export default function SubscriptionScreen() {
         } as any
       );
 
-      // ⛔️ ادامه‌ی handleBuy نباید اجرا شود
       return;
-
-      // (اختیاری) اگر می‌خوای همون لحظه یک پیام هم بدی:
-      // setPayResult({ visible: true, success: true, refId: null, message: "در حال بررسی نتیجه پرداخت..." });
 
     } catch (e: any) {
       setPayResult({
@@ -268,11 +255,11 @@ export default function SubscriptionScreen() {
     }
   }
 
-  const headerBg = "#0B0C10";
-  const cardBg = "#111216";
-  const border = "#20242C";
+  const headerBg = "#0b0f14";
+  const cardBg = "rgba(255,255,255,.04)";
+  const border = "rgba(255,255,255,.10)";
 
-  // رنگ و متن بج وضعیت بالا
+  // رنگ و متن بج وضعیت بالا (دست نخورده)
   const badgeBg =
     planView === "expired"
       ? "#7f1d1d55"
@@ -299,90 +286,67 @@ export default function SubscriptionScreen() {
       : "FREE";
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: headerBg }}
-      edges={["top", "left", "right", "bottom"]}
-    >
+    <SafeAreaView style={{ flex: 1, backgroundColor: headerBg }} edges={["top", "left", "right", "bottom"]}>
       <View style={{ flex: 1 }}>
+        {/* گلو شبیه تب‌های دیگه */}
+        <View pointerEvents="none" style={styles.bgGlow1} />
+        <View pointerEvents="none" style={styles.bgGlow2} />
+
+        {/* هدر بالا: ضربدر چپ + عنوان راست با آیکن */}
+        <View style={styles.topBar}>
+          <TouchableOpacity
+            onPress={() => router.replace("/(tabs)/Phoenix")}
+            activeOpacity={0.85}
+            style={styles.closeBtn}
+          >
+            <Ionicons name="close" size={18} color="#E5E7EB" />
+          </TouchableOpacity>
+
+          <View style={styles.titleRow}>
+            <Ionicons name="card" size={18} color="#D4AF37" />
+            <Text style={styles.topTitle}>اشتراک ققنوس</Text>
+          </View>
+
+          {/* اسپیس برای بالانس چپ/راست */}
+          <View style={{ width: 36 }} />
+        </View>
+
         <ScrollView
           contentContainerStyle={{
             paddingHorizontal: 16,
             paddingBottom: 24,
+            paddingTop: 8,
           }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
-          <View
-            style={{
-              marginTop: 12,
-              padding: 16,
-              borderRadius: 20,
-              backgroundColor: "#111827",
-            }}
-          >
-            <Text
-              style={{
-                color: "#F9FAFB",
-                fontSize: 20,
-                fontWeight: "900",
-                marginBottom: 4,
-                textAlign: "right",
-              }}
-            >
-              اشتراک ققنوس
-            </Text>
-            <Text
-              style={{
-                color: "#9CA3AF",
-                fontSize: 12,
-                lineHeight: 18,
-                textAlign: "right",
-              }}
-            >
+          {/* کارت معرفی */}
+          <View style={[styles.glassCard, { borderRadius: 22, padding: 16 }]}>
+            <Text style={styles.heroSubtitle}>
               برای رهایی، برای بازسازی، برای شروع دوباره.
             </Text>
 
             {/* وضعیت فعلی اشتراک */}
-            <View
-              style={{
-                marginTop: 12,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: "#1F2937",
-                backgroundColor: "#030712",
-                flexDirection: "row-reverse",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
+            <View style={styles.statusCard}>
               <View style={{ flex: 1, marginLeft: 12 }}>
                 {refreshing || waitingForPayRefresh ? (
-                  <Text style={{ color: "#9CA3AF", fontSize: 12, marginTop: 4 }}>
-                    در حال به‌روزرسانی…
-                  </Text>
+                  <Text style={styles.mutedText}>در حال به‌روزرسانی…</Text>
                 ) : isProActive ? (
                   <>
                     <Text
-                      style={{
-                        color: isAlmostExpired ? "#FBBF24" : "#6EE7B7",
-                        fontSize: 13,
-                        fontWeight: "800",
-                        textAlign: "right",
-                      }}
+                      style={[
+                        styles.statusTitle,
+                        { color: isAlmostExpired ? "#FBBF24" : "#6EE7B7" },
+                      ]}
                     >
                       اشتراک ققنوسِ تو فعاله
                     </Text>
 
                     {niceExpireText && (
                       <Text
-                        style={{
-                          color: isAlmostExpired ? "#FBBF24" : "#9CA3AF",
-                          fontSize: 11,
-                          marginTop: 2,
-                          textAlign: "right",
-                        }}
+                        style={[
+                          styles.smallText,
+                          { color: isAlmostExpired ? "#FBBF24" : "#9CA3AF" },
+                        ]}
                       >
                         پایان اشتراک: {niceExpireText}
                       </Text>
@@ -390,12 +354,10 @@ export default function SubscriptionScreen() {
 
                     {typeof daysRemaining === "number" && daysRemaining > 0 && (
                       <Text
-                        style={{
-                          color: isAlmostExpired ? "#FBBF24" : "#D1FAE5",
-                          fontSize: 11,
-                          marginTop: 2,
-                          textAlign: "right",
-                        }}
+                        style={[
+                          styles.smallText,
+                          { color: isAlmostExpired ? "#FBBF24" : "#D1FAE5" },
+                        ]}
                       >
                         {toFaNum(daysRemaining)} روز از اشتراکت باقی مانده.
                       </Text>
@@ -403,56 +365,27 @@ export default function SubscriptionScreen() {
                   </>
                 ) : planView === "expired" ? (
                   <>
-                    <Text
-                      style={{
-                        color: "#F97373",
-                        fontSize: 12,
-                        marginTop: 4,
-                        fontWeight: "800",
-                        textAlign: "right",
-                      }}
-                    >
+                    <Text style={[styles.statusTitle, { color: "#F97373" }]}>
                       اشتراک منقضی شده
                     </Text>
                     {niceExpireText && (
-                      <Text
-                        style={{
-                          color: "#FCA5A5",
-                          fontSize: 11,
-                          marginTop: 2,
-                          textAlign: "right",
-                        }}
-                      >
+                      <Text style={[styles.smallText, { color: "#FCA5A5" }]}>
                         تاریخ انقضا: {niceExpireText}
                       </Text>
                     )}
-                    <Text
-                      style={{
-                        color: "#ff5100ff",
-                        fontSize: 11,
-                        marginTop: 2,
-                        textAlign: "right",
-                      }}
-                    >
+                    <Text style={[styles.smallText, { color: "#ff5100ff" }]}>
                       همه بخش‌های حالت پرو الان از دسترس تو خارج شده
                     </Text>
                   </>
                 ) : (
-                  <Text
-                    style={{
-                      color: "#9CA3AF",
-                      fontSize: 12,
-                      marginTop: 4,
-                      textAlign: "right",
-                    }}
-                  >
+                  <Text style={styles.mutedText}>
                     در حال حاضر روی پلن رایگان هستی. با فعال‌کردن اشتراک به همهٔ
                     دوره‌ها، پاکسازی‌ها و برنامه‌های روزانه دسترسی پیدا می‌کنی.
                   </Text>
                 )}
               </View>
 
-              {/* بج وضعیت (PRO / EXPIRED / FREE) */}
+              {/* بج وضعیت (دست نخورده) */}
               <View
                 style={{
                   paddingHorizontal: 18,
@@ -469,27 +402,11 @@ export default function SubscriptionScreen() {
           </View>
 
           {/* باکس ارزش اشتراک */}
-          <View
-            style={{
-              marginTop: 16,
-              padding: 16,
-              borderRadius: 20,
-              backgroundColor: cardBg,
-              borderWidth: 1,
-              borderColor: border,
-            }}
-          >
-            <Text
-              style={{
-                color: "#F9FAFB",
-                fontSize: 15,
-                fontWeight: "800",
-                marginBottom: 10,
-                textAlign: "right",
-              }}
-            >
-              با اشتراک ققنوس به چه چیزهایی می‌رسی؟
-            </Text>
+          <View style={[styles.glassCard, { marginTop: 16, borderRadius: 22, padding: 16 }]}>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="sparkles" size={16} color="#E98A15" />
+              <Text style={styles.sectionTitle}>با اشتراک ققنوس به چه چیزهایی می‌رسی؟</Text>
+            </View>
 
             {[
               "دسترسی کامل به تمام دوره‌ها و تکنیک‌ها",
@@ -499,40 +416,31 @@ export default function SubscriptionScreen() {
               "امکان ارتباط و پشتیبانی با درمانگر واقعی",
               "ردیابی پیشرفت و استریک تمرین‌ها",
             ].map((item) => (
-              <View
-                key={item}
-                style={{
-                  flexDirection: "row-reverse",
-                  alignItems: "center",
-                  marginBottom: 6,
-                }}
-              >
-                <Ionicons name="checkmark-circle" size={18} color="#10B981" style={{ marginLeft: 6 }} />
-                <Text style={{ color: "#D1D5DB", fontSize: 12, textAlign: "right", flex: 1 }}>
-                  {item}
-                </Text>
+              <View key={item} style={styles.bulletRow}>
+                <Ionicons
+                  name="checkmark-circle"
+                  size={18}
+                  color="#10B981"
+                  style={{ marginLeft: 6 }}
+                />
+                <Text style={styles.bulletText}>{item}</Text>
               </View>
             ))}
           </View>
 
           {/* پلن‌ها */}
           <View style={{ marginTop: 18 }}>
-            <Text
-              style={{
-                color: "#E5E7EB",
-                fontSize: 15,
-                fontWeight: "800",
-                marginBottom: 10,
-                textAlign: "right",
-              }}
-            >
-              انتخاب پلن اشتراک
-            </Text>
+            {/* ✅ آیکن سمت راست + عنوان */}
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="list" size={16} color="#D4AF37" />
+              <Text style={styles.sectionTitle}>انتخاب پلن اشتراک</Text>
+            </View>
 
             {plans.map((p) => {
               const isLoading = payingKey === p.key;
               const disabled = !p.amount || isLoading;
 
+              // ✅ رنگ دور باکس‌ها حفظ شد
               const borderColor =
                 p.badgeType === "best"
                   ? "#F97316"
@@ -542,14 +450,15 @@ export default function SubscriptionScreen() {
                   ? "#C8A951"
                   : border;
 
+              // فقط کمی شیشه‌ای‌تر مثل تب‌های دیگه
               const bgHighlight =
                 p.badgeType === "best"
-                  ? "#111827"
+                  ? "rgba(17,24,39,.70)"
                   : p.badgeType === "value"
-                  ? "#022C22"
+                  ? "rgba(2,44,34,.70)"
                   : p.badgeType === "premium"
-                  ? "#1A1A10"
-                  : cardBg;
+                  ? "rgba(26,26,16,.70)"
+                  : "rgba(255,255,255,.03)";
 
               let ctaLabel = "شروع اشتراک";
               if (p.amount) {
@@ -686,41 +595,30 @@ export default function SubscriptionScreen() {
             })}
           </View>
 
-          {/* بخش اعتمادسازی پایین صفحه */}
-          <View
-            style={{
-              marginTop: 18,
-              padding: 14,
-              borderRadius: 18,
-              borderWidth: 1,
-              borderColor: border,
-              backgroundColor: "#020617",
-              gap: 8,
-            }}
-          >
+          {/* اعتمادسازی پایین صفحه */}
+          <View style={[styles.glassCard, { marginTop: 18, borderRadius: 22, padding: 14, gap: 8 }]}>
             <View style={{ flexDirection: "row-reverse", alignItems: "center" }}>
               <Ionicons name="shield-checkmark" size={18} color="#22C55E" />
-              <Text style={{ color: "#E5E7EB", fontSize: 12, marginRight: 6, textAlign: "right", flex: 1 }}>
+              <Text style={styles.trustText}>
                 حریم خصوصی و اطلاعاتت داخل ققنوس کاملاً محرمانه‌ست.
               </Text>
             </View>
 
             <View style={{ flexDirection: "row-reverse", alignItems: "center" }}>
               <Ionicons name="lock-closed" size={18} color="#60A5FA" />
-              <Text style={{ color: "#E5E7EB", fontSize: 12, marginRight: 6, textAlign: "right", flex: 1 }}>
+              <Text style={styles.trustText}>
                 پرداخت از طریق درگاه امن و معتبر انجام میشه.
               </Text>
             </View>
 
             <View style={{ flexDirection: "row-reverse", alignItems: "center" }}>
               <Ionicons name="help-circle" size={18} color="#F97316" />
-              <Text style={{ color: "#9CA3AF", fontSize: 11, marginRight: 6, textAlign: "right", flex: 1, flexWrap: "wrap" }}>
+              <Text style={[styles.trustText, { color: "#9CA3AF", fontSize: 11 }]}>
                 این محصول یک ابزار کمک‌درمانی برای رهایی از زخم جداییه.
               </Text>
             </View>
           </View>
 
-          {/* اسپیسِر پایین */}
           <View style={{ height: 80 }} />
         </ScrollView>
 
@@ -775,9 +673,7 @@ export default function SubscriptionScreen() {
               )}
 
               <TouchableOpacity
-                onPress={() => {
-                  setPayResult((prev) => ({ ...prev, visible: false }));
-                }}
+                onPress={() => setPayResult((prev) => ({ ...prev, visible: false }))}
                 style={{
                   alignSelf: "flex-start",
                   marginTop: 14,
@@ -798,3 +694,135 @@ export default function SubscriptionScreen() {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  bgGlow1: {
+    position: "absolute",
+    top: -240,
+    left: -220,
+    width: 520,
+    height: 520,
+    borderRadius: 999,
+    backgroundColor: "rgba(212,175,55,.14)",
+  },
+  bgGlow2: {
+    position: "absolute",
+    bottom: -260,
+    right: -260,
+    width: 560,
+    height: 560,
+    borderRadius: 999,
+    backgroundColor: "rgba(233,138,21,.10)",
+  },
+
+  topBar: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.10)",
+    backgroundColor: "rgba(255,255,255,.04)",
+  },
+
+  titleRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+  },
+  topTitle: {
+    color: "#F9FAFB",
+    fontSize: 16,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+
+  glassCard: {
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.10)",
+    backgroundColor: "rgba(255,255,255,.04)",
+    overflow: "hidden",
+  },
+
+  heroSubtitle: {
+    color: "#9CA3AF",
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "right",
+  },
+
+  statusCard: {
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.08)",
+    backgroundColor: "rgba(3,7,18,.72)",
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  statusTitle: {
+    fontSize: 13,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  smallText: {
+    fontSize: 11,
+    marginTop: 2,
+    textAlign: "right",
+  },
+  mutedText: {
+    color: "#9CA3AF",
+    fontSize: 12,
+    marginTop: 4,
+    textAlign: "right",
+  },
+
+  sectionTitleRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    color: "#E5E7EB",
+    fontSize: 15,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+
+  bulletRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  bulletText: {
+    color: "#D1D5DB",
+    fontSize: 12,
+    textAlign: "right",
+    flex: 1,
+  },
+
+  trustText: {
+    color: "#E5E7EB",
+    fontSize: 12,
+    marginRight: 6,
+    textAlign: "right",
+    flex: 1,
+  },
+});

@@ -481,7 +481,10 @@ export default function EditProfileModal({ onClose }: Props) {
       resetNoContact();
       if (typeof points === "number" && points !== 0) addPoints(-points);
 
-      await AsyncStorage.removeItem("profile_completed_flag");
+      await AsyncStorage.multiRemove([
+  "profile_completed_flag",
+  "hasOnboarded_v1",
+]);
 
       showToast("ok", "ریست انجام شد. از نو شروع کن ✨");
 
@@ -554,7 +557,7 @@ export default function EditProfileModal({ onClose }: Props) {
       // ✅ مهم: بعد از خروج باید برود صفحه لاگین (نه onboarding)
       // اگر روت شما متفاوت است این را مطابق پروژه‌ات عوض کن (مثلاً "/(auth)/login")
       setTimeout(() => {
-        router.replace("/login");
+        router.replace("/(auth)/login");
       }, 200);
     } catch (e: any) {
       openDialog({
@@ -595,6 +598,7 @@ export default function EditProfileModal({ onClose }: Props) {
   const LOCAL_KEYS_TO_CLEAR = [
     "phoenix_profile",
     "profile_completed_flag",
+    "hasOnboarded_v1",
     "otp_phone_v1",
     "session_v1",
     "tags_v1",

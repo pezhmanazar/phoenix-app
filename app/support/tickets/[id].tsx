@@ -1,4 +1,3 @@
-// app/support/tickets/[id].tsx
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme, useFocusEffect } from "@react-navigation/native";
 import {
@@ -34,7 +33,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
-  Alert,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Audio } from "expo-av";
@@ -44,6 +42,9 @@ import type { ViewStyle } from "react-native";
 import BACKEND_URL from "../../../constants/backend";
 import { useUser } from "../../../hooks/useUser";
 import { getPlanStatus, PRO_FLAG_KEY } from "../../../lib/plan";
+
+// ✅ مسیر را اگر متفاوت است فقط همین خط را اصلاح کن
+import PlanStatusBadge from "../../../components/PlanStatusBadge";
 
 /* ===== انواع ===== */
 type MessageType = "text" | "voice" | "image" | "file";
@@ -188,7 +189,12 @@ function ImageLightbox({
   }, [visible, scale]);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <View style={styles.lbBackdrop}>
         <Pressable style={styles.lbClose} onPress={onClose}>
           <Ionicons name="close" size={24} color="#fff" />
@@ -224,7 +230,7 @@ function Waveform({
   const inactive =
     tint === "#000" ? "rgba(0,0,0,0.35)" : "rgba(255,255,255,0.35)";
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", height: 28 }}>
+    <View style={{ flexDirection: "row", alignItems: "center", height: 26 }}>
       {arr.map((h, i) => {
         const active = i <= activeCount;
         return (
@@ -419,10 +425,10 @@ function VoicePlayer({
   };
 
   const tint = dark ? "#000" : "#fff";
-  const subTint = dark ? "#222" : "#aaa";
+  const subTint = dark ? "rgba(0,0,0,0.55)" : "rgba(255,255,255,0.70)";
 
   return (
-    <View style={{ gap: 10, width: "100%" }}>
+    <View style={{ gap: 8, width: "100%" }}>
       <View
         style={{ width: "100%", overflow: "hidden" }}
         onLayout={(e) => (wfWidth.current = e.nativeEvent.layout.width || 1)}
@@ -440,39 +446,36 @@ function VoicePlayer({
         <TouchableOpacity
           onPress={onToggle}
           style={{
-            backgroundColor: dark ? "#fff" : "#111",
+            backgroundColor: dark ? "#fff" : "rgba(255,255,255,0.10)",
             borderWidth: 1,
-            borderColor: dark ? "#ddd" : "#333",
-            paddingVertical: 10,
-            paddingHorizontal: 12,
-            borderRadius: 12,
+            borderColor: dark ? "rgba(0,0,0,0.10)" : "rgba(255,255,255,0.18)",
+            paddingVertical: 8,
+            paddingHorizontal: 10,
+            borderRadius: 10,
           }}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
         >
           <Ionicons
             name={playing ? "pause" : "play"}
-            size={18}
+            size={16}
             color={dark ? "#000" : "#fff"}
           />
         </TouchableOpacity>
+
         {dur ? (
-          <Text style={{ color: subTint, fontSize: 12 }}>
+          <Text style={{ color: subTint, fontSize: 11, fontWeight: "800" }}>
             {fmt(pos)} / {fmt(dur)}
           </Text>
         ) : (
           <View />
         )}
+
         <TouchableOpacity
           onPress={cycleRate}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
           style={styles.speedBtn}
         >
-          <Text
-            style={{
-              color: dark ? "#000" : "#fff",
-              fontWeight: "800",
-            }}
-          >
+          <Text style={{ color: dark ? "#000" : "#fff", fontWeight: "900" }}>
             {rate}×
           </Text>
         </TouchableOpacity>
@@ -481,10 +484,30 @@ function VoicePlayer({
   );
 }
 
+/* ================= Banner ================= */
+function Banner({ text, onClose }: { text: string; onClose: () => void }) {
+  if (!text) return null;
+  return (
+    <View style={styles.bannerWrap}>
+      <View style={styles.banner}>
+        <Ionicons name="alert-circle" size={18} color="#FDBA74" />
+        <Text style={styles.bannerText} numberOfLines={3}>
+          {text}
+        </Text>
+        <TouchableOpacity
+          onPress={onClose}
+          activeOpacity={0.85}
+          style={styles.bannerClose}
+        >
+          <Ionicons name="close" size={18} color="#E5E7EB" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 /* ================= Composer ================= */
 const MAX_VOICE_MS = 5 * 60 * 1000;
-
-// آیا شناسه در URL در واقع نوع تیکت است؟
 const parseTicketType = (idLike?: string): "tech" | "therapy" | null =>
   idLike === "tech" || idLike === "therapy" ? idLike : null;
 
@@ -496,6 +519,7 @@ function Composer({
   onTicketCreated,
   onSent,
   onMeasureHeight,
+  onError,
 }: {
   ticketId: string;
   ticketType?: "tech" | "therapy" | null;
@@ -504,9 +528,8 @@ function Composer({
   onTicketCreated?: (newId: string, fullTicket?: Ticket | null) => void;
   onSent: (updatedTicket?: Ticket | null) => void;
   onMeasureHeight?: (h: number) => void;
+  onError: (msg: string) => void;
 }) {
-  const { colors, dark } = useTheme();
-
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -526,10 +549,8 @@ function Composer({
 
   const planGuard = () => {
     if (!lockedForPlan) return false;
-    Alert.alert(
-      "نیاز به اشتراک PRO",
-      "ارسال پیام به درمانگر ققنوس فقط برای کاربرانی فعاله که اشتراک PRO را از تب «پرداخت» فعال کرده‌اند. اگر مشکل فنی یا سؤال عمومی داری، می‌تونی از پشتیبانی فنی یا پشتیبان هوشمند استفاده کنی.",
-      [{ text: "باشه" }]
+    onError(
+      "ارسال پیام به درمانگر فقط برای اعضای PRO فعاله. برای فعال‌سازی از تب «پرداخت» اقدام کن یا فعلاً از پشتیبانی فنی/هوشمند استفاده کن."
     );
     return true;
   };
@@ -542,7 +563,7 @@ function Composer({
     Keyboard.dismiss();
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      alert("اجازه دسترسی به گالری داده نشد.");
+      onError("اجازه دسترسی به گالری داده نشد.");
       return;
     }
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -566,7 +587,7 @@ function Composer({
     try {
       const { granted } = await Audio.requestPermissionsAsync();
       if (!granted) {
-        alert("دسترسی میکروفون داده نشد.");
+        onError("دسترسی میکروفون داده نشد.");
         return;
       }
       await Audio.setAudioModeAsync({
@@ -588,7 +609,7 @@ function Composer({
       setRecURI(null);
       setRecMs(0);
     } catch {
-      alert("شروع ضبط ناموفق بود.");
+      onError("شروع ضبط ناموفق بود.");
     }
   };
 
@@ -610,13 +631,12 @@ function Composer({
   };
 
   const createTicketIfNeeded = async (textFallback: string) => {
-    // اگر id واقعی داریم (نه tech/therapy) همون رو استفاده کن
     if (!ticketType) return ticketId;
 
     const { openedById, openedByName } = await resolveIdentity(user);
 
     const payload = {
-      type: ticketType, // "tech" | "therapy"
+      type: ticketType,
       text:
         textFallback && textFallback.trim()
           ? textFallback.trim()
@@ -625,58 +645,30 @@ function Composer({
       openedByName,
     };
 
-    console.log(
-      "[tickets/send] REQUEST",
-      `${BACKEND_URL}/api/public/tickets/send`,
-      payload
-    );
-
     const res = await fetch(`${BACKEND_URL}/api/public/tickets/send`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(payload),
     });
 
     let json: any = null;
     try {
       json = await res.json();
-    } catch (e) {
-      console.log(
-        "[tickets/send] ERROR parsing JSON",
-        res.status,
-        res.headers.get("content-type")
-      );
+    } catch {
       throw new Error("پاسخ سرور قابل خواندن نیست (JSON نبود).");
     }
 
-    console.log("[tickets/send] RESPONSE", res.status, json);
-
     if (!res.ok || !json?.ok) {
-      const serverErr =
-        typeof json?.error === "string"
-          ? json.error
-          : undefined;
+      const serverErr = typeof json?.error === "string" ? json.error : undefined;
       const msg =
-        serverErr && serverErr.trim().length
-          ? serverErr
-          : "ساخت تیکت ناموفق بود";
+        serverErr && serverErr.trim().length ? serverErr : "ساخت تیکت ناموفق بود";
       throw new Error(msg);
     }
 
     const newId: unknown =
       (json.ticket && json.ticket.id) || json.ticketId || json.id;
-
     if (!newId || typeof newId !== "string") {
-      console.log(
-        "[tickets/send] invalid id in response",
-        JSON.stringify(json, null, 2)
-      );
-      throw new Error(
-        "ساخت تیکت انجام شد اما شناسهٔ تیکت از سرور برنگشت."
-      );
+      throw new Error("ساخت تیکت انجام شد اما شناسهٔ تیکت از سرور برنگشت.");
     }
 
     const fullTicket: Ticket | null = json.ticket ?? null;
@@ -694,11 +686,9 @@ function Composer({
 
       let targetId = ticketId;
       if (ticketType) {
-        // اگر صفحه برای نوع تیکت است (tech/therapy)، اول تیکت بساز
         targetId = await createTicketIfNeeded(textPayload);
         setText("");
-        // createTicketIfNeeded خودش onTicketCreated را صدا می‌زند
-        onSent(); // برای اینکه reload نهایی انجام شود
+        onSent();
         return;
       }
 
@@ -707,15 +697,8 @@ function Composer({
         `${BACKEND_URL}/api/public/tickets/${targetId}/reply`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          body: JSON.stringify({
-            text: textPayload,
-            openedById,
-            openedByName,
-          }),
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ text: textPayload, openedById, openedByName }),
         }
       );
 
@@ -730,12 +713,10 @@ function Composer({
       }
 
       const updatedTicket: Ticket | null = json.ticket ?? null;
-
       setText("");
       onSent(updatedTicket);
     } catch (e: any) {
-      const msg = extractErrorMessage(e, "خطا در ارسال متن");
-      alert(msg);
+      onError(extractErrorMessage(e, "خطا در ارسال متن"));
     } finally {
       setSending(false);
     }
@@ -743,19 +724,13 @@ function Composer({
 
   const buildForm = async () => {
     const fd = new FormData();
-
     const { openedById, openedByName } = await resolveIdentity(user);
     fd.append("openedById", String(openedById || ""));
     fd.append("openedByName", String(openedByName || "کاربر"));
-
     if (hasText) fd.append("text", text.trim());
 
     if (image) {
-      const file: any = {
-        uri: image.uri,
-        name: image.name,
-        type: image.type,
-      };
+      const file: any = { uri: image.uri, name: image.name, type: image.type };
       fd.append("file", file);
       fd.append("attachment", file);
     } else if (recURI) {
@@ -774,38 +749,17 @@ function Composer({
   };
 
   const tryPost = async (url: string, fd: FormData) => {
-    console.log("[tickets/upload] POST", url);
-
-    const res = await fetch(url, {
-      method: "POST",
-      body: fd,
-    });
-
+    const res = await fetch(url, { method: "POST", body: fd });
     let rawText = "";
     try {
       rawText = await res.text();
-    } catch (e) {
-      console.log("[tickets/upload] ERROR reading body", url, e);
-    }
-
+    } catch {}
     let json: any = null;
     try {
-      // اگر بدنه JSON بود، تبدیلش کن
       json = rawText ? JSON.parse(rawText) : null;
     } catch {
-      // اگر JSON نبود، json همون null می‌مونه
       json = null;
     }
-
-    console.log(
-      "[tickets/upload] RES",
-      url,
-      "status=",
-      res.status,
-      "body=",
-      rawText
-    );
-
     return { res, json };
   };
 
@@ -816,23 +770,18 @@ function Composer({
     try {
       setSending(true);
 
-      // اگر تیکت alias بود (tech/therapy) اول تیکت بساز
       let targetId = ticketId;
       if (ticketType) {
         const firstText = hasText ? text.trim() : "ضمیمه";
         targetId = await createTicketIfNeeded(firstText);
       }
 
-      // فرم اصلی
       const fd = await buildForm();
-
-      // ⭐️ تلاش اول: /reply-upload
       let { res, json } = await tryPost(
         `${BACKEND_URL}/api/public/tickets/${targetId}/reply-upload`,
         fd
       );
 
-      // ⭐️ اگر هر جور خطایی داشت (نه فقط 404)، یک بار هم /reply را امتحان کن
       if (!res.ok || !json?.ok) {
         const fd2 = await buildForm();
         ({ res, json } = await tryPost(
@@ -841,20 +790,17 @@ function Composer({
         ));
       }
 
-      // اگر بعد از هر دو تلاش هنوز خراب بود → ارور واقعی را نمایش بده
       if (!res.ok || !json?.ok) {
         const msg = extractErrorMessage(json?.error, "ارسال ناموفق");
         throw new Error(msg);
       }
 
       const updatedTicket: Ticket | null = json.ticket ?? null;
-
       setText("");
       resetAttachments();
       onSent(updatedTicket);
     } catch (e: any) {
-      const msg = extractErrorMessage(e, "خطا در ارسال فایل/ویس");
-      alert(msg);
+      onError(extractErrorMessage(e, "خطا در ارسال فایل/ویس"));
     } finally {
       setSending(false);
     }
@@ -866,45 +812,25 @@ function Composer({
         value={text}
         onChangeText={setText}
         placeholder="پیام خود را بنویسید…"
-        placeholderTextColor={dark ? "#8E8E93" : "#6b7280"}
-        style={[
-          styles.composerInput,
-          {
-            backgroundColor: colors.card,
-            borderColor: colors.border,
-            color: colors.text,
-          },
-        ]}
+        placeholderTextColor="rgba(231,238,247,.55)"
+        style={styles.composerInput}
         multiline
         textAlignVertical="top"
-        scrollEnabled={true}
+        scrollEnabled
       />
 
       {image || recURI ? (
-        <View
-          style={[
-            styles.previewRow,
-            {
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-            },
-          ]}
-        >
+        <View style={styles.previewRow}>
           {image ? (
             <Image
               source={{ uri: image.uri }}
-              style={{ width: 64, height: 64, borderRadius: 8 }}
+              style={{ width: 56, height: 56, borderRadius: 10 }}
             />
           ) : null}
           {recURI ? (
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-            >
-              <Ionicons name="mic" size={18} color={colors.text} />
-              <Text style={{ color: colors.text }}>
+            <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 6 }}>
+              <Ionicons name="mic" size={16} color="#E5E7EB" />
+              <Text style={{ color: "#E5E7EB", fontWeight: "900", fontSize: 12 }}>
                 {Math.min(300, Math.round(recMs / 1000))}s
               </Text>
             </View>
@@ -923,45 +849,21 @@ function Composer({
       <View style={styles.composerActions}>
         <TouchableOpacity
           onPress={pickImage}
-          style={[
-            styles.iconBtn,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-              opacity: lockedForPlan ? 0.5 : 1,
-            },
-          ]}
+          style={[styles.iconBtn, { opacity: lockedForPlan ? 0.5 : 1 }]}
           activeOpacity={0.8}
           disabled={lockedForPlan}
         >
-          <Ionicons name="attach" size={18} color={colors.text} />
+          <Ionicons name="attach" size={18} color="#E5E7EB" />
         </TouchableOpacity>
 
         <View style={{ flex: 1 }} />
 
         {recording ? (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <Text
-              style={{
-                color: colors.text,
-                fontWeight: "800",
-                backgroundColor: colors.card,
-                borderWidth: 1,
-                borderColor: colors.border,
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 10,
-                fontVariant: ["tabular-nums"],
-              }}
-            >
-              {fmt(recMs)}
-            </Text>
+          <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+            <Text style={styles.recTimer}>{fmt(recMs)}</Text>
             <TouchableOpacity
               onPress={() => stopRecording(false)}
-              style={[
-                styles.roundBtn,
-                { backgroundColor: "#ef4444", borderColor: "#991b1b" },
-              ]}
+              style={[styles.roundBtn, { backgroundColor: "#ef4444", borderColor: "#991b1b" }]}
               activeOpacity={0.85}
             >
               <Ionicons name="stop" size={18} color="#fff" />
@@ -970,18 +872,14 @@ function Composer({
         ) : hasAttachment ? (
           <TouchableOpacity
             onPress={sendUpload}
-            style={[
-              styles.sendBtn,
-              { backgroundColor: "#10b981", opacity: lockedForPlan ? 0.5 : 1 },
-            ]}
+            style={[styles.sendBtn, { opacity: lockedForPlan ? 0.5 : 1 }]}
             disabled={sending || lockedForPlan}
+            activeOpacity={0.9}
           >
             {sending ? (
-              <ActivityIndicator color="#000" />
+              <ActivityIndicator color="#111827" />
             ) : (
-              <Text style={{ color: "#000", fontWeight: "800" }}>
-                ارسال ضمیمه
-              </Text>
+              <Text style={styles.sendBtnText}>ارسال ضمیمه</Text>
             )}
           </TouchableOpacity>
         ) : hasText ? (
@@ -990,34 +888,27 @@ function Composer({
             style={[
               styles.roundBtn,
               {
-                backgroundColor: "#fbbf24",
-                borderColor: "#d97706",
-                opacity: lockedForPlan ? 0.5 : 1,
+                backgroundColor: "rgba(212,175,55,.18)",
+                borderColor: "rgba(212,175,55,.32)",
               },
             ]}
             disabled={sending || lockedForPlan}
+            activeOpacity={0.9}
           >
             {sending ? (
-              <ActivityIndicator color="#000" />
+              <ActivityIndicator color="#D4AF37" />
             ) : (
-              <Ionicons name="send" size={18} color="#000" />
+              <Ionicons name="send" size={18} color="#D4AF37" />
             )}
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
             onPress={startRecording}
-            style={[
-              styles.roundBtn,
-              {
-                backgroundColor: colors.card,
-                borderColor: colors.border,
-                opacity: lockedForPlan ? 0.5 : 1,
-              },
-            ]}
+            style={styles.roundBtn}
             activeOpacity={0.85}
             disabled={lockedForPlan}
           >
-            <Ionicons name="mic" size={18} color={colors.text} />
+            <Ionicons name="mic" size={18} color="#E5E7EB" />
           </TouchableOpacity>
         )}
       </View>
@@ -1066,7 +957,6 @@ function prettyTsJalali(input?: string) {
 
 /* ================= صفحه تیکت ================= */
 export default function TicketDetail() {
-  const { colors, dark: isDark } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const navigation = useNavigation();
@@ -1080,12 +970,14 @@ export default function TicketDetail() {
 
   const typeFromParam = parseTicketType(id);
 
-const [ticket, setTicket] = useState<Ticket | null>(null);
-const [loading, setLoading] = useState(true);
-// ⭐ اگر id = "tech" یا "therapy" باشد، از همان رندر اول checkingExisting = true
-const [checkingExisting, setCheckingExisting] = useState(!!typeFromParam);
+  const [ticket, setTicket] = useState<Ticket | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [checkingExisting, setCheckingExisting] = useState(!!typeFromParam);
+
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
+
+  const [banner, setBanner] = useState<string>("");
 
   const scrollRef = useRef<ScrollView | null>(null);
   const didInitialScroll = useRef(false);
@@ -1107,7 +999,13 @@ const [checkingExisting, setCheckingExisting] = useState(!!typeFromParam);
     };
   }, []);
 
-  /* سنک وضعیت پلن از روی me (با استفاده از getPlanStatus + PRO_FLAG_KEY) */
+  const pushError = useCallback((msg: string) => {
+    const clean = (msg || "").trim();
+    if (!clean) return;
+    setBanner(clean);
+  }, []);
+
+  /* سنک وضعیت پلن از روی me */
   const syncPlanView = useCallback(async () => {
     try {
       const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
@@ -1117,30 +1015,22 @@ const [checkingExisting, setCheckingExisting] = useState(!!typeFromParam);
       let view: PlanView = "free";
 
       if (status.rawExpiresAt) {
-        // پلن تاریخ انقضا دارد
         if (
           status.isExpired &&
           (status.rawPlan === "pro" || status.rawPlan === "vip")
         ) {
           view = "expired";
         } else if (status.isPro || flagIsPro) {
-          const d =
-            typeof status.daysLeft === "number" ? status.daysLeft : null;
-          if (d != null && d > 0 && d <= 7) {
-            view = "expiring";
-          } else {
-            view = "pro";
-          }
-        } else {
-          view = "free";
-        }
+          const d = typeof status.daysLeft === "number" ? status.daysLeft : null;
+          if (d != null && d > 0 && d <= 7) view = "expiring";
+          else view = "pro";
+        } else view = "free";
       } else {
-        // بدون تاریخ انقضا → فقط بر اساس isPro یا فلگ لوکال
         view = status.isPro || flagIsPro ? "pro" : "free";
       }
 
       setPlanView(view);
-    } catch (e) {
+    } catch {
       setPlanView("free");
     } finally {
       setPlanLoaded(true);
@@ -1166,58 +1056,36 @@ const [checkingExisting, setCheckingExisting] = useState(!!typeFromParam);
       try {
         if (!silent) setLoading(true);
         const url = `${BACKEND_URL}/api/public/tickets/${id}?ts=${Date.now()}`;
-console.log("[tickets/reload - byId] GET", url);
         const res = await fetch(url);
         let json: any = null;
         try {
           json = await res.json();
         } catch {}
-        console.log(
-          "[tickets/reload - byId] RES",
-          res.status,
-          json?.ok ? "ok" : "not-ok"
-        );
-        if (json?.ok && json.ticket) {
-          setTicket(json.ticket);
-        }
+        if (json?.ok && json.ticket) setTicket(json.ticket);
+      } catch (e: any) {
+        pushError(extractErrorMessage(e, "خطا در دریافت گفتگو"));
       } finally {
         if (!silent) setLoading(false);
       }
     },
-    [id, typeFromParam]
+    [id, typeFromParam, pushError]
   );
 
   useEffect(() => {
     fetchTicket(false);
   }, [fetchTicket]);
 
-  // 🔁 پولینگ برای دریافت پیام‌های جدید (مثلاً وقتی ادمین از پنل جواب می‌دهد)
   useFocusEffect(
     useCallback(() => {
-      // اگر هنوز روی alias هستیم (id = "tech" یا "therapy")، صبر می‌کنیم تا
-      // router.replace روی id واقعی انجام شود
       if (typeFromParam) return;
-
-      // اگر هنوز هیچ تیکتی لود نشده، کاری نکن
       if (!id) return;
 
-      console.log("[tickets/poll] start polling for ticket updates");
-
-      // 🔹 همین اولِ فوکوس، یک بار فوراً تیکت را ریلود کن
-      fetchTicket(true); // silent = true → بدون لودر فول‌اسکرین
-
-      const interval = setInterval(() => {
-        fetchTicket(true); // هر ۸ ثانیه یک‌بار آپدیت
-      }, 8000);
-
-      return () => {
-        console.log("[tickets/poll] stop polling");
-        clearInterval(interval);
-      };
+      fetchTicket(true);
+      const interval = setInterval(() => fetchTicket(true), 8000);
+      return () => clearInterval(interval);
     }, [id, typeFromParam, fetchTicket])
   );
-  
-  /* اگر id = tech/therapy باشد، سعی می‌کنیم تیکت باز کاربر را پیدا کنیم */
+
   const tryOpenExisting = useCallback(async () => {
     if (!typeFromParam) return;
     try {
@@ -1225,25 +1093,19 @@ console.log("[tickets/reload - byId] GET", url);
 
       const { openedById } = await resolveIdentity(me);
       const qs: string[] = [];
-    qs.push(`type=${encodeURIComponent(typeFromParam)}`);
-    if (openedById) {
-      qs.push(`openedById=${encodeURIComponent(openedById)}`);
-    }
-    qs.push(`ts=${Date.now()}`);
+      qs.push(`type=${encodeURIComponent(typeFromParam)}`);
+      if (openedById) qs.push(`openedById=${encodeURIComponent(openedById)}`);
+      qs.push(`ts=${Date.now()}`);
 
-    const url =
-      `${BACKEND_URL}/api/public/tickets/open` +
-      (qs.length ? `?${qs.join("&")}` : "");
-
-      console.log("[tickets/open] GET", url);
+      const url = `${BACKEND_URL}/api/public/tickets/open?${qs.join("&")}`;
       const res = await fetch(url);
+
       let json: any = null;
       try {
         json = await res.json();
       } catch {
         json = null;
       }
-      console.log("[tickets/open] RES", res.status, json);
 
       if (res.ok && json?.ok && json.ticket && json.ticket.id) {
         const t: Ticket = json.ticket;
@@ -1251,17 +1113,15 @@ console.log("[tickets/reload - byId] GET", url);
         loadPins(t.id).then(setPins).catch(() => {});
         router.replace(`/support/tickets/${t.id}`);
       }
-    } catch (e) {
-      console.log("[tickets/open] error", e);
+    } catch (e: any) {
+      pushError(extractErrorMessage(e, "خطا در آماده‌سازی گفتگو"));
     } finally {
       setCheckingExisting(false);
     }
-  }, [typeFromParam, me, router]);
+  }, [typeFromParam, me, router, pushError]);
 
   useEffect(() => {
-    if (typeFromParam) {
-      tryOpenExisting();
-    }
+    if (typeFromParam) tryOpenExisting();
   }, [typeFromParam, tryOpenExisting]);
 
   useLayoutEffect(() => {
@@ -1308,108 +1168,18 @@ console.log("[tickets/reload - byId] GET", url);
   const jumpToMessage = (mid: string) => {
     const y = msgPositions.current[mid];
     if (typeof y !== "number" || !scrollRef.current) return;
-    scrollRef.current.scrollTo({ y: Math.max(0, y - 80), animated: true });
+    scrollRef.current.scrollTo({ y: Math.max(0, y - 72), animated: true });
   };
 
   const pinnedList = useMemo(() => {
     if (!ticket) return [];
     const byId = new Map(ticket.messages.map((m) => [m.id, m]));
-    return pins
-      .map((pid) => byId.get(pid))
-      .filter(Boolean) as Message[];
+    return pins.map((pid) => byId.get(pid)).filter(Boolean) as Message[];
   }, [pins, ticket]);
 
-  const statusChip = useMemo(() => {
-    if (!ticket) return null;
-    const statusColor =
-      ticket.status === "closed"
-        ? "#22C55E"
-        : ticket.status === "pending"
-        ? "#F59E0B"
-        : colors.primary;
-    const statusLabel =
-      ticket.status === "open"
-        ? "باز"
-        : ticket.status === "pending"
-        ? "در انتظار"
-        : "بسته";
-    return (
-      <View
-        style={{
-          paddingHorizontal: 8,
-          paddingVertical: 4,
-          borderRadius: 999,
-          backgroundColor: statusColor + "22",
-        }}
-      >
-        <Text
-          style={{
-            color: statusColor,
-            fontSize: 11,
-            fontWeight: "800",
-          }}
-        >
-          {statusLabel}
-        </Text>
-      </View>
-    );
-  }, [ticket, colors.primary]);
-
-  const typeChip = useMemo(() => {
-    const t = ticket?.type || typeFromParam;
-    if (!t) return null;
-    const typeColor = t === "therapy" ? "#A855F7" : "#3B82F6";
-    const typeLabel = t === "therapy" ? "درمانگر" : "فنی";
-    return (
-      <View
-        style={{
-          paddingHorizontal: 8,
-          paddingVertical: 4,
-          borderRadius: 999,
-          backgroundColor: typeColor + "22",
-        }}
-      >
-        <Text
-          style={{
-            color: typeColor,
-            fontSize: 11,
-            fontWeight: "800",
-          }}
-        >
-          {typeLabel}
-        </Text>
-      </View>
-    );
-  }, [ticket, typeFromParam]);
-
-  const chatType = (ticket?.type || typeFromParam) as
-    | "tech"
-    | "therapy"
-    | null;
+  const chatType = (ticket?.type || typeFromParam) as "tech" | "therapy" | null;
   const isTherapyChat = chatType === "therapy";
-
   const isProPlan = planView === "pro" || planView === "expiring";
-
-  // رنگ و متن بج پلن، هماهنگ با تب Subscription
-  let badgeBg = "#111827";
-  let badgeTextColor = "#E5E7EB";
-  let badgeLabel: "FREE" | "PRO" | "EXPIRED" = "FREE";
-
-
-  if (planView === "pro") {
-    badgeBg = "#064E3B"; // سبز تیره
-    badgeTextColor = "#4ADE80"; // سبز روشن
-    badgeLabel = "PRO";
-  } else if (planView === "expiring") {
-    badgeBg = "#451A03"; // کهربایی تیره
-    badgeTextColor = "#FBBF24"; // زرد
-    badgeLabel = "PRO";
-  } else if (planView === "expired") {
-    badgeBg = "#7F1D1D"; // قرمز تیره
-    badgeTextColor = "#FCA5A5"; // قرمز روشن
-    badgeLabel = "EXPIRED";
-  }
-
   const headerTitle =
     chatType === "therapy"
       ? "چت با درمانگر ققنوس"
@@ -1422,161 +1192,88 @@ console.log("[tickets/reload - byId] GET", url);
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : -1}
       >
         <Stack.Screen options={{ headerShown: false }} />
 
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-          {/* Header: عنوان راست، بج چپ عنوان */}
-          <View
-            style={[styles.customHeader, { borderBottomColor: colors.border }]}
-          >
+        <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
+          <View pointerEvents="none" style={styles.bgGlowTop} />
+          <View pointerEvents="none" style={styles.bgGlowBottom} />
+
+          {/* ✅ Header مثل index: back + title + badge */}
+          <View style={[styles.headerBar, { paddingTop: 10 }]}>
             <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.headerBack}
+              style={styles.backBtn}
               activeOpacity={0.7}
+              onPress={() => router.back()}
             >
-              <Ionicons
-                name={I18nManager.isRTL ? "arrow-forward" : "arrow-back"}
-                size={22}
-                color={colors.text}
-              />
+              <Ionicons name="arrow-forward" size={22} color="#E5E7EB" />
             </TouchableOpacity>
 
-            <View
-              style={{
-                flex: 1,
-                flexDirection: "row-reverse",
-                alignItems: "center",
-                justifyContent: "flex-start",
-                columnGap: 8,
-              }}
-            >
-              <Text
-                style={[styles.headerText, { color: colors.text }]}
-                numberOfLines={1}
-              >
+            <View style={styles.headerCenter}>
+              <Text style={styles.headerTitle} numberOfLines={1}>
                 چت با درمانگر ققنوس
               </Text>
-              <View style={[styles.planBadge, { backgroundColor: badgeBg }]}>
-                <Text
-                  style={[
-                    styles.planBadgeText,
-                    { color: badgeTextColor },
-                  ]}
-                >
-                  {badgeLabel}
-                </Text>
-              </View>
             </View>
 
-            <View style={{ width: 32 }} />
+            <View style={styles.headerLeft}>
+              <PlanStatusBadge me={me} showExpiringText />
+            </View>
           </View>
 
-          <View
-            style={{
-              flex: 1,
-              padding: 24,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text
-              style={{
-                color: colors.text,
-                fontSize: 15,
-                textAlign: "center",
-                lineHeight: 22,
-                marginBottom: 16,
-              }}
-            >
-              {isExpiredView
-                ? "اشتراک PRO ققنوس منقضی شده و فعلاً دسترسی به چت مستقیم با درمانگر برایت قفله.\n\nبرای باز شدن دوباره این بخش، اشتراک را از تب «پرداخت» تمدید کن. در این فاصله می‌توانی از «پشتیبان هوشمند» یا «پشتیبانی فنی» استفاده کنی."
-                : "دسترسی به چت مستقیم با درمانگر ققنوس فقط برای کاربرانی فعاله که اشتراک PRO را از تب «پرداخت» فعال کرده‌اند.\n\nاگر فعلاً اشتراک نداری، می‌تونی از «پشتیبان هوشمند» یا «پشتیبانی فنی» کمک بگیری."}
-            </Text>
+          <Banner text={banner} onClose={() => setBanner("")} />
 
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={{
-                marginTop: 8,
-                paddingHorizontal: 20,
-                paddingVertical: 10,
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: colors.border,
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={{ color: colors.text, fontWeight: "700" }}>
-                برگشت
+          <View style={styles.lockWrap}>
+            <View style={styles.lockCard}>
+              <View pointerEvents="none" style={styles.lockCardGlow} />
+              <View style={styles.lockIcon}>
+                <Ionicons name="lock-closed" size={22} color="#D4AF37" />
+              </View>
+              <Text style={styles.lockTitle}>
+                {isExpiredView ? "اشتراکت منقضی شده" : "این بخش مخصوص اعضای PRO است"}
               </Text>
-            </TouchableOpacity>
+              <Text style={styles.lockBody}>
+                {isExpiredView
+                  ? "برای باز شدن دوباره‌ی چت درمانگر، اشتراک PRO را تمدید کن. تا آن زمان می‌تونی از پشتیبانی فنی یا پشتیبان هوشمند استفاده کنی."
+                  : "برای ارسال پیام به درمانگر، باید اشتراک PRO را از تب «پرداخت» فعال کنی. در این فاصله می‌تونی از پشتیبانی فنی یا پشتیبان هوشمند استفاده کنی."}
+              </Text>
+
+              <TouchableOpacity onPress={() => router.back()} activeOpacity={0.9} style={styles.lockBtn}>
+                <Text style={styles.lockBtnText}>برگشت</Text>
+                <Ionicons name="chevron-back" size={18} color="#E5E7EB" />
+              </TouchableOpacity>
+            </View>
           </View>
         </SafeAreaView>
       </KeyboardAvoidingView>
     );
   }
-// ⭐ لودر وقتی id فقط نوع تیکت است (tech/therapy) و در حال چک کردن تیکت باز کاربر هستیم
+
   if (typeFromParam && checkingExisting) {
     return (
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : -1}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <Stack.Screen options={{ headerShown: false }} />
-
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-          <View
-            style={{
-              flex: 1,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <ActivityIndicator color={colors.primary} />
-            <Text
-              style={{
-                marginTop: 8,
-                color: colors.text,
-                fontSize: 12,
-              }}
-            >
-              در حال آماده‌سازی گفتگو…
-            </Text>
+        <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
+          <View pointerEvents="none" style={styles.bgGlowTop} />
+          <View pointerEvents="none" style={styles.bgGlowBottom} />
+          <View style={styles.center}>
+            <ActivityIndicator color="#D4AF37" />
+            <Text style={styles.centerText}>در حال آماده‌سازی گفتگو…</Text>
           </View>
         </SafeAreaView>
       </KeyboardAvoidingView>
     );
-  } 
-  // ⭐ لودر فقط وقتی: id واقعی تیکت داریم (نه tech/therapy) + هنوز در حال لود اولیه‌ایم
+  }
+
   if (!typeFromParam && loading && !ticket) {
     return (
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : -1}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <Stack.Screen options={{ headerShown: false }} />
-
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-          <View
-            style={{
-              flex: 1,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <ActivityIndicator color={colors.primary} />
-            <Text
-              style={{
-                marginTop: 8,
-                color: colors.text,
-                fontSize: 12,
-              }}
-            >
-              در حال بارگذاری گفتگو…
-            </Text>
+        <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
+          <View pointerEvents="none" style={styles.bgGlowTop} />
+          <View pointerEvents="none" style={styles.bgGlowBottom} />
+          <View style={styles.center}>
+            <ActivityIndicator color="#D4AF37" />
+            <Text style={styles.centerText}>در حال بارگذاری گفتگو…</Text>
           </View>
         </SafeAreaView>
       </KeyboardAvoidingView>
@@ -1584,30 +1281,22 @@ console.log("[tickets/reload - byId] GET", url);
   }
 
   const renderMessage = (m: Message) => {
-    const mine = m.sender === "admin";
-    const alignSelf: ViewStyle["alignSelf"] = mine
-      ? rtl
-        ? "flex-start"
-        : "flex-end"
-      : rtl
-      ? "flex-end"
-      : "flex-start";
+    const isAdmin = m.sender === "admin";
+    const alignSelf: ViewStyle["alignSelf"] = isAdmin ? "flex-start" : "flex-end";
 
     const bubbleStyle: ViewStyle[] = [
       styles.msg,
-      {
-        borderColor: colors.border,
-        backgroundColor: mine ? colors.primary : colors.background,
-        alignSelf,
-      },
+      isAdmin ? styles.msgAdmin : styles.msgUser,
+      { alignSelf },
     ];
-    const textColor = { color: mine ? "#fff" : colors.text };
-    const darkBubble = mine;
+
+    const textColor = isAdmin ? "#F9FAFB" : "#E5E7EB";
+    const subColor = isAdmin ? "rgba(249,250,251,.72)" : "rgba(231,238,247,.62)";
+
     const fullURL = m.fileUrl ? `${BACKEND_URL}${m.fileUrl}` : undefined;
     const type: MessageType = m.type || detectType(m.mime, m.fileUrl);
     const isPinned = pins.includes(m.id);
     const stamp = prettyTsJalali(m.ts || m.createdAt);
-    const voiceDark = !mine && !isDark ? true : false;
 
     return (
       <View
@@ -1617,63 +1306,36 @@ console.log("[tickets/reload - byId] GET", url);
           msgPositions.current[m.id] = e.nativeEvent.layout.y;
         }}
       >
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 8,
-          }}
-        >
-          <Text style={[{ fontWeight: "800" }, textColor]}>
-            {mine ? "پاسخ پشتیبانی" : "شما"}
+        <View style={styles.msgTopRow}>
+          <Text style={[styles.msgWho, { color: textColor }]}>
+            {isAdmin ? "پاسخ پشتیبانی" : "شما"}
           </Text>
-          <TouchableOpacity
-            onPress={() => togglePin(m.id)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
+          <TouchableOpacity onPress={() => togglePin(m.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons
               name={isPinned ? "star" : "star-outline"}
-              size={16}
-              color={mine ? "#fff" : colors.text}
+              size={15}
+              color={isAdmin ? "#FBBF24" : "#D4AF37"}
             />
           </TouchableOpacity>
         </View>
 
         {type === "image" && fullURL ? (
           <TouchableOpacity
-            activeOpacity={0.85}
+            activeOpacity={0.9}
             onPress={() => {
               setViewerUri(fullURL);
               setViewerVisible(true);
             }}
             style={{ marginTop: 6 }}
           >
-            <Image
-              source={{ uri: fullURL }}
-              style={{ width: 220, height: 220, borderRadius: 10 }}
-              resizeMode="cover"
-            />
-            <Text
-              style={{
-                color: darkBubble ? "#000" : "#aaa",
-                fontSize: 11,
-                marginTop: 4,
-              }}
-            >
-              برای بزرگ‌نمایی لمس کنید
-            </Text>
+            <Image source={{ uri: fullURL }} style={styles.msgImage} resizeMode="cover" />
+            <Text style={[styles.msgHint, { color: subColor }]}>برای بزرگ‌نمایی لمس کنید</Text>
           </TouchableOpacity>
         ) : null}
 
         {type === "voice" && fullURL ? (
           <View style={{ marginTop: 6 }}>
-            <VoicePlayer
-              id={m.id}
-              uri={fullURL}
-              durationSec={m.durationSec ?? undefined}
-              dark={voiceDark || darkBubble}
-            />
+            <VoicePlayer id={m.id} uri={fullURL} durationSec={m.durationSec ?? undefined} />
           </View>
         ) : null}
 
@@ -1682,48 +1344,23 @@ console.log("[tickets/reload - byId] GET", url);
             onPress={async () => {
               const ok = await Linking.canOpenURL(fullURL);
               if (ok) Linking.openURL(fullURL);
+              else pushError("لینک فایل قابل باز شدن نیست.");
             }}
-            activeOpacity={0.8}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              backgroundColor: mine
-                ? "rgba(0,0,0,0.15)"
-                : isDark
-                ? "#111"
-                : "#eee",
-              padding: 10,
-              borderRadius: 10,
-              marginTop: 6,
-            }}
+            activeOpacity={0.9}
+            style={styles.filePill}
           >
-            <Ionicons
-              name="document-attach"
-              size={18}
-              color={mine ? "#fff" : colors.text}
-            />
-            <Text style={textColor}>دانلود فایل</Text>
+            <Ionicons name="document-attach" size={18} color="#E5E7EB" />
+            <Text style={{ color: "#E5E7EB", fontWeight: "900", fontSize: 12 }}>دانلود فایل</Text>
           </TouchableOpacity>
         ) : null}
 
         {!!m.text && (
-          <Text style={[{ marginTop: 6 }, textColor]}>{m.text}</Text>
+          <Text style={{ marginTop: 6, color: textColor, lineHeight: 18, fontWeight: "700", fontSize: 12 }}>
+            {m.text}
+          </Text>
         )}
 
-        {stamp ? (
-          <Text
-            style={[
-              styles.stamp,
-              {
-                color: mine ? "rgba(255,255,255,0.75)" : "#8E8E93",
-                alignSelf: "flex-end",
-              },
-            ]}
-          >
-            {stamp}
-          </Text>
-        ) : null}
+        {stamp ? <Text style={[styles.stamp, { color: subColor }]}>{stamp}</Text> : null}
       </View>
     );
   };
@@ -1731,127 +1368,80 @@ console.log("[tickets/reload - byId] GET", url);
   const hasMessages = !!ticket?.messages?.length;
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : -1}
-    >
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-        {/* Header مشترک: عنوان راست، بج چپ عنوان */}
-        <View
-          style={[styles.customHeader, { borderBottomColor: colors.border }]}
-        >
+      <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
+        <View pointerEvents="none" style={styles.bgGlowTop} />
+        <View pointerEvents="none" style={styles.bgGlowBottom} />
+
+        {/* ✅ Header مثل index: back + title + badge */}
+        <View style={[styles.headerBar, { paddingTop: 10 }]}>
           <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.headerBack}
+            style={styles.backBtn}
             activeOpacity={0.7}
+            onPress={() => router.back()}
           >
-            <Ionicons
-              name={I18nManager.isRTL ? "arrow-forward" : "arrow-back"}
-              size={22}
-              color={colors.text}
-            />
+            <Ionicons name="arrow-forward" size={22} color="#E5E7EB" />
           </TouchableOpacity>
 
-          <View
-            style={{
-              flex: 1,
-              flexDirection: "row-reverse",
-              alignItems: "center",
-              justifyContent: "flex-start",
-              columnGap: 8,
-            }}
-          >
-            <Text
-              style={[styles.headerText, { color: colors.text }]}
-              numberOfLines={1}
-            >
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle} numberOfLines={1}>
               {headerTitle}
             </Text>
-
-            {isTherapyChat && (
-              <View style={[styles.planBadge, { backgroundColor: badgeBg }]}>
-                <Text
-                  style={[
-                    styles.planBadgeText,
-                    { color: badgeTextColor },
-                  ]}
-                >
-                  {badgeLabel}
-                </Text>
-              </View>
-            )}
           </View>
 
-          <View style={{ width: 32 }} />
+          <View style={styles.headerLeft}>
+            <PlanStatusBadge me={me} showExpiringText />
+          </View>
         </View>
 
+        <Banner text={banner} onClose={() => setBanner("")} />
+
+        {/* ✅ pin bar باریک‌تر */}
         {pinnedList.length ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={[
-              styles.pinBar,
-              {
-                backgroundColor: colors.background,
-                borderBottomColor: colors.border,
-              },
-            ]}
-            contentContainerStyle={{
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              columnGap: 8,
-            }}
-          >
-            {pinnedList.map((pm) => {
-              const type = detectType(pm.mime, pm.fileUrl);
-              const t = pm.text?.trim();
-              const label =
-                (t && (t.length > 24 ? t.slice(0, 24) + "…" : t)) ||
-                (type === "voice"
-                  ? "ویس"
-                  : type === "image"
-                  ? "عکس"
-                  : type === "file"
-                  ? "فایل"
-                  : "پیام");
-              return (
-                <TouchableOpacity
-                  key={pm.id}
-                  onPress={() => jumpToMessage(pm.id)}
-                  style={[
-                    styles.pinChip,
-                    {
-                      backgroundColor: colors.card,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name="star" size={14} color="#fbbf24" />
-                  <Text
-                    style={[styles.pinText, { color: colors.text }]}
-                    numberOfLines={1}
+          <View style={styles.pinBar}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.pinBarContent}
+            >
+              {pinnedList.map((pm) => {
+                const t = pm.text?.trim();
+                const typ = detectType(pm.mime, pm.fileUrl);
+                const label =
+                  (t && (t.length > 24 ? t.slice(0, 24) + "…" : t)) ||
+                  (typ === "voice" ? "ویس" : typ === "image" ? "عکس" : typ === "file" ? "فایل" : "پیام");
+
+                return (
+                  <TouchableOpacity
+                    key={pm.id}
+                    onPress={() => jumpToMessage(pm.id)}
+                    style={styles.pinChip}
+                    activeOpacity={0.9}
                   >
-                    {label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+                    <Ionicons name="star" size={13} color="#D4AF37" />
+                    <Text style={styles.pinText} numberOfLines={1}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
         ) : null}
 
         <ScrollView
           ref={scrollRef}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{
-            padding: 16,
-            rowGap: 12,
-            direction: I18nManager.isRTL ? "rtl" : "ltr",
+            paddingHorizontal: 14,
+            paddingTop: 12,
+            rowGap: 8,
+            direction: rtl ? "rtl" : "ltr",
             paddingBottom: insets.bottom + 160,
           }}
+          showsVerticalScrollIndicator={false}
           onContentSizeChange={() => {
             if (!didInitialScroll.current) {
               scrollRef.current?.scrollToEnd({ animated: false });
@@ -1862,41 +1452,11 @@ console.log("[tickets/reload - byId] GET", url);
           {hasMessages ? ticket!.messages.map(renderMessage) : <View />}
         </ScrollView>
 
-        <View
-          style={[
-            styles.composerDock,
-            {
-              paddingBottom: insets.bottom + 5,
-              bottom: 0,
-              backgroundColor: colors.background,
-              borderTopColor: colors.border,
-            },
-          ]}
-          pointerEvents="box-none"
-        >
+        <View style={[styles.composerDock, { paddingBottom: Math.max(10, insets.bottom + 8) }]} pointerEvents="box-none">
           {chatType === "therapy" && !isProPlan && (
-            <View
-              style={{
-                marginBottom: 8,
-                padding: 10,
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.card,
-              }}
-            >
-              <Text
-                style={{
-                  color: colors.text,
-                  fontSize: 12,
-                  textAlign: "right",
-                  lineHeight: 18,
-                }}
-              >
-                ارسال پیام به درمانگر ققنوس فقط برای کاربرانی فعاله که اشتراک
-                PRO را از تب «پرداخت» فعال کرده‌اند. اگر فعلاً اشتراک نداری،
-                می‌تونی از پشتیبانی فنی یا پشتیبان هوشمند استفاده کنی.
-              </Text>
+            <View style={styles.inlineLock}>
+              <Ionicons name="lock-closed" size={16} color="#D4AF37" />
+              <Text style={styles.inlineLockText}>ارسال پیام به درمانگر فقط برای اعضای PRO فعاله.</Text>
             </View>
           )}
 
@@ -1905,34 +1465,23 @@ console.log("[tickets/reload - byId] GET", url);
             ticketType={typeFromParam}
             isPro={isProPlan}
             user={me}
+            onError={pushError}
             onTicketCreated={(newId, fullTicket) => {
               router.replace(`/support/tickets/${newId}`);
-              if (fullTicket) {
-                setTicket(fullTicket);
-              } else {
-                fetchTicket(true);
-              }
+              if (fullTicket) setTicket(fullTicket);
+              else fetchTicket(true);
               loadPins(newId).then(setPins);
             }}
             onSent={(updatedTicket) => {
-              if (updatedTicket) {
-                setTicket(updatedTicket);
-              } else {
-                fetchTicket(true);
-              }
-              requestAnimationFrame(() =>
-                scrollRef.current?.scrollToEnd({ animated: true })
-              );
+              if (updatedTicket) setTicket(updatedTicket);
+              else fetchTicket(true);
+              requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
             }}
           />
         </View>
 
         {viewerUri ? (
-          <ImageLightbox
-            uri={viewerUri}
-            visible={viewerVisible}
-            onClose={() => setViewerVisible(false)}
-          />
+          <ImageLightbox uri={viewerUri} visible={viewerVisible} onClose={() => setViewerVisible(false)} />
         ) : null}
       </SafeAreaView>
     </KeyboardAvoidingView>
@@ -1940,64 +1489,179 @@ console.log("[tickets/reload - byId] GET", url);
 }
 
 const styles = StyleSheet.create({
-  customHeader: {
-    flexDirection: "row",
+  root: { flex: 1, backgroundColor: "#0b0f14" },
+
+  bgGlowTop: {
+    position: "absolute",
+    top: -260,
+    left: -240,
+    width: 480,
+    height: 480,
+    borderRadius: 999,
+    backgroundColor: "rgba(212,175,55,.14)",
+  },
+  bgGlowBottom: {
+    position: "absolute",
+    bottom: -280,
+    right: -260,
+    width: 560,
+    height: 560,
+    borderRadius: 999,
+    backgroundColor: "rgba(233,138,21,.10)",
+  },
+
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  centerText: {
+    marginTop: 8,
+    color: "rgba(231,238,247,.72)",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+
+  /* ✅ Header دقیقاً مثل index */
+  headerBar: {
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,.08)",
+    backgroundColor: "#030712",
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
   },
-  headerBack: {
-    width: 32,
+  backBtn: {
+    width: 40,
+    height: 38,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    padding: 6,
+    backgroundColor: "rgba(255,255,255,.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.08)",
   },
-  headerText: {
-    fontSize: 17,
-    fontWeight: "900",
-  },
-
-  planBadge: {
+  headerCenter: {
+    flex: 1,
+    alignItems: "flex-start",
+    justifyContent: "center",
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
   },
-  planBadgeText: {
+  headerTitle: {
+    color: "#F9FAFB",
+    fontSize: 16,
     fontWeight: "900",
-    fontSize: 10,
+    textAlign: "right",
+    alignSelf: "stretch",
+  },
+  headerLeft: {
+    width: 140,
+    alignItems: "flex-start",
+    justifyContent: "flex-end",
   },
 
+  /* banner */
+  bannerWrap: { paddingHorizontal: 12, paddingTop: 10 },
+  banner: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(249,115,22,.28)",
+    backgroundColor: "rgba(249,115,22,.12)",
+  },
+  bannerText: {
+    flex: 1,
+    color: "#E5E7EB",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 18,
+    textAlign: "right",
+  },
+  bannerClose: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.10)",
+  },
+
+  /* ✅ pinned: نوار باریک */
   pinBar: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,.08)",
+    backgroundColor: "#0b0f14",
+    paddingVertical: 4,
+  },
+  pinBarContent: {
+    paddingHorizontal: 10,
+    columnGap: 8,
+    alignItems: "center",
   },
   pinChip: {
-    flexDirection: "row",
+    flexDirection: "row-reverse",
     alignItems: "center",
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
+    borderColor: "rgba(255,255,255,.10)",
+    backgroundColor: "rgba(255,255,255,.04)",
     maxWidth: 220,
   },
-  pinText: { fontSize: 12, fontWeight: "700" },
+  pinText: { color: "#E5E7EB", fontSize: 11, fontWeight: "900" },
 
+  /* ✅ messages */
   msg: {
     borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    maxWidth: "82%",
+    overflow: "hidden",
+  },
+  msgAdmin: {
+    borderColor: "rgba(212,175,55,.25)",
+    backgroundColor: "rgba(212,175,55,.10)",
+  },
+  msgUser: {
+    borderColor: "rgba(255,255,255,.10)",
+    backgroundColor: "rgba(255,255,255,.04)",
+  },
+  msgTopRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  msgWho: { fontWeight: "900", fontSize: 11 },
+  msgImage: { width: 210, height: 210, borderRadius: 12 },
+  msgHint: { fontSize: 10, marginTop: 5, fontWeight: "800" },
+  filePill: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
     borderRadius: 12,
-    padding: 10,
-    marginVertical: 6,
-    maxWidth: "88%",
-    gap: 6,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
   },
-
   stamp: {
-    fontSize: 10,
-    marginTop: 4,
+    fontSize: 9,
+    marginTop: 6,
+    fontWeight: "800",
+    alignSelf: "flex-start",
   },
 
+  /* lightbox */
   lbBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.95)",
@@ -2015,69 +1679,172 @@ const styles = StyleSheet.create({
   lbClose: { position: "absolute", top: 40, right: 20, zIndex: 2, padding: 10 },
 
   speedBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-    backgroundColor: "transparent",
+    borderColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.04)",
   },
 
-  /* Composer */
+  /* composer dock */
   composerDock: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
-    padding: 10,
+    paddingHorizontal: 12,
+    paddingTop: 10,
     borderTopWidth: 1,
-    zIndex: 100,
-    elevation: 100,
+    borderTopColor: "rgba(255,255,255,.08)",
+    backgroundColor: "rgba(3,7,18,0.92)",
   },
-  composerWrap: { gap: 8 },
+  inlineLock: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(212,175,55,.25)",
+    backgroundColor: "rgba(212,175,55,.10)",
+    marginBottom: 10,
+  },
+  inlineLockText: {
+    flex: 1,
+    color: "#E5E7EB",
+    fontSize: 12,
+    fontWeight: "800",
+    textAlign: "right",
+  },
+
+  /* Composer */
+  composerWrap: { gap: 10 },
   composerInput: {
     minHeight: 44,
     maxHeight: 120,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: 14,
     borderWidth: 1,
+    fontWeight: "700",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: "rgba(255,255,255,0.10)",
+    color: "#E5E7EB",
   },
   composerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
   iconBtn: {
-    padding: 10,
-    borderRadius: 10,
+    padding: 12,
+    borderRadius: 14,
     borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.04)",
   },
   roundBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 46,
+    height: 46,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: "rgba(255,255,255,0.10)",
   },
   sendBtn: {
-    backgroundColor: "#fbbf24",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  previewRow: {
-    alignSelf: "flex-start",
-    marginTop: -2,
-    marginBottom: -2,
+    backgroundColor: "rgba(212,175,55,.22)",
     borderWidth: 1,
-    padding: 6,
-    borderRadius: 10,
-    position: "relative",
+    borderColor: "rgba(212,175,55,.38)",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+  },
+  sendBtnText: { color: "#E5E7EB", fontWeight: "900" },
+  previewRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 8,
+    borderRadius: 14,
   },
   trashBtn: {
     backgroundColor: "#ef4444",
     borderWidth: 1,
     borderColor: "#991b1b",
     paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingVertical: 10,
+    borderRadius: 12,
   },
+  recTimer: {
+    color: "#E5E7EB",
+    fontWeight: "900",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    fontVariant: ["tabular-nums"],
+  },
+
+  /* lock */
+  lockWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: 18 },
+  lockCard: {
+    width: "100%",
+    maxWidth: 520,
+    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.10)",
+    backgroundColor: "rgba(255,255,255,.03)",
+    overflow: "hidden",
+  },
+  lockCardGlow: {
+    position: "absolute",
+    top: -110,
+    left: -120,
+    width: 260,
+    height: 260,
+    borderRadius: 999,
+    backgroundColor: "rgba(212,175,55,.12)",
+  },
+  lockIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(212,175,55,.12)",
+    borderWidth: 1,
+    borderColor: "rgba(212,175,55,.24)",
+    alignSelf: "center",
+    marginBottom: 12,
+  },
+  lockTitle: { color: "#F9FAFB", fontSize: 16, fontWeight: "900", textAlign: "center" },
+  lockBody: {
+    marginTop: 10,
+    color: "rgba(231,238,247,.70)",
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
+    fontWeight: "800",
+  },
+  lockBtn: {
+    marginTop: 14,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: "rgba(212,175,55,.14)",
+    borderWidth: 1,
+    borderColor: "rgba(212,175,55,.30)",
+  },
+  lockBtnText: { color: "#E5E7EB", fontSize: 12, fontWeight: "900" },
 });

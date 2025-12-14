@@ -7,9 +7,10 @@ import {
   Image,
   StyleSheet,
   ActivityIndicator,
+  ScrollView,
 } from "react-native";
-import { useTheme, useFocusEffect } from "@react-navigation/native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Video, ResizeMode, AVPlaybackStatusSuccess } from "expo-av";
@@ -18,6 +19,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useAudio } from "../../hooks/useAudio";
 import { useUser } from "../../hooks/useUser";
 import { getPlanStatus, PRO_FLAG_KEY } from "../../lib/plan";
+import PlanStatusBadge from "../../components/PlanStatusBadge";
 
 const keyFor = (id: string) => `Mashaal.progress.${id}`;
 
@@ -95,7 +97,6 @@ function LessonCard({
   durationMs?: number;
   onResetProgress: (id: string) => void;
 }) {
-  const { colors } = useTheme();
   const pct =
     progressMs && durationMs && durationMs > 0
       ? Math.min(100, Math.round((progressMs / durationMs) * 100))
@@ -105,114 +106,44 @@ function LessonCard({
     <TouchableOpacity
       activeOpacity={0.9}
       onPress={() => onOpen(item)}
-      style={{
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.card,
-        borderRadius: 16,
-        padding: 12,
-        gap: 10,
-        marginBottom: 10,
-      }}
+      style={styles.lessonCard}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-        <View
-          style={{
-            width: 42,
-            height: 42,
-            borderRadius: 10,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: colors.background,
-            borderWidth: 1,
-            borderColor: colors.border,
-          }}
-        >
+      <View style={styles.lessonTopRow}>
+        <View style={styles.lessonIconBox}>
           <Ionicons
             name={item.kind === "video" ? "videocam" : "musical-notes"}
             size={22}
-            color={colors.text}
+            color="#E5E7EB"
           />
         </View>
-        <Text
-          style={{
-            color: colors.text,
-            fontWeight: "900",
-            flex: 1,
-            textAlign: "right",
-          }}
-        >
-          {item.title}
-        </Text>
+        <Text style={styles.lessonTitle}>{item.title}</Text>
       </View>
 
       {pct > 0 ? (
         <View style={{ gap: 6 }}>
-          <View
-            style={{
-              height: 8,
-              backgroundColor: colors.background,
-              borderRadius: 999,
-              overflow: "hidden",
-              borderWidth: 1,
-              borderColor: colors.border,
-            }}
-          >
-            <View
-              style={{
-                width: `${pct}%`,
-                height: "100%",
-                backgroundColor: colors.primary,
-                borderRadius: 999,
-              }}
-            />
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${pct}%` }]} />
           </View>
-          <View
-            style={{
-              flexDirection: "row-reverse",
-              justifyContent: "space-between",
-            }}
-          >
-            <Text style={{ color: "#8E8E93", fontSize: 11 }}>
-              پیشرفت: {pct}%
-            </Text>
-            <Text style={{ color: "#8E8E93", fontSize: 11 }}>
+
+          <View style={styles.progressMetaRow}>
+            <Text style={styles.progressMetaText}>پیشرفت: {pct}%</Text>
+            <Text style={styles.progressMetaText}>
               {toHMM(progressMs || 0)} / {toHMM(durationMs || 0)}
             </Text>
           </View>
+
           <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
             <TouchableOpacity
               onPress={() => onResetProgress(item.id)}
-              style={{
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderRadius: 10,
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-              }}
+              style={styles.resetBtn}
+              activeOpacity={0.9}
             >
-              <Text
-                style={{
-                  color: colors.text,
-                  fontSize: 12,
-                  fontWeight: "800",
-                }}
-              >
-                پاک‌کردن پیشرفت
-              </Text>
+              <Text style={styles.resetBtnText}>پاک‌کردن پیشرفت</Text>
             </TouchableOpacity>
           </View>
         </View>
       ) : (
-        <Text
-          style={{
-            color: "#8E8E93",
-            fontSize: 12,
-            textAlign: "right",
-          }}
-        >
-          برای شروع تپ کن
-        </Text>
+        <Text style={styles.tapToStart}>برای شروع تپ کن</Text>
       )}
     </TouchableOpacity>
   );
@@ -228,8 +159,6 @@ function Player({
   onClose: () => void;
   onProgress: (id: string, p: number, d: number) => void;
 }) {
-  const { colors } = useTheme();
-
   // ویدیو
   const [vDuration, setVDuration] = useState<number>(0);
   const [vPosition, setVPosition] = useState<number>(0);
@@ -300,7 +229,7 @@ function Player({
   const atAudioEnd =
     lesson.kind === "audio" &&
     (audio.duration ?? 0) > 0 &&
-    (audio.position ?? 0) >= (audio.duration - 250);
+    (audio.position ?? 0) >= audio.duration - 250;
 
   useEffect(() => {
     if (lesson.kind !== "audio") return;
@@ -316,12 +245,18 @@ function Player({
       lastProgressRef.current = now;
       onProgress(lesson.id, audio.position, audio.duration);
     }
-  }, [audio.position, audio.duration, lesson.kind, lesson.id, atAudioEnd]);
+  }, [
+    audio.position,
+    audio.duration,
+    lesson.kind,
+    lesson.id,
+    atAudioEnd,
+    onProgress,
+    audio.duration,
+  ]);
 
-  const progPosition =
-    lesson.kind === "video" ? vPosition : audio.position ?? 0;
-  const progDuration =
-    lesson.kind === "video" ? vDuration : audio.duration ?? 0;
+  const progPosition = lesson.kind === "video" ? vPosition : audio.position ?? 0;
+  const progDuration = lesson.kind === "video" ? vDuration : audio.duration ?? 0;
 
   // اسلایدر تعاملی صوت
   const [dragging, setDragging] = useState(false);
@@ -353,40 +288,28 @@ function Player({
       : null;
 
   const header = (
-    <View
-      style={{
-        flexDirection: "row-reverse",
-        alignItems: "center",
-        justifyContent: "space-between",
-      }}
-    >
+    <View style={styles.playerHeaderRow}>
       <TouchableOpacity
         onPress={() => {
-          if (lesson.kind === "audio") {
-            audio.stopAndUnload();
-          }
+          if (lesson.kind === "audio") audio.stopAndUnload();
           onClose();
         }}
-        style={{ padding: 6 }}
+        style={styles.playerBackBtn}
+        activeOpacity={0.9}
       >
         <Ionicons
           name="chevron-back"
           size={22}
-          color={colors.text}
+          color="#E5E7EB"
           style={{ transform: [{ scaleX: -1 }] }}
         />
       </TouchableOpacity>
-      <Text
-        style={{
-          color: colors.text,
-          fontWeight: "900",
-          flex: 1,
-          textAlign: "right",
-        }}
-      >
+
+      <Text style={styles.playerTitle} numberOfLines={1}>
         {lesson.title}
       </Text>
-      <View style={{ width: 28 }} />
+
+      <View style={{ width: 34 }} />
     </View>
   );
 
@@ -395,21 +318,10 @@ function Player({
       {header}
 
       {lesson.kind === "video" ? (
-        <View
-          style={{
-            borderRadius: 16,
-            overflow: "hidden",
-            borderWidth: 1,
-            borderColor: colors.border,
-            backgroundColor: "#000",
-            height: 260,
-          }}
-        >
+        <View style={styles.videoBox}>
           <Video
             ref={videoRef}
-            source={
-              typeof lesson.uri === "string" ? { uri: lesson.uri } : lesson.uri
-            }
+            source={typeof lesson.uri === "string" ? { uri: lesson.uri } : lesson.uri}
             style={{ width: "100%", height: "100%" }}
             resizeMode={ResizeMode.CONTAIN}
             useNativeControls
@@ -422,20 +334,7 @@ function Player({
           />
         </View>
       ) : (
-        <View
-          style={{
-            flex: 1,
-            borderRadius: 16,
-            borderWidth: 1,
-            borderColor: colors.border,
-            backgroundColor: colors.card,
-            padding: 16,
-            gap: 16,
-            justifyContent: "space-between",
-            overflow: "hidden",
-            position: "relative",
-          }}
-        >
+        <View style={styles.audioCard}>
           {!!coverSource && (
             <>
               <Image
@@ -446,9 +345,9 @@ function Player({
               />
               <LinearGradient
                 colors={[
-                  "rgba(0,0,0,0.55)",
-                  "rgba(0,0,0,0.28)",
-                  "rgba(0,0,0,0.08)",
+                  "rgba(0,0,0,0.62)",
+                  "rgba(0,0,0,0.32)",
+                  "rgba(0,0,0,0.10)",
                 ]}
                 start={{ x: 0.5, y: 0 }}
                 end={{ x: 0.5, y: 1 }}
@@ -466,19 +365,7 @@ function Player({
 
           {/* Cover */}
           <View style={{ alignItems: "center", marginTop: 8 }}>
-            <View
-              style={{
-                width: 260,
-                height: 260,
-                borderRadius: 28,
-                backgroundColor: "#111",
-                alignItems: "center",
-                justifyContent: "center",
-                borderWidth: 1,
-                borderColor: colors.border,
-                overflow: "hidden",
-              }}
-            >
+            <View style={styles.coverBox}>
               {coverSource ? (
                 <Image
                   source={coverSource}
@@ -486,7 +373,7 @@ function Player({
                   resizeMode="cover"
                 />
               ) : (
-                <Ionicons name="musical-notes" size={70} color={colors.text} />
+                <Ionicons name="musical-notes" size={70} color="#E5E7EB" />
               )}
             </View>
           </View>
@@ -506,32 +393,20 @@ function Player({
                 onPress={async () => {
                   await audio.seekBy(-10000);
                 }}
-                style={{
-                  opacity: audio.loading ? 0.5 : 1,
-                  padding: 12,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                }}
+                style={[styles.circleOutlineBtn, { opacity: audio.loading ? 0.5 : 1 }]}
               >
-                <Ionicons name="play-back" size={28} color={colors.text} />
+                <Ionicons name="play-back" size={28} color="#E5E7EB" />
               </TouchableOpacity>
 
               <TouchableOpacity
                 disabled={audio.loading}
                 onPress={audio.togglePlay}
-                style={{
-                  opacity: audio.loading ? 0.5 : 1,
-                  paddingVertical: 16,
-                  paddingHorizontal: 24,
-                  borderRadius: 999,
-                  backgroundColor: colors.primary,
-                }}
+                style={[styles.playBtn, { opacity: audio.loading ? 0.5 : 1 }]}
               >
                 <Ionicons
                   name={audio.isPlaying ? "pause" : "play"}
                   size={32}
-                  color="#fff"
+                  color="#111827"
                 />
               </TouchableOpacity>
 
@@ -540,74 +415,38 @@ function Player({
                 onPress={async () => {
                   await audio.seekBy(10000);
                 }}
-                style={{
-                  opacity: audio.loading ? 0.5 : 1,
-                  padding: 12,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                }}
+                style={[styles.circleOutlineBtn, { opacity: audio.loading ? 0.5 : 1 }]}
               >
-                <Ionicons name="play-forward" size={28} color={colors.text} />
+                <Ionicons name="play-forward" size={28} color="#E5E7EB" />
               </TouchableOpacity>
             </View>
           </View>
 
           {/* Row 2: restart — rate */}
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              paddingHorizontal: 8,
-              marginTop: 6,
-            }}
-          >
+          <View style={styles.audioRow2}>
             <TouchableOpacity
               disabled={audio.loading}
               onPress={async () => {
                 await audio.restart();
               }}
-              style={{
-                opacity: audio.loading ? 0.5 : 1,
-                paddingVertical: 10,
-                paddingHorizontal: 14,
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: colors.border,
-              }}
+              style={[styles.pillOutlineBtn, { opacity: audio.loading ? 0.5 : 1 }]}
             >
-              <Ionicons name="play-skip-back" size={22} color={colors.text} />
+              <Ionicons name="play-skip-back" size={22} color="#E5E7EB" />
             </TouchableOpacity>
 
             <TouchableOpacity
               disabled={audio.loading}
               onPress={audio.cycleRate}
-              style={{
-                opacity: audio.loading ? 0.5 : 1,
-                paddingVertical: 10,
-                paddingHorizontal: 14,
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: colors.border,
-              }}
+              style={[styles.pillOutlineBtn, { opacity: audio.loading ? 0.5 : 1 }]}
             >
-              <Text
-                style={{
-                  color: colors.text,
-                  fontWeight: "900",
-                }}
-              >{`${audio.rate}×`}</Text>
+              <Text style={{ color: "#E5E7EB", fontWeight: "900" }}>
+                {`${audio.rate}×`}
+              </Text>
             </TouchableOpacity>
           </View>
 
           {/* Slider + timers */}
-          <View
-            style={{
-              width: "100%",
-              paddingHorizontal: 4,
-              marginTop: 4,
-            }}
-          >
+          <View style={{ width: "100%", paddingHorizontal: 4, marginTop: 4 }}>
             <Slider
               value={sliderValue}
               minimumValue={0}
@@ -616,9 +455,9 @@ function Player({
               onSlidingStart={onSlideStart}
               onValueChange={(v: number) => setDragPos(v)}
               onSlidingComplete={onSlideComplete}
-              minimumTrackTintColor={colors.primary}
-              maximumTrackTintColor={colors.border}
-              thumbTintColor={colors.primary}
+              minimumTrackTintColor="#D4AF37"
+              maximumTrackTintColor="rgba(255,255,255,.18)"
+              thumbTintColor="#D4AF37"
             />
             <View
               style={{
@@ -643,20 +482,16 @@ function Player({
 
 /* ------------------ تب مشعل ------------------ */
 export default function Mashaal() {
-  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const { me } = useUser();
 
   const [selected, setSelected] = useState<Lesson | null>(null);
-  const [progressMap, setProgressMap] = useState<
-    Record<string, { p: number; d: number }>
-  >({});
+  const [progressMap, setProgressMap] = useState<Record<string, { p: number; d: number }>>({});
   const [planView, setPlanView] = useState<PlanView>("free");
   const [daysLeft, setDaysLeft] = useState<number | null>(null);
   const [loadingPlan, setLoadingPlan] = useState(true);
 
   const isProPlan = planView === "pro";
-  const isNearExpire =
-    planView === "pro" && daysLeft != null && daysLeft > 0 && daysLeft <= 7;
 
   // لود اولیه پیشرفت‌ها
   useEffect(() => {
@@ -668,10 +503,7 @@ export default function Mashaal() {
           const raw = await AsyncStorage.getItem(keyFor(l.id));
           if (raw) {
             const { positionMillis, durationMillis } = JSON.parse(raw) || {};
-            if (
-              typeof positionMillis === "number" &&
-              typeof durationMillis === "number"
-            ) {
+            if (typeof positionMillis === "number" && typeof durationMillis === "number") {
               next[l.id] = { p: positionMillis, d: durationMillis };
             }
           }
@@ -693,26 +525,19 @@ export default function Mashaal() {
         const flagIsPro = flag === "1";
 
         let view: PlanView = "free";
-        let localDaysLeft: number | null = status.daysLeft;
+        const localDaysLeft: number | null = status.daysLeft ?? null;
 
         if (status.rawExpiresAt) {
-          if (status.isExpired) {
-            view =
-              status.rawPlan === "pro" || status.rawPlan === "vip"
-                ? "expired"
-                : "free";
-          } else if (status.isPro || flagIsPro) {
-            view = "pro";
-          } else {
-            view = "free";
-          }
+          if (status.isExpired) view = "expired";
+          else if (status.isPro || flagIsPro) view = "pro";
+          else view = "free";
         } else {
           view = status.isPro || flagIsPro ? "pro" : "free";
         }
 
         setPlanView(view);
-        setDaysLeft(localDaysLeft ?? null);
-      } catch (e) {
+        setDaysLeft(localDaysLeft);
+      } catch {
         setPlanView("free");
         setDaysLeft(null);
       } finally {
@@ -721,7 +546,7 @@ export default function Mashaal() {
     })();
   }, [me]);
 
-  /** هر بار تب مشعل فوکوس بگیرد، وضعیت پلن دوباره محاسبه شود */
+  /** هر بار تب فوکوس بگیرد، وضعیت پلن دوباره محاسبه شود */
   useFocusEffect(
     React.useCallback(() => {
       let cancelled = false;
@@ -732,28 +557,21 @@ export default function Mashaal() {
           const flagIsPro = flag === "1";
 
           let view: PlanView = "free";
-          let localDaysLeft: number | null = status.daysLeft;
+          const localDaysLeft: number | null = status.daysLeft ?? null;
 
           if (status.rawExpiresAt) {
-            if (status.isExpired) {
-              view =
-                status.rawPlan === "pro" || status.rawPlan === "vip"
-                  ? "expired"
-                  : "free";
-            } else if (status.isPro || flagIsPro) {
-              view = "pro";
-            } else {
-              view = "free";
-            }
+            if (status.isExpired) view = "expired";
+            else if (status.isPro || flagIsPro) view = "pro";
+            else view = "free";
           } else {
             view = status.isPro || flagIsPro ? "pro" : "free";
           }
 
           if (!cancelled) {
             setPlanView(view);
-            setDaysLeft(localDaysLeft ?? null);
+            setDaysLeft(localDaysLeft);
           }
-        } catch (e) {}
+        } catch {}
       })();
       return () => {
         cancelled = true;
@@ -778,316 +596,414 @@ export default function Mashaal() {
 
   if (loadingPlan) {
     return (
-      <SafeAreaView
-        style={{ flex: 1, backgroundColor: colors.background }}
-        edges={["top", "left", "right", "bottom"]}
-      >
-        <View
-          style={{
-            flex: 1,
-            alignItems: "center",
-            justifyContent: "center",
-            paddingBottom: 16,
-          }}
-        >
-          <ActivityIndicator color={colors.primary} />
-          <Text
-            style={{
-              color: colors.text,
-              marginTop: 8,
-              fontSize: 12,
-            }}
-          >
-            در حال آماده‌سازی مشعل…
-          </Text>
+      <SafeAreaView edges={["top"]} style={styles.root}>
+        <View pointerEvents="none" style={styles.bgGlowTop} />
+        <View pointerEvents="none" style={styles.bgGlowBottom} />
+
+        <View style={styles.center}>
+          <ActivityIndicator color="#D4AF37" />
+          <Text style={styles.centerText}>در حال آماده‌سازی مشعل…</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  // 🎯 سیستم بج هماهنگ با تب Subscription:
-  // FREE: پس‌زمینه تیره، متن روشن
-  // PRO: سبز تیره + متن سبز نئونی
-  // PRO نزدیک انقضا: قهوه‌ای تیره + متن زرد
-  // EXPIRED: قرمز تیره + متن صورتی روشن
-  let badgeBg = "#111827";          // FREE
-  let badgeTextColor = "#E5E7EB";
-  let badgeLabel: "FREE" | "PRO" | "EXPIRED" = "FREE";
-
-  if (planView === "pro") {
-    if (isNearExpire) {
-      // PRO نزدیک انقضا
-      badgeBg = "#451A03";
-      badgeTextColor = "#FBBF24";
-    } else {
-      // PRO عادی
-      badgeBg = "#064E3B";
-      badgeTextColor = "#4ADE80";
-    }
-    badgeLabel = "PRO";
-  } else if (planView === "expired") {
-    // منقضی
-    badgeBg = "#7F1D1D";
-    badgeTextColor = "#FCA5A5";
-    badgeLabel = "EXPIRED";
-  }
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.background, paddingBottom: 16 }}
-      edges={["top", "left", "right", "bottom"]}
-    >
-      {/* هدر + بج پلن */}
-      <View
-        style={{
-          flexDirection: "row-reverse",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 12,
-          paddingHorizontal: 16,
-          marginTop: 4,
-        }}
-      >
-        <Text
-          style={{
-            color: colors.text,
-            fontSize: 20,
-            fontWeight: "900",
-            textAlign: "right",
-          }}
-        >
-          مشعل 🔥
-        </Text>
-        <View style={{ flexDirection: "row-reverse", alignItems: "center" }}>
-          {isNearExpire && (
-            <Text
-              style={{
-                color: "#FACC15",
-                fontSize: 11,
-                fontWeight: "900",
-                marginLeft: 8,
-              }}
-            >
-              {daysLeft} روز تا پایان اشتراک
-            </Text>
-          )}
-          <View style={[styles.headerBadge, { backgroundColor: badgeBg }]}>
-            <Text
-              style={[styles.headerBadgeText, { color: badgeTextColor }]}
-            >
-              {badgeLabel}
+    <SafeAreaView edges={["top"]} style={styles.root}>
+      <View pointerEvents="none" style={styles.bgGlowTop} />
+      <View pointerEvents="none" style={styles.bgGlowBottom} />
+
+      {/* Header: بج سمت چپ + عنوان راست‌چین (بدون ایموجی) */}
+      <View style={[styles.headerBar, { paddingTop: 10 }]}>
+        <View style={styles.headerLeft}>
+          {/* ✅ متن نزدیک انقضا را از خود کامپوننت بگیر و کنار بج نمایش بده */}
+          <PlanStatusBadge me={me} showExpiringText />
+        </View>
+
+        <View style={styles.headerCenter} pointerEvents="none">
+          <View style={styles.headerTitleBox}>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              مــــــشعل
             </Text>
           </View>
+        </View>
+
+        <View style={styles.headerActions}>
+          {/* سمت راست خالیه تا عنوان دقیقاً در جای درست بایسته */}
+          <View style={{ width: 120 }} />
         </View>
       </View>
 
-      {/* اگر پلن پرو نیست → صفحه قفل‌شده */}
-      {!isProPlan ? (
-        <View
-          style={{
-            flex: 1,
-            borderWidth: 1,
-            borderRadius: 16,
-            borderColor: colors.border,
-            backgroundColor: colors.card,
-            padding: 16,
-            marginHorizontal: 16,
-            marginTop: 4,
-          }}
-        >
-          {planView === "expired" ? (
-            <>
-              <Text
-                style={{
-                  color: colors.text,
-                  fontSize: 15,
-                  fontWeight: "900",
-                  textAlign: "right",
-                  lineHeight: 24,
-                }}
-              >
-                اشتراکت منقضی شده و مشعل فعلاً برات قفله.
-              </Text>
+      {/* ✅ بدنه اسکرولی + padding پایین برای اینکه زیر تب‌بار نره */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingTop: 10,
+          paddingBottom: Math.max(18, insets.bottom + 120),
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* اگر پلن پرو نیست → صفحه قفل‌شده */}
+        {!isProPlan ? (
+          <View style={styles.lockCard}>
+            {planView === "expired" ? (
+              <>
+                <Text style={styles.lockTitle}>اشتراکت منقضی شده و مشعل فعلاً برات قفله.</Text>
 
-              <Text
-                style={{
-                  color: colors.text,
-                  opacity: 0.8,
-                  marginTop: 10,
-                  fontSize: 13,
-                  textAlign: "right",
-                  lineHeight: 20,
-                }}
-              >
-                مشعل جاییه که ویدیوها و ویس‌های آموزشی عمیقِ شکست عشقی جمع شده؛
-                برای فهمیدن مغزت، الگوها، و ساختن مهارت‌های جدید.
-                {"\n\n"}
-                برای این‌که دوباره به همهٔ درس‌ها و مسیرهای آموزشی دسترسی داشته
-                باشی، پلن ققنوس رو تمدید کن و ادامه بده.
-              </Text>
-            </>
-          ) : (
-            <>
-              <View
-                style={{
-                  flexDirection: "row-reverse",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                <Ionicons name="school" size={22} color={colors.primary} />
-                <Text
-                  style={{
-                    color: colors.text,
-                    fontWeight: "900",
-                    fontSize: 15,
-                    textAlign: "right",
-                    flex: 1,
-                  }}
-                >
-                  اینجا «مشعل»ـه؛ جایی که ویدیوها و ویس‌های آموزشی عمیق و
-                  کاربردی‌ات قرار می‌گیره.
+                <Text style={styles.lockBody}>
+                  مشعل جاییه که ویدیوها و ویس‌های آموزشی عمیقِ شکست عشقی جمع شده؛ برای فهمیدن مغزت، الگوها، و ساختن
+                  مهارت‌های جدید.
+                  {"\n\n"}
+                  برای این‌که دوباره به همهٔ درس‌ها و مسیرهای آموزشی دسترسی داشته باشی، پلن ققنوس رو تمدید کن و ادامه بده.
                 </Text>
-              </View>
-
-              <Text
-                style={{
-                  color: colors.text,
-                  opacity: 0.8,
-                  marginTop: 10,
-                  fontSize: 13,
-                  textAlign: "right",
-                  lineHeight: 20,
-                }}
-              >
-                این تب برای این ساخته شده که فقط حالِت کمی بهتر نشه؛ واقعاً مهارت
-                بسازی برای مدیریت احساس، وسواس فکری، ترس از تنهایی و بازسازی
-                عزت‌نفس بعد از جدایی.
-              </Text>
-
-              <View style={{ marginTop: 14, gap: 6 }}>
-                <View style={styles.bulletRow}>
-                  <Ionicons
-                    name="play-outline"
-                    size={16}
-                    color={colors.primary}
-                  />
-                  <Text
-                    style={[styles.bulletText, { color: colors.text }]}
-                  >
-                    ویدیوهای کوتاه و کاربردی با مثال‌های واقعی از مراجعان
+              </>
+            ) : (
+              <>
+                <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
+                  <Ionicons name="school" size={22} color="#D4AF37" />
+                  <Text style={styles.lockTitle}>
+                    اینجا «مشعل»ـه؛ جایی که ویدیوها و ویس‌های آموزشی عمیق و کاربردی‌ات قرار می‌گیره.
                   </Text>
                 </View>
-                <View style={styles.bulletRow}>
-                  <Ionicons
-                    name="mic-outline"
-                    size={16}
-                    color={colors.primary}
-                  />
-                  <Text
-                    style={[styles.bulletText, { color: colors.text }]}
-                  >
-                    ویس‌هایی که هر وقت حوصله تصویر نداری، می‌تونی گوش کنی
-                  </Text>
-                </View>
-                <View style={styles.bulletRow}>
-                  <Ionicons
-                    name="trail-sign-outline"
-                    size={16}
-                    color={colors.primary}
-                  />
-                  <Text
-                    style={[styles.bulletText, { color: colors.text }]}
-                  >
-                    مسیرهای آموزشی مرحله‌به‌مرحله برای عبور سالم از شکست عشقی
-                  </Text>
-                </View>
-              </View>
 
-              <View
-                style={{
-                  marginTop: 16,
-                  padding: 10,
-                  borderRadius: 10,
-                  backgroundColor: colors.background,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                }}
-              >
-                <Text
-                  style={{
-                    color: colors.text,
-                    fontSize: 12,
-                    textAlign: "right",
-                    lineHeight: 18,
-                  }}
-                >
-                  برای باز شدن کامل «مشعل» و دسترسی به همه‌ی ویدیوها و ویس‌های
-                  آموزشی، باید پلن PRO را از تب پرداخت فعال کنی.
+                <Text style={[styles.lockBody, { marginTop: 10 }]}>
+                  این تب برای این ساخته شده که فقط حالِت کمی بهتر نشه؛ واقعاً مهارت بسازی برای مدیریت احساس، وسواس فکری،
+                  ترس از تنهایی و بازسازی عزت‌نفس بعد از جدایی.
                 </Text>
-              </View>
-            </>
-          )}
-        </View>
-      ) : !selected ? (
-        // حالت PRO و هنوز در لیست هستیم
-        <View style={{ gap: 10, flexGrow: 1, paddingHorizontal: 16 }}>
-          <Text
-            style={{
-              color: "#8E8E93",
-              fontSize: 12,
-              textAlign: "right",
-              marginHorizontal: 4,
-            }}
-          >
-            محتوای آموزشی (ویدیو / ویس). هر جا موندی، دفعهٔ بعد از همان‌جا
-            ادامه می‌دهیم.
-          </Text>
 
-          <View style={{ paddingTop: 4, paddingBottom: 16 }}>
-            {LESSONS.map((item) => (
-              <LessonCard
-                key={item.id}
-                item={item}
-                onOpen={open}
-                progressMs={progressMap[item.id]?.p}
-                durationMs={progressMap[item.id]?.d}
-                onResetProgress={resetProgress}
-              />
-            ))}
+                <View style={{ marginTop: 14, gap: 6 }}>
+                  <View style={styles.bulletRow}>
+                    <Ionicons name="play-outline" size={16} color="#D4AF37" />
+                    <Text style={styles.bulletText}>ویدیوهای کوتاه و کاربردی با مثال‌های واقعی از مراجعان</Text>
+                  </View>
+                  <View style={styles.bulletRow}>
+                    <Ionicons name="mic-outline" size={16} color="#D4AF37" />
+                    <Text style={styles.bulletText}>ویس‌هایی که هر وقت حوصله تصویر نداری، می‌تونی گوش کنی</Text>
+                  </View>
+                  <View style={styles.bulletRow}>
+                    <Ionicons name="trail-sign-outline" size={16} color="#D4AF37" />
+                    <Text style={styles.bulletText}>مسیرهای آموزشی مرحله‌به‌مرحله برای عبور سالم از شکست عشقی</Text>
+                  </View>
+                </View>
+
+                <View style={styles.lockHintBox}>
+                  <Text style={styles.lockHintText}>
+                    برای باز شدن کامل «مشعل» و دسترسی به همه‌ی ویدیوها و ویس‌های آموزشی، باید پلن PRO را از تب پرداخت فعال کنی.
+                  </Text>
+                </View>
+              </>
+            )}
           </View>
-        </View>
-      ) : (
-        // حالت PRO و داخل پلیر
-        <View style={{ flex: 1, paddingHorizontal: 16 }}>
-          <Player
-            lesson={selected}
-            onClose={close}
-            onProgress={handleProgress}
-          />
-        </View>
-      )}
+        ) : !selected ? (
+          // حالت PRO و هنوز در لیست هستیم
+          <View style={{ paddingHorizontal: 16, gap: 10 }}>
+            <Text style={styles.listHint}>
+              محتوای آموزشی (ویدیو / ویس). هر جا موندی، دفعهٔ بعد از همان‌جا ادامه می‌دهیم.
+            </Text>
+
+            <View style={{ paddingTop: 4 }}>
+              {LESSONS.map((item) => (
+                <LessonCard
+                  key={item.id}
+                  item={item}
+                  onOpen={open}
+                  progressMs={progressMap[item.id]?.p}
+                  durationMs={progressMap[item.id]?.d}
+                  onResetProgress={resetProgress}
+                />
+              ))}
+            </View>
+          </View>
+        ) : (
+          // حالت PRO و داخل پلیر (اسکرول‌پذیر + فضای پایین برای تب‌بار)
+          <View style={{ paddingHorizontal: 16 }}>
+            <Player lesson={selected} onClose={close} onProgress={handleProgress} />
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+  root: { flex: 1, backgroundColor: "#0b0f14" },
+
+  bgGlowTop: {
+    position: "absolute",
+    top: -260,
+    left: -240,
+    width: 480,
+    height: 480,
     borderRadius: 999,
+    backgroundColor: "rgba(212,175,55,.14)",
   },
-  headerBadgeText: {
+  bgGlowBottom: {
+    position: "absolute",
+    bottom: -280,
+    right: -260,
+    width: 560,
+    height: 560,
+    borderRadius: 999,
+    backgroundColor: "rgba(233,138,21,.10)",
+  },
+
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  centerText: { marginTop: 8, color: "rgba(231,238,247,.72)", fontSize: 12, fontWeight: "800" },
+
+  headerBar: {
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,.08)",
+    backgroundColor: "#030712",
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  headerLeft: {
+    minWidth: 120,
+    alignItems: "flex-start",
+    justifyContent: "flex-end",
+  },
+
+  // ✅ عنوان: به جای وسط‌چین، راست‌چین و هم‌خوان با تم
+  headerCenter: {
+  position: "absolute",
+  left: 12,     // هم‌عرض paddingHorizontal هدر
+  right: 12,    // هم‌عرض paddingHorizontal هدر
+  top: 10,
+  bottom: 10,
+  justifyContent: "center",
+  alignItems: "flex-end",
+  paddingRight: 0,
+},
+  headerTitleBox: {
+    maxWidth: "92%",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 14,
+    backgroundColor: "transparent",
+    alignSelf: "flex-end",
+  },
+  headerTitle: {
+    color: "#F9FAFB",
+    fontSize: 15,
     fontWeight: "900",
-    fontSize: 11,
+    textAlign: "right",
   },
-  bulletRow: {
+
+  headerActions: {
+    marginLeft: "auto",
     flexDirection: "row-reverse",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
+    minWidth: 120,
+    justifyContent: "flex-end",
   },
+
+  lockCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    borderColor: "rgba(255,255,255,.08)",
+    backgroundColor: "rgba(255,255,255,.04)",
+    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 6,
+  },
+  lockTitle: {
+    color: "#F9FAFB",
+    fontSize: 15,
+    fontWeight: "900",
+    textAlign: "right",
+    lineHeight: 24,
+    flex: 1,
+  },
+  lockBody: {
+    color: "rgba(231,238,247,.80)",
+    marginTop: 10,
+    fontSize: 13,
+    textAlign: "right",
+    lineHeight: 20,
+    fontWeight: "700",
+  },
+  lockHintBox: {
+    marginTop: 16,
+    padding: 10,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,.03)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.08)",
+  },
+  lockHintText: {
+    color: "rgba(231,238,247,.82)",
+    fontSize: 12,
+    textAlign: "right",
+    lineHeight: 18,
+    fontWeight: "700",
+  },
+
+  bulletRow: { flexDirection: "row-reverse", alignItems: "center", gap: 6 },
   bulletText: {
     fontSize: 13,
     textAlign: "right",
     flex: 1,
+    color: "#E5E7EB",
+    fontWeight: "700",
+    lineHeight: 19,
+  },
+
+  listHint: {
+    color: "rgba(231,238,247,.55)",
+    fontSize: 12,
+    textAlign: "right",
+    marginHorizontal: 4,
+    fontWeight: "800",
+  },
+
+  lessonCard: {
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.08)",
+    backgroundColor: "rgba(255,255,255,.04)",
+    borderRadius: 16,
+    padding: 12,
+    gap: 10,
+    marginBottom: 10,
+  },
+  lessonTopRow: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
+  lessonIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,.03)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.08)",
+  },
+  lessonTitle: {
+    color: "#F9FAFB",
+    fontWeight: "900",
+    flex: 1,
+    textAlign: "right",
+    lineHeight: 22,
+  },
+  tapToStart: {
+    color: "rgba(231,238,247,.55)",
+    fontSize: 12,
+    textAlign: "right",
+    fontWeight: "800",
+  },
+
+  progressTrack: {
+    height: 8,
+    backgroundColor: "rgba(255,255,255,.03)",
+    borderRadius: 999,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.08)",
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#D4AF37",
+    borderRadius: 999,
+  },
+  progressMetaRow: { flexDirection: "row-reverse", justifyContent: "space-between" },
+  progressMetaText: { color: "rgba(231,238,247,.55)", fontSize: 11, fontWeight: "800" },
+
+  resetBtn: {
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.10)",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: "rgba(255,255,255,.03)",
+  },
+  resetBtnText: { color: "#E5E7EB", fontSize: 12, fontWeight: "800" },
+
+  playerHeaderRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  playerBackBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.08)",
+  },
+  playerTitle: {
+    color: "#F9FAFB",
+    fontWeight: "900",
+    flex: 1,
+    textAlign: "right",
+    marginHorizontal: 10,
+  },
+
+  videoBox: {
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.08)",
+    backgroundColor: "#000",
+    height: 260,
+  },
+
+  audioCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.08)",
+    backgroundColor: "rgba(255,255,255,.04)",
+    padding: 16,
+    gap: 16,
+    justifyContent: "space-between",
+    overflow: "hidden",
+    position: "relative",
+    minHeight: 520,
+  },
+  coverBox: {
+    width: 260,
+    height: 260,
+    borderRadius: 28,
+    backgroundColor: "rgba(0,0,0,.35)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.10)",
+    overflow: "hidden",
+  },
+
+  circleOutlineBtn: {
+    padding: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.12)",
+    backgroundColor: "rgba(255,255,255,.04)",
+  },
+  playBtn: {
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 999,
+    backgroundColor: "rgba(212,175,55,.92)",
+    borderWidth: 1,
+    borderColor: "rgba(212,175,55,.45)",
+  },
+
+  audioRow2: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    paddingHorizontal: 8,
+    marginTop: 6,
+  },
+  pillOutlineBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.12)",
+    backgroundColor: "rgba(255,255,255,.04)",
   },
 });

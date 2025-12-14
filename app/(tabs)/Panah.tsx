@@ -8,25 +8,16 @@ import {
   Dimensions,
   ActivityIndicator,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  useTheme,
-  useFocusEffect,
-  useNavigation,
-} from "@react-navigation/native";
+import { useTheme, useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useUser } from "../../hooks/useUser";
-import { getPlanStatus, PRO_FLAG_KEY } from "../../lib/plan";
 import BACKEND_URL from "../../constants/backend";
+import PlanStatusBadge from "../../components/PlanStatusBadge";
 
 const { height } = Dimensions.get("window");
-
-type PlanView = "free" | "pro" | "expired";
 
 type Message = {
   id: string;
@@ -42,8 +33,7 @@ type TicketWithMessages = {
   messages: Message[];
 };
 
-const SEEN_KEY = (type: "tech" | "therapy") =>
-  `support:lastSeenAdmin:${type}`;
+const SEEN_KEY = (type: "tech" | "therapy") => `support:lastSeenAdmin:${type}`;
 
 function getOpenedById(me: any) {
   const phone = me?.phone;
@@ -57,12 +47,10 @@ async function countUnreadForType(
 ): Promise<number> {
   try {
     if (!openedById) return 0;
-
     const qs: string[] = [];
     qs.push(`type=${encodeURIComponent(type)}`);
     qs.push(`openedById=${encodeURIComponent(openedById)}`);
     qs.push(`ts=${Date.now()}`);
-
     const url = `${BACKEND_URL}/api/public/tickets/open?${qs.join("&")}`;
     console.log("[panah] countUnread", type, url);
 
@@ -73,7 +61,6 @@ async function countUnreadForType(
     } catch {
       json = null;
     }
-
     if (!res.ok || !json?.ok || !json.ticket) return 0;
 
     const t: TicketWithMessages = json.ticket;
@@ -105,121 +92,27 @@ export default function Panah() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { me } = useUser();
-
-  const [planView, setPlanView] = useState<PlanView>("free");
-  const [daysLeft, setDaysLeft] = useState<number | null>(null);
-  const [loadingPlan, setLoadingPlan] = useState(true);
-
   const [unreadCount, setUnreadCount] = useState(0);
-
-  const isProPlan = planView === "pro";
-  const isNearExpire =
-    planView === "pro" && daysLeft != null && daysLeft > 0 && daysLeft <= 7;
-
-  /** بارگذاری اولیه وضعیت پلن (با در نظر گرفتن PRO_FLAG_KEY) */
-  useEffect(() => {
-    (async () => {
-      try {
-        const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
-        const status = getPlanStatus(me);
-        const flagIsPro = flag === "1";
-
-        let view: PlanView = "free";
-        let localDaysLeft: number | null = status.daysLeft;
-
-        if (status.rawExpiresAt) {
-          if (status.isExpired) {
-            view =
-              status.rawPlan === "pro" || status.rawPlan === "vip"
-                ? "expired"
-                : "free";
-          } else if (status.isPro || flagIsPro) {
-            view = "pro";
-          } else {
-            view = "free";
-          }
-        } else {
-          view = status.isPro || flagIsPro ? "pro" : "free";
-        }
-
-        setPlanView(view);
-        setDaysLeft(localDaysLeft ?? null);
-      } catch (e) {
-        console.log("PANAH INIT ERR", e);
-        setPlanView("free");
-        setDaysLeft(null);
-      } finally {
-        setLoadingPlan(false);
-      }
-    })();
-  }, [me]);
-
-  /** هر بار تب پناه فوکوس می‌گیرد → دوباره محاسبه پلن (با فلگ پرو) */
-  useFocusEffect(
-    useCallback(() => {
-      let cancelled = false;
-      (async () => {
-        try {
-          const flag = await AsyncStorage.getItem(PRO_FLAG_KEY);
-          const status = getPlanStatus(me);
-          const flagIsPro = flag === "1";
-
-          let view: PlanView = "free";
-          let localDaysLeft: number | null = status.daysLeft;
-
-          if (status.rawExpiresAt) {
-            if (status.isExpired) {
-              view =
-                status.rawPlan === "pro" || status.rawPlan === "vip"
-                  ? "expired"
-                  : "free";
-            } else if (status.isPro || flagIsPro) {
-              view = "pro";
-            } else {
-              view = "free";
-            }
-          } else {
-            view = status.isPro || flagIsPro ? "pro" : "free";
-          }
-
-          if (!cancelled) {
-            setPlanView(view);
-            setDaysLeft(localDaysLeft ?? null);
-          }
-        } catch (e) {
-          console.log("PANAH FOCUS ERR", e);
-        }
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }, [me])
-  );
 
   /** هر بار فوکوس → تعداد پیام‌های نخوانده (ادمین) را حساب کن و در unreadCount بگذار */
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-
       const loadUnread = async () => {
         const openedById = getOpenedById(me);
         if (!openedById) {
           if (!cancelled) setUnreadCount(0);
           return;
         }
-
         const [therapyUnread, techUnread] = await Promise.all([
           countUnreadForType("therapy", openedById),
           countUnreadForType("tech", openedById),
         ]);
-
         if (!cancelled) {
           setUnreadCount(therapyUnread + techUnread);
         }
       };
-
       loadUnread();
-
       return () => {
         cancelled = true;
       };
@@ -233,41 +126,13 @@ export default function Panah() {
     });
   }, [navigation, unreadCount]);
 
-  // 🎯 سیستم بج پلن هماهنگ با تب Subscription
-  let badgeBg = "#111827";
-  let badgeTextColor = "#E5E7EB";
-  let badgeLabel: "FREE" | "PRO" | "EXPIRED" = "FREE";
-
-  if (planView === "pro") {
-    if (isNearExpire) {
-      badgeBg = "#451A03";
-      badgeTextColor = "#FBBF24";
-    } else {
-      badgeBg = "#064E3B";
-      badgeTextColor = "#4ADE80";
-    }
-    badgeLabel = "PRO";
-  } else if (planView === "expired") {
-    badgeBg = "#7F1D1D";
-    badgeTextColor = "#FCA5A5";
-    badgeLabel = "EXPIRED";
-  }
-
-  if (loadingPlan) {
+  // ✅ اگر هنوز me نیومده، یک لودینگ سبک
+  if (!me) {
     return (
-      <SafeAreaView
-        style={[styles.root, { backgroundColor: colors.background }]}
-        edges={["top", "left", "right", "bottom"]}
-      >
+      <SafeAreaView style={[styles.root, { backgroundColor: "#0b0f14" }]} edges={["top"]}>
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} />
-          <Text
-            style={{
-              color: colors.text,
-              marginTop: 8,
-              fontSize: 12,
-            }}
-          >
+          <Text style={{ color: "#E5E7EB", marginTop: 8, fontSize: 12 }}>
             در حال آماده‌سازی پناه…
           </Text>
         </View>
@@ -276,71 +141,77 @@ export default function Panah() {
   }
 
   return (
-    <SafeAreaView
-      style={[styles.root, { backgroundColor: colors.background }]}
-      edges={["top", "left", "right", "bottom"]}
-    >
-      {/* Header — عنوان سمت راست، بج سمت چپ */}
-      <View style={[styles.header, { borderColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          پنــــــــاه
-        </Text>
+    <SafeAreaView style={[styles.root, { backgroundColor: "#0b0f14" }]} edges={["top"]}>
+      <View style={styles.root}>
+        {/* ✅ پس‌زمینه‌ی گلو/شیپ مثل انبوردینگ */}
+        <View pointerEvents="none" style={styles.bgGlow1} />
+        <View pointerEvents="none" style={styles.bgGlow2} />
 
-        <View style={{ flexDirection: "row-reverse", alignItems: "center" }}>
-          {isNearExpire && (
-            <Text
-              style={{
-                color: "#FACC15",
-                fontSize: 11,
-                fontWeight: "900",
-                marginLeft: 8,
-              }}
-            >
-              {daysLeft} روز تا پایان اشتراک
-            </Text>
-          )}
+        {/* Header — عنوان سمت راست، بج سمت چپ */}
+        <View style={[styles.header, { paddingTop: Math.max(10, insets.top * 0.15) }]}>
+          <Text style={styles.headerTitle}>پنــــــــاه</Text>
 
-          <View
-            style={[
-              styles.badge,
-              {
-                backgroundColor: badgeBg,
-              },
-            ]}
-          >
-            <Text style={[styles.badgeText, { color: badgeTextColor }]}>
-              {badgeLabel}
-            </Text>
-          </View>
+          {/* ✅ فقط از خود PlanStatusBadge متن نزدیک انقضا را بگیر (بدون expiringText سفارشی) */}
+          <PlanStatusBadge me={me} showExpiringText />
         </View>
-      </View>
 
-      {/* دو دکمه‌ی بزرگ با تقسیم دقیق ارتفاع */}
-      <View
-        style={[
-          styles.fullArea,
-          {
-            height: height - (insets.top + insets.bottom + 140),
-          },
-        ]}
-      >
-        <TouchableOpacity
-          activeOpacity={0.9}
-          style={[styles.bigBtn, styles.realSupport]}
-          onPress={() => router.push("/support/real")}
+        {/* دو کارت بزرگ */}
+        <View
+          style={[
+            styles.fullArea,
+            { height: height - (insets.top + insets.bottom + 140) },
+          ]}
         >
-          <Ionicons name="list" size={28} color="#7C2D12" />
-          <Text style={styles.bigBtnText}>پشتیبان واقعی</Text>
-        </TouchableOpacity>
+          {/* کارت پشتیبان واقعی */}
+          <TouchableOpacity
+            activeOpacity={0.92}
+            style={[styles.card, styles.cardReal]}
+            onPress={() => router.push("/support/real")}
+          >
+            {/* هایلایت داخلی */}
+            <View pointerEvents="none" style={styles.cardHighlight} />
+            {/* شیپ گوشه‌ای */}
+            <View pointerEvents="none" style={[styles.cardShape, styles.cardShapeReal]} />
 
-        <TouchableOpacity
-          activeOpacity={0.9}
-          style={[styles.bigBtn, styles.aiSupport]}
-          onPress={() => router.push("../support/ai")}
-        >
-          <Ionicons name="chatbubbles" size={28} color="#1E3A8A" />
-          <Text style={styles.bigBtnText}>پشتیبان هوشمند (AI)</Text>
-        </TouchableOpacity>
+            <View style={styles.cardIconWrap}>
+              <Ionicons name="list" size={26} color="#F59E0B" />
+            </View>
+
+            <Text style={styles.cardTitle}>پشتیبان واقعی</Text>
+            <Text style={styles.cardSubtitle}>
+              ارتباط با تیم پشتیبانی، پیگیری مشکلات و سوالات تخصصی.
+            </Text>
+
+            <View style={styles.cardCtaRow}>
+              <Text style={styles.cardCtaText}>ورود</Text>
+              <Ionicons name="arrow-back" size={18} color="#F9FAFB" />
+            </View>
+          </TouchableOpacity>
+
+          {/* کارت پشتیبان هوشمند */}
+          <TouchableOpacity
+            activeOpacity={0.92}
+            style={[styles.card, styles.cardAI]}
+            onPress={() => router.push("../support/ai")}
+          >
+            <View pointerEvents="none" style={styles.cardHighlight} />
+            <View pointerEvents="none" style={[styles.cardShape, styles.cardShapeAI]} />
+
+            <View style={styles.cardIconWrap}>
+              <Ionicons name="chatbubbles" size={24} color="#60A5FA" />
+            </View>
+
+            <Text style={styles.cardTitle}>پشتیبان هوشمند (AI)</Text>
+            <Text style={styles.cardSubtitle}>
+              پاسخ سریع، تمرین‌های کوتاه و راهنمایی لحظه‌ای.
+            </Text>
+
+            <View style={styles.cardCtaRow}>
+              <Text style={styles.cardCtaText}>شروع</Text>
+              <Ionicons name="arrow-back" size={18} color="#F9FAFB" />
+            </View>
+          </TouchableOpacity>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -350,54 +221,137 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 
+  /* ✅ بک‌گراند گلو مثل انبوردینگ */
+  bgGlow1: {
+    position: "absolute",
+    top: -240,
+    left: -220,
+    width: 520,
+    height: 520,
+    borderRadius: 999,
+    backgroundColor: "rgba(212,175,55,.14)",
+  },
+  bgGlow2: {
+    position: "absolute",
+    bottom: -260,
+    right: -260,
+    width: 560,
+    height: 560,
+    borderRadius: 999,
+    backgroundColor: "rgba(233,138,21,.10)",
+  },
+
+  /* ✅ هدر: هم‌خانواده Verify/EditProfile + خوانایی نوار وضعیت */
   header: {
     borderBottomWidth: 1,
+    borderColor: "rgba(255,255,255,.10)",
+    backgroundColor: "rgba(3,7,18,.92)",
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  headerTitle: { fontSize: 18, fontWeight: "900" },
-
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  badgeText: {
-    fontSize: 10,
+  headerTitle: {
+    fontSize: 18,
     fontWeight: "900",
+    color: "#F9FAFB",
   },
 
   fullArea: {
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    marginVertical: 10,
+    marginVertical: 12,
+    gap: 14,
   },
-  bigBtn: {
-    height: "48%",
-    borderRadius: 22,
+
+  /* ✅ کارت‌ها: شیشه‌ای + رنک بهتر */
+  card: {
+    flex: 1,
+    borderRadius: 26,
     padding: 18,
+    justifyContent: "center",
+    borderWidth: 1,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.22,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 18,
+    elevation: 6,
+  },
+  cardReal: {
+    backgroundColor: "rgba(255, 237, 213, .92)",
+    borderColor: "rgba(124,45,18,.18)",
+  },
+  cardAI: {
+    backgroundColor: "rgba(219, 234, 254, .92)",
+    borderColor: "rgba(30,58,138,.18)",
+  },
+  cardHighlight: {
+    position: "absolute",
+    top: -120,
+    left: -120,
+    width: 260,
+    height: 260,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,.28)",
+  },
+  cardShape: {
+    position: "absolute",
+    bottom: -140,
+    right: -160,
+    width: 360,
+    height: 360,
+    borderRadius: 999,
+  },
+  cardShapeReal: {
+    backgroundColor: "rgba(245,158,11,.18)",
+  },
+  cardShapeAI: {
+    backgroundColor: "rgba(59,130,246,.14)",
+  },
+  cardIconWrap: {
+    alignSelf: "center",
+    width: 64,
+    height: 64,
+    borderRadius: 18,
+    backgroundColor: "rgba(17,24,39,.10)",
+    borderWidth: 1,
+    borderColor: "rgba(17,24,39,.10)",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-    elevation: 3,
+    marginBottom: 10,
   },
-  realSupport: {
-    backgroundColor: "#FFEAD5",
-  },
-  aiSupport: {
-    backgroundColor: "#DBEAFE",
-  },
-  bigBtnText: {
+  cardTitle: {
     fontSize: 18,
     fontWeight: "900",
     color: "#111827",
     textAlign: "center",
+    marginTop: 2,
+  },
+  cardSubtitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "rgba(17,24,39,.70)",
+    textAlign: "center",
     marginTop: 8,
+    lineHeight: 18,
+    paddingHorizontal: 10,
+  },
+  cardCtaRow: {
+    marginTop: 14,
+    alignSelf: "center",
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(17,24,39,.82)",
+  },
+  cardCtaText: {
+    color: "#F9FAFB",
+    fontSize: 12,
+    fontWeight: "900",
   },
 });

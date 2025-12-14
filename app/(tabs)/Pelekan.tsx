@@ -1,11 +1,5 @@
 // app/(tabs)/Pelekan.tsx
-import React, {
-  useEffect,
-  useMemo,
-  useState,
-  useCallback,
-  useRef,
-} from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -16,17 +10,16 @@ import {
   Animated,
   Easing,
   Alert,
+  ActivityIndicator,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme, useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
 import { useUser } from "../../hooks/useUser";
 import { getPlanStatus, PRO_FLAG_KEY } from "../../lib/plan";
+import PlanStatusBadge from "../../components/PlanStatusBadge";
 
 /* --------------------------- مدل و دادهٔ اولیه --------------------------- */
 type StepDef = { id: string; title: string; days: number };
@@ -108,7 +101,7 @@ function Pulsing({
 
 /* ------------------------------- صفحه اصلی ------------------------------- */
 export default function PelekanScreen() {
-  const { colors, dark } = useTheme();
+  const { dark } = useTheme();
   const insets = useSafeAreaInsets();
   const { me } = useUser();
 
@@ -116,12 +109,9 @@ export default function PelekanScreen() {
   const [loading, setLoading] = useState(true);
 
   const [planView, setPlanView] = useState<PlanView>("free");
-  const [expiringDaysLeft, setExpiringDaysLeft] = useState<number | null>(null);
 
-  // مودال قشنگ برای FREE / EXPIRED
-  const [planInfoModal, setPlanInfoModal] = useState<null | "free" | "expired">(
-    null
-  );
+  // مودال برای FREE / EXPIRED
+  const [planInfoModal, setPlanInfoModal] = useState<null | "free" | "expired">(null);
 
   const isProPlan = planView === "pro" || planView === "expiring";
 
@@ -133,31 +123,20 @@ export default function PelekanScreen() {
         const flagIsPro = flag === "1";
 
         let view: PlanView = "free";
-        let expDays: number | null = null;
 
         if (status.rawExpiresAt) {
           if (status.isExpired) {
             view = "expired";
-            expDays = 0;
           } else if (status.isPro || flagIsPro) {
-            const d =
-              typeof status.daysLeft === "number" ? status.daysLeft : null;
-            if (d != null && d > 0 && d <= 7) {
-              view = "expiring";
-              expDays = d;
-            } else {
-              view = "pro";
-              expDays = d;
-            }
+            const d = typeof status.daysLeft === "number" ? status.daysLeft : null;
+            if (d != null && d > 0 && d <= 7) view = "expiring";
+            else view = "pro";
           } else {
             view = "free";
           }
         } else {
-          if (status.isPro || flagIsPro) {
-            view = "pro";
-          } else {
-            view = "free";
-          }
+          if (status.isPro || flagIsPro) view = "pro";
+          else view = "free";
         }
 
         const finalIsPro = view === "pro" || view === "expiring";
@@ -172,23 +151,15 @@ export default function PelekanScreen() {
               base = defaultProgress;
             }
           }
-          const merged: Progress = {
-            ...base,
-            isPro: finalIsPro,
-          };
-          setProgress(merged);
+          setProgress({ ...base, isPro: finalIsPro });
         } else {
           setProgress((prev) => ({ ...prev, isPro: finalIsPro }));
         }
 
         setPlanView(view);
-        setExpiringDaysLeft(expDays);
       } catch {
-        if (includeProgress) {
-          setProgress(defaultProgress);
-        }
+        if (includeProgress) setProgress(defaultProgress);
         setPlanView("free");
-        setExpiringDaysLeft(null);
       } finally {
         if (includeProgress) setLoading(false);
       }
@@ -196,12 +167,10 @@ export default function PelekanScreen() {
     [me]
   );
 
-  // بارگذاری اولیه: پروگرس + وضعیت پلن
   useEffect(() => {
     computePlanView(true);
   }, [computePlanView]);
 
-  // هر بار تب فوکوس شد: فقط وضعیت پلن را تازه کن
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
@@ -220,111 +189,85 @@ export default function PelekanScreen() {
     await AsyncStorage.setItem(PROGRESS_KEY, JSON.stringify(p));
   }, []);
 
-  // پالت تطبیقی روشن/تاریک
+  // ✅ پالت جدید: نودها «مات و تیره» (نه شیشه‌ای) تا روی مسیر گم نشن
   const palette = {
-    bg: colors.background,
-    card: colors.card,
-    text: colors.text,
-    border: colors.border,
-    pathIdle: dark ? "#334155" : "#CBD5E1",
-    pathDone: dark ? "#0EA5E955" : "#A7F3D0",
+    bg: "#0b0f14",
+    text: "#F9FAFB",
+    border: "rgba(255,255,255,.10)",
+    glassCard: "rgba(3,7,18,.92)",
+
+    pathIdle: "rgba(226,232,240,.55)",
+    pathDone: "rgba(34,197,94,.75)",
+
     node: {
-      availableBg: dark ? "#0B1220" : "#FFFFFF",
-      availableBorder: dark ? "#334155" : "#CBD5E1",
-      availableIcon: dark ? "#60A5FA" : "#2563EB",
-      availableLabel: dark ? "#E5E7EB" : "#111827",
-      lockedBg: dark ? "#1F2937" : "#E5E7EB",
-      lockedBorder: dark ? "#374151" : "#D1D5DB",
-      lockedIcon: dark ? "#94A3B8" : "#9CA3AF",
-      lockedLabel: dark ? "#9CA3AF" : "#6B7280",
+      availableBg: "#0B0F14",          // ✅ مات و تیره
+      availableBorder: "rgba(212,175,55,.55)",
+      availableIcon: "#D4AF37",
+      availableLabel: "#F9FAFB",
+
+      lockedBg: "#0B0F14",            // ✅ مات و تیره
+      lockedBorder: "rgba(231,238,247,.22)",
+      lockedIcon: "rgba(231,238,247,.55)",
+      lockedLabel: "rgba(231,238,247,.55)",
+
       doneBg: "#22C55E",
       doneBorder: "#16A34A",
       doneIcon: "#FFFFFF",
       doneLabel: "#FFFFFF",
     },
-    // هدر پله‌ها
-    step1: dark
-      ? {
-          bg: "#3B2A1D",
-          border: "#6B4E2E",
-          text: "#FDE68A",
-          icon: "flame" as const,
-          iconColor: "#FBBF24",
-        }
-      : {
-          bg: "#FFEAD5",
-          border: "#FDBA74",
-          text: "#7C2D12",
-          icon: "flame" as const,
-          iconColor: "#EA580C",
-        },
-    step2: dark
-      ? {
-          bg: "#102A17",
-          border: "#14532D",
-          text: "#BBF7D0",
-          icon: "leaf" as const,
-          iconColor: "#22C55E",
-        }
-      : {
-          bg: "#DCFCE7",
-          border: "#86EFAC",
-          text: "#065F46",
-          icon: "leaf" as const,
-          iconColor: "#16A34A",
-        },
-    step3: dark
-      ? {
-          bg: "#0F223A",
-          border: "#1E3A8A",
-          text: "#BFDBFE",
-          icon: "cloud" as const,
-          iconColor: "#60A5FA",
-        }
-      : {
-          bg: "#DBEAFE",
-          border: "#93C5FD",
-          text: "#1E3A8A",
-          icon: "cloud" as const,
-          iconColor: "#2563EB",
-        },
-    startFlag: dark
-      ? { bg: "#3F2D1C", border: "#F59E0B55", text: "#FDE68A", icon: "#FBBF24" }
-      : { bg: "#FEF3C7", border: "#FCD34D", text: "#92400E", icon: "#F59E0B" },
+
+    stepGlass: {
+      bg: "rgba(255,255,255,.04)",
+      border: "rgba(255,255,255,.10)",
+      text: "#F9FAFB",
+    },
+    stepIcon: {
+      step1: "#E98A15",
+      step2: "#4ADE80",
+      step3: "#60A5FA",
+      default: "rgba(231,238,247,.70)",
+    },
+    startFlag: {
+      bg: "rgba(255,255,255,.04)",
+      border: "rgba(255,255,255,.10)",
+      text: "#F9FAFB",
+      icon: "#D4AF37",
+    },
   };
 
-  // سبک گرافیکی برای هدر هر پله
   const stepStyle = (stepId: string) => {
-    switch (stepId) {
-      case "step1":
-        return palette.step1;
-      case "step2":
-        return palette.step2;
-      case "step3":
-        return palette.step3;
-      default:
-        return {
-          bg: palette.card,
-          border: palette.border,
-          text: palette.text,
-          icon: "ellipse-outline" as const,
-          iconColor: dark ? "#9CA3AF" : "#6B7280",
-        };
-    }
+    const iconColor =
+      stepId === "step1"
+        ? palette.stepIcon.step1
+        : stepId === "step2"
+        ? palette.stepIcon.step2
+        : stepId === "step3"
+        ? palette.stepIcon.step3
+        : palette.stepIcon.default;
+
+    const icon =
+      stepId === "step1"
+        ? ("flame" as const)
+        : stepId === "step2"
+        ? ("leaf" as const)
+        : stepId === "step3"
+        ? ("cloud" as const)
+        : ("ellipse-outline" as const);
+
+    return {
+      bg: palette.stepGlass.bg,
+      border: palette.stepGlass.border,
+      text: palette.stepGlass.text,
+      icon,
+      iconColor,
+    };
   };
 
-  // آیتم‌های مسیر
   const pathItems = useMemo(() => {
     const items: Array<
       | { kind: "start"; id: string }
       | { kind: "header"; id: string; title: string; stepId: string }
-      | {
-          kind: "day";
-          id: string;
-          stepIdx: number;
-          dayIdx: number;
-          zig: "L" | "R";
-        }
+      | { kind: "day"; id: string; stepIdx: number; dayIdx: number; zig: "L" | "R" }
       | { kind: "spacer"; id: string }
     > = [];
 
@@ -341,13 +284,7 @@ export default function PelekanScreen() {
       });
       for (let d = 0; d < STEPS[s].days; d++) {
         const zig = counter++ % 2 === 0 ? "L" : "R";
-        items.push({
-          kind: "day",
-          id: `${STEPS[s].id}-${d}`,
-          stepIdx: s,
-          dayIdx: d,
-          zig,
-        });
+        items.push({ kind: "day", id: `${STEPS[s].id}-${d}`, stepIdx: s, dayIdx: d, zig });
       }
       items.push({ kind: "spacer", id: `sp-${s}` });
     }
@@ -360,8 +297,7 @@ export default function PelekanScreen() {
     return d < progress.dayIndex;
   };
 
-  const isAvailable = (s: number, d: number) =>
-    s === progress.stepIndex && d === progress.dayIndex;
+  const isAvailable = (s: number, d: number) => s === progress.stepIndex && d === progress.dayIndex;
 
   const handleCompleteToday = async () => {
     let { stepIndex, dayIndex, gems, streak, isPro } = progress;
@@ -380,12 +316,7 @@ export default function PelekanScreen() {
     await persist({ stepIndex, dayIndex, gems, streak, isPro });
   };
 
-  const onTapDay = async (
-    s: number,
-    d: number,
-    done: boolean,
-    available: boolean
-  ) => {
+  const onTapDay = async (s: number, d: number) => {
     if (!isProPlan) {
       setPlanInfoModal(planView === "expired" ? "expired" : "free");
       return;
@@ -397,55 +328,32 @@ export default function PelekanScreen() {
     switch (item.kind) {
       case "start":
         return (
-          <View
-            style={{
-              height: CELL_H * 0.8,
-              width: PATH_W,
-              alignSelf: "center",
-              justifyContent: "center",
-            }}
-          >
+          <View style={{ height: CELL_H * 0.8, width: PATH_W, alignSelf: "center", justifyContent: "center" }}>
             <TouchableOpacity
               activeOpacity={0.9}
               onPress={() => {
                 if (!isProPlan) {
-                  setPlanInfoModal(
-                    planView === "expired" ? "expired" : "free"
-                  );
+                  setPlanInfoModal(planView === "expired" ? "expired" : "free");
                   return;
-                } else {
-                  Alert.alert(
-                    "تبریک ✨",
-                    "پلکان برای تو باز است؛ از روزها شروع کن."
-                  );
                 }
+                Alert.alert("تبریک ✨", "پلکان برای تو باز است؛ از روزها شروع کن.");
               }}
               style={{
                 alignSelf: "center",
                 backgroundColor: palette.startFlag.bg,
                 borderColor: palette.startFlag.border,
-                borderWidth: 2,
+                borderWidth: 1,
                 paddingVertical: 10,
                 paddingHorizontal: 14,
                 borderRadius: 16,
                 flexDirection: "row-reverse",
                 alignItems: "center",
                 gap: 8,
-                shadowColor: "#000",
-                shadowOpacity: 0.06,
-                shadowRadius: 8,
-                shadowOffset: { width: 0, height: 4 },
               }}
             >
               <Ionicons name="flag" size={20} color={palette.startFlag.icon} />
-              <Text
-                style={{ fontWeight: "900", color: palette.startFlag.text }}
-              >
-                {planView === "expired"
-                  ? "اشتراک منقضی شده"
-                  : isProPlan
-                  ? "شروع شد"
-                  : "شروع (نسخه رایگان)"}
+              <Text style={{ fontWeight: "900", color: palette.startFlag.text }}>
+                {planView === "expired" ? "اشتراک منقضی شده" : isProPlan ? "شروع شد" : "شروع (نسخه رایگان)"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -454,28 +362,10 @@ export default function PelekanScreen() {
       case "header": {
         const s = stepStyle(item.stepId);
         return (
-          <View
-            style={{
-              alignItems: "center",
-              alignSelf: "center",
-              width: PATH_W,
-            }}
-          >
-            <View
-              style={[
-                styles.stepHeaderCard,
-                { backgroundColor: s.bg, borderColor: s.border },
-              ]}
-            >
-              <Ionicons
-                name={s.icon}
-                size={18}
-                color={s.iconColor}
-                style={{ marginLeft: 6 }}
-              />
-              <Text style={[styles.stepHeaderText, { color: s.text }]}>
-                {item.title}
-              </Text>
+          <View style={{ alignItems: "center", alignSelf: "center", width: PATH_W }}>
+            <View style={[styles.stepHeaderCard, { backgroundColor: s.bg, borderColor: s.border }]}>
+              <Ionicons name={s.icon} size={18} color={s.iconColor} style={{ marginLeft: 6 }} />
+              <Text style={[styles.stepHeaderText, { color: s.text }]}>{item.title}</Text>
             </View>
             <View
               style={{
@@ -506,48 +396,24 @@ export default function PelekanScreen() {
 
         const nodeX = item.zig === "L" ? NODE_X_LEFT : NODE_X_RIGHT;
 
-        const bg = done
-          ? palette.node.doneBg
-          : available
-          ? palette.node.availableBg
-          : palette.node.lockedBg;
-        const border = done
-          ? palette.node.doneBorder
-          : available
-          ? palette.node.availableBorder
-          : palette.node.lockedBorder;
-        const iconCol = done
-          ? palette.node.doneIcon
-          : available
-          ? palette.node.availableIcon
-          : palette.node.lockedIcon;
-        const label = done
-          ? palette.node.doneLabel
-          : available
-          ? palette.node.availableLabel
-          : palette.node.lockedLabel;
+        const bg = done ? palette.node.doneBg : available ? palette.node.availableBg : palette.node.lockedBg;
+        const border = done ? palette.node.doneBorder : available ? palette.node.availableBorder : palette.node.lockedBorder;
+        const iconCol = done ? palette.node.doneIcon : available ? palette.node.availableIcon : palette.node.lockedIcon;
+        const label = done ? palette.node.doneLabel : available ? palette.node.availableLabel : palette.node.lockedLabel;
 
         const bottomY = CELL_H;
         const topY = 0;
         const pathD = `
           M ${MID_X} ${bottomY}
-          C ${MID_X} ${bottomY - 30}, ${nodeX} ${CELL_H * 0.65}, ${nodeX} ${
-          CELL_H * 0.5
-        }
+          C ${MID_X} ${bottomY - 30}, ${nodeX} ${CELL_H * 0.65}, ${nodeX} ${CELL_H * 0.5}
           C ${nodeX} ${CELL_H * 0.35}, ${MID_X} ${topY + 30}, ${MID_X} ${topY}
         `;
 
         const NodeWrapper = available ? Pulsing : React.Fragment;
 
         return (
-          <View
-            style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}
-          >
-            <Svg
-              width={PATH_W}
-              height={CELL_H}
-              style={{ position: "absolute" }}
-            >
+          <View style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}>
+            <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
               <Path
                 d={pathD}
                 stroke={done ? palette.pathDone : palette.pathIdle}
@@ -560,7 +426,7 @@ export default function PelekanScreen() {
             <NodeWrapper {...(available ? { playing: true } : {})}>
               <TouchableOpacity
                 activeOpacity={0.9}
-                onPress={() => onTapDay(s, d, done, available)}
+                onPress={() => onTapDay(s, d)}
                 style={[
                   styles.node,
                   {
@@ -568,26 +434,18 @@ export default function PelekanScreen() {
                     top: CELL_H / 2 - NODE_R,
                     backgroundColor: bg,
                     borderColor: border,
-                    elevation: available ? 3 : 0,
+                    elevation: available ? 6 : 0,
                     zIndex: 2,
-                    shadowOpacity: dark ? 0.3 : 0.08,
+                    shadowOpacity: dark ? 0.35 : 0.18,
                   },
                 ]}
               >
                 <Ionicons
-                  name={
-                    done
-                      ? "checkmark-circle"
-                      : locked
-                      ? "lock-closed-outline"
-                      : "star"
-                  }
+                  name={done ? "checkmark-circle" : locked ? "lock-closed-outline" : "star"}
                   size={22}
                   color={iconCol}
                 />
-                <Text style={[styles.nodeText, { color: label }]}>
-                  روز {d + 1}
-                </Text>
+                <Text style={[styles.nodeText, { color: label }]}>روز {d + 1}</Text>
               </TouchableOpacity>
             </NodeWrapper>
           </View>
@@ -601,25 +459,23 @@ export default function PelekanScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView
-        style={[styles.center, { backgroundColor: colors.background }]}
-      >
-        <Text style={{ color: colors.text }}>در حال بارگذاری…</Text>
+      <SafeAreaView edges={["top"]} style={[styles.root, { backgroundColor: palette.bg }]}>
+        <View pointerEvents="none" style={styles.bgGlowTop} />
+        <View pointerEvents="none" style={styles.bgGlowBottom} />
+        <View style={styles.center}>
+          <ActivityIndicator color="#D4AF37" />
+          <Text style={{ color: "#E5E7EB", marginTop: 8, fontSize: 12 }}>در حال بارگذاری…</Text>
+        </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView
-      style={[styles.root, { backgroundColor: colors.background }]}
-      edges={["top", "left", "right", "bottom"]}
-    >
-      <Header
-        planView={planView}
-        gems={progress.gems}
-        streak={progress.streak}
-        expiringDaysLeft={expiringDaysLeft}
-      />
+    <SafeAreaView style={[styles.root, { backgroundColor: palette.bg }]} edges={["top", "left", "right", "bottom"]}>
+      <View pointerEvents="none" style={styles.bgGlowTop} />
+      <View pointerEvents="none" style={styles.bgGlowBottom} />
+
+      <Header me={me} gems={progress.gems} streak={progress.streak} />
 
       <FlatList
         data={pathItems}
@@ -633,38 +489,18 @@ export default function PelekanScreen() {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* مودال شیک برای حالت FREE / EXPIRED */}
       {planInfoModal && (
         <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalCard,
-              planInfoModal === "expired"
-                ? styles.modalCardExpired
-                : styles.modalCardFree,
-            ]}
-          >
-            <View
-              style={{
-                flexDirection: "row-reverse",
-                alignItems: "center",
-                marginBottom: 8,
-              }}
-            >
+          <View style={[styles.modalCard, planInfoModal === "expired" ? styles.modalCardExpired : styles.modalCardFree]}>
+            <View style={{ flexDirection: "row-reverse", alignItems: "center", marginBottom: 8 }}>
               <Ionicons
-                name={
-                  planInfoModal === "expired"
-                    ? "time-outline"
-                    : "lock-closed-outline"
-                }
+                name={planInfoModal === "expired" ? "time-outline" : "lock-closed-outline"}
                 size={22}
                 color={planInfoModal === "expired" ? "#F97373" : "#FBBF24"}
                 style={{ marginLeft: 6 }}
               />
               <Text style={styles.modalTitle}>
-                {planInfoModal === "expired"
-                  ? "اشتراک منقضی شده"
-                  : "محدودیت دسترسی"}
+                {planInfoModal === "expired" ? "اشتراک منقضی شده" : "محدودیت دسترسی"}
               </Text>
             </View>
 
@@ -674,11 +510,7 @@ export default function PelekanScreen() {
                 : "در حال حاضر روی نسخهٔ رایگان هستی.\nبرای باز شدن پله‌ها و تمرین‌ها، پلن PRO را فعال کن."}
             </Text>
 
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() => setPlanInfoModal(null)}
-              style={styles.modalButton}
-            >
+            <TouchableOpacity activeOpacity={0.85} onPress={() => setPlanInfoModal(null)} style={styles.modalButton}>
               <Text style={styles.modalButtonText}>باشه</Text>
             </TouchableOpacity>
           </View>
@@ -689,78 +521,38 @@ export default function PelekanScreen() {
 }
 
 /* ------------------------------- هدر بالایی ------------------------------ */
-function Header({
-  planView,
-  gems,
-  streak,
-  expiringDaysLeft,
-}: {
-  planView: PlanView;
-  gems: number;
-  streak: number;
-  expiringDaysLeft: number | null;
-}) {
-  const { colors } = useTheme();
-
-  let badgeBg = "#111827";
-  let badgeTextColor = "#E5E7EB";
-  let badgeLabel: "FREE" | "PRO" | "EXPIRED" = "FREE";
-
-  if (planView === "pro") {
-    badgeBg = "#064E3B";
-    badgeTextColor = "#4ADE80";
-    badgeLabel = "PRO";
-  } else if (planView === "expiring") {
-    badgeBg = "#451A03";
-    badgeTextColor = "#FBBF24";
-    badgeLabel = "PRO";
-  } else if (planView === "expired") {
-    badgeBg = "#7F1D1D";
-    badgeTextColor = "#FCA5A5";
-    badgeLabel = "EXPIRED";
-  }
-
-  const showExpiring =
-    planView === "expiring" &&
-    expiringDaysLeft != null &&
-    expiringDaysLeft > 0;
+/**
+ * ✅ دقیقاً همون چیزی که خواستی:
+ * - badge سمت چپ
+ * - diamond وسط
+ * - flame سمت راست
+ *
+ * نکته: چون RTL هستی، اگر flexDirection="row" باشه، آیتم اول میره چپ.
+ */
+function Header({ me, gems, streak }: { me: any; gems: number; streak: number }) {
+  const insets = useSafeAreaInsets();
 
   return (
-    <View
-      style={[
-        styles.topBar,
-        { backgroundColor: colors.card, borderColor: colors.border },
-      ]}
-    >
-      {/* ستون وضعیت پلن (راست) */}
-      <View style={[styles.topItem, { justifyContent: "flex-start" }]}>
-        <View style={[styles.badge, { backgroundColor: badgeBg }]}>
-          <Text
-            style={[
-              styles.badgeText,
-              { color: badgeTextColor },
-            ]}
-          >
-            {badgeLabel}
-          </Text>
+    <View style={[styles.topBar, { paddingTop: Math.max(10, insets.top * 0.15) }]}>
+      {/* ✅ LEFT: Badge */}
+      <View style={[styles.topCol, styles.colLeft]}>
+        <PlanStatusBadge me={me} showExpiringText />
+      </View>
+
+      {/* ✅ CENTER: Diamond */}
+      <View style={[styles.topCol, styles.colCenter]}>
+        <View style={styles.iconStatRow}>
+          <Ionicons name="diamond" size={18} color="#60A5FA" />
+          <Text style={styles.topText}>{gems}</Text>
         </View>
-        {showExpiring && (
-          <Text style={styles.expiringText}>
-            {expiringDaysLeft} روز تا پایان اشتراک
-          </Text>
-        )}
       </View>
 
-      {/* ستون وسط: الماس – همیشه وسط */}
-      <View style={[styles.topItem, { justifyContent: "center" }]}>
-        <Ionicons name="diamond" size={18} color="#60A5FA" />
-        <Text style={[styles.topText, { color: colors.text }]}> {gems}</Text>
-      </View>
-
-      {/* ستون چپ: استریک */}
-      <View style={[styles.topItem, { justifyContent: "flex-end" }]}>
-        <Ionicons name="flame" size={18} color="#F97316" />
-        <Text style={[styles.topText, { color: colors.text }]}>{streak}</Text>
+      {/* ✅ RIGHT: Flame */}
+      <View style={[styles.topCol, styles.colRight]}>
+        <View style={styles.iconStatRow}>
+          <Ionicons name="flame" size={18} color="#E98A15" />
+          <Text style={styles.topText}>{streak}</Text>
+        </View>
       </View>
     </View>
   );
@@ -771,37 +563,52 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 
-  topBar: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
+  bgGlowTop: {
+    position: "absolute",
+    top: -260,
+    left: -240,
+    width: 480,
+    height: 480,
+    borderRadius: 999,
+    backgroundColor: "rgba(212,175,55,.14)",
   },
-  topItem: {
+  bgGlowBottom: {
+    position: "absolute",
+    bottom: -280,
+    right: -260,
+    width: 560,
+    height: 560,
+    borderRadius: 999,
+    backgroundColor: "rgba(233,138,21,.10)",
+  },
+
+  // ✅ هدر شیشه‌ای
+  topBar: {
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,.10)",
+    backgroundColor: "rgba(3,7,18,.92)",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: "row",          // ✅ مهم: با RTL، ترتیب 1→چپ، 3→راست
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  topCol: {
     flex: 1,
-    flexDirection: "row-reverse",
+    minHeight: 28,
+  },
+  colLeft: { alignItems: "flex-start", justifyContent: "center" },
+  colCenter: { alignItems: "center", justifyContent: "center" },
+  colRight: { alignItems: "flex-end", justifyContent: "center" },
+
+  iconStatRow: {
+    flexDirection: "row",
     alignItems: "center",
     gap: 6,
   },
-  topText: { fontWeight: "900" },
+  topText: { fontWeight: "900", color: "#F9FAFB" },
 
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  badgeText: {
-    fontWeight: "900",
-    fontSize: 12,
-  },
-  expiringText: {
-    color: "#FBBF24",
-    fontWeight: "900",
-    fontSize: 11,
-  },
-
-  // هدر هر پله
+  // ✅ هدر هر پله شیشه‌ای
   stepHeaderCard: {
     borderWidth: 1,
     paddingVertical: 8,
@@ -811,13 +618,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     alignSelf: "center",
+    backgroundColor: "rgba(255,255,255,.04)",
+    borderColor: "rgba(255,255,255,.10)",
     shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
   },
   stepHeaderText: { fontWeight: "900", fontSize: 16 },
 
+  // ✅ نودها مات و قابل‌دیدن
   node: {
     position: "absolute",
     width: NODE_R * 2,
@@ -827,10 +638,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    backgroundColor: "#fff",
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
   },
   nodeText: {
     position: "absolute",
@@ -839,7 +649,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 
-  // مودال داخلی
+  // مودال
   modalOverlay: {
     position: "absolute",
     top: 0,

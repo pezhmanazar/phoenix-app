@@ -7,7 +7,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import BACKEND_URL from "../../constants/backend";
 import { useUser } from "../../hooks/useUser";
-import { AppState, AppStateStatus, View, Text } from "react-native";
+import {
+  AppState,
+  AppStateStatus,
+  View,
+  Text,
+  I18nManager,
+} from "react-native";
 
 /* ===== helpers برای unread ===== */
 const SEEN_KEY = (type: "tech" | "therapy") => `support:lastSeenAdmin:${type}`;
@@ -46,9 +52,8 @@ async function countUnreadForType(
     qs.push(`type=${encodeURIComponent(type)}`);
     qs.push(`openedById=${encodeURIComponent(openedById)}`);
     qs.push(`ts=${Date.now()}`);
-    const url = `${BACKEND_URL}/api/public/tickets/open?${qs.join("&")}`;
 
-    console.log("[tabs/_layout] countUnread", type, url);
+    const url = `${BACKEND_URL}/api/public/tickets/open?${qs.join("&")}`;
 
     const res = await fetch(url);
     let json: any = null;
@@ -59,18 +64,13 @@ async function countUnreadForType(
     }
 
     if (!res.ok || !json?.ok || !json.ticket) {
-      console.log(
-        "[tabs/_layout] countUnread",
-        type,
-        "→ no ticket / not ok",
-        res.status
-      );
       return 0;
     }
 
     const t: TicketWithMessages = json.ticket;
     const msgs = Array.isArray(t.messages) ? t.messages : [];
     const adminMsgs = msgs.filter((m) => m.sender === "admin");
+
     const lastSeenId = await AsyncStorage.getItem(SEEN_KEY(type));
 
     const result = (() => {
@@ -81,22 +81,51 @@ async function countUnreadForType(
       return Math.max(0, adminMsgs.length - (idx + 1));
     })();
 
-    console.log(
-      "[tabs/_layout] countUnread result",
-      type,
-      "adminMsgs=",
-      adminMsgs.length,
-      "lastSeenId=",
-      lastSeenId,
-      "→",
-      result
-    );
-
     return result;
   } catch (e) {
     console.log("[tabs/_layout] countUnread error", type, e);
     return 0;
   }
+}
+
+/* ===== Background شیشه‌ای + گلو برای tabBar ===== */
+function TabBarGlassBackground() {
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        flex: 1,
+        backgroundColor: "rgba(3,7,18,.94)",
+        borderTopWidth: 1,
+        borderTopColor: "rgba(255,255,255,.08)",
+      }}
+    >
+      {/* glow left/top */}
+      <View
+        style={{
+          position: "absolute",
+          top: -40,
+          left: -70,
+          width: 170,
+          height: 170,
+          borderRadius: 999,
+          backgroundColor: "rgba(212,175,55,.14)",
+        }}
+      />
+      {/* glow right/bottom */}
+      <View
+        style={{
+          position: "absolute",
+          bottom: -60,
+          right: -90,
+          width: 240,
+          height: 240,
+          borderRadius: 999,
+          backgroundColor: "rgba(233,138,21,.10)",
+        }}
+      />
+    </View>
+  );
 }
 
 /* ===== خود layout تب‌ها ===== */
@@ -111,7 +140,6 @@ export default function TabsLayout() {
     try {
       const openedById = getOpenedById(me);
       if (!openedById) {
-        console.log("[tabs/_layout] refreshUnread: no openedById");
         setUnreadCount(0);
         return;
       }
@@ -123,21 +151,7 @@ export default function TabsLayout() {
 
       const total = therapyUnread + techUnread;
 
-      console.log(
-        "[tabs/_layout] refreshUnread raw → therapy=",
-        therapyUnread,
-        "tech=",
-        techUnread,
-        "total=",
-        total
-      );
-
-      setUnreadCount((prev) => {
-        if (prev !== total) {
-          console.log("[tabs/_layout] refreshUnread APPLY →", total);
-        }
-        return total;
-      });
+      setUnreadCount((prev) => (prev !== total ? total : prev));
     } catch (e) {
       console.log("[tabs/_layout] refreshUnread error", e);
     }
@@ -147,7 +161,6 @@ export default function TabsLayout() {
   useEffect(() => {
     let cancelled = false;
     let intervalId: ReturnType<typeof setInterval> | null = null;
-
     const appState = { current: AppState.currentState as AppStateStatus };
 
     const run = async () => {
@@ -155,23 +168,13 @@ export default function TabsLayout() {
       await refreshUnread();
     };
 
-    // بار اول
     run();
-
-    // هر ۵ ثانیه یک‌بار
     intervalId = setInterval(run, 5000);
 
-    // وقتی اپ از background → active میاد
     const sub = AppState.addEventListener("change", (nextState) => {
       const prevState = appState.current;
       appState.current = nextState;
-      if (
-        prevState.match(/inactive|background/) &&
-        nextState === "active"
-      ) {
-        console.log(
-          "[tabs/_layout] AppState active → refreshUnread()"
-        );
+      if (prevState.match(/inactive|background/) && nextState === "active") {
         run();
       }
     });
@@ -183,10 +186,8 @@ export default function TabsLayout() {
     };
   }, [refreshUnread]);
 
-  // وقتی me لود/عوض می‌شود
   useEffect(() => {
     if (!me) return;
-    console.log("[tabs/_layout] me changed → refreshUnread()");
     refreshUnread();
   }, [me, refreshUnread]);
 
@@ -196,16 +197,26 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarHideOnKeyboard: true,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: "#C7CBD1",
+
+        // ✅ تم رنگی ثابت و هماهنگ با برند
+        tabBarActiveTintColor: "#D4AF37",
+        tabBarInactiveTintColor: "rgba(231,238,247,.55)",
+
+        // ✅ شیشه‌ای + گلو
+        tabBarBackground: () => <TabBarGlassBackground />,
+
         tabBarStyle: {
-          backgroundColor: "#0F1115",
+          backgroundColor: "transparent",
           borderTopWidth: 0,
-          height: 74 + insets.bottom,
-          paddingBottom: insets.bottom,
+
+          // ✅ FIX: حذف نوار اضافه
+          // فقط ارتفاع را با safe-area تنظیم می‌کنیم؛ paddingBottom را صفر می‌کنیم
+          height: 70 + insets.bottom,
+          paddingBottom: 0,
+
           paddingTop: 10,
-          flexDirection: "row",
         },
+
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: "800",
@@ -215,7 +226,6 @@ export default function TabsLayout() {
         },
       }}
     >
-      {/* تب index مخفی */}
       <Tabs.Screen name="index" options={{ href: null }} />
 
       <Tabs.Screen
@@ -223,7 +233,7 @@ export default function TabsLayout() {
         options={{
           title: "پلکان",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="trending-up" color={color} size={size} />
+            <Ionicons name="trending-up-outline" color={color} size={size} />
           ),
         }}
       />
@@ -233,7 +243,11 @@ export default function TabsLayout() {
         options={{
           title: "پناهگاه",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" color={color} size={size} />
+            <Ionicons
+              name="shield-checkmark-outline"
+              color={color}
+              size={size}
+            />
           ),
         }}
       />
@@ -243,7 +257,7 @@ export default function TabsLayout() {
         options={{
           title: "مشعل",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="flame" color={color} size={size} />
+            <Ionicons name="flame-outline" color={color} size={size} />
           ),
         }}
       />
@@ -254,13 +268,14 @@ export default function TabsLayout() {
           title: "پناه",
           tabBarIcon: ({ color, size }) => (
             <View style={{ position: "relative" }}>
-              <Ionicons name="shield" color={color} size={size} />
+              <Ionicons name="chatbubbles-outline" color={color} size={size} />
+
               {unreadCount > 0 && (
                 <View
                   style={{
                     position: "absolute",
                     top: -4,
-                    right: -10,
+                    ...(I18nManager.isRTL ? { left: -10 } : { right: -10 }),
                     minWidth: 18,
                     height: 18,
                     borderRadius: 9,
@@ -291,7 +306,7 @@ export default function TabsLayout() {
         options={{
           title: "روزنگار",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="calendar" color={color} size={size} />
+            <Ionicons name="calendar-outline" color={color} size={size} />
           ),
         }}
       />
@@ -299,14 +314,13 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="Phoenix"
         options={{
-          title: "ققنوس من",
+          title: "پروفایل",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-circle" color={color} size={size} />
+            <Ionicons name="person-circle-outline" color={color} size={size} />
           ),
         }}
       />
 
-      {/* تب مخفی اشتراک */}
       <Tabs.Screen
         name="Subscription"
         options={{

@@ -60,7 +60,7 @@ export default function Onboarding() {
 
   async function finish() {
     await AsyncStorage.setItem(KEY, "1");
-    router.replace("/(auth)/login");
+    router.replace("/");
   }
 
   function next() {
@@ -116,7 +116,7 @@ export default function Onboarding() {
                 {/* یک ریز-هایلایت کوتاه برای حس “برند” */}
                 <View style={styles.highlightRow}>
                   <View style={[styles.pill, accentStyle(item.accent).pill]}>
-                    <Text style={styles.pillText}>سریع • ساده • قابل اجرا</Text>
+                    <Text style={styles.pillText}>سریع | ساده | قابل اجرا</Text>
                   </View>
                 </View>
               </View>

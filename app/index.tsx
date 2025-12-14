@@ -8,7 +8,7 @@ import { useAuth } from "../hooks/useAuth";
 const ONBOARDING_KEY = "hasOnboarded_v1";
 
 // ✅ فعلاً همیشه آنبوردینگ را نشان بده (بعداً می‌تونیم false کنیم)
-const FORCE_ALWAYS_ONBOARDING = true;
+const FORCE_ALWAYS_ONBOARDING = false;
 
 export default function Gate() {
   const router = useRouter();

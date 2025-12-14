@@ -18,6 +18,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { allScenarios } from "@/lib/panahgah/registry";
 import { useUser } from "../../hooks/useUser";
 import { getPlanStatus, PRO_FLAG_KEY } from "../../lib/plan";
+import PlanStatusBadge from "../../components/PlanStatusBadge";
 
 type PlanView = "free" | "pro" | "expired" | "expiring";
 
@@ -49,8 +50,7 @@ export default function Panahgah() {
           view = "expired";
           expDays = 0;
         } else if (status.isPro || flagIsPro) {
-          const d =
-            typeof status.daysLeft === "number" ? status.daysLeft : null;
+          const d = typeof status.daysLeft === "number" ? status.daysLeft : null;
           if (d != null && d > 0 && d <= 7) {
             view = "expiring";
             expDays = d;
@@ -74,14 +74,14 @@ export default function Panahgah() {
       setExpiringDaysLeft(expDays);
 
       //console.log("PANAHGAH PLAN INIT", {
-       //rawPlan: status.rawPlan,
-        //rawExpiresAt: status.rawExpiresAt,
-        //isExpired: status.isExpired,
-        //daysLeft: status.daysLeft,
-        //flag,
-        //planView: view,
-        //expDays,
-     // });
+      //rawPlan: status.rawPlan,
+      //rawExpiresAt: status.rawExpiresAt,
+      //isExpired: status.isExpired,
+      //daysLeft: status.daysLeft,
+      //flag,
+      //planView: view,
+      //expDays,
+      //});
     } catch (e) {
       console.log("PANAHGAH PLAN ERR", e);
       setPlanView("free");
@@ -109,10 +109,7 @@ export default function Panahgah() {
     const items = allScenarios();
     if (!q.trim()) return items;
     const qq = q.trim();
-    return items.filter(
-      (s) =>
-        s.title.includes(qq) || s.id.includes(qq.replace(/\s+/g, "-"))
-    );
+    return items.filter((s) => s.title.includes(qq) || s.id.includes(qq.replace(/\s+/g, "-")));
   }, [q]);
 
   /** هنگام تپ روی سناریو */
@@ -140,18 +137,15 @@ export default function Panahgah() {
     <TouchableOpacity
       activeOpacity={0.9}
       onPress={() => onTapScenario(item.id)}
-      style={[
-        styles.card,
-        { borderColor: colors.border, backgroundColor: colors.card },
-      ]}
+      style={[styles.card, { borderColor: "rgba(255,255,255,.08)", backgroundColor: "rgba(255,255,255,.04)" }]}
     >
       <View style={styles.row}>
-        <Ionicons name="heart" size={18} color={colors.primary} />
-        <Text style={[styles.title, { color: colors.text }]}>{item.title}</Text>
+        <Ionicons name="heart" size={18} color="#D4AF37" />
+        <Text style={[styles.title, { color: "#F9FAFB" }]}>{item.title}</Text>
         <Ionicons
           name="chevron-back"
           size={18}
-          color={colors.text}
+          color="#E5E7EB"
           style={{ transform: [{ scaleX: -1 }], opacity: 0.7 }}
         />
       </View>
@@ -160,12 +154,12 @@ export default function Panahgah() {
 
   if (loading) {
     return (
-      <SafeAreaView
-        style={[styles.root, { backgroundColor: colors.background }]}
-      >
+      <SafeAreaView style={[styles.root, { backgroundColor: "#0b0f14" }]} edges={["top"]}>
+        <View pointerEvents="none" style={styles.bgGlowTop} />
+        <View pointerEvents="none" style={styles.bgGlowBottom} />
         <View style={[styles.center, { paddingBottom: insets.bottom }]}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={{ color: colors.text, marginTop: 8, fontSize: 12 }}>
+          <ActivityIndicator color="#D4AF37" />
+          <Text style={{ color: "#E5E7EB", marginTop: 8, fontSize: 12 }}>
             در حال آماده‌سازی پناهگاه…
           </Text>
         </View>
@@ -173,90 +167,21 @@ export default function Panahgah() {
     );
   }
 
-  // 🔰 وضعیت بج هماهنگ با تب Subscription (چهار حالت)
-  type BadgeState = "free" | "pro" | "expiring" | "expired";
-  const badgeState: BadgeState =
-    planView === "expired"
-      ? "expired"
-      : planView === "expiring"
-      ? "expiring"
-      : planView === "pro"
-      ? "pro"
-      : "free";
-
-  const badgeBg =
-    badgeState === "expired"
-      ? "#7f1d1d55"
-      : badgeState === "expiring"
-      ? "#fbbf2455"
-      : badgeState === "pro"
-      ? "#16a34a33"
-      : "#4B556333";
-
-  const badgeTextColor =
-    badgeState === "expired"
-      ? "#F87171"
-      : badgeState === "expiring"
-      ? "#FBBF24"
-      : badgeState === "pro"
-      ? "#4ADE80"
-      : "#E5E7EB";
-
-  const badgeLabel =
-    badgeState === "expired"
-      ? "EXPIRED"
-      : badgeState === "pro" || badgeState === "expiring"
-      ? "PRO"
-      : "FREE";
-
-  const showExpiring =
-    badgeState === "expiring" &&
-    expiringDaysLeft != null &&
-    expiringDaysLeft > 0;
-
   return (
     <SafeAreaView
-      style={[styles.root, { backgroundColor: colors.background }]}
+      style={[styles.root, { backgroundColor: "#0b0f14" }]}
       edges={["top", "left", "right", "bottom"]}
     >
-      {/* Header */}
-      <View style={[styles.header, { borderColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          پناهگاه
-        </Text>
-        <View style={styles.headerBadgeRow}>
-          {showExpiring && (
-            <Text
-              style={{
-                color: "#FBBF24",
-                fontSize: 11,
-                fontWeight: "900",
-                marginLeft: 8,
-              }}
-            >
-              {expiringDaysLeft} روز تا پایان اشتراک
-            </Text>
-          )}
-          <View
-            style={[
-              styles.headerBadge,
-              {
-                backgroundColor: badgeBg,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.headerBadgeText,
-                {
-                  color: badgeTextColor,
-                },
-              ]}
-            >
-              {badgeLabel}
-            </Text>
-          </View>
-        </View>
+      {/* ✅ پس‌زمینه گلو مثل بقیه تب‌ها */}
+      <View pointerEvents="none" style={styles.bgGlowTop} />
+      <View pointerEvents="none" style={styles.bgGlowBottom} />
+
+      {/* Header (شیشه‌ای) — عنوان سمت راست، بج سمت چپ از PlanStatusBadge */}
+      <View style={[styles.header, { paddingTop: Math.max(10, insets.top * 0.15) }]}>
+        <Text style={styles.headerTitle}>پناهگاه</Text>
+
+        {/* ✅ بج و متن نزدیک انقضا از خود کامپوننت */}
+        <PlanStatusBadge me={me} showExpiringText />
       </View>
 
       {/* صفحه قفل‌شده → FREE یا EXPIRED */}
@@ -269,17 +194,12 @@ export default function Panahgah() {
             paddingBottom: 16 + insets.bottom,
           }}
         >
-          <View
-            style={[
-              styles.lockCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
+          <View style={[styles.lockCard]}>
             {planView === "expired" ? (
               <>
                 <Text
                   style={{
-                    color: colors.text,
+                    color: "#F9FAFB",
                     fontSize: 15,
                     fontWeight: "900",
                     textAlign: "right",
@@ -290,58 +210,47 @@ export default function Panahgah() {
                 </Text>
                 <Text
                   style={{
-                    color: colors.text,
-                    opacity: 0.8,
+                    color: "rgba(231,238,247,.80)",
                     fontSize: 13,
                     textAlign: "right",
                     marginTop: 12,
                     lineHeight: 22,
+                    fontWeight: "700",
                   }}
                 >
-                  پناهگاه جاییه برای وقتی که یهو حالت بد میشه، یا وسوسه می‌شی
-                  پیام بدی، یا احساساتت ناگهانی بهت هجوم میارن.
+                  پناهگاه جاییه برای وقتی که یهو حالت بد میشه، یا وسوسه می‌شی پیام بدی، یا احساساتت ناگهانی بهت هجوم میارن.
                   {"\n\n"}
-                  برای اینکه دوباره به همه‌ی سناریوهای اورژانسی و مسیرهای نجات
-                  دسترسی داشته باشی، پلن ققنوس رو تمدید کن.
+                  برای اینکه دوباره به همه‌ی سناریوهای اورژانسی و مسیرهای نجات دسترسی داشته باشی، پلن ققنوس رو تمدید کن.
                 </Text>
               </>
             ) : (
               <>
-                <View
-                  style={{
-                    flexDirection: "row-reverse",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  <Ionicons
-                    name="shield-checkmark"
-                    size={22}
-                    color={colors.primary}
-                  />
+                <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
+                  <Ionicons name="shield-checkmark" size={22} color="#D4AF37" />
                   <Text
                     style={{
-                      color: colors.text,
+                      color: "#F9FAFB",
                       fontWeight: "900",
                       fontSize: 15,
                       textAlign: "right",
+                      flex: 1,
                     }}
                   >
                     پناهگاه مخصوص لحظه‌های اورژانسی بعد از جداییه
                   </Text>
                 </View>
+
                 <Text
                   style={{
-                    color: colors.text,
-                    opacity: 0.8,
+                    color: "rgba(231,238,247,.80)",
                     marginTop: 10,
                     fontSize: 13,
                     textAlign: "right",
                     lineHeight: 20,
+                    fontWeight: "700",
                   }}
                 >
-                  هر موقع ناگهانی وسوسه پیام دادن، چک کردن، گریه‌های شدید یا
-                  تنهایی سنگین میاد سراغت… اینجا دقیقاً همون‌جاست که باید بیای.
+                  هر موقع ناگهانی وسوسه پیام دادن، چک کردن، گریه‌های شدید یا تنهایی سنگین میاد سراغت… اینجا دقیقاً همون‌جاست که باید بیای.
                 </Text>
               </>
             )}
@@ -350,30 +259,24 @@ export default function Panahgah() {
       ) : (
         <>
           {/* Search */}
-          <View
-            style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 }}
-          >
-            <View
-              style={[
-                styles.searchBox,
-                { borderColor: colors.border, backgroundColor: colors.card },
-              ]}
-            >
+          <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 }}>
+            <View style={styles.searchBox}>
               <Ionicons
                 name="search"
                 size={18}
-                color={colors.text}
+                color="#E5E7EB"
                 style={{ opacity: 0.6 }}
               />
               <TextInput
                 value={q}
                 onChangeText={setQ}
                 placeholder="جست‌وجوی موقعیت…"
-                placeholderTextColor={colors.text + "99"}
-                style={{ flex: 1, textAlign: "right", color: colors.text }}
+                placeholderTextColor="rgba(231,238,247,.55)"
+                style={{ flex: 1, textAlign: "right", color: "#F9FAFB" }}
               />
             </View>
           </View>
+
           {/* لیست سناریوها */}
           <FlatList
             data={data}
@@ -395,29 +298,40 @@ export default function Panahgah() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
+
+  /* ✅ گلو / شیپ مثل بقیه */
+  bgGlowTop: {
+    position: "absolute",
+    top: -260,
+    left: -240,
+    width: 480,
+    height: 480,
+    borderRadius: 999,
+    backgroundColor: "rgba(212,175,55,.14)",
+  },
+  bgGlowBottom: {
+    position: "absolute",
+    bottom: -280,
+    right: -260,
+    width: 560,
+    height: 560,
+    borderRadius: 999,
+    backgroundColor: "rgba(233,138,21,.10)",
+  },
+
+  /* ✅ هدر شیشه‌ای هماهنگ */
   header: {
     borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,.10)",
+    backgroundColor: "rgba(3,7,18,.92)",
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    alignItems: "center",
+    paddingVertical: 14,
     flexDirection: "row-reverse",
+    alignItems: "center",
     justifyContent: "space-between",
   },
-  headerTitle: { fontSize: 18, fontWeight: "900" },
-  headerBadgeRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 8,
-  },
-  headerBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  headerBadgeText: {
-    fontWeight: "900",
-    fontSize: 11,
-  },
+  headerTitle: { fontSize: 18, fontWeight: "900", color: "#F9FAFB" },
+
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -426,16 +340,29 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 8,
+    borderColor: "rgba(255,255,255,.08)",
+    backgroundColor: "rgba(255,255,255,.04)",
   },
-  card: { borderWidth: 1, borderRadius: 16, padding: 14 },
+
+  card: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    borderColor: "rgba(255,255,255,.08)",
+    backgroundColor: "rgba(255,255,255,.04)",
+  },
   row: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
   title: { flex: 1, textAlign: "right", fontWeight: "900" },
+
   lockCard: {
     borderWidth: 1,
     borderRadius: 16,
     padding: 16,
     flex: 1,
+    borderColor: "rgba(255,255,255,.08)",
+    backgroundColor: "rgba(255,255,255,.04)",
   },
+
   bulletRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
