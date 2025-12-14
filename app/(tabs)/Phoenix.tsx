@@ -23,6 +23,9 @@ import { useUser } from "../../hooks/useUser";
 import EditProfileModal from "../../components/EditProfileModal";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+// ✅ اضافه شد: منبع واحد وضعیت پلن
+import { getPlanStatus } from "../../lib/plan";
+
 // اگر PlanStatusBadge تو پروژه‌ات named export بود، این رو به { PlanStatusBadge } تغییر بده.
 import PlanStatusBadge from "../../components/PlanStatusBadge";
 
@@ -64,6 +67,7 @@ function PrimarySplitButton({
   rightText,
   rightIcon,
   onRightPress,
+  rightVariant = "gold",
 }: {
   leftText: string;
   leftIcon: keyof typeof Ionicons.glyphMap;
@@ -71,15 +75,23 @@ function PrimarySplitButton({
   rightText: string;
   rightIcon: keyof typeof Ionicons.glyphMap;
   onRightPress: () => void;
+  rightVariant?: "gold" | "danger";
 }) {
   return (
     <View style={styles.splitRow}>
       <TouchableOpacity
         activeOpacity={0.9}
         onPress={onRightPress}
-        style={[styles.splitBtn, styles.splitBtnRight]}
+        style={[
+          styles.splitBtn,
+          rightVariant === "danger" ? styles.splitBtnRightDanger : styles.splitBtnRight,
+        ]}
       >
-        <Ionicons name={rightIcon as any} size={16} color="#D4AF37" />
+        <Ionicons
+          name={rightIcon as any}
+          size={16}
+          color={rightVariant === "danger" ? "#FCA5A5" : "#D4AF37"}
+        />
         <Text style={styles.splitBtnText}>{rightText}</Text>
       </TouchableOpacity>
 
@@ -245,6 +257,10 @@ export default function Phoenix() {
     );
   }, []);
 
+  // ✅ وضعیت پلن (منبع واحد)
+  const status = getPlanStatus(me);
+  const isProActive = status.isPro;
+
   // فعلاً طبق درخواست: صفر
   const techniqueStreakDays = 0;
   const noContactDays = 0;
@@ -287,12 +303,13 @@ export default function Phoenix() {
 
         {/* دو دکمه زیر کارت پروفایل */}
         <PrimarySplitButton
-          rightText="اشتراک"
+          rightText={isProActive ? "اشتراک" : "ارتقا به پرو"}
           rightIcon="card"
           onRightPress={() => router.push("/(tabs)/Subscription")}
           leftText="ویرایش پروفایل"
           leftIcon="create"
           onLeftPress={() => setEditVisible(true)}
+          rightVariant={isProActive ? "gold" : "danger"}
         />
 
         {/* استمرار روزها */}
@@ -602,6 +619,11 @@ const styles = StyleSheet.create({
   splitBtnRight: {
     backgroundColor: "rgba(212,175,55,.18)",
     borderColor: "rgba(212,175,55,.30)",
+  },
+  // ✅ اضافه شد: حالت قرمز برای ارتقا به پرو
+  splitBtnRightDanger: {
+    backgroundColor: "rgba(239,68,68,.18)",
+    borderColor: "rgba(239,68,68,.35)",
   },
   splitBtnLeft: {
     backgroundColor: "rgba(96,165,250,.14)",

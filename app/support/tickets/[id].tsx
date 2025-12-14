@@ -1233,13 +1233,13 @@ export default function TicketDetail() {
               </Text>
               <Text style={styles.lockBody}>
                 {isExpiredView
-                  ? "برای باز شدن دوباره‌ی چت درمانگر، اشتراک PRO را تمدید کن. تا آن زمان می‌تونی از پشتیبانی فنی یا پشتیبان هوشمند استفاده کنی."
+                  ? "برای باز شدن دوباره‌ی چت درمانگر، اشتراک پرو رو تمدید کن. تا اون‌موقع می‌تونی از پشتیبانی فنی یا پشتیبان هوشمند استفاده کنی."
                   : "برای ارسال پیام به درمانگر، باید اشتراک PRO را از تب «پرداخت» فعال کنی. در این فاصله می‌تونی از پشتیبانی فنی یا پشتیبان هوشمند استفاده کنی."}
               </Text>
 
               <TouchableOpacity onPress={() => router.back()} activeOpacity={0.9} style={styles.lockBtn}>
                 <Text style={styles.lockBtnText}>برگشت</Text>
-                <Ionicons name="chevron-back" size={18} color="#E5E7EB" />
+                <Ionicons name="chevron-forward" size={18} color="#E5E7EB" />
               </TouchableOpacity>
             </View>
           </View>
