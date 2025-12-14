@@ -129,7 +129,7 @@ export async function getMeByPhone(
 ): Promise<ApiResp<UserRecord | null>> {
 
   const p = normalizeIranPhone(phone);
-  const cacheBuster = `cb_${Date.now()}`;
+  const cacheBuster = `cb=${Date.now()}`;
 
   // 🔥 بسیار مهم: فقط یک ? باید وجود داشته باشد
   const url = userUrl(`/api/users/me`) + `?phone=${encodeURIComponent(p)}&${cacheBuster}`;
