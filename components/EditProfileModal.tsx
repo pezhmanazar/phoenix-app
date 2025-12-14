@@ -519,134 +519,197 @@ export default function EditProfileModal({ onClose }: Props) {
     });
   };
 
-  /* ---------------- Delete account (DB) with double confirmation ---------------- */
+  /* ---------------- Sign out only (NO DATA DELETE) ---------------- */
+  const AUTH_KEYS_TO_CLEAR = ["session_v1", "otp_phone_v1", "otp_token_v1"] as const;
 
-const LOCAL_KEYS_TO_CLEAR = [
-  "phoenix_profile",
-  "profile_completed_flag",
-  "otp_phone_v1",
-  "session_v1",
-  "tags_v1",
-  "reminders_v1",
-  "today_v1",
-] as const;
+  const clearAuthOnly = async () => {
+    try {
+      await AsyncStorage.multiRemove([...AUTH_KEYS_TO_CLEAR]);
+    } catch {
+      await Promise.all(
+        AUTH_KEYS_TO_CLEAR.map((k) => AsyncStorage.removeItem(k).catch(() => {}))
+      );
+    }
+  };
 
-const clearLocalUserData = async () => {
-  try {
-    // بعضی RN ها multiRemove رو بهتر هندل می‌کنن، ولی اگر نبود هم با removeItem می‌ریم جلو
-    await AsyncStorage.multiRemove([...LOCAL_KEYS_TO_CLEAR]);
-  } catch {
-    // fallback: تک‌تک پاک کن
-    await Promise.all(
-      LOCAL_KEYS_TO_CLEAR.map((k) => AsyncStorage.removeItem(k).catch(() => {}))
-    );
-  }
-};
+  const doSignOutOnly = async () => {
+    if (saving) return;
 
-const deleteAccount = async () => {
-  if (saving) return; // ✅ جلوگیری از دوبار کلیک
-  const p = String(phone || "").trim();
+    try {
+      setSaving(true);
 
-  if (!p) {
-    openDialog({
-      tone: "danger",
-      title: "خطا",
-      message: "شماره موبایل پیدا نشد.",
-      buttons: [{ text: "باشه", kind: "primary", onPress: closeDialog }],
-    });
-    return;
-  }
+      // ✅ فقط خروج: هیچ چیز دیگری پاک نشود (نه phoenix_profile، نه profile_completed_flag، نه تمرین‌ها)
+      await clearAuthOnly();
 
-  try {
-    setSaving(true);
+      // ✅ استیت auth هم null شود
+      await signOut().catch(() => {});
 
-    const res = await deleteMeByPhone(p);
+      // ✅ استیت user هم به‌روز شود که جایی گیر نکند
+      await refresh?.({ force: true }).catch(() => {});
 
-    if (!res || typeof res !== "object" || (res as any).ok !== true) {
-      const err = (res as any)?.error || "حذف حساب ناموفق بود.";
+      showToast("ok", "خارج شدی. ✅");
+
+      onClose();
+
+      // ✅ مهم: بعد از خروج باید برود صفحه لاگین (نه onboarding)
+      // اگر روت شما متفاوت است این را مطابق پروژه‌ات عوض کن (مثلاً "/(auth)/login")
+      setTimeout(() => {
+        router.replace("/login");
+      }, 200);
+    } catch (e: any) {
       openDialog({
         tone: "danger",
-        title: "حذف نشد",
-        message: String(err),
+        title: "خطا",
+        message: e?.message || "مشکل شبکه",
+        buttons: [{ text: "باشه", kind: "primary", onPress: closeDialog }],
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmSignOutOnly = () => {
+    if (saving) return;
+
+    openDialog({
+      tone: "danger",
+      title: "خروج از حساب",
+      message:
+        "فقط از حسابت خارج میشی. هیچ اطلاعاتی پاک نمیشه. ادامه میدی؟",
+      buttons: [
+        { text: "انصراف", kind: "secondary", onPress: closeDialog },
+        {
+          text: "بله، خارج شو",
+          kind: "danger",
+          onPress: async () => {
+            closeDialog();
+            await doSignOutOnly();
+          },
+        },
+      ],
+    });
+  };
+
+  /* ---------------- Delete account (DB) with double confirmation ---------------- */
+
+  const LOCAL_KEYS_TO_CLEAR = [
+    "phoenix_profile",
+    "profile_completed_flag",
+    "otp_phone_v1",
+    "session_v1",
+    "tags_v1",
+    "reminders_v1",
+    "today_v1",
+  ] as const;
+
+  const clearLocalUserData = async () => {
+    try {
+      await AsyncStorage.multiRemove([...LOCAL_KEYS_TO_CLEAR]);
+    } catch {
+      await Promise.all(
+        LOCAL_KEYS_TO_CLEAR.map((k) => AsyncStorage.removeItem(k).catch(() => {}))
+      );
+    }
+  };
+
+  const deleteAccount = async () => {
+    if (saving) return;
+    const p = String(phone || "").trim();
+
+    if (!p) {
+      openDialog({
+        tone: "danger",
+        title: "خطا",
+        message: "شماره موبایل پیدا نشد.",
         buttons: [{ text: "باشه", kind: "primary", onPress: closeDialog }],
       });
       return;
     }
 
-    // ✅ اگر سرور گفت deleted:false هم به کاربر بگو (ولی لوکال رو هم پاک می‌کنیم تا گیر نکنه)
-    const deleted = (res as any)?.data?.deleted;
-    if (deleted === false) {
-      showToast("danger", "حساب روی سرور پیدا نشد (یا قبلاً حذف شده).");
+    try {
+      setSaving(true);
+
+      const res = await deleteMeByPhone(p);
+
+      if (!res || typeof res !== "object" || (res as any).ok !== true) {
+        const err = (res as any)?.error || "حذف حساب ناموفق بود.";
+        openDialog({
+          tone: "danger",
+          title: "حذف نشد",
+          message: String(err),
+          buttons: [{ text: "باشه", kind: "primary", onPress: closeDialog }],
+        });
+        return;
+      }
+
+      const deleted = (res as any)?.data?.deleted;
+      if (deleted === false) {
+        showToast("danger", "حساب روی سرور پیدا نشد (یا قبلاً حذف شده).");
+      }
+
+      await clearLocalUserData();
+      await signOut().catch(() => {});
+      await refresh?.({ force: true }).catch(() => {});
+
+      showToast("ok", "حساب حذف شد.");
+      onClose();
+
+      setTimeout(() => {
+        router.replace("/onboarding");
+      }, 200);
+    } catch (e: any) {
+      openDialog({
+        tone: "danger",
+        title: "خطا",
+        message: e?.message || "مشکل شبکه",
+        buttons: [{ text: "باشه", kind: "primary", onPress: closeDialog }],
+      });
+    } finally {
+      setSaving(false);
     }
+  };
 
-    // ✅ پاکسازی کامل لوکال
-    await clearLocalUserData();
+  const confirmDeleteAccount = () => {
+    if (saving) return;
 
-    // ✅ خروج
-    await signOut().catch(() => {});
+    const isPro =
+      String(me?.plan || "").toLowerCase() === "pro" ||
+      String(me?.plan || "").toLowerCase() === "vip";
 
-    // ✅ رفرش state کاربر (اگر useUser در همین صفحه اثر می‌گذارد)
-    await refresh?.({ force: true }).catch(() => {});
-
-    showToast("ok", "حساب حذف شد.");
-    onClose();
-
-    setTimeout(() => {
-      router.replace("/onboarding");
-    }, 200);
-  } catch (e: any) {
     openDialog({
       tone: "danger",
-      title: "خطا",
-      message: e?.message || "مشکل شبکه",
-      buttons: [{ text: "باشه", kind: "primary", onPress: closeDialog }],
-    });
-  } finally {
-    setSaving(false);
-  }
-};
-
-const confirmDeleteAccount = () => {
-  if (saving) return;
-
-  const isPro =
-    String(me?.plan || "").toLowerCase() === "pro" ||
-    String(me?.plan || "").toLowerCase() === "vip";
-
-  openDialog({
-    tone: "danger",
-    title: "حذف حساب کاربری",
-    message: "این کار غیرقابل بازگشته و همهٔ اطلاعاتت پاک میشه. ادامه میدی؟",
-    buttons: [
-      { text: "انصراف", kind: "secondary", onPress: closeDialog },
-      {
-        text: "ادامه",
-        kind: "danger",
-        onPress: () => {
-          closeDialog();
-          openDialog({
-            tone: "danger",
-            title: "تأیید نهایی",
-            message: isPro
-              ? "هشدار: اشتراک فعال داری و با حذف حساب، اشتراک هم پاک می‌شود. مطمئنی؟"
-              : "مطمئنی که می‌خوای حسابت رو حذف کنی؟",
-            buttons: [
-              { text: "انصراف", kind: "secondary", onPress: closeDialog },
-              {
-                text: "بله، حذف کن",
-                kind: "danger",
-                onPress: async () => {
-                  closeDialog();
-                  await deleteAccount();
+      title: "حذف حساب کاربری",
+      message: "این کار غیرقابل بازگشته و همهٔ اطلاعاتت پاک میشه. ادامه میدی؟",
+      buttons: [
+        { text: "انصراف", kind: "secondary", onPress: closeDialog },
+        {
+          text: "ادامه",
+          kind: "danger",
+          onPress: () => {
+            closeDialog();
+            openDialog({
+              tone: "danger",
+              title: "تأیید نهایی",
+              message: isPro
+                ? "هشدار: اشتراک فعال داری و با حذف حساب، اشتراک هم پاک میشه. مطمئنی؟"
+                : "مطمئنی که می‌خوای حسابت رو حذف کنی؟",
+              buttons: [
+                { text: "انصراف", kind: "secondary", onPress: closeDialog },
+                {
+                  text: "بله، حذف کن",
+                  kind: "danger",
+                  onPress: async () => {
+                    closeDialog();
+                    await deleteAccount();
+                  },
                 },
-              },
-            ],
-          });
+              ],
+            });
+          },
         },
-      },
-    ],
-  });
-};
+      ],
+    });
+  };
 
   /* ---------------- Dialog component ---------------- */
   const PhoenixDialog = useMemo(() => {
@@ -713,7 +776,6 @@ const confirmDeleteAccount = () => {
                         try {
                           await b.onPress?.();
                         } catch {
-                          // اگر اکشن خودش خطا داد، حداقل UI نشکنه
                           showToast("danger", "خطای غیرمنتظره");
                         }
                       }}
@@ -1047,6 +1109,34 @@ const confirmDeleteAccount = () => {
                 </Text>
               </View>
 
+              {/* Sign out only */}
+              <View style={{ marginTop: 12 }}>
+                <TouchableOpacity
+                  onPress={confirmSignOutOnly}
+                  activeOpacity={0.9}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "rgba(212,175,55,.55)",
+                    backgroundColor: "rgba(212,175,55,.08)",
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                    alignItems: "center",
+                    flexDirection: "row",
+                    justifyContent: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Ionicons name="log-out-outline" size={18} color={P.gold} />
+                  <Text style={{ color: P.text, fontWeight: "900" }}>
+                    خروج از حساب
+                  </Text>
+                </TouchableOpacity>
+
+                <Text style={{ color: P.muted2, fontSize: 11, textAlign: "center", marginTop: 6 }}>
+                  فقط از حساب خارج میشی. هیچ اطلاعاتی پاک نمیشه و دوباره با شماره وارد میشی.
+                </Text>
+              </View>
+
               {/* Delete account */}
               <View style={{ marginTop: 12 }}>
                 <TouchableOpacity
@@ -1071,7 +1161,7 @@ const confirmDeleteAccount = () => {
                 </TouchableOpacity>
 
                 <Text style={{ color: P.muted2, fontSize: 11, textAlign: "center", marginTop: 6 }}>
-                  هشدار: حذف حساب غیرقابل بازگشته و اگر کاربر پرو باشی، اشتراک هم حذف میشه.
+                  هشدار: حذف حساب غیرقابل بازگشته و اگر کاربر پرو باشی، اشتراکت هم حذف میشه.
                 </Text>
               </View>
 
