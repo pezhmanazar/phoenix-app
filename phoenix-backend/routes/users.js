@@ -72,6 +72,41 @@ router.get("/me", authUser, async (req, res) => {
   }
 });
 
+/* ---------- DELETE /api/users/me ---------- */
+/**
+ * حذف کامل حساب کاربری
+ * DELETE /api/users/me?phone=09...
+ */
+router.delete("/me", authUser, async (req, res) => {
+  try {
+    const phone = req.userPhone;
+
+    console.log("[users.delete] phone =", phone);
+
+    const user = await prisma.user.findUnique({
+      where: { phone },
+    });
+
+    if (!user) {
+      return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+    }
+
+    // اگر وابستگی‌های دیگه داری (Subscription / Payment / ...)
+    // اینجا باید به ترتیب پاک شوند
+
+    await prisma.user.delete({
+      where: { phone },
+    });
+
+    console.log("[users.delete] SUCCESS phone =", phone);
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("[users.delete] error:", e);
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
 /* ---------- POST /api/users/upsert ----------
    پروفایل‌ویزارد و ادیت پروفایل
    اپ تو:

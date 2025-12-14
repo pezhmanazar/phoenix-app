@@ -167,6 +167,12 @@ export async function resetUserByPhone(
   return doJson<UserRecord>(url, { method: "DELETE" });
 }
 
+// DELETE /api/users/delete?phone=...
+export async function deleteMeByPhone(phone: string): Promise<ApiResp<{ ok: true }>> {
+  const p = normalizeIranPhone(phone);
+  const url = userUrl(`/api/users/delete?phone=${encodeURIComponent(p)}`);
+  return doJson<{ ok: true }>(url, { method: "DELETE" });
+}
 /* ----------------- fetchMe برای useUser ----------------- */
 /**
  * me را واقعا از بک‌اند ققنوس می‌خواند.

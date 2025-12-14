@@ -7,6 +7,9 @@ import { useAuth } from "../hooks/useAuth";
 
 const ONBOARDING_KEY = "hasOnboarded_v1";
 
+// ✅ فعلاً همیشه آنبوردینگ را نشان بده (بعداً می‌تونیم false کنیم)
+const FORCE_ALWAYS_ONBOARDING = true;
+
 export default function Gate() {
   const router = useRouter();
   const { loading, isAuthenticated } = useAuth();
@@ -16,7 +19,6 @@ export default function Gate() {
 
   useEffect(() => {
     let mounted = true;
-
     (async () => {
       try {
         const v = await AsyncStorage.getItem(ONBOARDING_KEY);
@@ -28,7 +30,6 @@ export default function Gate() {
         setOnboarded(false);
       }
     })();
-
     return () => {
       mounted = false;
     };
@@ -39,6 +40,12 @@ export default function Gate() {
     if (loading) return;
     if (onboarded === null) return;
 
+    // ✅ فعلاً همیشه آنبوردینگ
+    if (FORCE_ALWAYS_ONBOARDING) {
+      router.replace("/onboarding");
+      return;
+    }
+
     // 1) اگر اولین بار است -> onboarding
     if (!onboarded) {
       router.replace("/onboarding");
@@ -47,7 +54,7 @@ export default function Gate() {
 
     // 2) منطق قبلی خودت
     router.replace(isAuthenticated ? "/(tabs)" : "/(auth)/login");
-  }, [loading, isAuthenticated, onboarded]);
+  }, [loading, isAuthenticated, onboarded, router]);
 
   return (
     <View
