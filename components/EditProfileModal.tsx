@@ -520,91 +520,133 @@ export default function EditProfileModal({ onClose }: Props) {
   };
 
   /* ---------------- Delete account (DB) with double confirmation ---------------- */
-  const deleteAccount = async () => {
-    if (!phone) {
+
+const LOCAL_KEYS_TO_CLEAR = [
+  "phoenix_profile",
+  "profile_completed_flag",
+  "otp_phone_v1",
+  "session_v1",
+  "tags_v1",
+  "reminders_v1",
+  "today_v1",
+] as const;
+
+const clearLocalUserData = async () => {
+  try {
+    // بعضی RN ها multiRemove رو بهتر هندل می‌کنن، ولی اگر نبود هم با removeItem می‌ریم جلو
+    await AsyncStorage.multiRemove([...LOCAL_KEYS_TO_CLEAR]);
+  } catch {
+    // fallback: تک‌تک پاک کن
+    await Promise.all(
+      LOCAL_KEYS_TO_CLEAR.map((k) => AsyncStorage.removeItem(k).catch(() => {}))
+    );
+  }
+};
+
+const deleteAccount = async () => {
+  if (saving) return; // ✅ جلوگیری از دوبار کلیک
+  const p = String(phone || "").trim();
+
+  if (!p) {
+    openDialog({
+      tone: "danger",
+      title: "خطا",
+      message: "شماره موبایل پیدا نشد.",
+      buttons: [{ text: "باشه", kind: "primary", onPress: closeDialog }],
+    });
+    return;
+  }
+
+  try {
+    setSaving(true);
+
+    const res = await deleteMeByPhone(p);
+
+    if (!res || typeof res !== "object" || (res as any).ok !== true) {
+      const err = (res as any)?.error || "حذف حساب ناموفق بود.";
       openDialog({
         tone: "danger",
-        title: "خطا",
-        message: "شماره موبایل پیدا نشد.",
+        title: "حذف نشد",
+        message: String(err),
         buttons: [{ text: "باشه", kind: "primary", onPress: closeDialog }],
       });
       return;
     }
 
-    try {
-      setSaving(true);
-      const res = await deleteMeByPhone(phone);
-      if (!res.ok) {
-        openDialog({
-          tone: "danger",
-          title: "حذف نشد",
-          message: res.error || "حذف حساب ناموفق بود.",
-          buttons: [{ text: "باشه", kind: "primary", onPress: closeDialog }],
-        });
-        return;
-      }
-
-      await AsyncStorage.removeItem("phoenix_profile").catch(() => {});
-      await AsyncStorage.removeItem("profile_completed_flag").catch(() => {});
-      await signOut().catch(() => {});
-
-      showToast("ok", "حساب حذف شد.");
-      onClose();
-      setTimeout(() => {
-        router.replace("/onboarding");
-      }, 180);
-    } catch (e: any) {
-      openDialog({
-        tone: "danger",
-        title: "خطا",
-        message: e?.message || "مشکل شبکه",
-        buttons: [{ text: "باشه", kind: "primary", onPress: closeDialog }],
-      });
-    } finally {
-      setSaving(false);
+    // ✅ اگر سرور گفت deleted:false هم به کاربر بگو (ولی لوکال رو هم پاک می‌کنیم تا گیر نکنه)
+    const deleted = (res as any)?.data?.deleted;
+    if (deleted === false) {
+      showToast("danger", "حساب روی سرور پیدا نشد (یا قبلاً حذف شده).");
     }
-  };
 
-  const confirmDeleteAccount = () => {
-    const isPro =
-      String(me?.plan || "").toLowerCase() === "pro" ||
-      String(me?.plan || "").toLowerCase() === "vip";
+    // ✅ پاکسازی کامل لوکال
+    await clearLocalUserData();
 
+    // ✅ خروج
+    await signOut().catch(() => {});
+
+    // ✅ رفرش state کاربر (اگر useUser در همین صفحه اثر می‌گذارد)
+    await refresh?.({ force: true }).catch(() => {});
+
+    showToast("ok", "حساب حذف شد.");
+    onClose();
+
+    setTimeout(() => {
+      router.replace("/onboarding");
+    }, 200);
+  } catch (e: any) {
     openDialog({
       tone: "danger",
-      title: "حذف حساب کاربری",
-      message:
-        "این کار غیرقابل بازگشته و همهٔ اطلاعاتت پاک میشه. ادامه میدی؟",
-      buttons: [
-        { text: "انصراف", kind: "secondary", onPress: closeDialog },
-        {
-          text: "ادامه",
-          kind: "danger",
-          onPress: () => {
-            closeDialog();
-            openDialog({
-              tone: "danger",
-              title: "تأیید نهایی",
-              message: isPro
-                ? "هشدار: اشتراک فعال داری و با حذف حساب، اشتراک هم پاک می‌شود. مطمئنی؟"
-                : "مطمئنی که می‌خوای حسابت رو حذف کنی؟",
-              buttons: [
-                { text: "انصراف", kind: "secondary", onPress: closeDialog },
-                {
-                  text: "بله، حذف کن",
-                  kind: "danger",
-                  onPress: async () => {
-                    closeDialog();
-                    await deleteAccount();
-                  },
-                },
-              ],
-            });
-          },
-        },
-      ],
+      title: "خطا",
+      message: e?.message || "مشکل شبکه",
+      buttons: [{ text: "باشه", kind: "primary", onPress: closeDialog }],
     });
-  };
+  } finally {
+    setSaving(false);
+  }
+};
+
+const confirmDeleteAccount = () => {
+  if (saving) return;
+
+  const isPro =
+    String(me?.plan || "").toLowerCase() === "pro" ||
+    String(me?.plan || "").toLowerCase() === "vip";
+
+  openDialog({
+    tone: "danger",
+    title: "حذف حساب کاربری",
+    message: "این کار غیرقابل بازگشته و همهٔ اطلاعاتت پاک میشه. ادامه میدی؟",
+    buttons: [
+      { text: "انصراف", kind: "secondary", onPress: closeDialog },
+      {
+        text: "ادامه",
+        kind: "danger",
+        onPress: () => {
+          closeDialog();
+          openDialog({
+            tone: "danger",
+            title: "تأیید نهایی",
+            message: isPro
+              ? "هشدار: اشتراک فعال داری و با حذف حساب، اشتراک هم پاک می‌شود. مطمئنی؟"
+              : "مطمئنی که می‌خوای حسابت رو حذف کنی؟",
+            buttons: [
+              { text: "انصراف", kind: "secondary", onPress: closeDialog },
+              {
+                text: "بله، حذف کن",
+                kind: "danger",
+                onPress: async () => {
+                  closeDialog();
+                  await deleteAccount();
+                },
+              },
+            ],
+          });
+        },
+      },
+    ],
+  });
+};
 
   /* ---------------- Dialog component ---------------- */
   const PhoenixDialog = useMemo(() => {
