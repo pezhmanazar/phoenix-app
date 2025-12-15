@@ -49,22 +49,19 @@ router.post("/login", async (req, res) => {
 
     if (apiKey?.trim()) {
       admin = await prisma.admin.findUnique({ where: { apiKey: apiKey.trim() } });
-      // ✅ FIX: همیشه JSON (برای جلوگیری از HTML شدن در WCDN)
-      if (!admin) return res.json({ ok: false, error: "invalid_api_key" });
+      if (!admin) return res.status(401).json({ ok: false, error: "invalid_api_key" });
     } else if (email && password) {
       // ✅ FIX: normalize email (lowercase)
       const emailNorm = String(email).trim().toLowerCase();
       admin = await prisma.admin.findUnique({ where: { email: emailNorm } });
 
-      // ✅ FIX: همیشه JSON
       if (!admin || !admin.passwordHash) {
-        return res.json({ ok: false, error: "invalid_credentials" });
+        return res.status(401).json({ ok: false, error: "invalid_credentials" });
       }
       const ok = await bcrypt.compare(String(password), admin.passwordHash);
-      if (!ok) return res.json({ ok: false, error: "invalid_credentials" });
+      if (!ok) return res.status(401).json({ ok: false, error: "invalid_credentials" });
     } else {
-      // ✅ FIX: همیشه JSON
-      return res.json({ ok: false, error: "missing_login_fields" });
+      return res.status(400).json({ ok: false, error: "missing_login_fields" });
     }
 
     const token = crypto.randomBytes(32).toString("hex");
@@ -100,16 +97,14 @@ router.post("/login", async (req, res) => {
 router.get("/verify", async (req, res) => {
   try {
     const t = String(req.headers["x-admin-token"] || "");
-    // ✅ FIX: همیشه JSON
-    if (!t) return res.json({ ok: false, error: "token_required" });
+    if (!t) return res.status(401).json({ ok: false, error: "token_required" });
 
     const session = await prisma.adminSession.findUnique({
       where: { token: t },
       include: { admin: true },
     });
-    // ✅ FIX: همیشه JSON
     if (!session || session.revokedAt || session.expiresAt < new Date()) {
-      return res.json({ ok: false, error: "invalid_or_expired" });
+      return res.status(401).json({ ok: false, error: "invalid_or_expired" });
     }
     const { admin } = session;
     return res.json({
@@ -129,8 +124,7 @@ router.get("/verify", async (req, res) => {
 router.post("/logout", async (req, res) => {
   try {
     const t = String(req.headers["x-admin-token"] || "");
-    // ✅ FIX: همیشه JSON
-    if (!t) return res.json({ ok: false, error: "token_required" });
+    if (!t) return res.status(400).json({ ok: false, error: "token_required" });
 
     await prisma.adminSession
       .update({
@@ -149,16 +143,14 @@ router.post("/logout", async (req, res) => {
 async function sessionAuth(req, res, next) {
   try {
     const token = String(req.headers["x-admin-token"] || "");
-    // ✅ FIX: همیشه JSON
-    if (!token) return res.json({ ok: false, error: "token_required" });
+    if (!token) return res.status(401).json({ ok: false, error: "token_required" });
 
     const session = await prisma.adminSession.findUnique({
       where: { token },
       include: { admin: true },
     });
-    // ✅ FIX: همیشه JSON
     if (!session || session.revokedAt || session.expiresAt < new Date()) {
-      return res.json({ ok: false, error: "invalid_or_expired" });
+      return res.status(401).json({ ok: false, error: "invalid_or_expired" });
     }
     req.admin = session.admin;
     next();
@@ -170,9 +162,8 @@ async function sessionAuth(req, res, next) {
 
 // ===== نگهبان نقش‌ها
 const allow = (...roles) => (req, res, next) => {
-  // ✅ FIX: همیشه JSON
-  if (!req.admin) return res.json({ ok: false, error: "unauthorized" });
-  if (!roles.includes(req.admin.role)) return res.json({ ok: false, error: "forbidden" });
+  if (!req.admin) return res.status(401).json({ ok: false, error: "unauthorized" });
+  if (!roles.includes(req.admin.role)) return res.status(403).json({ ok: false, error: "forbidden" });
   next();
 };
 
@@ -315,10 +306,6 @@ router.post("/users", allow("manager", "owner"), async (req, res) => {
 });
 
 // ✅ PATCH /api/admin/users/:id/plan
-// body نمونه‌ها:
-// 1) { plan: "pro", months: 3 }  -> expiresAt = now + months
-// 2) { plan: "pro", expiresAt: "2026-01-01T00:00:00.000Z" }  -> تاریخ دستی
-// 3) { plan: "free" } -> free + expires null
 router.patch("/users/:id/plan", allow("manager", "owner"), async (req, res) => {
   try {
     const id = String(req.params.id);
@@ -342,7 +329,6 @@ router.patch("/users/:id/plan", allow("manager", "owner"), async (req, res) => {
         }
         planExpiresAt = addMonths(new Date(), months);
       } else {
-        // اگر هیچ‌کدام نبود، حداقل 30 روز بده (قانون سخت‌گیرانه)
         planExpiresAt = addMonths(new Date(), 1);
       }
     }
@@ -372,12 +358,11 @@ router.patch("/users/:id/plan", allow("manager", "owner"), async (req, res) => {
 });
 
 // ✅ DELETE /api/admin/users/:id  (حذف کامل)
-// فقط owner (چون حذف ریسک بالاست)
+// فقط owner
 router.delete("/users/:id", allow("owner"), async (req, res) => {
   try {
     const id = String(req.params.id);
 
-    // اول subscriptions رو هم پاک می‌کنیم تا مطمئن باشیم چیزی گیر نمی‌کنه
     await prisma.$transaction([
       prisma.subscription.deleteMany({ where: { userId: id } }),
       prisma.user.delete({ where: { id } }),
@@ -391,8 +376,7 @@ router.delete("/users/:id", allow("owner"), async (req, res) => {
   }
 });
 
-// ✅ GET /api/admin/stats  (آمار سریع)
-// دسترسی: manager/owner
+// ✅ GET /api/admin/stats
 router.get("/stats", allow("manager", "owner"), async (_req, res) => {
   try {
     const now = new Date();
@@ -467,6 +451,217 @@ router.patch("/profile", async (req, res) => {
   }
 });
 /* ==================== پایان بخش profile (افزودنی) ===================== */
+
+/* ====================== ✅ ANNOUNCEMENTS (بنر همگانی) ====================== */
+/**
+ * ✅ لیست بنرها
+ * GET /api/admin/announcements?enabled=true|false
+ * دسترسی: manager/owner
+ */
+router.get("/announcements", allow("manager", "owner"), async (req, res) => {
+  try {
+    const enabled =
+      req.query.enabled === undefined
+        ? undefined
+        : String(req.query.enabled).toLowerCase() === "true";
+
+    const where = {};
+    if (enabled !== undefined) where.enabled = enabled;
+
+    const items = await prisma.announcement.findMany({
+      where,
+      orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+      take: 500,
+    });
+
+    res.json({ ok: true, data: items });
+  } catch (e) {
+    console.error("admin/announcements GET error:", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+/**
+ * ✅ ساخت بنر
+ * POST /api/admin/announcements
+ * body: { id?, title?, message, level?, placement?, dismissible?, enabled?, startAt?, endAt?, priority? }
+ * دسترسی: manager/owner
+ */
+router.post("/announcements", allow("manager", "owner"), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const message = typeof b.message === "string" ? b.message.trim() : "";
+    if (!message) return res.status(400).json({ ok: false, error: "message_required" });
+
+    const id = b.id ? String(b.id).trim() : undefined;
+    const title = b.title !== undefined ? (b.title === null ? null : String(b.title).trim()) : undefined;
+
+    const level = b.level ? String(b.level) : "info";
+    if (!["info", "warning", "critical"].includes(level)) {
+      return res.status(400).json({ ok: false, error: "invalid_level" });
+    }
+
+    const placement = b.placement ? String(b.placement) : "top_banner";
+    if (!["top_banner"].includes(placement)) {
+      return res.status(400).json({ ok: false, error: "invalid_placement" });
+    }
+
+    const dismissible =
+      b.dismissible === undefined ? true : Boolean(b.dismissible);
+    const enabled =
+      b.enabled === undefined ? true : Boolean(b.enabled);
+
+    const priority =
+      b.priority === undefined ? 0 : Number(b.priority);
+    if (!Number.isFinite(priority)) {
+      return res.status(400).json({ ok: false, error: "invalid_priority" });
+    }
+
+    const startAt = b.startAt ? new Date(b.startAt) : null;
+    const endAt = b.endAt ? new Date(b.endAt) : null;
+    if (startAt && isNaN(startAt.getTime())) return res.status(400).json({ ok: false, error: "invalid_startAt" });
+    if (endAt && isNaN(endAt.getTime())) return res.status(400).json({ ok: false, error: "invalid_endAt" });
+
+    const created = await prisma.announcement.create({
+      data: {
+        ...(id ? { id } : {}),
+        ...(title !== undefined ? { title } : {}),
+        message,
+        level,
+        placement,
+        dismissible,
+        enabled,
+        startAt,
+        endAt,
+        priority,
+      },
+    });
+
+    res.json({ ok: true, data: created });
+  } catch (e) {
+    if (e?.code === "P2002") return res.status(409).json({ ok: false, error: "unique_violation" });
+    console.error("admin/announcements POST error:", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+/**
+ * ✅ ویرایش بنر
+ * PATCH /api/admin/announcements/:id
+ * دسترسی: manager/owner
+ */
+router.patch("/announcements/:id", allow("manager", "owner"), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const b = req.body || {};
+    const data = {};
+
+    if (b.title !== undefined) data.title = b.title === null ? null : String(b.title).trim();
+
+    if (b.message !== undefined) {
+      const msg = String(b.message).trim();
+      if (!msg) return res.status(400).json({ ok: false, error: "message_required" });
+      data.message = msg;
+    }
+
+    if (b.level !== undefined) {
+      const level = String(b.level);
+      if (!["info", "warning", "critical"].includes(level)) {
+        return res.status(400).json({ ok: false, error: "invalid_level" });
+      }
+      data.level = level;
+    }
+
+    if (b.placement !== undefined) {
+      const placement = String(b.placement);
+      if (!["top_banner"].includes(placement)) {
+        return res.status(400).json({ ok: false, error: "invalid_placement" });
+      }
+      data.placement = placement;
+    }
+
+    if (b.dismissible !== undefined) data.dismissible = Boolean(b.dismissible);
+    if (b.enabled !== undefined) data.enabled = Boolean(b.enabled);
+
+    if (b.priority !== undefined) {
+      const p = Number(b.priority);
+      if (!Number.isFinite(p)) return res.status(400).json({ ok: false, error: "invalid_priority" });
+      data.priority = p;
+    }
+
+    if (b.startAt !== undefined) {
+      const d = b.startAt ? new Date(b.startAt) : null;
+      if (d && isNaN(d.getTime())) return res.status(400).json({ ok: false, error: "invalid_startAt" });
+      data.startAt = d;
+    }
+    if (b.endAt !== undefined) {
+      const d = b.endAt ? new Date(b.endAt) : null;
+      if (d && isNaN(d.getTime())) return res.status(400).json({ ok: false, error: "invalid_endAt" });
+      data.endAt = d;
+    }
+
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({ ok: false, error: "no_fields_to_update" });
+    }
+
+    const updated = await prisma.announcement.update({
+      where: { id },
+      data,
+    });
+
+    res.json({ ok: true, data: updated });
+  } catch (e) {
+    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
+    console.error("admin/announcements PATCH error:", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+/**
+ * ✅ حذف بنر (برای WCDN: POST)
+ * POST /api/admin/announcements/:id/delete
+ * دسترسی: owner
+ */
+router.post("/announcements/:id/delete", allow("owner"), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+
+    await prisma.$transaction([
+      prisma.announcementSeen.deleteMany({ where: { announcementId: id } }),
+      prisma.announcement.delete({ where: { id } }),
+    ]);
+
+    res.json({ ok: true });
+  } catch (e) {
+    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
+    console.error("admin/announcements delete POST error:", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+/**
+ * ✅ حذف بنر (REST/لوکال: DELETE)
+ * DELETE /api/admin/announcements/:id
+ * دسترسی: owner
+ */
+router.delete("/announcements/:id", allow("owner"), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+
+    await prisma.$transaction([
+      prisma.announcementSeen.deleteMany({ where: { announcementId: id } }),
+      prisma.announcement.delete({ where: { id } }),
+    ]);
+
+    res.json({ ok: true });
+  } catch (e) {
+    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
+    console.error("admin/announcements DELETE error:", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+/* ====================== END ANNOUNCEMENTS ====================== */
 
 /**
  * ✅ لیست تیکت‌ها + فیلتر/جستجو (سنجاق‌شده‌ها اول)
@@ -628,6 +823,50 @@ router.patch("/tickets/:id", allow("manager", "owner"), async (req, res) => {
 });
 
 /**
+ * ✅ حذف تیکت (برای WCDN: POST)
+ * POST /api/admin/tickets/:id/delete
+ * دسترسی: manager/owner
+ */
+router.post("/tickets/:id/delete", allow("manager", "owner"), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+
+    await prisma.$transaction([
+      prisma.message.deleteMany({ where: { ticketId: id } }),
+      prisma.ticket.delete({ where: { id } }),
+    ]);
+
+    res.json({ ok: true });
+  } catch (e) {
+    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
+    console.error("admin/tickets delete POST error:", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+/**
+ * ✅ حذف تیکت (REST/لوکال: DELETE)
+ * DELETE /api/admin/tickets/:id
+ * دسترسی: manager/owner
+ */
+router.delete("/tickets/:id", allow("manager", "owner"), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+
+    await prisma.$transaction([
+      prisma.message.deleteMany({ where: { ticketId: id } }),
+      prisma.ticket.delete({ where: { id } }),
+    ]);
+
+    res.json({ ok: true });
+  } catch (e) {
+    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
+    console.error("admin/tickets DELETE error:", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+/**
  * ✅ ارسال پاسخ ادمین (متنی)
  * POST /api/admin/tickets/:id/reply
  * body: { text: string }
@@ -767,35 +1006,11 @@ router.post(
   }
 );
 
-/**
- * ✅ حذف کامل تیکت
- * DELETE /api/admin/tickets/:id
- * دسترسی: manager/owner
- */
-router.delete("/tickets/:id", allow("manager", "owner"), async (req, res) => {
-  try {
-    const id = String(req.params.id);
-
-    // اگر نبود
-    const exists = await prisma.ticket.findUnique({ where: { id }, select: { id: true } });
-    if (!exists) return res.status(404).json({ ok: false, error: "not_found" });
-
-    // با توجه به onDelete: Cascade در Message، پیام‌ها هم پاک می‌شوند
-    await prisma.ticket.delete({ where: { id } });
-
-    return res.json({ ok: true });
-  } catch (e) {
-    console.error("admin/tickets DELETE error:", e);
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
 /* ====== 👇👇👇 ایجاد ادمین فقط توسط Owner 👇👇👇 ====== */
 router.post("/admins", allow("owner"), async (req, res) => {
   try {
     const { email, name, role, password } = req.body || {};
 
-    // اعتبارسنجی ورودی
     if (!email || !password || !role) {
       return res.status(400).json({ ok: false, error: "missing_fields" });
     }
