@@ -3,17 +3,32 @@
   "compilerOptions": {
     "strict": true,
     "baseUrl": ".",
+    "skipLibCheck": true,
     "paths": {
       "@/*": ["./*"],
       "react-native-track-player": ["./lib/trackPlayerShim"]
     }
   },
   "include": [
-    "**/*.ts",
-    "**/*.tsx",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "hooks/**/*.ts",
+    "hooks/**/*.tsx",
+    "lib/**/*.ts",
+    "lib/**/*.tsx",
+    "constants/**/*.ts",
+    "constants/**/*.tsx",
     ".expo/types/**/*.ts",
-    "expo-env.d.ts",
-    "lib/storage",
-    "lib/trackPlayerShim.ts"
+    "expo-env.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/node_modules/*",
+    "android",
+    "ios",
+    "dist",
+    "build"
   ]
 }

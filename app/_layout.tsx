@@ -10,14 +10,17 @@ import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useMemo } from "react";
 import { Text, TextInput } from "react-native";
 import { useFonts } from "expo-font";
+import * as SplashScreen from "expo-splash-screen";
 
 import { PhoenixProvider, usePhoenix } from "../hooks/PhoenixContext";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-// 🔌 ماژول‌های کانتکست‌ها
+// 🔌 Context modules
 import * as AuthModule from "../hooks/useAuth";
 import * as UserModule from "../hooks/useUser";
 import * as PlanModule from "../hooks/usePlanStatus";
+
+/* ---------------- Providers ---------------- */
 
 const AuthProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -49,14 +52,27 @@ const PlanStatusProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
   return <Comp>{children}</Comp>;
 };
 
+/* ---------------- Navigation ---------------- */
+
 function RootStack() {
   return (
     <>
       <StatusBar style="auto" />
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="pay" options={{ headerShown: false }} />
+        {/* ✅ Splash route */}
+        <Stack.Screen name="splash" />
+
+        {/* ✅ Gate route (همون index فعلی‌ات رو منتقل می‌کنیم به gate) */}
+        <Stack.Screen name="gate" />
+
+        <Stack.Screen name="onboarding" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="(auth)" />
+
+        {/* ✅ pay درست */}
+        <Stack.Screen name="pay/index" />
+        <Stack.Screen name="pay/result" />
+
         <Stack.Screen name="modal" options={{ presentation: "modal" }} />
       </Stack>
     </>
@@ -77,6 +93,8 @@ function ThemeBridge() {
   );
 }
 
+/* ---------------- Root Layout ---------------- */
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     "Anjoman-Regular": require("../assets/fonts/Anjoman-Regular.ttf"),
@@ -84,26 +102,34 @@ export default function RootLayout() {
     "Anjoman-Bold": require("../assets/fonts/Anjoman-Bold.ttf"),
   });
 
+  // ✅ امن: بعد از mount شدن runtime — فقط prevent، نه hide
   useEffect(() => {
-  if (!fontsLoaded) return;
+    SplashScreen.preventAutoHideAsync().catch(() => {});
+    console.log("🟢 SPLASH PREVENT (SAFE)");
+  }, []);
 
-  const oldTextRender = (Text as any).render;
-  (Text as any).render = function (...args: any[]) {
-    const origin = oldTextRender.call(this, ...args);
-    return React.cloneElement(origin, {
-      style: [{ fontFamily: "Anjoman-Regular" }, origin.props.style],
-    });
-  };
+  // فونت پیش‌فرض برای Text / TextInput
+  useEffect(() => {
+    if (!fontsLoaded) return;
 
-  const oldInputRender = (TextInput as any).render;
-  (TextInput as any).render = function (...args: any[]) {
-    const origin = oldInputRender.call(this, ...args);
-    return React.cloneElement(origin, {
-      style: [{ fontFamily: "Anjoman-Regular" }, origin.props.style],
-    });
-  };
-}, [fontsLoaded]);
+    const oldTextRender = (Text as any).render;
+    (Text as any).render = function (...args: any[]) {
+      const origin = oldTextRender.call(this, ...args);
+      return React.cloneElement(origin, {
+        style: [{ fontFamily: "Anjoman-Regular" }, origin.props.style],
+      });
+    };
 
+    const oldInputRender = (TextInput as any).render;
+    (TextInput as any).render = function (...args: any[]) {
+      const origin = oldInputRender.call(this, ...args);
+      return React.cloneElement(origin, {
+        style: [{ fontFamily: "Anjoman-Regular" }, origin.props.style],
+      });
+    };
+  }, [fontsLoaded]);
+
+  // تا آماده شدن فونت‌ها چیزی رندر نشود (Native splash می‌ماند)
   if (!fontsLoaded) return null;
 
   return (
