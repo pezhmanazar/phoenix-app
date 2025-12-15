@@ -19,7 +19,6 @@ import authRouter from "./routes/auth.js";       // 🔹 روتر جدید اح�
 import payRouter from "./routes/pay.js";         // 🔹 روتر پرداخت / زرین‌پال (جدید)
 import paymentsRouter from "./routes/payments.js";
 import announcementsRouter from "./routes/announcements.js";
-app.use("/api/announcements", announcementsRouter);
 
 // ---------- Paths ----------
 const __filename = fileURLToPath(import.meta.url);
@@ -46,6 +45,8 @@ app.use(
 );
 app.options("*", cors());
 app.use(morgan("dev"));
+
+app.use("/api/announcements", announcementsRouter);
 
 // ---------- Static site (Phoenix website) ----------
 app.use(express.static(PUBLIC_DIR)); // /, /store.html, /contact.html, ...
