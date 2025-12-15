@@ -21,8 +21,8 @@ enum TicketStatus {
 
 // ⬅️ نوع تیکت
 enum TicketType {
-  tech     // پشتیبانی فنی
-  therapy  // ارتباط با درمانگر
+  tech // پشتیبانی فنی
+  therapy // ارتباط با درمانگر
 }
 
 model Ticket {
@@ -65,7 +65,7 @@ model Message {
   mime        String?
   size        Int?
   durationSec Int?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime    @default(now())
 
   @@index([ticketId])
 }
@@ -90,11 +90,11 @@ model Admin {
 }
 
 model AdminSession {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   adminId   String
-  admin     Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
-  token     String   @unique
-  createdAt DateTime @default(now())
+  admin     Admin     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  token     String    @unique
+  createdAt DateTime  @default(now())
   expiresAt DateTime
   revokedAt DateTime?
 }
@@ -107,7 +107,9 @@ model AiMemory {
   createdAt DateTime @default(now())
 }
 
-/* ----------- User + Subscription برای اپ ققنوس ----------- */
+/**
+ * ----------- User + Subscription برای اپ ققنوس -----------
+ */
 
 enum SubscriptionStatus {
   pending
@@ -119,14 +121,14 @@ enum SubscriptionStatus {
 // ❌ enum Plan را حذف کردیم تا لازم نباشه type دیتابیسی public.Plan بسازیم
 // ✅ پلن را به صورت رشته ذخیره می‌کنیم: 'free' | 'pro' | 'vip'
 model User {
-  id        String   @id @default(uuid())
-  phone     String   @unique
-  fullName  String?  @default("")
-  gender    String?  // male / female / other (ساده نگه می‌داریم)
+  id        String    @id @default(uuid())
+  phone     String    @unique
+  fullName  String?   @default("")
+  gender    String? // male / female / other (ساده نگه می‌داریم)
   birthDate DateTime?
 
   // ✅ فیلدهای رسمی اشتراک - به صورت String
-  plan          String   @default("free") // 'free' | 'pro' | 'vip'
+  plan          String    @default("free") // 'free' | 'pro' | 'vip'
   planExpiresAt DateTime?
 
   profileCompleted Boolean @default(false)
@@ -135,28 +137,81 @@ model User {
   updatedAt DateTime @updatedAt
 
   subscriptions Subscription[]
+
+  // ✅ همین یک خط، مشکل P1012 را حل می‌کند:
+  announcementSeen AnnouncementSeen[]
 }
 
 model Subscription {
-  id        String             @id @default(uuid())
+  id String @id @default(uuid())
 
-  userId    String?
-  user      User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   phone     String
-  authority String             @unique
+  authority String  @unique
   refId     String?
 
-  amount    Int
-  months    Int
-  plan      String
-  status    SubscriptionStatus @default(pending)
+  amount Int
+  months Int
+  plan   String
+  status SubscriptionStatus @default(pending)
 
   expiresAt DateTime
 
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
   paidAt    DateTime?
 
   @@index([userId])
   @@index([phone])
+}
+
+enum AnnouncementPlacement {
+  top_banner
+}
+
+enum AnnouncementLevel {
+  info
+  warning
+  critical
+}
+
+model Announcement {
+  id        String                @id @default(uuid())
+  title     String?
+  message   String
+  level     AnnouncementLevel     @default(info)
+  placement AnnouncementPlacement @default(top_banner)
+
+  // ✅ اجباری/اختیاری (اجباری یعنی dismissible=false)
+  dismissible Boolean @default(true)
+
+  // ✅ فعال/غیرفعال
+  enabled Boolean @default(true)
+
+  // زمان‌بندی
+  startAt DateTime?
+  endAt   DateTime?
+
+  // ترتیب نمایش (عدد بزرگ‌تر یعنی بالاتر)
+  priority Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  seenBy AnnouncementSeen[]
+}
+
+model AnnouncementSeen {
+  id             String   @id @default(uuid())
+  announcementId String
+  userId         String
+  seenAt         DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, userId])
+  @@index([userId])
+  @@index([announcementId])
 }

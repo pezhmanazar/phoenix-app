@@ -1,5 +1,5 @@
 // routes/admin.js
-import { PrismaClient } from "@prisma/client";
+import prisma from "../utils/prisma.js";
 import { Router } from "express";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
@@ -9,7 +9,6 @@ import multer from "multer";
 import fs from "fs";
 import path from "path";
 
-const prisma = new PrismaClient();
 const router = Router();
 
 // Helper: ساعت به جلو
@@ -52,7 +51,10 @@ router.post("/login", async (req, res) => {
       admin = await prisma.admin.findUnique({ where: { apiKey: apiKey.trim() } });
       if (!admin) return res.status(401).json({ ok: false, error: "invalid_api_key" });
     } else if (email && password) {
-      admin = await prisma.admin.findUnique({ where: { email: String(email).trim() } });
+      // ✅ FIX: normalize email (lowercase)
+      const emailNorm = String(email).trim().toLowerCase();
+      admin = await prisma.admin.findUnique({ where: { email: emailNorm } });
+
       if (!admin || !admin.passwordHash) {
         return res.status(401).json({ ok: false, error: "invalid_credentials" });
       }
@@ -167,6 +169,262 @@ const allow = (...roles) => (req, res, next) => {
 
 // از اینجا به بعد همه مسیرها حفاظت می‌شوند
 router.use(sessionAuth);
+
+/* ====================== USERS (Admin Panel) ====================== */
+
+// helper: normalize phone مثل users.js (همون منطق)
+function normalizePhone(input) {
+  const digits = String(input || "").replace(/\D/g, "");
+  if (digits.startsWith("989") && digits.length === 12) return "0" + digits.slice(2);
+  if (digits.startsWith("09") && digits.length === 11) return digits;
+  if (digits.startsWith("9") && digits.length === 10) return "0" + digits;
+  return null;
+}
+
+// helper: months -> expiresAt
+function addMonths(date, months) {
+  const d = new Date(date);
+  const m = Number(months || 0);
+  if (!Number.isFinite(m) || m <= 0) return d;
+  d.setMonth(d.getMonth() + m);
+  return d;
+}
+
+// ✅ GET /api/admin/users?plan=free|pro|vip|expired&q=...&page=1&limit=50
+// دسترسی: agent/manager/owner (صرفاً مشاهده)
+router.get("/users", allow("agent", "manager", "owner"), async (req, res) => {
+  try {
+    const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    const plan = typeof req.query.plan === "string" ? req.query.plan.trim() : "";
+    const page = Math.max(1, Number(req.query.page || 1) || 1);
+    const limitRaw = Number(req.query.limit || 50) || 50;
+    const limit = Math.min(200, Math.max(10, limitRaw));
+    const skip = (page - 1) * limit;
+
+    // ✅ FIX: جلوگیری از overwrite شدن OR با AND
+    const where = { AND: [] };
+
+    if (plan && ["free", "pro", "vip", "expired"].includes(plan)) {
+      if (plan === "expired") {
+        where.AND.push({
+          OR: [
+            { plan: "pro", planExpiresAt: { lt: new Date() } },
+            { plan: "vip", planExpiresAt: { lt: new Date() } },
+          ],
+        });
+      } else {
+        where.AND.push({ plan });
+      }
+    }
+
+    if (q) {
+      const qPhone = normalizePhone(q);
+      where.AND.push({
+        OR: [
+          ...(qPhone ? [{ phone: { contains: qPhone } }] : [{ phone: { contains: q } }]),
+          { fullName: { contains: q, mode: "insensitive" } },
+        ],
+      });
+    }
+
+    if (where.AND.length === 0) delete where.AND;
+
+    const [total, users] = await Promise.all([
+      prisma.user.count({ where }),
+      prisma.user.findMany({
+        where,
+        orderBy: [{ createdAt: "desc" }],
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          phone: true,
+          fullName: true,
+          gender: true,
+          birthDate: true,
+          plan: true,
+          planExpiresAt: true,
+          profileCompleted: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+    ]);
+
+    return res.json({
+      ok: true,
+      data: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+        users,
+      },
+    });
+  } catch (e) {
+    console.error("admin/users GET error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// ✅ POST /api/admin/users  (ساخت دستی کاربر)
+// body: { phone, fullName?, gender?, birthDate? }
+router.post("/users", allow("manager", "owner"), async (req, res) => {
+  try {
+    const phone = normalizePhone(req.body?.phone);
+    if (!phone) return res.status(400).json({ ok: false, error: "PHONE_REQUIRED" });
+
+    const fullName = typeof req.body?.fullName === "string" ? req.body.fullName.trim() : "";
+    const gender = typeof req.body?.gender === "string" ? req.body.gender.trim() : null;
+    const birthDate = req.body?.birthDate ? new Date(req.body.birthDate) : null;
+    const birthDateValue = birthDate && !isNaN(birthDate.getTime()) ? birthDate : null;
+
+    const created = await prisma.user.upsert({
+      where: { phone },
+      create: {
+        phone,
+        fullName,
+        gender: gender && gender.length ? gender : null,
+        birthDate: birthDateValue,
+        profileCompleted: false,
+        plan: "free",
+        planExpiresAt: null,
+      },
+      update: {
+        ...(fullName ? { fullName } : {}),
+        ...(gender !== null ? { gender: gender && gender.length ? gender : null } : {}),
+        ...(req.body?.birthDate !== undefined ? { birthDate: birthDateValue } : {}),
+      },
+    });
+
+    return res.json({ ok: true, data: created });
+  } catch (e) {
+    if (e?.code === "P2002") return res.status(409).json({ ok: false, error: "unique_violation" });
+    console.error("admin/users POST error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// ✅ PATCH /api/admin/users/:id/plan
+// body نمونه‌ها:
+// 1) { plan: "pro", months: 3 }  -> expiresAt = now + months
+// 2) { plan: "pro", expiresAt: "2026-01-01T00:00:00.000Z" }  -> تاریخ دستی
+// 3) { plan: "free" } -> free + expires null
+router.patch("/users/:id/plan", allow("manager", "owner"), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const plan = String(req.body?.plan || "").trim();
+
+    if (!["free", "pro", "vip"].includes(plan)) {
+      return res.status(400).json({ ok: false, error: "invalid_plan" });
+    }
+
+    let planExpiresAt = null;
+
+    if (plan !== "free") {
+      if (req.body?.expiresAt) {
+        const d = new Date(req.body.expiresAt);
+        if (isNaN(d.getTime())) return res.status(400).json({ ok: false, error: "invalid_expiresAt" });
+        planExpiresAt = d;
+      } else if (req.body?.months !== undefined) {
+        const months = Number(req.body.months);
+        if (!Number.isFinite(months) || months <= 0) {
+          return res.status(400).json({ ok: false, error: "invalid_months" });
+        }
+        planExpiresAt = addMonths(new Date(), months);
+      } else {
+        // اگر هیچ‌کدام نبود، حداقل 30 روز بده (قانون سخت‌گیرانه)
+        planExpiresAt = addMonths(new Date(), 1);
+      }
+    }
+
+    const updated = await prisma.user.update({
+      where: { id },
+      data: {
+        plan,
+        planExpiresAt,
+      },
+      select: {
+        id: true,
+        phone: true,
+        fullName: true,
+        plan: true,
+        planExpiresAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return res.json({ ok: true, data: updated });
+  } catch (e) {
+    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
+    console.error("admin/users plan PATCH error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// ✅ DELETE /api/admin/users/:id  (حذف کامل)
+// فقط owner (چون حذف ریسک بالاست)
+router.delete("/users/:id", allow("owner"), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+
+    // اول subscriptions رو هم پاک می‌کنیم تا مطمئن باشیم چیزی گیر نمی‌کنه
+    await prisma.$transaction([
+      prisma.subscription.deleteMany({ where: { userId: id } }),
+      prisma.user.delete({ where: { id } }),
+    ]);
+
+    return res.json({ ok: true });
+  } catch (e) {
+    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
+    console.error("admin/users DELETE error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// ✅ GET /api/admin/stats  (آمار سریع)
+// دسترسی: manager/owner
+router.get("/stats", allow("manager", "owner"), async (_req, res) => {
+  try {
+    const now = new Date();
+    const start24h = new Date(Date.now() - 24 * 3600 * 1000);
+    const start7d = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+
+    const [
+      totalUsers,
+      newUsers24h,
+      newUsers7d,
+      proActive,
+      vipActive,
+      proExpired,
+      vipExpired,
+    ] = await Promise.all([
+      prisma.user.count(),
+      prisma.user.count({ where: { createdAt: { gte: start24h } } }),
+      prisma.user.count({ where: { createdAt: { gte: start7d } } }),
+      prisma.user.count({ where: { plan: "pro", planExpiresAt: { gt: now } } }),
+      prisma.user.count({ where: { plan: "vip", planExpiresAt: { gt: now } } }),
+      prisma.user.count({ where: { plan: "pro", planExpiresAt: { lt: now } } }),
+      prisma.user.count({ where: { plan: "vip", planExpiresAt: { lt: now } } }),
+    ]);
+
+    return res.json({
+      ok: true,
+      data: {
+        totalUsers,
+        newUsers24h,
+        newUsers7d,
+        active: { pro: proActive, vip: vipActive },
+        expired: { pro: proExpired, vip: vipExpired },
+      },
+    });
+  } catch (e) {
+    console.error("admin/stats error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+/* ====================== END USERS ====================== */
 
 /* ====================== ✅ profile (افزودنی جدید) ====================== */
 router.patch("/profile", async (req, res) => {
@@ -407,7 +665,11 @@ function ensureDirSync(dir) {
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     const now = new Date();
-    const dir = path.join("uploads", String(now.getFullYear()), String(now.getMonth() + 1).toString().padStart(2, "0"));
+    const dir = path.join(
+      "uploads",
+      String(now.getFullYear()),
+      String(now.getMonth() + 1).toString().padStart(2, "0")
+    );
     ensureDirSync(dir);
     cb(null, dir);
   },
@@ -551,6 +813,8 @@ router.post("/admins", allow("owner"), async (req, res) => {
 async function ownersCount() {
   return prisma.admin.count({ where: { role: "owner" } });
 }
+
+// (این تابع استفاده نمی‌شه، ولی فعلاً دست نمی‌زنم چون گفتی بقیه همون‌طور بمونه)
 function onlyOwner(res, admin) {
   if (admin.role !== "owner") {
     res.status(403).json({ ok: false, error: "forbidden" });
@@ -562,7 +826,7 @@ function onlyOwner(res, admin) {
 router.get("/admins", allow("owner"), async (_req, res) => {
   try {
     const admins = await prisma.admin.findMany({
-      orderBy: [{ role: "asc" }, { createdAt: "desc" } ],
+      orderBy: [{ role: "asc" }, { createdAt: "desc" }],
       select: { id: true, email: true, name: true, role: true, apiKey: true, createdAt: true },
       take: 500,
     });
