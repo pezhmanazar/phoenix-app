@@ -59,22 +59,20 @@ function RootStack() {
     <>
       <StatusBar style="auto" />
       <Stack screenOptions={{ headerShown: false }}>
-        {/* ✅ Splash route */}
-        <Stack.Screen name="splash" />
+  {/* splash: بدون انیمیشن تا چشمک/پرش تولید نکند */}
+  <Stack.Screen name="splash" options={{ animation: "none" }} />
 
-        {/* ✅ Gate route (همون index فعلی‌ات رو منتقل می‌کنیم به gate) */}
-        <Stack.Screen name="gate" />
+  {/* بقیه: fade نرم و یکدست */}
+  <Stack.Screen name="gate" options={{ animation: "fade" }} />
+  <Stack.Screen name="onboarding" options={{ animation: "fade" }} />
+  <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
+  <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
 
-        <Stack.Screen name="onboarding" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="(auth)" />
+  <Stack.Screen name="pay/index" options={{ animation: "fade" }} />
+  <Stack.Screen name="pay/result" options={{ animation: "fade" }} />
 
-        {/* ✅ pay درست */}
-        <Stack.Screen name="pay/index" />
-        <Stack.Screen name="pay/result" />
-
-        <Stack.Screen name="modal" options={{ presentation: "modal" }} />
-      </Stack>
+  <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+</Stack>
     </>
   );
 }
