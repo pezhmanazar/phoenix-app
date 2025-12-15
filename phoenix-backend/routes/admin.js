@@ -767,6 +767,29 @@ router.post(
   }
 );
 
+/**
+ * ✅ حذف کامل تیکت
+ * DELETE /api/admin/tickets/:id
+ * دسترسی: manager/owner
+ */
+router.delete("/tickets/:id", allow("manager", "owner"), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+
+    // اگر نبود
+    const exists = await prisma.ticket.findUnique({ where: { id }, select: { id: true } });
+    if (!exists) return res.status(404).json({ ok: false, error: "not_found" });
+
+    // با توجه به onDelete: Cascade در Message، پیام‌ها هم پاک می‌شوند
+    await prisma.ticket.delete({ where: { id } });
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("admin/tickets DELETE error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
 /* ====== 👇👇👇 ایجاد ادمین فقط توسط Owner 👇👇👇 ====== */
 router.post("/admins", allow("owner"), async (req, res) => {
   try {
