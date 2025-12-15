@@ -902,6 +902,30 @@ router.post("/tickets/:id/reply", allow("agent", "manager", "owner"), async (req
   }
 });
 
+/**
+ * POST /api/admin/tickets/:id/delete
+ */
+router.post("/tickets/:id/delete", allow("manager", "owner"), async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    // اول پیام‌ها پاک شوند
+    await prisma.message.deleteMany({ where: { ticketId: id } });
+
+    // بعد خود تیکت
+    const deleted = await prisma.ticket.delete({ where: { id } }).catch(() => null);
+
+    if (!deleted) {
+      return res.status(404).json({ ok: false, error: "not_found" });
+    }
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("admin tickets/:id/delete error:", e);
+    return res.status(500).json({ ok: false, error: "server_error" });
+  }
+});
+
 /* ====================== ⬇️ پاسخ ادمین با فایل/ویس/عکس ⬇️ ====================== */
 
 const MAX_UPLOAD = 25 * 1024 * 1024;
