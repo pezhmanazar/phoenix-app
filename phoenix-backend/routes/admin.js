@@ -358,7 +358,6 @@ router.patch("/users/:id/plan", allow("manager", "owner"), async (req, res) => {
 });
 
 // ✅ DELETE /api/admin/users/:id  (حذف کامل)
-// فقط owner
 router.delete("/users/:id", allow("owner"), async (req, res) => {
   try {
     const id = String(req.params.id);
@@ -419,6 +418,262 @@ router.get("/stats", allow("manager", "owner"), async (_req, res) => {
 
 /* ====================== END USERS ====================== */
 
+/* ====================== ✅ ANNOUNCEMENTS (Admin Panel) ====================== */
+/**
+ * ✅ لیست بنرها (همه/فیلتر)
+ * GET /api/admin/announcements?enabled=true|false&q=...&placement=top_banner&page=1&limit=50
+ * دسترسی: agent/manager/owner (مشاهده)
+ */
+router.get("/announcements", allow("agent", "manager", "owner"), async (req, res) => {
+  try {
+    const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    const placement = typeof req.query.placement === "string" ? req.query.placement.trim() : "";
+    const enabledRaw = typeof req.query.enabled === "string" ? req.query.enabled.trim() : "";
+
+    const page = Math.max(1, Number(req.query.page || 1) || 1);
+    const limitRaw = Number(req.query.limit || 50) || 50;
+    const limit = Math.min(200, Math.max(10, limitRaw));
+    const skip = (page - 1) * limit;
+
+    const where = { AND: [] };
+
+    if (enabledRaw) {
+      if (!["true", "false"].includes(enabledRaw.toLowerCase())) {
+        return res.status(400).json({ ok: false, error: "invalid_enabled" });
+      }
+      where.AND.push({ enabled: enabledRaw.toLowerCase() === "true" });
+    }
+
+    if (placement) {
+      // فعلاً فقط top_banner داریم
+      if (!["top_banner"].includes(placement)) {
+        return res.status(400).json({ ok: false, error: "invalid_placement" });
+      }
+      where.AND.push({ placement });
+    }
+
+    if (q) {
+      where.AND.push({
+        OR: [
+          { id: { contains: q, mode: "insensitive" } },
+          { title: { contains: q, mode: "insensitive" } },
+          { message: { contains: q, mode: "insensitive" } },
+        ],
+      });
+    }
+
+    if (where.AND.length === 0) delete where.AND;
+
+    const [total, items] = await Promise.all([
+      prisma.announcement.count({ where }),
+      prisma.announcement.findMany({
+        where,
+        orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return res.json({
+      ok: true,
+      data: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+        items,
+      },
+    });
+  } catch (e) {
+    console.error("admin/announcements GET error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+/**
+ * ✅ ساخت بنر
+ * POST /api/admin/announcements
+ * body: { id?, title?, message, level?, placement?, dismissible?, enabled?, startAt?, endAt?, priority? }
+ * دسترسی: manager/owner
+ */
+router.post("/announcements", allow("manager", "owner"), async (req, res) => {
+  try {
+    const body = req.body || {};
+    const message = typeof body.message === "string" ? body.message.trim() : "";
+    if (!message) return res.status(400).json({ ok: false, error: "message_required" });
+
+    const id = body.id ? String(body.id).trim() : undefined;
+    const title = body.title !== undefined ? (body.title ? String(body.title).trim() : null) : undefined;
+
+    const level = body.level ? String(body.level).trim() : undefined;
+    if (level && !["info", "warning", "critical"].includes(level)) {
+      return res.status(400).json({ ok: false, error: "invalid_level" });
+    }
+
+    const placement = body.placement ? String(body.placement).trim() : undefined;
+    if (placement && !["top_banner"].includes(placement)) {
+      return res.status(400).json({ ok: false, error: "invalid_placement" });
+    }
+
+    const toBool = (v) =>
+      typeof v === "boolean" ? v : typeof v === "string" ? v.toLowerCase() === "true" : undefined;
+
+    const dismissible = body.dismissible !== undefined ? toBool(body.dismissible) : undefined;
+    if (body.dismissible !== undefined && dismissible === undefined) {
+      return res.status(400).json({ ok: false, error: "invalid_dismissible" });
+    }
+
+    const enabled = body.enabled !== undefined ? toBool(body.enabled) : undefined;
+    if (body.enabled !== undefined && enabled === undefined) {
+      return res.status(400).json({ ok: false, error: "invalid_enabled" });
+    }
+
+    const priority = body.priority !== undefined ? Number(body.priority) : undefined;
+    if (priority !== undefined && !Number.isFinite(priority)) {
+      return res.status(400).json({ ok: false, error: "invalid_priority" });
+    }
+
+    const startAt = body.startAt ? new Date(body.startAt) : undefined;
+    if (body.startAt !== undefined && body.startAt !== null && isNaN(startAt.getTime())) {
+      return res.status(400).json({ ok: false, error: "invalid_startAt" });
+    }
+    const endAt = body.endAt ? new Date(body.endAt) : undefined;
+    if (body.endAt !== undefined && body.endAt !== null && isNaN(endAt.getTime())) {
+      return res.status(400).json({ ok: false, error: "invalid_endAt" });
+    }
+
+    const created = await prisma.announcement.create({
+      data: {
+        ...(id ? { id } : {}),
+        ...(title !== undefined ? { title } : {}),
+        message,
+        ...(level ? { level } : {}),
+        ...(placement ? { placement } : {}),
+        ...(dismissible !== undefined ? { dismissible } : {}),
+        ...(enabled !== undefined ? { enabled } : {}),
+        ...(body.startAt !== undefined ? { startAt: body.startAt ? startAt : null } : {}),
+        ...(body.endAt !== undefined ? { endAt: body.endAt ? endAt : null } : {}),
+        ...(priority !== undefined ? { priority } : {}),
+      },
+    });
+
+    return res.json({ ok: true, item: created });
+  } catch (e) {
+    if (e?.code === "P2002") return res.status(409).json({ ok: false, error: "unique_violation" });
+    console.error("admin/announcements POST error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+/**
+ * ✅ ویرایش بنر
+ * PATCH /api/admin/announcements/:id
+ * دسترسی: manager/owner
+ */
+router.patch("/announcements/:id", allow("manager", "owner"), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const body = req.body || {};
+    const data = {};
+
+    if (body.title !== undefined) data.title = body.title ? String(body.title).trim() : null;
+
+    if (body.message !== undefined) {
+      const m = body.message ? String(body.message).trim() : "";
+      if (!m) return res.status(400).json({ ok: false, error: "message_empty" });
+      data.message = m;
+    }
+
+    if (body.level !== undefined) {
+      const level = String(body.level).trim();
+      if (!["info", "warning", "critical"].includes(level)) {
+        return res.status(400).json({ ok: false, error: "invalid_level" });
+      }
+      data.level = level;
+    }
+
+    if (body.placement !== undefined) {
+      const placement = String(body.placement).trim();
+      if (!["top_banner"].includes(placement)) {
+        return res.status(400).json({ ok: false, error: "invalid_placement" });
+      }
+      data.placement = placement;
+    }
+
+    const toBool = (v) =>
+      typeof v === "boolean" ? v : typeof v === "string" ? v.toLowerCase() === "true" : undefined;
+
+    if (body.dismissible !== undefined) {
+      const v = toBool(body.dismissible);
+      if (v === undefined) return res.status(400).json({ ok: false, error: "invalid_dismissible" });
+      data.dismissible = v;
+    }
+
+    if (body.enabled !== undefined) {
+      const v = toBool(body.enabled);
+      if (v === undefined) return res.status(400).json({ ok: false, error: "invalid_enabled" });
+      data.enabled = v;
+    }
+
+    if (body.priority !== undefined) {
+      const p = Number(body.priority);
+      if (!Number.isFinite(p)) return res.status(400).json({ ok: false, error: "invalid_priority" });
+      data.priority = p;
+    }
+
+    if (body.startAt !== undefined) {
+      if (body.startAt === null || body.startAt === "") data.startAt = null;
+      else {
+        const d = new Date(body.startAt);
+        if (isNaN(d.getTime())) return res.status(400).json({ ok: false, error: "invalid_startAt" });
+        data.startAt = d;
+      }
+    }
+
+    if (body.endAt !== undefined) {
+      if (body.endAt === null || body.endAt === "") data.endAt = null;
+      else {
+        const d = new Date(body.endAt);
+        if (isNaN(d.getTime())) return res.status(400).json({ ok: false, error: "invalid_endAt" });
+        data.endAt = d;
+      }
+    }
+
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({ ok: false, error: "no_fields_to_update" });
+    }
+
+    const updated = await prisma.announcement.update({
+      where: { id },
+      data,
+    });
+
+    return res.json({ ok: true, item: updated });
+  } catch (e) {
+    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
+    console.error("admin/announcements PATCH error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+/**
+ * ✅ حذف بنر (عمداً POST چون DELETE پشت WCDN ممکنه 404 HTML بده)
+ * POST /api/admin/announcements/:id/delete
+ * دسترسی: manager/owner
+ */
+router.post("/announcements/:id/delete", allow("manager", "owner"), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    await prisma.announcement.delete({ where: { id } });
+    return res.json({ ok: true });
+  } catch (e) {
+    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
+    console.error("admin/announcements delete error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+/* ====================== END ANNOUNCEMENTS ====================== */
+
 /* ====================== ✅ profile (افزودنی جدید) ====================== */
 router.patch("/profile", async (req, res) => {
   try {
@@ -451,217 +706,6 @@ router.patch("/profile", async (req, res) => {
   }
 });
 /* ==================== پایان بخش profile (افزودنی) ===================== */
-
-/* ====================== ✅ ANNOUNCEMENTS (بنر همگانی) ====================== */
-/**
- * ✅ لیست بنرها
- * GET /api/admin/announcements?enabled=true|false
- * دسترسی: manager/owner
- */
-router.get("/announcements", allow("manager", "owner"), async (req, res) => {
-  try {
-    const enabled =
-      req.query.enabled === undefined
-        ? undefined
-        : String(req.query.enabled).toLowerCase() === "true";
-
-    const where = {};
-    if (enabled !== undefined) where.enabled = enabled;
-
-    const items = await prisma.announcement.findMany({
-      where,
-      orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
-      take: 500,
-    });
-
-    res.json({ ok: true, data: items });
-  } catch (e) {
-    console.error("admin/announcements GET error:", e);
-    res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
-/**
- * ✅ ساخت بنر
- * POST /api/admin/announcements
- * body: { id?, title?, message, level?, placement?, dismissible?, enabled?, startAt?, endAt?, priority? }
- * دسترسی: manager/owner
- */
-router.post("/announcements", allow("manager", "owner"), async (req, res) => {
-  try {
-    const b = req.body || {};
-    const message = typeof b.message === "string" ? b.message.trim() : "";
-    if (!message) return res.status(400).json({ ok: false, error: "message_required" });
-
-    const id = b.id ? String(b.id).trim() : undefined;
-    const title = b.title !== undefined ? (b.title === null ? null : String(b.title).trim()) : undefined;
-
-    const level = b.level ? String(b.level) : "info";
-    if (!["info", "warning", "critical"].includes(level)) {
-      return res.status(400).json({ ok: false, error: "invalid_level" });
-    }
-
-    const placement = b.placement ? String(b.placement) : "top_banner";
-    if (!["top_banner"].includes(placement)) {
-      return res.status(400).json({ ok: false, error: "invalid_placement" });
-    }
-
-    const dismissible =
-      b.dismissible === undefined ? true : Boolean(b.dismissible);
-    const enabled =
-      b.enabled === undefined ? true : Boolean(b.enabled);
-
-    const priority =
-      b.priority === undefined ? 0 : Number(b.priority);
-    if (!Number.isFinite(priority)) {
-      return res.status(400).json({ ok: false, error: "invalid_priority" });
-    }
-
-    const startAt = b.startAt ? new Date(b.startAt) : null;
-    const endAt = b.endAt ? new Date(b.endAt) : null;
-    if (startAt && isNaN(startAt.getTime())) return res.status(400).json({ ok: false, error: "invalid_startAt" });
-    if (endAt && isNaN(endAt.getTime())) return res.status(400).json({ ok: false, error: "invalid_endAt" });
-
-    const created = await prisma.announcement.create({
-      data: {
-        ...(id ? { id } : {}),
-        ...(title !== undefined ? { title } : {}),
-        message,
-        level,
-        placement,
-        dismissible,
-        enabled,
-        startAt,
-        endAt,
-        priority,
-      },
-    });
-
-    res.json({ ok: true, data: created });
-  } catch (e) {
-    if (e?.code === "P2002") return res.status(409).json({ ok: false, error: "unique_violation" });
-    console.error("admin/announcements POST error:", e);
-    res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
-/**
- * ✅ ویرایش بنر
- * PATCH /api/admin/announcements/:id
- * دسترسی: manager/owner
- */
-router.patch("/announcements/:id", allow("manager", "owner"), async (req, res) => {
-  try {
-    const id = String(req.params.id);
-    const b = req.body || {};
-    const data = {};
-
-    if (b.title !== undefined) data.title = b.title === null ? null : String(b.title).trim();
-
-    if (b.message !== undefined) {
-      const msg = String(b.message).trim();
-      if (!msg) return res.status(400).json({ ok: false, error: "message_required" });
-      data.message = msg;
-    }
-
-    if (b.level !== undefined) {
-      const level = String(b.level);
-      if (!["info", "warning", "critical"].includes(level)) {
-        return res.status(400).json({ ok: false, error: "invalid_level" });
-      }
-      data.level = level;
-    }
-
-    if (b.placement !== undefined) {
-      const placement = String(b.placement);
-      if (!["top_banner"].includes(placement)) {
-        return res.status(400).json({ ok: false, error: "invalid_placement" });
-      }
-      data.placement = placement;
-    }
-
-    if (b.dismissible !== undefined) data.dismissible = Boolean(b.dismissible);
-    if (b.enabled !== undefined) data.enabled = Boolean(b.enabled);
-
-    if (b.priority !== undefined) {
-      const p = Number(b.priority);
-      if (!Number.isFinite(p)) return res.status(400).json({ ok: false, error: "invalid_priority" });
-      data.priority = p;
-    }
-
-    if (b.startAt !== undefined) {
-      const d = b.startAt ? new Date(b.startAt) : null;
-      if (d && isNaN(d.getTime())) return res.status(400).json({ ok: false, error: "invalid_startAt" });
-      data.startAt = d;
-    }
-    if (b.endAt !== undefined) {
-      const d = b.endAt ? new Date(b.endAt) : null;
-      if (d && isNaN(d.getTime())) return res.status(400).json({ ok: false, error: "invalid_endAt" });
-      data.endAt = d;
-    }
-
-    if (Object.keys(data).length === 0) {
-      return res.status(400).json({ ok: false, error: "no_fields_to_update" });
-    }
-
-    const updated = await prisma.announcement.update({
-      where: { id },
-      data,
-    });
-
-    res.json({ ok: true, data: updated });
-  } catch (e) {
-    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/announcements PATCH error:", e);
-    res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
-/**
- * ✅ حذف بنر (برای WCDN: POST)
- * POST /api/admin/announcements/:id/delete
- * دسترسی: owner
- */
-router.post("/announcements/:id/delete", allow("owner"), async (req, res) => {
-  try {
-    const id = String(req.params.id);
-
-    await prisma.$transaction([
-      prisma.announcementSeen.deleteMany({ where: { announcementId: id } }),
-      prisma.announcement.delete({ where: { id } }),
-    ]);
-
-    res.json({ ok: true });
-  } catch (e) {
-    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/announcements delete POST error:", e);
-    res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
-/**
- * ✅ حذف بنر (REST/لوکال: DELETE)
- * DELETE /api/admin/announcements/:id
- * دسترسی: owner
- */
-router.delete("/announcements/:id", allow("owner"), async (req, res) => {
-  try {
-    const id = String(req.params.id);
-
-    await prisma.$transaction([
-      prisma.announcementSeen.deleteMany({ where: { announcementId: id } }),
-      prisma.announcement.delete({ where: { id } }),
-    ]);
-
-    res.json({ ok: true });
-  } catch (e) {
-    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/announcements DELETE error:", e);
-    res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
-/* ====================== END ANNOUNCEMENTS ====================== */
 
 /**
  * ✅ لیست تیکت‌ها + فیلتر/جستجو (سنجاق‌شده‌ها اول)
@@ -823,50 +867,6 @@ router.patch("/tickets/:id", allow("manager", "owner"), async (req, res) => {
 });
 
 /**
- * ✅ حذف تیکت (برای WCDN: POST)
- * POST /api/admin/tickets/:id/delete
- * دسترسی: manager/owner
- */
-router.post("/tickets/:id/delete", allow("manager", "owner"), async (req, res) => {
-  try {
-    const id = String(req.params.id);
-
-    await prisma.$transaction([
-      prisma.message.deleteMany({ where: { ticketId: id } }),
-      prisma.ticket.delete({ where: { id } }),
-    ]);
-
-    res.json({ ok: true });
-  } catch (e) {
-    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/tickets delete POST error:", e);
-    res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
-/**
- * ✅ حذف تیکت (REST/لوکال: DELETE)
- * DELETE /api/admin/tickets/:id
- * دسترسی: manager/owner
- */
-router.delete("/tickets/:id", allow("manager", "owner"), async (req, res) => {
-  try {
-    const id = String(req.params.id);
-
-    await prisma.$transaction([
-      prisma.message.deleteMany({ where: { ticketId: id } }),
-      prisma.ticket.delete({ where: { id } }),
-    ]);
-
-    res.json({ ok: true });
-  } catch (e) {
-    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/tickets DELETE error:", e);
-    res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
-/**
  * ✅ ارسال پاسخ ادمین (متنی)
  * POST /api/admin/tickets/:id/reply
  * body: { text: string }
@@ -894,8 +894,6 @@ router.post("/tickets/:id/reply", allow("agent", "manager", "owner"), async (req
       where: { id },
       include: { messages: { orderBy: { createdAt: "asc" } } },
     });
-
-    // (پوش موقتاً حذف شد)
 
     return res.json({ ok: true, ticket });
   } catch (e) {
@@ -938,16 +936,6 @@ function mimeToMessageType(mime = "") {
   return "file";
 }
 
-/**
- * ✅ ارسال پاسخ ادمین با فایل (ویس/عکس/فایل)
- * POST /api/admin/tickets/:id/reply-upload
- * headers: x-admin-token
- * form-data:
- *   - file: (required)
- *   - text: (optional)
- *   - durationSec: (optional)
- * دسترسی: agent/manager/owner
- */
 router.post(
   "/tickets/:id/reply-upload",
   allow("agent", "manager", "owner"),
@@ -992,8 +980,6 @@ router.post(
         where: { id },
         include: { messages: { orderBy: { createdAt: "asc" } } },
       });
-
-      // (پوش موقتاً حذف شد)
 
       return res.json({ ok: true, ticket, message: created });
     } catch (e) {
