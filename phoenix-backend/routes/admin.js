@@ -49,19 +49,22 @@ router.post("/login", async (req, res) => {
 
     if (apiKey?.trim()) {
       admin = await prisma.admin.findUnique({ where: { apiKey: apiKey.trim() } });
-      if (!admin) return res.status(401).json({ ok: false, error: "invalid_api_key" });
+      // ✅ FIX: همیشه JSON (برای جلوگیری از HTML شدن در WCDN)
+      if (!admin) return res.json({ ok: false, error: "invalid_api_key" });
     } else if (email && password) {
       // ✅ FIX: normalize email (lowercase)
       const emailNorm = String(email).trim().toLowerCase();
       admin = await prisma.admin.findUnique({ where: { email: emailNorm } });
 
+      // ✅ FIX: همیشه JSON
       if (!admin || !admin.passwordHash) {
-        return res.status(401).json({ ok: false, error: "invalid_credentials" });
+        return res.json({ ok: false, error: "invalid_credentials" });
       }
       const ok = await bcrypt.compare(String(password), admin.passwordHash);
-      if (!ok) return res.status(401).json({ ok: false, error: "invalid_credentials" });
+      if (!ok) return res.json({ ok: false, error: "invalid_credentials" });
     } else {
-      return res.status(400).json({ ok: false, error: "missing_login_fields" });
+      // ✅ FIX: همیشه JSON
+      return res.json({ ok: false, error: "missing_login_fields" });
     }
 
     const token = crypto.randomBytes(32).toString("hex");
@@ -97,14 +100,16 @@ router.post("/login", async (req, res) => {
 router.get("/verify", async (req, res) => {
   try {
     const t = String(req.headers["x-admin-token"] || "");
-    if (!t) return res.status(401).json({ ok: false, error: "token_required" });
+    // ✅ FIX: همیشه JSON
+    if (!t) return res.json({ ok: false, error: "token_required" });
 
     const session = await prisma.adminSession.findUnique({
       where: { token: t },
       include: { admin: true },
     });
+    // ✅ FIX: همیشه JSON
     if (!session || session.revokedAt || session.expiresAt < new Date()) {
-      return res.status(401).json({ ok: false, error: "invalid_or_expired" });
+      return res.json({ ok: false, error: "invalid_or_expired" });
     }
     const { admin } = session;
     return res.json({
@@ -124,7 +129,8 @@ router.get("/verify", async (req, res) => {
 router.post("/logout", async (req, res) => {
   try {
     const t = String(req.headers["x-admin-token"] || "");
-    if (!t) return res.status(400).json({ ok: false, error: "token_required" });
+    // ✅ FIX: همیشه JSON
+    if (!t) return res.json({ ok: false, error: "token_required" });
 
     await prisma.adminSession
       .update({
@@ -143,14 +149,16 @@ router.post("/logout", async (req, res) => {
 async function sessionAuth(req, res, next) {
   try {
     const token = String(req.headers["x-admin-token"] || "");
-    if (!token) return res.status(401).json({ ok: false, error: "token_required" });
+    // ✅ FIX: همیشه JSON
+    if (!token) return res.json({ ok: false, error: "token_required" });
 
     const session = await prisma.adminSession.findUnique({
       where: { token },
       include: { admin: true },
     });
+    // ✅ FIX: همیشه JSON
     if (!session || session.revokedAt || session.expiresAt < new Date()) {
-      return res.status(401).json({ ok: false, error: "invalid_or_expired" });
+      return res.json({ ok: false, error: "invalid_or_expired" });
     }
     req.admin = session.admin;
     next();
@@ -162,8 +170,9 @@ async function sessionAuth(req, res, next) {
 
 // ===== نگهبان نقش‌ها
 const allow = (...roles) => (req, res, next) => {
-  if (!req.admin) return res.status(401).json({ ok: false, error: "unauthorized" });
-  if (!roles.includes(req.admin.role)) return res.status(403).json({ ok: false, error: "forbidden" });
+  // ✅ FIX: همیشه JSON
+  if (!req.admin) return res.json({ ok: false, error: "unauthorized" });
+  if (!roles.includes(req.admin.role)) return res.json({ ok: false, error: "forbidden" });
   next();
 };
 
