@@ -40,7 +40,7 @@ app.use(
     origin: ALLOWED_ORIGIN,
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-admin-token", "x-api-key"],
   })
 );
 app.options("*", cors());
