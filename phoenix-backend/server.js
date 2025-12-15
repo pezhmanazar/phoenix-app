@@ -18,6 +18,8 @@ import usersRouter from "./routes/users.js";     // 🔹 روتر یوزرها
 import authRouter from "./routes/auth.js";       // 🔹 روتر جدید احراز هویت / OTP
 import payRouter from "./routes/pay.js";         // 🔹 روتر پرداخت / زرین‌پال (جدید)
 import paymentsRouter from "./routes/payments.js";
+import announcementsRouter from "./routes/announcements.js";
+app.use("/api/announcements", announcementsRouter);
 
 // ---------- Paths ----------
 const __filename = fileURLToPath(import.meta.url);
