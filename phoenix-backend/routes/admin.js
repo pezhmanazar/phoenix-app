@@ -141,6 +141,166 @@ router.post("/logout", async (req, res) => {
   }
 });
 
+// ===== Admin auth helper (cookie or header) =====
+function parseCookies(cookieHeader = "") {
+  const out = {};
+  cookieHeader.split(";").forEach((part) => {
+    const [k, ...v] = part.trim().split("=");
+    if (!k) return;
+    out[k] = decodeURIComponent(v.join("=") || "");
+  });
+  return out;
+}
+
+async function requireAdmin(req, res) {
+  const hdr = String(req.headers["x-admin-token"] || "").trim();
+  const cookies = parseCookies(String(req.headers.cookie || ""));
+  const token = hdr || String(cookies.admin_token || "").trim();
+
+  if (!token) {
+    res.status(401).json({ ok: false, error: "token_required" });
+    return null;
+  }
+
+  const session = await prisma.adminSession.findUnique({
+    where: { token },
+    include: { admin: true },
+  });
+
+  if (!session || session.revokedAt || session.expiresAt < new Date()) {
+    res.status(401).json({ ok: false, error: "invalid_or_expired" });
+    return null;
+  }
+
+  return { token, session, admin: session.admin };
+}
+
+// ===== Users (DB Viewer + Actions) =====
+
+// GET /api/admin/users?q=...&page=1&limit=30
+router.get("/users", async (req, res) => {
+  try {
+    const auth = await requireAdmin(req, res);
+    if (!auth) return;
+
+    const q = String(req.query.q || "").trim();
+    const page = Math.max(1, parseInt(String(req.query.page || "1"), 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || "30"), 10) || 30));
+    const skip = (page - 1) * limit;
+
+    const where = q
+      ? {
+          OR: [
+            { phone: { contains: q } },
+            { fullName: { contains: q, mode: "insensitive" } },
+            { id: { contains: q } },
+          ],
+        }
+      : {};
+
+    const [total, rows] = await Promise.all([
+      prisma.user.count({ where }),
+      prisma.user.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          phone: true,
+          fullName: true,
+          plan: true,
+          planExpiresAt: true,
+          profileCompleted: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+    ]);
+
+    res.json({ ok: true, page, limit, total, users: rows });
+  } catch (e) {
+    console.error("admin/users error:", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// POST /api/admin/users/:id/set-plan  body: { plan: "free"|"pro", days?: number }
+router.post("/users/:id/set-plan", async (req, res) => {
+  try {
+    const auth = await requireAdmin(req, res);
+    if (!auth) return;
+
+    const id = String(req.params.id || "");
+    const plan = String(req.body?.plan || "").trim();
+    const days = Number(req.body?.days || 0);
+
+    if (!id || (plan !== "free" && plan !== "pro")) {
+      return res.status(400).json({ ok: false, error: "bad_request" });
+    }
+
+    let planExpiresAt = null;
+    if (plan === "pro") {
+      const d = days > 0 ? days : 30;
+      planExpiresAt = new Date(Date.now() + d * 24 * 3600 * 1000);
+    }
+
+    const user = await prisma.user.update({
+      where: { id },
+      data: {
+        plan,
+        planExpiresAt,
+      },
+      select: { id: true, phone: true, fullName: true, plan: true, planExpiresAt: true },
+    });
+
+    res.json({ ok: true, user });
+  } catch (e) {
+    console.error("admin/set-plan error:", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// POST /api/admin/users/:id/cancel-plan
+router.post("/users/:id/cancel-plan", async (req, res) => {
+  try {
+    const auth = await requireAdmin(req, res);
+    if (!auth) return;
+
+    const id = String(req.params.id || "");
+    if (!id) return res.status(400).json({ ok: false, error: "bad_request" });
+
+    const user = await prisma.user.update({
+      where: { id },
+      data: { plan: "free", planExpiresAt: null },
+      select: { id: true, phone: true, fullName: true, plan: true, planExpiresAt: true },
+    });
+
+    res.json({ ok: true, user });
+  } catch (e) {
+    console.error("admin/cancel-plan error:", e);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// DELETE /api/admin/users/:id
+router.delete("/users/:id", async (req, res) => {
+  try {
+    const auth = await requireAdmin(req, res);
+    if (!auth) return;
+
+    const id = String(req.params.id || "");
+    if (!id) return res.status(400).json({ ok: false, error: "bad_request" });
+
+    await prisma.user.delete({ where: { id } });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("admin/delete-user error:", e);
+    // اگر رکوردهای وابسته داری، اینجا ممکنه FK بده → بعداً هندل می‌کنیم
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
 // ===== میدل‌ور احراز هویت سشن
 async function sessionAuth(req, res, next) {
   try {
