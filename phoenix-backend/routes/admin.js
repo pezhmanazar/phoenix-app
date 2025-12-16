@@ -53,7 +53,9 @@ router.post("/login", async (req, res) => {
     } else if (email && password) {
       // ✅ FIX: normalize email (lowercase)
       const emailNorm = String(email).trim().toLowerCase();
-      admin = await prisma.admin.findUnique({ where: { email: emailNorm } });
+      admin = await prisma.admin.findFirst({
+  where: { email: { equals: emailNorm, mode: "insensitive" } },
+});
 
       if (!admin || !admin.passwordHash) {
         return res.status(401).json({ ok: false, error: "invalid_credentials" });
