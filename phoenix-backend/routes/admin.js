@@ -288,10 +288,26 @@ router.post("/users/:id/set-plan", allow("manager", "owner"), async (req, res) =
     }
 
     let planExpiresAt = null;
-    if (plan === "pro") {
-      const d = days > 0 ? days : 30;
-      planExpiresAt = new Date(Date.now() + d * 24 * 3600 * 1000);
-    }
+
+if (plan === "pro") {
+  const addDays = days > 0 ? days : 30;
+
+  // اگر کاربر از قبل PRO و هنوز منقضی نشده بود، به همون تاریخ اضافه کن
+  const current = await prisma.user.findUnique({
+    where: { id },
+    select: { plan: true, planExpiresAt: true },
+  });
+
+  const now = new Date();
+  const curExp = current?.planExpiresAt ? new Date(current.planExpiresAt) : null;
+
+  const base =
+    current?.plan === "pro" && curExp && curExp.getTime() > now.getTime()
+      ? curExp
+      : now;
+
+  planExpiresAt = new Date(base.getTime() + addDays * 24 * 3600 * 1000);
+}
 
     const user = await prisma.user.update({
       where: { id },
