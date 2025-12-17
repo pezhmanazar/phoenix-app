@@ -89,13 +89,17 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         // اگر خطاست، me را دست نمی‌زنیم (وضعیت قبلی را حفظ می‌کنیم)
         // ✅ FIX: روی خطا lastLoadedPhoneRef رو آپدیت نکن که گیر کش نشی
         if (!resp.ok) {
-          if (__DEV__)
-            console.warn(
-              "[useUser.refresh] ERROR but keep previous me",
-              resp.error
-            );
-          return;
-        }
+  // ✅ اگر کاربر در DB وجود ندارد، me قبلی را نگه ندار!
+  if (resp.error === "USER_NOT_FOUND") {
+    if (__DEV__) console.warn("[useUser.refresh] USER_NOT_FOUND → clear me");
+    lastLoadedPhoneRef.current = null;
+    lastFetchAtRef.current = 0;
+    if (mountedRef.current) setMe(null);
+  } else {
+    if (__DEV__) console.warn("[useUser.refresh] ERROR but keep previous me", resp.error);
+  }
+  return;
+}
 
         // اگر داده OK بود
         if (mountedRef.current) setMe(resp.data || null);
