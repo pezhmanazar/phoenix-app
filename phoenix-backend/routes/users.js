@@ -64,17 +64,17 @@ function noStore(res) {
  */
 router.get("/me", authUser, async (req, res) => {
   try {
-    noStore(res); // 👈👈👈 این خط
+    noStore(res);
 
     const phone = req.userPhone;
-    const user = await prisma.user.findUnique({
-      where: { phone },
-    });
+    const user = await prisma.user.findUnique({ where: { phone } });
 
-    return res.json({
-      ok: true,
-      data: user || null,
-    });
+    if (!user) {
+      // 🔥 کاربر حذف شده / وجود ندارد → اپ باید بفهمد و برگردد onboarding
+      return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+    }
+
+    return res.json({ ok: true, data: user });
   } catch (e) {
     console.error("[users.me] error:", e);
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
