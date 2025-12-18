@@ -23,7 +23,8 @@ type UserContextValue = {
 const UserCtx = createContext<UserContextValue | undefined>(undefined);
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
-  const { phone, isAuthenticated } = useAuth();
+  const { phone, isAuthenticated, signOut } = useAuth();
+
   const [me, setMe] = useState<Me | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -86,20 +87,19 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
         const resp = await getMeByPhone(phone);
 
-        // اگر خطاست، me را دست نمی‌زنیم (وضعیت قبلی را حفظ می‌کنیم)
-        // ✅ FIX: روی خطا lastLoadedPhoneRef رو آپدیت نکن که گیر کش نشی
+        // ✅ اگر کاربر در DB وجود ندارد: خروج کامل + پاک کردن me
         if (!resp.ok) {
-  // ✅ اگر کاربر در DB وجود ندارد، me قبلی را نگه ندار!
-  if (resp.error === "USER_NOT_FOUND") {
-    if (__DEV__) console.warn("[useUser.refresh] USER_NOT_FOUND → clear me");
-    lastLoadedPhoneRef.current = null;
-    lastFetchAtRef.current = 0;
-    if (mountedRef.current) setMe(null);
-  } else {
-    if (__DEV__) console.warn("[useUser.refresh] ERROR but keep previous me", resp.error);
-  }
-  return;
-}
+          if (resp.error === "USER_NOT_FOUND") {
+            if (__DEV__) console.warn("[useUser.refresh] USER_NOT_FOUND → signOut + clear me");
+            lastLoadedPhoneRef.current = null;
+            lastFetchAtRef.current = 0;
+            if (mountedRef.current) setMe(null);
+            await signOut(); // ✅ برگشت به onboarding
+          } else {
+            if (__DEV__) console.warn("[useUser.refresh] ERROR but keep previous me", resp.error);
+          }
+          return;
+        }
 
         // اگر داده OK بود
         if (mountedRef.current) setMe(resp.data || null);
@@ -117,7 +117,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         if (mountedRef.current) setRefreshing(false);
       }
     },
-    [phone, me, isAuthenticated]
+    [phone, me, isAuthenticated, signOut]
   );
 
   // هنگام تغییر auth → یک بار رفرش

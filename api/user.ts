@@ -26,15 +26,21 @@ export type UserRecord = {
 
 export type Me = UserRecord;
 
+/**
+ * ✅ مهم: فقط API مربوط به /api/users/* را از api.qoqnoos.app بزنیم
+ * تا WCDN روی qoqnoos.app مزاحم JSON نشود.
+ * بقیه سیستم‌ها (OTP/پرداخت/...) همچنان از APP_API_URL استفاده می‌کنند.
+ */
+const USERS_API_URL =
+  (process.env.EXPO_PUBLIC_USERS_API_URL || "").trim() ||
+  "https://api.qoqnoos.app";
+
 function userUrl(path: string) {
-  const base = APP_API_URL.replace(/\/+$/, "");
+  const base = USERS_API_URL.replace(/\/+$/, "");
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-async function doJson<T>(
-  input: RequestInfo,
-  init?: RequestInit
-): Promise<ApiResp<T>> {
+async function doJson<T>(input: RequestInfo, init?: RequestInit): Promise<ApiResp<T>> {
   try {
     // 1) هدرهای قبلی را جمع می‌کنیم
     const baseHeaders: Record<string, string> = {};
@@ -123,19 +129,12 @@ export function normalizeIranPhone(v: string) {
 
 /* ----------------- این سه تا برای پروفایل‌ویزارد و کار با بک‌اند لوکال ----------------- */
 // GET http://192.168.xxx.xxx:4000/api/users/me?phone=...
-
-export async function getMeByPhone(
-  phone: string
-): Promise<ApiResp<UserRecord | null>> {
-
+export async function getMeByPhone(phone: string): Promise<ApiResp<UserRecord | null>> {
   const p = normalizeIranPhone(phone);
   const cacheBuster = `cb=${Date.now()}`;
-
   // 🔥 بسیار مهم: فقط یک ? باید وجود داشته باشد
   const url = userUrl(`/api/users/me`) + `?phone=${encodeURIComponent(p)}&${cacheBuster}`;
-
   console.log("[user.getMeByPhone] FINAL URL =", url);
-
   return doJson<UserRecord | null>(url, {
     method: "GET",
     headers: {
@@ -163,9 +162,7 @@ export async function upsertUserByPhone(
 }
 
 // DELETE برای ریست پروفایل (اگر روی بک‌اند پیاده شده باشد)
-export async function resetUserByPhone(
-  phone: string
-): Promise<ApiResp<UserRecord>> {
+export async function resetUserByPhone(phone: string): Promise<ApiResp<UserRecord>> {
   const p = normalizeIranPhone(phone);
   const url = userUrl(`/api/users/reset?phone=${encodeURIComponent(p)}`);
   return doJson<UserRecord>(url, { method: "DELETE" });
