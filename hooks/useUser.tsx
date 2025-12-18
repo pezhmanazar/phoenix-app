@@ -34,7 +34,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   // ✅ NEW: زمان آخرین fetch برای TTL کش
   const lastFetchAtRef = useRef<number>(0);
-  const CACHE_TTL_MS = 2000; // ✅ NEW: ۲ ثانیه (برای ریسِ بعد از verify)
+  const CACHE_TTL_MS = 2000;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -47,7 +47,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     async (opts?: RefreshOptions) => {
       const force = opts?.force === true;
 
-      // ✅ NEW: اگر لاگین نیستیم، me رو پاک کن و کش رو ریست کن
+      // اگر لاگین نیستیم، me رو پاک کن و کش رو ریست کن
       if (!isAuthenticated || !phone) {
         if (__DEV__) {
           console.log("[useUser.refresh] not authenticated or no phone, skip");
@@ -58,22 +58,17 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // ✅ NEW: کش فقط تا وقتی معتبره که TTL نگذشته باشه
       const now = Date.now();
       const cacheFresh =
         lastLoadedPhoneRef.current === phone &&
         !!me &&
         now - lastFetchAtRef.current < CACHE_TTL_MS;
 
-      // اگر قبلاً load شده و force=false و کش هنوز تازه است → هیچی
       if (!force && cacheFresh) {
-        if (__DEV__) {
-          console.log("[useUser.refresh] skip (cached ttl)");
-        }
+        if (__DEV__) console.log("[useUser.refresh] skip (cached ttl)");
         return;
       }
 
-      // هم‌زمان فقط یک رفرش
       if (loadingRef.current) {
         if (__DEV__) console.log("[useUser.refresh] skip (already loading)");
         return;
@@ -87,28 +82,65 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
         const resp = await getMeByPhone(phone);
 
-        // ✅ اگر کاربر در DB وجود ندارد: خروج کامل + پاک کردن me
+        // ❗️ok:false
         if (!resp.ok) {
+          // ✅ USER_NOT_FOUND در onboarding طبیعی است → نباید signOut کند
           if (resp.error === "USER_NOT_FOUND") {
-            if (__DEV__) console.warn("[useUser.refresh] USER_NOT_FOUND → signOut + clear me");
+            if (__DEV__) {
+              console.warn(
+                "[useUser.refresh] USER_NOT_FOUND → keep auth/phone, just clear me"
+              );
+            }
             lastLoadedPhoneRef.current = null;
             lastFetchAtRef.current = 0;
             if (mountedRef.current) setMe(null);
-            await signOut(); // ✅ برگشت به onboarding
-          } else {
-            if (__DEV__) console.warn("[useUser.refresh] ERROR but keep previous me", resp.error);
+            return;
           }
+
+          // ✅ اگر status هم داشته باشیم (401/403) => signOut
+          const status = (resp as any)?.status;
+          if (status === 401 || status === 403) {
+            if (__DEV__)
+              console.warn("[useUser.refresh] AUTH_STATUS → signOut", status);
+            lastLoadedPhoneRef.current = null;
+            lastFetchAtRef.current = 0;
+            if (mountedRef.current) setMe(null);
+            await signOut();
+            return;
+          }
+
+          // ✅ فقط خطاهای احراز هویت → signOut
+          if (
+            resp.error === "UNAUTHORIZED" ||
+            resp.error === "INVALID_SESSION" ||
+            resp.error === "TOKEN_EXPIRED"
+          ) {
+            if (__DEV__)
+              console.warn(
+                "[useUser.refresh] AUTH_ERROR → signOut",
+                resp.error
+              );
+            lastLoadedPhoneRef.current = null;
+            lastFetchAtRef.current = 0;
+            if (mountedRef.current) setMe(null);
+            await signOut();
+            return;
+          }
+
+          // سایر خطاها: me قبلی رو نگه می‌داریم (یا null می‌مونه)
+          if (__DEV__)
+            console.warn(
+              "[useUser.refresh] ERROR but keep previous me",
+              resp.error
+            );
           return;
         }
 
-        // اگر داده OK بود
+        // ok:true
         if (mountedRef.current) setMe(resp.data || null);
         lastLoadedPhoneRef.current = phone;
-        lastFetchAtRef.current = Date.now(); // ✅ NEW: مهر زمان برای TTL
-
-        if (__DEV__) {
-          console.log("[useUser.refresh] new me =", resp.data);
-        }
+        lastFetchAtRef.current = Date.now();
+        if (__DEV__) console.log("[useUser.refresh] new me =", resp.data);
       } catch (e) {
         if (__DEV__)
           console.warn("[useUser.refresh] EXCEPTION but keep previous me", e);

@@ -18,6 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { useAuth } from "../../hooks/useAuth";
@@ -26,10 +27,11 @@ import JalaliSelect from "../../components/JalaliSelect";
 import { usePhoenix } from "../../hooks/PhoenixContext";
 import type { UserRecord } from "../../api/user";
 import { useUser } from "../../hooks/useUser";
+import { SECURE_KEYS } from "@/constants/storage";
 
 type Gender = "male" | "female" | "other";
 
-/* ---------------- Colors / Tokens (Match onboarding/login) ---------------- */
+/* ---------------- Colors / Tokens ---------------- */
 const P = {
   pageBg: "#0b0f14",
   cardBg: "rgba(255,255,255,.03)",
@@ -77,7 +79,7 @@ const getPresetAvatarSource = (id: string | null) => {
   return found?.src ?? null;
 };
 
-// YYYY-MM-DD نگه داریم (بدون ساعت و تایم‌زون)
+// YYYY-MM-DD نگه داریم (بدون ساعت و TZ)
 function normalizeIsoDateOnly(value?: string | null): string | undefined {
   const v = String(value || "").trim();
   if (!v) return undefined;
@@ -87,7 +89,7 @@ function normalizeIsoDateOnly(value?: string | null): string | undefined {
   return undefined;
 }
 
-/* ----------------- Pretty in-app banner (instead of Android Alert) ----------------- */
+/* -------- Pretty in-app banner (بدل Alert) -------- */
 type BannerType = "error" | "info" | "success";
 function bannerStyle(type: BannerType) {
   if (type === "success") {
@@ -133,137 +135,93 @@ export default function ProfileWizard() {
   const [fullName, setFullName] = useState("");
   const [nameConfirmed, setNameConfirmed] = useState(false);
   const [gender, setGender] = useState<Gender | null>(null);
-  const [birthDate, setBirthDate] = useState<string | undefined>(undefined); // yyyy-mm-dd
+  const [birthDate, setBirthDate] = useState<string | undefined>(undefined);
   const [avatarUrl, setAvatarUrlState] = useState<string>("avatar:phoenix");
   const [saving, setSaving] = useState(false);
 
-  // ✅ بوت‌چک: فقط سرور تصمیم می‌گیرد
+  // بوت‌چک
   const [bootChecking, setBootChecking] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
 
-  // ✅ Banner
-  const [banner, setBanner] = useState<{
-    type: BannerType;
-    title: string;
-    message?: string;
-  } | null>(null);
+  // Banner
+  const [banner, setBanner] = useState<{ type: BannerType; title: string; message?: string } | null>(null);
   const bannerAnim = useRef(new Animated.Value(0)).current;
 
-  const showBanner = useCallback(
-    (type: BannerType, title: string, message?: string, autoHideMs = 3500) => {
-      setBanner({ type, title, message });
-      Animated.timing(bannerAnim, {
-        toValue: 1,
-        duration: 180,
-        useNativeDriver: true,
-      }).start();
-
-      if (autoHideMs > 0) {
-        setTimeout(() => {
-          Animated.timing(bannerAnim, {
-            toValue: 0,
-            duration: 160,
-            useNativeDriver: true,
-          }).start(() => setBanner(null));
-        }, autoHideMs);
-      }
-    },
-    [bannerAnim]
-  );
+  const showBanner = useCallback((type: BannerType, title: string, message?: string, autoHideMs = 3500) => {
+    setBanner({ type, title, message });
+    Animated.timing(bannerAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+    if (autoHideMs > 0) {
+      setTimeout(() => {
+        Animated.timing(bannerAnim, { toValue: 0, duration: 160, useNativeDriver: true }).start(() => setBanner(null));
+      }, autoHideMs);
+    }
+  }, [bannerAnim]);
 
   const hideBanner = useCallback(() => {
-    Animated.timing(bannerAnim, {
-      toValue: 0,
-      duration: 160,
-      useNativeDriver: true,
-    }).start(() => setBanner(null));
+    Animated.timing(bannerAnim, { toValue: 0, duration: 160, useNativeDriver: true }).start(() => setBanner(null));
   }, [bannerAnim]);
 
   const mounted = useRef(true);
   const submittingRef = useRef(false);
   const redirectedRef = useRef(false);
 
-  // ✅ اسکرول امن (بدون measureLayout)
+  // اسکرول امن
   const scrollRef = useRef<ScrollView>(null);
   const nameBlockYRef = useRef(0);
 
-  // ✅ KEYBOARD FIX: ارتفاع کیبورد برای paddingBottom و اسکرول درست
+  // ارتفاع کیبورد
   const [kbH, setKbH] = useState(0);
   useEffect(() => {
-    const showSub = Keyboard.addListener("keyboardDidShow", (e) => {
-      setKbH(e.endCoordinates?.height ?? 0);
-    });
-    const hideSub = Keyboard.addListener("keyboardDidHide", () => {
-      setKbH(0);
-    });
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
+    const showSub = Keyboard.addListener("keyboardDidShow", (e) => setKbH(e.endCoordinates?.height ?? 0));
+    const hideSub = Keyboard.addListener("keyboardDidHide", () => setKbH(0));
+    return () => { showSub.remove(); hideSub.remove(); };
   }, []);
 
   const scrollToName = useCallback(() => {
     setTimeout(() => {
-      scrollRef.current?.scrollTo({
-        y: Math.max(0, nameBlockYRef.current - 40),
-        animated: true,
-      });
+      scrollRef.current?.scrollTo({ y: Math.max(0, nameBlockYRef.current - 40), animated: true });
     }, 80);
   }, []);
 
   useEffect(() => {
     mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
+    return () => { mounted.current = false; };
   }, []);
 
-  // ✅ resolve phone: اگر Context دیر رسید، از AsyncStorage بخوان
+  /* ------- resolve phone: Context → SecureStore → AsyncStorage ------- */
   useEffect(() => {
     let alive = true;
     (async () => {
-      if (phone) {
-        if (alive) setResolvedPhone(phone);
-        return;
+      try {
+        if (phone) { if (alive) setResolvedPhone(phone); return; }
+        const ss = await SecureStore.getItemAsync(SECURE_KEYS.OTP_PHONE);
+        if (ss) { if (alive) setResolvedPhone(ss); return; }
+        const as = await AsyncStorage.getItem(SECURE_KEYS.OTP_PHONE);
+        if (alive) setResolvedPhone(as || null);
+        if (__DEV__) console.log("[profile-wizard] resolvePhone", { ctx: phone ?? null, ss: ss ?? null, as: as ?? null, key: SECURE_KEYS.OTP_PHONE });
+      } catch (e) {
+        if (__DEV__) console.log("[profile-wizard] resolvePhone error:", e);
+        if (alive) setResolvedPhone(null);
       }
-      const p = await AsyncStorage.getItem("otp_phone_v1");
-      if (alive) setResolvedPhone(p || null);
     })();
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [phone]);
 
-  // ✅ پیش‌پر کردن فیلدها از سرور (مرجع نهایی)
+  // پیش‌پر از سرور
   useEffect(() => {
     if (redirectedRef.current) return;
-
-    // تا وقتی auth loading یا resolvePhone هنوز معلوم نشده، بوت‌چک را نگه داریم
     if (authLoading) return;
-    if (!resolvedPhone) {
-      // این یعنی هنوز لاگین/OTP کامل نشده یا storage خالیه
-      setBootChecking(false);
-      setBootError(null);
-      return;
-    }
+    if (!resolvedPhone) { setBootChecking(false); setBootError(null); return; }
 
     (async () => {
       try {
         setBootChecking(true);
         setBootError(null);
-
         const r = await getMeByPhone(resolvedPhone);
-        if (__DEV__) console.log("[profile-wizard] getMeByPhone →", r);
-
-        // اگر کاربر وجود ندارد: فلگ‌ها پاک و در ویزارد بمان
         if (!r.ok) {
           if (r.error === "USER_NOT_FOUND") {
             await AsyncStorage.removeItem("profile_completed_flag");
             await AsyncStorage.removeItem("phoenix_profile");
-            if (__DEV__)
-              console.log(
-                "[profile-wizard] USER_NOT_FOUND → stay in wizard, cleared local flags"
-              );
             showBanner("info", "پروفایل پیدا نشد", "لطفاً اطلاعات را دوباره تکمیل کن.");
             return;
           }
@@ -271,28 +229,20 @@ export default function ProfileWizard() {
           showBanner("error", "خطا در ارتباط با سرور", r.error || "NETWORK_ERROR", 4500);
           return;
         }
-
-        // me=null => هنوز پروفایل ساخته نشده
         if (!r.data) {
           await AsyncStorage.removeItem("profile_completed_flag");
           await AsyncStorage.removeItem("phoenix_profile");
-          if (__DEV__)
-            console.log("[profile-wizard] me=null → stay in wizard, cleared local flags");
           return;
         }
-
         const d = r.data as any;
 
-        // فقط سرور حق ریدایرکت دارد
         if (d.profileCompleted === true && !redirectedRef.current) {
-          await AsyncStorage.setItem("profile_completed_flag", "1"); // فقط cache
+          await AsyncStorage.setItem("profile_completed_flag", "1");
           redirectedRef.current = true;
-          if (__DEV__) console.log("[profile-wizard] redirect via server flag");
           router.replace("/(tabs)");
           return;
         }
 
-        // پیش‌پر کردن فرم از داده سرور
         if (d.fullName) setFullName(String(d.fullName));
         if (d.gender) setGender(d.gender as Gender);
         if (d.birthDate) setBirthDate(normalizeIsoDateOnly(String(d.birthDate)));
@@ -301,15 +251,9 @@ export default function ProfileWizard() {
           (d.avatarUrl as string | undefined) ?? (avatarUrl || undefined) ?? null;
 
         if (!safeAvatar && d.gender) {
-          safeAvatar =
-            d.gender === "male"
-              ? "icon:male"
-              : d.gender === "female"
-              ? "icon:female"
-              : "avatar:phoenix";
+          safeAvatar = d.gender === "male" ? "icon:male" : d.gender === "female" ? "icon:female" : "avatar:phoenix";
         }
         if (!safeAvatar) safeAvatar = "avatar:phoenix";
-
         setAvatarUrlState(safeAvatar);
 
         const safeName = (d.fullName as string) || "کاربر";
@@ -327,7 +271,6 @@ export default function ProfileWizard() {
           })
         );
       } catch (e: any) {
-        if (__DEV__) console.log("[profile-wizard] getMeByPhone error:", e);
         setBootError(e?.message || "NETWORK_ERROR");
         showBanner("error", "مشکل شبکه", e?.message || "NETWORK_ERROR", 4500);
       } finally {
@@ -340,78 +283,52 @@ export default function ProfileWizard() {
   /* ---------------- Image Pickers ---------------- */
   async function ensureMediaPermission() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      showBanner("error", "اجازه لازم است", "برای انتخاب عکس، دسترسی گالری را فعال کن.", 4500);
-      return false;
-    }
+    if (status !== "granted") { showBanner("error", "اجازه لازم است", "برای انتخاب عکس، دسترسی گالری را فعال کن.", 4500); return false; }
     return true;
   }
   async function ensureCameraPermission() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== "granted") {
-      showBanner("error", "اجازه لازم است", "برای عکس‌برداری، دسترسی دوربین را فعال کن.", 4500);
-      return false;
-    }
+    if (status !== "granted") { showBanner("error", "اجازه لازم است", "برای عکس‌برداری، دسترسی دوربین را فعال کن.", 4500); return false; }
     return true;
   }
 
   const pickFromGallery = async () => {
     try {
-      const ok = await ensureMediaPermission();
-      if (!ok) return;
+      const ok = await ensureMediaPermission(); if (!ok) return;
       const mediaField =
         (ImagePicker as any).MediaType
           ? { mediaTypes: [(ImagePicker as any).MediaType.Image] }
           : { mediaTypes: (ImagePicker as any).MediaTypeOptions.Images };
-
       const res = await ImagePicker.launchImageLibraryAsync({
-        ...mediaField,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.85,
-        selectionLimit: 1,
+        ...mediaField, allowsEditing: true, aspect: [1, 1], quality: 0.85, selectionLimit: 1,
       });
-
       if (!res.canceled) {
         const uri = (res as any).assets?.[0]?.uri;
         if (uri) setAvatarUrlState(uri);
       }
-    } catch (e) {
-      if (__DEV__) console.log("pickFromGallery error:", e);
-      showBanner("error", "خطا", "در باز کردن گالری مشکلی پیش آمد.", 4500);
-    }
+    } catch (e) { showBanner("error", "خطا", "در باز کردن گالری مشکلی پیش آمد.", 4500); }
   };
 
   const pickFromCamera = async () => {
     try {
-      const ok = await ensureCameraPermission();
-      if (!ok) return;
-      const res = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.85,
-      });
+      const ok = await ensureCameraPermission(); if (!ok) return;
+      const res = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.85 });
       if (!res.canceled) {
         const uri = (res as any).assets?.[0]?.uri;
         if (uri) setAvatarUrlState(uri);
       }
-    } catch (e) {
-      if (__DEV__) console.log("pickFromCamera error:", e);
-      showBanner("error", "خطا", "در باز کردن دوربین مشکلی پیش آمد.", 4500);
-    }
+    } catch (e) { showBanner("error", "خطا", "در باز کردن دوربین مشکلی پیش آمد.", 4500); }
   };
 
   /* ---------------- Avatar (نمایش) ---------------- */
   const Avatar = () => {
     const current =
-      (typeof avatarUrl === "string" && avatarUrl.trim().length > 0
-        ? avatarUrl
-        : null) || "avatar:phoenix";
+      (typeof avatarUrl === "string" && avatarUrl.trim().length > 0 ? avatarUrl : null) || "avatar:phoenix";
 
     const shell = {
-      width: 104,
-      height: 104,
-      borderRadius: 52,
+      width: 92,
+      height: 92,
+      borderRadius: 46,
       backgroundColor: P.cardBg2,
       borderWidth: 3,
       borderColor: "rgba(212,175,55,.28)",
@@ -424,11 +341,7 @@ export default function ProfileWizard() {
       if (src) {
         return (
           <View style={shell}>
-            <Image
-              source={src}
-              style={{ width: 96, height: 96, borderRadius: 48 }}
-              resizeMode="cover"
-            />
+            <Image source={src} style={{ width: 84, height: 84, borderRadius: 42 }} resizeMode="cover" />
           </View>
         );
       }
@@ -436,17 +349,15 @@ export default function ProfileWizard() {
 
     if (typeof current === "string" && current.startsWith("icon:")) {
       const which = current.split(":")[1];
-      const color =
-        which === "female" ? "#A855F7" : which === "male" ? "#3B82F6" : P.gold;
-      const IconName =
-        which === "other" ? "account" : (which as "female" | "male");
+      const color = which === "female" ? "#A855F7" : which === "male" ? "#3B82F6" : P.gold;
+      const IconName = which === "other" ? "account" : (which as "female" | "male");
       return (
         <View style={shell}>
           <View
             style={{
-              width: 96,
-              height: 96,
-              borderRadius: 48,
+              width: 84,
+              height: 84,
+              borderRadius: 42,
               backgroundColor: P.goldSoft,
               alignItems: "center",
               justifyContent: "center",
@@ -454,25 +365,19 @@ export default function ProfileWizard() {
               borderWidth: 1,
             }}
           >
-            {IconName === "account" ? (
-              <MaterialCommunityIcons name="account" size={52} color={color} />
-            ) : (
-              <Ionicons name={IconName as any} size={52} color={color} />
-            )}
+            {IconName === "account"
+              ? <MaterialCommunityIcons name="account" size={46} color={color} />
+              : <Ionicons name={IconName as any} size={46} color={color} />}
           </View>
         </View>
       );
     }
 
-    const valid =
-      typeof current === "string" && /^(file:|content:|https?:)/.test(current);
+    const valid = typeof current === "string" && /^(file:|content:|https?:)/.test(current);
     if (valid) {
       return (
         <View style={shell}>
-          <Image
-            source={{ uri: current }}
-            style={{ width: 96, height: 96, borderRadius: 48 }}
-          />
+          <Image source={{ uri: current }} style={{ width: 84, height: 84, borderRadius: 42 }} />
         </View>
       );
     }
@@ -481,18 +386,13 @@ export default function ProfileWizard() {
     if (phoenixSrc) {
       return (
         <View style={shell}>
-          <Image
-            source={phoenixSrc}
-            style={{ width: 96, height: 96, borderRadius: 48 }}
-            resizeMode="cover"
-          />
+          <Image source={phoenixSrc} style={{ width: 84, height: 84, borderRadius: 42 }} resizeMode="cover" />
         </View>
       );
     }
-
     return (
       <View style={shell}>
-        <Ionicons name="person" size={52} color={P.muted} />
+        <Ionicons name="person" size={46} color={P.muted} />
       </View>
     );
   };
@@ -500,27 +400,15 @@ export default function ProfileWizard() {
   /* ---------------- Validation ---------------- */
   const validate = () => {
     const n = (fullName || "").trim();
-    if (n.length < 2) {
-      showBanner("error", "نام معتبر نیست", "نام و نام خانوادگی را کامل وارد کن.", 4500);
-      return false;
-    }
-    if (!gender) {
-      showBanner("error", "جنسیت انتخاب نشده", "لطفاً جنسیت را انتخاب کن.", 4500);
-      return false;
-    }
+    if (n.length < 2) { showBanner("error", "نام معتبر نیست", "نام و نام خانوادگی را کامل وارد کن.", 4500); return false; }
+    if (!gender) { showBanner("error", "جنسیت انتخاب نشده", "لطفاً جنسیت را انتخاب کن.", 4500); return false; }
     return true;
   };
 
   /* ---------------- Submit ---------------- */
   const onSubmit = async () => {
-    if (bootChecking) {
-      showBanner("info", "لطفاً کمی صبر کن", "در حال بررسی وضعیت پروفایل از سرور…", 2500);
-      return;
-    }
-    if (!resolvedPhone) {
-      showBanner("error", "شماره یافت نشد", "لطفاً یک‌بار خارج شو و دوباره وارد شو.", 4500);
-      return;
-    }
+    if (bootChecking) { showBanner("info", "لطفاً کمی صبر کن", "در حال بررسی وضعیت پروفایل از سرور…", 2500); return; }
+    if (!resolvedPhone) { showBanner("error", "شماره یافت نشد", "لطفاً یک‌بار خارج شو و دوباره وارد شو.", 4500); return; }
     if (submittingRef.current) return;
     if (!validate()) return;
 
@@ -541,39 +429,21 @@ export default function ProfileWizard() {
     try {
       submittingRef.current = true;
       setSaving(true);
-
-      if (__DEV__)
-        console.log("[profile-wizard] upsert by phone →", resolvedPhone, body);
-
       const r = await upsertUserByPhone(resolvedPhone, body);
-      if (!r.ok) {
-        showBanner("error", "ذخیره ناموفق بود", r.error || "HTTP_400", 4500);
-        return;
-      }
+      if (!r.ok) { showBanner("error", "ذخیره ناموفق بود", r.error || "HTTP_400", 4500); return; }
 
-      // فقط cache (تصمیم‌گیری با سرور است)
       await AsyncStorage.setItem("profile_completed_flag", "1");
 
-      // ✅ تصمیم نهایی: سرور
-      const finalMe = await getMeByPhone(resolvedPhone).catch(
-        () => ({ ok: false } as any)
-      );
-
-      if (
-        !finalMe.ok ||
-        !finalMe.data ||
-        (finalMe.data as any).profileCompleted !== true
-      ) {
+      const finalMe = await getMeByPhone(resolvedPhone).catch(() => ({ ok: false } as any));
+      if (!finalMe.ok || !finalMe.data || (finalMe.data as any).profileCompleted !== true) {
         await AsyncStorage.removeItem("profile_completed_flag");
         showBanner("error", "تایید سرور انجام نشد", "ذخیره روی سرور تایید نشد. دوباره تلاش کن.", 4500);
         return;
       }
 
       const d = finalMe.data as any;
-
       const finalName = (d.fullName as string) || safeName || "کاربر";
-      const finalAvatar: string =
-        (d.avatarUrl as string | undefined) || safeAvatar || "avatar:phoenix";
+      const finalAvatar: string = (d.avatarUrl as string | undefined) || safeAvatar || "avatar:phoenix";
 
       setProfileName(finalName);
       setAvatarUrl(finalAvatar);
@@ -589,13 +459,8 @@ export default function ProfileWizard() {
         })
       );
 
-      if (__DEV__) console.log("[profile-wizard] calling useUser.refresh(force)");
       await refresh({ force: true }).catch(() => {});
-
-      if (!redirectedRef.current) {
-        redirectedRef.current = true;
-        router.replace("/(tabs)");
-      }
+      if (!redirectedRef.current) { redirectedRef.current = true; router.replace("/(tabs)"); }
     } catch (e: any) {
       showBanner("error", "مشکل شبکه", e?.message || "NETWORK_ERROR", 4500);
     } finally {
@@ -604,12 +469,9 @@ export default function ProfileWizard() {
     }
   };
 
-  /* ---- helper برای تأیید نام ---- */
   const confirmName = () => {
     Keyboard.dismiss();
-    if ((fullName || "").trim().length > 0) {
-      setNameConfirmed(true);
-    }
+    if ((fullName || "").trim().length > 0) setNameConfirmed(true);
   };
 
   /* ---------------- UI ---------------- */
@@ -619,9 +481,7 @@ export default function ProfileWizard() {
     return (
       <Animated.View
         style={{
-          transform: [
-            { translateY: bannerAnim.interpolate({ inputRange: [0, 1], outputRange: [-14, 0] }) },
-          ],
+          transform: [{ translateY: bannerAnim.interpolate({ inputRange: [0, 1], outputRange: [-14, 0] }) }],
           opacity: bannerAnim,
           marginTop: 12,
           width: "92%",
@@ -638,9 +498,7 @@ export default function ProfileWizard() {
       >
         <Ionicons name={S.icon} size={18} color={S.iconColor} />
         <View style={{ flex: 1 }}>
-          <Text style={{ color: S.titleColor, fontWeight: "900", fontSize: 12, textAlign: "right" }}>
-            {banner.title}
-          </Text>
+          <Text style={{ color: S.titleColor, fontWeight: "900", fontSize: 12, textAlign: "right" }}>{banner.title}</Text>
           {!!banner.message ? (
             <Text style={{ color: S.msgColor, fontWeight: "700", fontSize: 11, marginTop: 2, textAlign: "right" }}>
               {banner.message}
@@ -675,28 +533,8 @@ export default function ProfileWizard() {
       >
         <View style={{ flex: 1 }}>
           {/* گلوها */}
-          <View
-            style={{
-              position: "absolute",
-              top: -220,
-              left: -220,
-              width: 420,
-              height: 420,
-              borderRadius: 999,
-              backgroundColor: "rgba(212,175,55,.16)",
-            }}
-          />
-          <View
-            style={{
-              position: "absolute",
-              bottom: -240,
-              right: -240,
-              width: 480,
-              height: 480,
-              borderRadius: 999,
-              backgroundColor: "rgba(233,138,21,.12)",
-            }}
-          />
+          <View style={{ position: "absolute", top: -220, left: -220, width: 420, height: 420, borderRadius: 999, backgroundColor: "rgba(212,175,55,.16)" }} />
+          <View style={{ position: "absolute", bottom: -240, right: -240, width: 480, height: 480, borderRadius: 999, backgroundColor: "rgba(233,138,21,.12)" }} />
 
           <ScrollView
             ref={scrollRef}
@@ -706,7 +544,6 @@ export default function ProfileWizard() {
             }}
             keyboardShouldPersistTaps="handled"
           >
-            {/* ✅ Pretty banner */}
             {bannerUI}
 
             <View
@@ -721,17 +558,17 @@ export default function ProfileWizard() {
                 overflow: "hidden",
               }}
             >
-              {/* Header */}
+              {/* Header (bigger padding so icon not clipped) */}
               <View
                 style={{
                   backgroundColor: "rgba(255,255,255,.02)",
                   borderBottomWidth: 1,
                   borderBottomColor: P.line,
-                  height: 150,
+                  height: 160,
                   alignItems: "center",
                   justifyContent: "center",
-                  paddingTop: 6,
-                  paddingBottom: 10,
+                  paddingTop: 18,   // ← بالاتر آوردیم تا زیر کادر نرود
+                  paddingBottom: 12,
                 }}
               >
                 <View
@@ -750,71 +587,50 @@ export default function ProfileWizard() {
                   <Ionicons name="person-outline" size={26} color={P.gold} />
                 </View>
 
-                <Text style={{ color: P.text, fontWeight: "900", fontSize: 18 }}>
-                  تکمیل پروفایل
-                </Text>
-                <Text style={{ color: P.muted, marginTop: 4, fontSize: 12 }}>
-                  فقط چند قدم تا شروع ققنوس فاصله داری
-                </Text>
+                <Text style={{ color: P.text, fontWeight: "900", fontSize: 18 }}>تکمیل پروفایل</Text>
+                <Text style={{ color: P.muted, marginTop: 4, fontSize: 12 }}>فقط چند قدم تا شروع ققنوس فاصله داری</Text>
 
-                {/* ✅ وضعیت بوت‌چک */}
                 <View style={{ marginTop: 10, height: 18 }}>
                   {bootChecking ? (
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                       <ActivityIndicator />
-                      <Text style={{ color: P.muted2, fontSize: 11 }}>
-                        در حال بررسی وضعیت پروفایل از سرور…
-                      </Text>
+                      <Text style={{ color: P.muted2, fontSize: 11 }}>در حال بررسی وضعیت پروفایل از سرور…</Text>
                     </View>
                   ) : bootError ? (
-                    <Text style={{ color: P.danger, fontSize: 11 }}>
-                      خطا در ارتباط با سرور: {bootError}
-                    </Text>
+                    <Text style={{ color: P.danger, fontSize: 11 }}>خطا در ارتباط با سرور: {bootError}</Text>
                   ) : null}
                 </View>
               </View>
 
-              {/* Floating Avatar & Actions */}
+              {/* Avatar & actions */}
               <View style={{ alignItems: "center" }}>
-                <View style={{ marginTop: 8 }}>
+                <View style={{ marginTop: 10 }}>
                   <Avatar />
                 </View>
 
-                {/* آواتارهای آماده */}
-                <View style={{ marginTop: 12, paddingHorizontal: 18, width: "100%" }}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "flex-end",
-                      gap: 6,
-                      marginBottom: 6,
-                    }}
-                  >
+                {/* آواتارهای آماده – یک ردیف افقی کم‌جا */}
+                <View style={{ marginTop: 10, paddingHorizontal: 12, width: "100%" }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 6, marginBottom: 6 }}>
                     <Ionicons name="sparkles-outline" size={16} color={P.muted} />
-                    <Text
-                      style={{
-                        color: P.muted,
-                        fontSize: 12,
-                        fontWeight: "800",
-                        textAlign: "right",
-                      }}
-                    >
+                    <Text style={{ color: P.muted, fontSize: 12, fontWeight: "800", textAlign: "right" }}>
                       انتخاب آواتار آماده
                     </Text>
                   </View>
 
-                  {/* ردیف اول */}
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 10 }}>
-                    {PRESET_AVATARS.slice(0, 4).map((av) => {
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ paddingVertical: 2, gap: 10 }}
+                  >
+                    {PRESET_AVATARS.map((av) => {
                       const selected = (avatarUrl || "avatar:phoenix") === av.id;
                       return (
                         <TouchableOpacity key={av.id} onPress={() => setAvatarUrlState(av.id)} activeOpacity={0.9}>
                           <View
                             style={{
-                              width: 64,
-                              height: 64,
-                              borderRadius: 32,
+                              width: 52,
+                              height: 52,
+                              borderRadius: 26,
                               overflow: "hidden",
                               borderWidth: selected ? 2 : 1,
                               borderColor: selected ? P.gold : P.line,
@@ -826,39 +642,15 @@ export default function ProfileWizard() {
                         </TouchableOpacity>
                       );
                     })}
-                  </View>
-
-                  {/* ردیف دوم */}
-                  <View style={{ flexDirection: "row", justifyContent: "space-evenly" }}>
-                    {PRESET_AVATARS.slice(4).map((av) => {
-                      const selected = (avatarUrl || "avatar:phoenix") === av.id;
-                      return (
-                        <TouchableOpacity key={av.id} onPress={() => setAvatarUrlState(av.id)} activeOpacity={0.9}>
-                          <View
-                            style={{
-                              width: 64,
-                              height: 64,
-                              borderRadius: 32,
-                              overflow: "hidden",
-                              borderWidth: selected ? 2 : 1,
-                              borderColor: selected ? P.gold : P.line,
-                              backgroundColor: P.cardBg2,
-                            }}
-                          >
-                            <Image source={av.src} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
+                  </ScrollView>
                 </View>
 
-                {/* دکمه‌های گالری / دوربین / ریست */}
+                {/* گالری / دوربین / ریست */}
                 <View
                   style={{
                     flexDirection: "row",
                     gap: 8,
-                    marginTop: 12,
+                    marginTop: 8,
                     marginBottom: 6,
                     paddingHorizontal: 18,
                     width: "100%",
@@ -880,9 +672,7 @@ export default function ProfileWizard() {
                     }}
                   >
                     <Ionicons name="images-outline" size={16} color={P.text} />
-                    <Text style={{ color: P.text, fontWeight: "900", fontSize: 12 }}>
-                      از گالری
-                    </Text>
+                    <Text style={{ color: P.text, fontWeight: "900", fontSize: 12 }}>از گالری</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -900,9 +690,7 @@ export default function ProfileWizard() {
                     }}
                   >
                     <Ionicons name="camera-outline" size={16} color={P.text} />
-                    <Text style={{ color: P.text, fontWeight: "800", fontSize: 12 }}>
-                      دوربین
-                    </Text>
+                    <Text style={{ color: P.text, fontWeight: "800", fontSize: 12 }}>دوربین</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -920,84 +708,35 @@ export default function ProfileWizard() {
                     }}
                   >
                     <Ionicons name="refresh-outline" size={16} color={P.muted} />
-                    <Text style={{ color: P.muted, fontWeight: "800", fontSize: 12 }}>
-                      ققنوس پیش‌فرض
-                    </Text>
+                    <Text style={{ color: P.muted, fontWeight: "800", fontSize: 12 }}>ققنوس پیش‌فرض</Text>
                   </TouchableOpacity>
                 </View>
               </View>
 
               {/* Form */}
-              <View
-                style={{
-                  paddingHorizontal: 18,
-                  paddingBottom: 18,
-                  paddingTop: 8,
-                  direction: "rtl",
-                }}
-              >
+              <View style={{ paddingHorizontal: 18, paddingBottom: 18, paddingTop: 8, direction: "rtl" }}>
                 {/* Phone */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "flex-start",
-                    marginTop: 12,
-                    marginBottom: 4,
-                    gap: 6,
-                  }}
-                >
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-start", marginTop: 8, marginBottom: 4, gap: 6 }}>
                   <Ionicons name="call-outline" size={14} color={P.muted} />
-                  <Text style={{ color: P.muted, fontSize: 12, fontWeight: "800", textAlign: "right" }}>
-                    شماره موبایل
-                  </Text>
+                  <Text style={{ color: P.muted, fontSize: 12, fontWeight: "800", textAlign: "right" }}>شماره موبایل</Text>
                 </View>
-                <View
-                  style={{
-                    height: 48,
-                    borderRadius: 14,
-                    backgroundColor: P.inputBg,
-                    borderColor: P.line,
-                    borderWidth: 1,
-                    justifyContent: "center",
-                    paddingHorizontal: 14,
-                  }}
-                >
+                <View style={{ height: 48, borderRadius: 14, backgroundColor: P.inputBg, borderColor: P.line, borderWidth: 1, justifyContent: "center", paddingHorizontal: 14 }}>
                   <Text style={{ color: P.text, fontWeight: "800", textAlign: "right", writingDirection: "rtl" }}>
                     {resolvedPhone || "-"}
                   </Text>
                 </View>
 
-                {/* ✅ Name block (برای اسکرول خودکار) */}
-                <View
-                  onLayout={(e) => {
-                    nameBlockYRef.current = e.nativeEvent.layout.y;
-                  }}
-                >
-                  {/* Name */}
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "flex-start",
-                      marginTop: 14,
-                      marginBottom: 6,
-                      gap: 6,
-                    }}
-                  >
+                {/* Name block */}
+                <View onLayout={(e) => { nameBlockYRef.current = e.nativeEvent.layout.y; }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-start", marginTop: 12, marginBottom: 6, gap: 6 }}>
                     <Ionicons name="person-outline" size={14} color={P.muted} />
-                    <Text style={{ color: P.muted, fontSize: 12, fontWeight: "800", textAlign: "right" }}>
-                      نام
-                    </Text>
+                    <Text style={{ color: P.muted, fontSize: 12, fontWeight: "800", textAlign: "right" }}>نام</Text>
                   </View>
 
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                     <TextInput
                       value={fullName}
-                      onChangeText={(t) => {
-                        setFullName(t);
-                        if (nameConfirmed) setNameConfirmed(false);
-                      }}
+                      onChangeText={(t) => { setFullName(t); if (nameConfirmed) setNameConfirmed(false); }}
                       onFocus={scrollToName}
                       placeholder="نام و نام خانوادگی"
                       placeholderTextColor="rgba(231,238,247,.45)"
@@ -1037,44 +776,26 @@ export default function ProfileWizard() {
                 </View>
 
                 {/* Gender */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "flex-start",
-                    marginTop: 16,
-                    marginBottom: 6,
-                    gap: 6,
-                  }}
-                >
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-start", marginTop: 14, marginBottom: 6, gap: 6 }}>
                   <Ionicons name="male-female-outline" size={14} color={P.muted} />
-                  <Text style={{ color: P.muted, fontSize: 12, fontWeight: "800", textAlign: "right" }}>
-                    جنسیت
-                  </Text>
+                  <Text style={{ color: P.muted, fontSize: 12, fontWeight: "800", textAlign: "right" }}>جنسیت</Text>
                 </View>
                 <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-                  {(
-                    [
-                      { key: "male", label: "مرد", icon: "male" },
-                      { key: "female", label: "زن", icon: "female" },
-                      { key: "other", label: "سایر", icon: "gender-non-binary" },
-                    ] as const
-                  ).map((g) => {
+                  {([
+                    { key: "male", label: "مرد", icon: "male" },
+                    { key: "female", label: "زن", icon: "female" },
+                    { key: "other", label: "سایر", icon: "gender-non-binary" },
+                  ] as const).map((g) => {
                     const selected = gender === (g.key as Gender);
                     const IconComp = g.key === "other" ? MaterialCommunityIcons : Ionicons;
-                    const iconName =
-                      g.key === "other" ? ("gender-non-binary" as any) : (g.icon as any);
-
+                    const iconName = g.key === "other" ? ("gender-non-binary" as any) : (g.icon as any);
                     return (
                       <Pressable
                         key={g.key}
-                        onPress={() => {
-                          Keyboard.dismiss();
-                          setGender(g.key as Gender);
-                        }}
+                        onPress={() => { Keyboard.dismiss(); setGender(g.key as Gender); }}
                         style={{
                           flex: 1,
-                          height: 48,
+                          height: 46,
                           borderRadius: 12,
                           backgroundColor: selected ? P.goldSoft : P.inputBg,
                           borderWidth: 2,
@@ -1093,40 +814,19 @@ export default function ProfileWizard() {
                 </View>
 
                 {/* Birthdate */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "flex-start",
-                    marginTop: 16,
-                    marginBottom: 6,
-                    gap: 6,
-                  }}
-                >
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-start", marginTop: 14, marginBottom: 6, gap: 6 }}>
                   <Ionicons name="calendar-outline" size={14} color={P.muted} />
-                  <Text style={{ color: P.muted, fontSize: 12, fontWeight: "800", textAlign: "right" }}>
-                    تاریخ تولد (اختیاری)
-                  </Text>
+                  <Text style={{ color: P.muted, fontSize: 12, fontWeight: "800", textAlign: "right" }}>تاریخ تولد (اختیاری)</Text>
                 </View>
 
                 <JalaliSelect
                   key={birthDate || "no-birth"}
                   initial={birthDate}
-                  onChange={(iso) => {
-                    Keyboard.dismiss();
-                    const d = normalizeIsoDateOnly(iso);
-                    setBirthDate(d);
-                  }}
+                  onChange={(iso) => { Keyboard.dismiss(); setBirthDate(normalizeIsoDateOnly(iso)); }}
                   minYear={1330}
                   maxYear={1390}
-                  styleContainer={{
-                    borderColor: P.line,
-                    backgroundColor: P.inputBg,
-                  }}
-                  stylePicker={{
-                    backgroundColor: "#0b0f14",
-                    borderColor: P.line,
-                  }}
+                  styleContainer={{ borderColor: P.line, backgroundColor: P.inputBg }}
+                  stylePicker={{ backgroundColor: "#0b0f14", borderColor: P.line }}
                   textColor={P.text}
                   accentColor={P.gold}
                   dark
@@ -1135,17 +835,13 @@ export default function ProfileWizard() {
 
                 {!!birthDate && (
                   <Text style={{ color: P.muted, fontSize: 12, marginTop: 6, textAlign: "left" }}>
-                    تاریخ انتخابی (میلادی):{" "}
-                    <Text style={{ color: P.text, fontWeight: "800" }}>{birthDate}</Text>
+                    تاریخ انتخابی (میلادی): <Text style={{ color: P.text, fontWeight: "800" }}>{birthDate}</Text>
                   </Text>
                 )}
 
                 {/* Submit */}
                 <TouchableOpacity
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    onSubmit();
-                  }}
+                  onPress={() => { Keyboard.dismiss(); onSubmit(); }}
                   disabled={saving || bootChecking}
                   activeOpacity={0.9}
                   style={{
@@ -1156,7 +852,7 @@ export default function ProfileWizard() {
                     borderColor: saving ? P.line : P.goldBorder,
                     alignItems: "center",
                     justifyContent: "center",
-                    marginTop: 18,
+                    marginTop: 16,
                     opacity: saving || bootChecking ? 0.65 : 1,
                   }}
                 >
