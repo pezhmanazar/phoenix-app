@@ -60,7 +60,7 @@ function RootStack() {
       <StatusBar style="auto" />
 
       {/* ✅ NEW: shown above every screen */}
-      <TopBanner />
+      <TopBanner headerHeight={64} />
 
       <Stack screenOptions={{ headerShown: false }}>
         {/* splash: بدون انیمیشن تا چشمک/پرش تولید نکند */}

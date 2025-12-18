@@ -1,98 +1,91 @@
-import { useAuth } from "./useAuth";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export type AnnouncementLevel = "info" | "warning" | "critical";
-export type AnnouncementPlacement = "top_banner";
 
 export type Announcement = {
   id: string;
   title: string | null;
   message: string;
   level: AnnouncementLevel;
-  placement: AnnouncementPlacement;
+  placement: "top_banner";
   dismissible: boolean;
   enabled: boolean;
   startAt: string | null;
   endAt: string | null;
   priority: number;
-  createdAt: string;
-  updatedAt: string;
 };
 
-const API_BASE =
-  process.env.EXPO_PUBLIC_API_BASE?.trim() ||
-  process.env.NEXT_PUBLIC_API_BASE?.trim() ||
-  "https://qoqnoos.app";
+type ApiResponse = {
+  ok: boolean;
+  data: Announcement[];
+};
 
-async function fetchActive(phone: string): Promise<Announcement[]> {
-  const url = `${API_BASE}/api/announcements/active?phone=${encodeURIComponent(
-    phone || ""
-  )}&t=${Date.now()}`;
-  const r = await fetch(url, {
-    headers: { Accept: "application/json", "Cache-Control": "no-cache" },
-  });
-  const ct = r.headers.get("content-type") || "";
-  const text = await r.text();
-  if (!ct.includes("application/json")) {
-    throw new Error(`Non-JSON (${r.status}): ${text.slice(0, 160)}...`);
-  }
-  const j = JSON.parse(text);
-  if (!r.ok || j?.ok === false) throw new Error(j?.error || "fetch_failed");
-  return (j?.data as Announcement[]) || [];
-}
-
-async function markSeen(phone: string, announcementId: string): Promise<void> {
-  if (!phone || !announcementId) return;
-  try {
-    await fetch(`${API_BASE}/api/announcements/seen`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ phone, announcementId }),
-    });
-  } catch {}
-}
+const API_BASE = "https://qoqnoos.app";
 
 export function useAnnouncements() {
-  const { phone, isAuthenticated } = useAuth();
   const [items, setItems] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const dismissedRef = useRef<Set<string>>(new Set());
 
-  // برای اینکه برای هر آیتم چند بار seen نفرستیم
-  const sentSeenRef = useRef<Set<string>>(new Set());
-
-  const refresh = useCallback(async () => {
-    if (!isAuthenticated || !phone) {
-      setItems([]);
-      return;
-    }
+  const fetchAnnouncements = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
-      const list = await fetchActive(phone);
-      setItems(list);
-      // فقط برای اجباری‌ها (dismissible=false) یک‌بار seen بزن تا بعداً حذف شوند
-      for (const a of list) {
-        if (!a.dismissible && !sentSeenRef.current.has(a.id)) {
-          sentSeenRef.current.add(a.id);
-          markSeen(phone, a.id).catch(() => {});
-        }
+      const res = await fetch(`${API_BASE}/api/announcements/active`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const json = (await res.json()) as ApiResponse;
+      if (json?.ok) {
+        setItems(json.data || []);
       }
-    } catch (e: any) {
-      setError(e?.message || "failed");
+    } catch (e) {
+      console.warn("fetch announcements failed", e);
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, phone]);
+  }, []);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    fetchAnnouncements();
+  }, [fetchAnnouncements]);
 
-  const topBanners = useMemo(
-    () => items.filter((x) => x.placement === "top_banner" && x.enabled),
-    [items]
-  );
+  // فقط بنرهای top_banner و مرتب‌شده
+  const topBanners = useMemo(() => {
+    return items
+      .filter(
+        (a) =>
+          a.placement === "top_banner" &&
+          !dismissedRef.current.has(a.id)
+      )
+      .sort((a, b) => b.priority - a.priority);
+  }, [items]);
 
-  return { items, topBanners, loading, error, refresh, phone };
+  // ✅ ثبت seen در بک‌اند
+  const markSeen = useCallback(async (announcementId: string) => {
+    try {
+      await fetch(`${API_BASE}/api/announcements/seen`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ announcementId }),
+      });
+    } catch (e) {
+      console.warn("markSeen failed", e);
+    }
+  }, []);
+
+  // ✅ حذف فقط در UI
+  const dismissLocal = useCallback((id: string) => {
+    dismissedRef.current.add(id);
+    setItems((prev) => prev.filter((x) => x.id !== id));
+  }, []);
+
+  return {
+    items,
+    topBanners,
+    loading,
+    refresh: fetchAnnouncements,
+    markSeen,
+    dismissLocal,
+  };
 }
