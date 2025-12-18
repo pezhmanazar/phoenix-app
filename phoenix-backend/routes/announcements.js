@@ -67,6 +67,35 @@ router.get("/active", async (req, res) => {
       take: 2000,
     });
 
+    router.post("/seen", async (req, res) => {
+  try {
+    noStore(res);
+
+    const phone = String(req.body?.phone || "").trim();
+    const announcementId = String(req.body?.announcementId || "").trim();
+
+    if (!phone) return res.status(400).json({ ok: false, error: "phone_required" });
+    if (!announcementId) return res.status(400).json({ ok: false, error: "announcementId_required" });
+
+    const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
+    if (!user) return res.status(404).json({ ok: false, error: "user_not_found" });
+
+    const ann = await prisma.announcement.findUnique({ where: { id: announcementId }, select: { id: true } });
+    if (!ann) return res.status(404).json({ ok: false, error: "announcement_not_found" });
+
+    await prisma.announcementSeen.upsert({
+      where: { announcementId_userId: { announcementId, userId: user.id } },
+      update: { seenAt: new Date() },
+      create: { announcementId, userId: user.id, seenAt: new Date() },
+    });
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("announcements/seen error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
     const seenSet = new Set(seen.map((x) => x.announcementId));
 
     const filtered = active.filter((a) => {
