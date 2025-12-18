@@ -1,7 +1,18 @@
 // hooks/PhoenixContext.tsx
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { DarkTheme as RNDark, DefaultTheme as RNLight, Theme } from "@react-navigation/native";
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  DarkTheme as RNDark,
+  DefaultTheme as RNLight,
+  Theme,
+} from "@react-navigation/native";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 /** ---------- تم‌های پایدار (خارج از کامپوننت) ---------- */
 const lightTheme: Theme = {
@@ -11,6 +22,7 @@ const lightTheme: Theme = {
     primary: "#FF6B00",
   },
 };
+
 const darkTheme: Theme = {
   ...RNDark,
   colors: {
@@ -24,6 +36,10 @@ type Ctx = {
   isDark: boolean;
   toggleTheme: () => void;
   navTheme?: Theme;
+
+  /** ✅ اپ آماده/ورود به اپ (برای کنترل نمایش بنر و چیزهای جهانی) */
+  appReady: boolean; // وقتی gate/(tabs) بالا اومد و اپ واقعاً آماده شد
+  setAppReady: (v: boolean) => void;
 
   /** پروفایل */
   profileName: string;
@@ -58,16 +74,17 @@ export function PhoenixProvider({ children }: { children: React.ReactNode }) {
   /** ------------- حالت‌ها ------------- */
   const [isDark, setIsDark] = useState(false);
 
+  // ✅ NEW: اپ آماده/ورود شده؟
+  // این رو پرسیست نمی‌کنیم چون مربوط به هر بوت/سشن است.
+  const [appReady, setAppReady] = useState(false);
+
   const [profileName, setProfileName] = useState("پژمان");
   const [avatarUrl, setAvatarUrl] = useState("https://i.pravatar.cc/150?img=66");
-
   const [pelekanProgress, setPelekanProgress] = useState(0);
   const [dayProgress, setDayProgress] = useState(0);
-
   const [points, setPoints] = useState(0);
   const [streakDays, setStreakDays] = useState(0);
   const [bestStreak, setBestStreak] = useState(0);
-
   const [noContactStreak, setNoContactStreak] = useState(0);
   const [lastNoContactDay, setLastNoContactDay] = useState<string>(""); // "YYYY-MM-DD"
 
@@ -122,8 +139,8 @@ export function PhoenixProvider({ children }: { children: React.ReactNode }) {
 
   /** ------------- اکشن‌ها ------------- */
   const toggleTheme = useCallback(() => setIsDark((v) => !v), []);
-
   const addPoints = useCallback((n: number) => setPoints((p) => Math.max(0, p + n)), []);
+
   const incrementStreak = useCallback(() => {
     setStreakDays((d) => {
       const nd = d + 1;
@@ -131,6 +148,7 @@ export function PhoenixProvider({ children }: { children: React.ReactNode }) {
       return nd;
     });
   }, []);
+
   const resetStreak = useCallback(() => setStreakDays(0), []);
 
   // helper برای تاریخ روز به فرمت YYYY-MM-DD
@@ -143,6 +161,7 @@ export function PhoenixProvider({ children }: { children: React.ReactNode }) {
   };
 
   const canLogNoContactToday = lastNoContactDay !== todayKey();
+
   const incNoContact = useCallback(() => {
     const tk = todayKey();
     if (lastNoContactDay === tk) return false;
@@ -150,6 +169,7 @@ export function PhoenixProvider({ children }: { children: React.ReactNode }) {
     setLastNoContactDay(tk);
     return true;
   }, [lastNoContactDay]);
+
   const resetNoContact = useCallback(() => {
     setNoContactStreak(0);
     setLastNoContactDay("");
@@ -165,23 +185,23 @@ export function PhoenixProvider({ children }: { children: React.ReactNode }) {
       toggleTheme,
       navTheme,
 
+      appReady,
+      setAppReady,
+
       profileName,
       avatarUrl,
       setProfileName,
       setAvatarUrl,
-
       pelekanProgress,
       setPelekanProgress,
       dayProgress,
       setDayProgress,
-
       points,
       addPoints,
       streakDays,
       bestStreak,
       incrementStreak,
       resetStreak,
-
       noContactStreak,
       canLogNoContactToday,
       incNoContact,
@@ -192,16 +212,15 @@ export function PhoenixProvider({ children }: { children: React.ReactNode }) {
       toggleTheme,
       navTheme,
 
+      appReady,
+
       profileName,
       avatarUrl,
-
       pelekanProgress,
       dayProgress,
-
       points,
       streakDays,
       bestStreak,
-
       canLogNoContactToday,
       incNoContact,
     ]

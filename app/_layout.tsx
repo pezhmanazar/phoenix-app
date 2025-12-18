@@ -5,7 +5,7 @@ import {
   Theme,
   ThemeProvider,
 } from "@react-navigation/native";
-import { Stack } from "expo-router";
+import { Stack, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useMemo } from "react";
 import { Text, TextInput } from "react-native";
@@ -13,10 +13,8 @@ import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import { PhoenixProvider, usePhoenix } from "../hooks/PhoenixContext";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-
 // ✅ NEW: Global Top Banner
 import TopBanner from "../components/TopBanner";
-
 // 🔌 Context modules
 import * as AuthModule from "../hooks/useAuth";
 import * as UserModule from "../hooks/useUser";
@@ -54,13 +52,30 @@ const PlanStatusProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
 };
 
 /* ---------------- Navigation ---------------- */
+
 function RootStack() {
+  const pathname = usePathname();
+  const { appReady, setAppReady } = usePhoenix();
+
+  // ✅ فقط وقتی از splash رد شدیم و وارد مسیرهای اصلی شدیم، appReady=true
+  useEffect(() => {
+    // pathname نمونه‌ها:
+    // "/splash" , "/gate" , "/onboarding" , "/(tabs)" , "/(auth)" , "/pay/index" ...
+    if (!pathname) return;
+
+    // تا وقتی روی splash هستیم بنر/چیزهای global را نشان نده
+    if (pathname.startsWith("/splash")) return;
+
+    // اولین بار که وارد هر مسیر غیر-splash شدیم → آماده
+    if (!appReady) setAppReady(true);
+  }, [pathname, appReady, setAppReady]);
+
   return (
     <>
       <StatusBar style="auto" />
 
-      {/* ✅ NEW: shown above every screen */}
-      <TopBanner headerHeight={64} />
+      {/* ✅ بنر فقط بعد از آماده شدن اپ */}
+      {appReady ? <TopBanner headerHeight={64} /> : null}
 
       <Stack screenOptions={{ headerShown: false }}>
         {/* splash: بدون انیمیشن تا چشمک/پرش تولید نکند */}
@@ -108,7 +123,6 @@ export default function RootLayout() {
   // فونت پیش‌فرض برای Text / TextInput
   useEffect(() => {
     if (!fontsLoaded) return;
-
     const oldTextRender = (Text as any).render;
     (Text as any).render = function (...args: any[]) {
       const origin = oldTextRender.call(this, ...args);
@@ -116,7 +130,6 @@ export default function RootLayout() {
         style: [{ fontFamily: "Anjoman-Regular" }, origin.props.style],
       });
     };
-
     const oldInputRender = (TextInput as any).render;
     (TextInput as any).render = function (...args: any[]) {
       const origin = oldInputRender.call(this, ...args);
