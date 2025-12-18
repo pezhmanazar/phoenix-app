@@ -860,19 +860,18 @@ router.get("/tickets", async (req, res) => {
 
 router.get("/tickets/:id", async (req, res) => {
   try {
-    const id = String(req.params.id);
-
     const t = await prisma.ticket.findUnique({
-      where: { id },
+      where: { id: String(req.params.id) },
       include: { messages: { orderBy: { createdAt: "asc" } } },
     });
     if (!t) return res.status(404).json({ ok: false, error: "not_found" });
 
-    // تلاش 1: اگر openedById واقعاً userId است
+    // ✅ user lookup: اول با openedById (اگر userId هست)، وگرنه با phone/contact
     let user = null;
+
     if (t.openedById) {
       user = await prisma.user.findUnique({
-        where: { id: String(t.openedById) },
+        where: { id: t.openedById },
         select: {
           id: true,
           phone: true,
@@ -885,30 +884,30 @@ router.get("/tickets/:id", async (req, res) => {
       }).catch(() => null);
     }
 
-    // تلاش 2: اگر با شماره/کانتکت باید پیدا کنیم
-    if (!user && t.contact) {
-      const phone = String(t.contact).replace(/\D/g, "");
-      // با توجه به normalizePhone خودت، اینجا هم کمی محافظه‌کارانه:
-      const q = phone.startsWith("0") ? phone : ("0" + phone);
-      user = await prisma.user.findFirst({
-        where: { phone: { contains: q } },
-        select: {
-          id: true,
-          phone: true,
-          fullName: true,
-          gender: true,
-          birthDate: true,
-          plan: true,
-          planExpiresAt: true,
-        },
-      }).catch(() => null);
+    // fallback: اگر openedById نداشت یا پیدا نشد
+    if (!user) {
+      const phone = (t.contact || "").trim();
+      if (phone) {
+        user = await prisma.user.findFirst({
+          where: { phone },
+          select: {
+            id: true,
+            phone: true,
+            fullName: true,
+            gender: true,
+            birthDate: true,
+            plan: true,
+            planExpiresAt: true,
+          },
+        }).catch(() => null);
+      }
     }
 
     const withDisplay = {
       ...t,
-      user,
       title: t.openedByName || t.title,
       displayTitle: t.openedByName || t.title,
+      user: user || null, // ✅ اینو فرانت لازم داره
     };
 
     return res.json({ ok: true, ticket: withDisplay });
