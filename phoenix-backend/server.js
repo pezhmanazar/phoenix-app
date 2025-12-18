@@ -46,7 +46,7 @@ app.use(
 app.options("*", cors());
 app.use(morgan("dev"));
 
-app.use("/api/announcements", announcementsRouter);
+
 
 // ---------- Static site (Phoenix website) ----------
 app.use(express.static(PUBLIC_DIR)); // /, /store.html, /contact.html, ...
@@ -100,6 +100,8 @@ const jsonUnlessMultipart = (req, res, next) => {
 
 app.use(jsonUnlessMultipart);
 app.use(express.urlencoded({ extended: true, limit: "1mb" })); // برای فرم‌های پنل
+
+app.use("/api/announcements", announcementsRouter);
 
 // ---------- Upload helpers ----------
 const withUploadAny = (req, res, next) => {
