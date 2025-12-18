@@ -858,6 +858,10 @@ router.get("/tickets", async (req, res) => {
   }
 });
 
+function isUuid(v) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v || ""));
+}
+
 router.get("/tickets/:id", async (req, res) => {
   try {
     const t = await prisma.ticket.findUnique({
@@ -866,37 +870,45 @@ router.get("/tickets/:id", async (req, res) => {
     });
     if (!t) return res.status(404).json({ ok: false, error: "not_found" });
 
-    // ✅ user lookup: اول با openedById (اگر userId هست)، وگرنه با phone/contact
-    let user = null;
+    // ✅ user lookup: openedById اگر UUID بود = userId، وگرنه با phone های ممکن
+let user = null;
 
-    if (t.openedById) {
-      user = await prisma.user.findUnique({
-        where: { id: t.openedById },
-        select: {
-          id: true,
-          phone: true,
-          fullName: true,
-          gender: true,
-          birthDate: true,
-          plan: true,
-          planExpiresAt: true,
-        },
-      }).catch(() => null);
-    }
+const openedByIdRaw = (t.openedById || "").trim();
+const contactRaw = (t.contact || "").trim();
 
-    // fallback: اگر openedById نداشت یا پیدا نشد
+if (openedByIdRaw && isUuid(openedByIdRaw)) {
+  user = await prisma.user.findUnique({
+    where: { id: openedByIdRaw },
+    select: {
+      id: true,
+      phone: true,
+      fullName: true,
+      gender: true,
+      birthDate: true,
+      plan: true,
+      planExpiresAt: true,
+    },
+  }).catch(() => null);
+}
+
 if (!user) {
-  const raw = String(t.contact || "").trim();
-  const norm = normalizePhone(raw);
+  // کاندیداهای شماره: contact + openedById (اگر UUID نبود احتمالاً شماره است)
+  const candidates = [
+    contactRaw,
+    (!isUuid(openedByIdRaw) ? openedByIdRaw : ""),
+  ].filter(Boolean);
 
-  if (norm) {
+  // نرمال‌سازی (09... / 989... / +98...)
+  const normalized = candidates
+    .map((p) => normalizePhone(p) || String(p).replace(/\D/g, ""))
+    .filter(Boolean);
+
+  // یکتا
+  const uniq = Array.from(new Set([...candidates, ...normalized])).filter(Boolean);
+
+  if (uniq.length) {
     user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { phone: norm },                          // 0912...
-          { phone: { endsWith: norm.slice(-10) } }, // پوشش حالت‌هایی مثل 912... یا ذخیره متفاوت
-        ],
-      },
+      where: { phone: { in: uniq } },
       select: {
         id: true,
         phone: true,
