@@ -885,23 +885,30 @@ router.get("/tickets/:id", async (req, res) => {
     }
 
     // fallback: اگر openedById نداشت یا پیدا نشد
-    if (!user) {
-      const phone = (t.contact || "").trim();
-      if (phone) {
-        user = await prisma.user.findFirst({
-          where: { phone },
-          select: {
-            id: true,
-            phone: true,
-            fullName: true,
-            gender: true,
-            birthDate: true,
-            plan: true,
-            planExpiresAt: true,
-          },
-        }).catch(() => null);
-      }
-    }
+if (!user) {
+  const raw = String(t.contact || "").trim();
+  const norm = normalizePhone(raw);
+
+  if (norm) {
+    user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { phone: norm },                          // 0912...
+          { phone: { endsWith: norm.slice(-10) } }, // پوشش حالت‌هایی مثل 912... یا ذخیره متفاوت
+        ],
+      },
+      select: {
+        id: true,
+        phone: true,
+        fullName: true,
+        gender: true,
+        birthDate: true,
+        plan: true,
+        planExpiresAt: true,
+      },
+    }).catch(() => null);
+  }
+}
 
     const withDisplay = {
       ...t,
