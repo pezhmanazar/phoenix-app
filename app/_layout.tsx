@@ -11,9 +11,11 @@ import React, { useEffect, useMemo } from "react";
 import { Text, TextInput } from "react-native";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
-
 import { PhoenixProvider, usePhoenix } from "../hooks/PhoenixContext";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+
+// ✅ NEW: Global Top Banner
+import TopBanner from "../components/TopBanner";
 
 // 🔌 Context modules
 import * as AuthModule from "../hooks/useAuth";
@@ -21,7 +23,6 @@ import * as UserModule from "../hooks/useUser";
 import * as PlanModule from "../hooks/usePlanStatus";
 
 /* ---------------- Providers ---------------- */
-
 const AuthProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -53,26 +54,26 @@ const PlanStatusProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
 };
 
 /* ---------------- Navigation ---------------- */
-
 function RootStack() {
   return (
     <>
       <StatusBar style="auto" />
+
+      {/* ✅ NEW: shown above every screen */}
+      <TopBanner />
+
       <Stack screenOptions={{ headerShown: false }}>
-  {/* splash: بدون انیمیشن تا چشمک/پرش تولید نکند */}
-  <Stack.Screen name="splash" options={{ animation: "none" }} />
-
-  {/* بقیه: fade نرم و یکدست */}
-  <Stack.Screen name="gate" options={{ animation: "fade" }} />
-  <Stack.Screen name="onboarding" options={{ animation: "fade" }} />
-  <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
-  <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
-
-  <Stack.Screen name="pay/index" options={{ animation: "fade" }} />
-  <Stack.Screen name="pay/result" options={{ animation: "fade" }} />
-
-  <Stack.Screen name="modal" options={{ presentation: "modal" }} />
-</Stack>
+        {/* splash: بدون انیمیشن تا چشمک/پرش تولید نکند */}
+        <Stack.Screen name="splash" options={{ animation: "none" }} />
+        {/* بقیه: fade نرم و یکدست */}
+        <Stack.Screen name="gate" options={{ animation: "fade" }} />
+        <Stack.Screen name="onboarding" options={{ animation: "fade" }} />
+        <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
+        <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
+        <Stack.Screen name="pay/index" options={{ animation: "fade" }} />
+        <Stack.Screen name="pay/result" options={{ animation: "fade" }} />
+        <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+      </Stack>
     </>
   );
 }
@@ -83,7 +84,6 @@ function ThemeBridge() {
     () => navTheme ?? (isDark ? DarkTheme : DefaultTheme),
     [navTheme, isDark]
   );
-
   return (
     <ThemeProvider value={theme}>
       <RootStack />
@@ -92,7 +92,6 @@ function ThemeBridge() {
 }
 
 /* ---------------- Root Layout ---------------- */
-
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     "Anjoman-Regular": require("../assets/fonts/Anjoman-Regular.ttf"),
