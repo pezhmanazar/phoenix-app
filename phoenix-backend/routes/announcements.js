@@ -55,7 +55,11 @@ router.get("/active", async (req, res) => {
 
     // اگر phone هست، آیتم‌های dismissible=false که قبلا دیده شده‌اند حذف شوند؟
     // منطق: فقط اجباری‌ها (dismissible=false) را یک‌بار نشان بدهیم.
-    const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true },
+    });
+
     if (!user) {
       // کاربر هنوز وجود ندارد => همه را نشان بده
       return res.json({ ok: true, data: active });
@@ -67,7 +71,25 @@ router.get("/active", async (req, res) => {
       take: 2000,
     });
 
-    router.post("/seen", async (req, res) => {
+    const seenSet = new Set(seen.map((x) => x.announcementId));
+
+    const filtered = active.filter((a) => {
+      // اختیاری‌ها همیشه می‌تونن دوباره نمایش داده بشن
+      if (a.dismissible) return true;
+      // اجباری‌ها فقط اگر قبلاً seen نشده باشند نمایش داده شوند
+      return !seenSet.has(a.id);
+    });
+
+    return res.json({ ok: true, data: filtered });
+  } catch (e) {
+    console.error("announcements/active error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+// POST /api/announcements/seen
+// body: { phone, announcementId }
+router.post("/seen", async (req, res) => {
   try {
     noStore(res);
 
@@ -92,22 +114,6 @@ router.get("/active", async (req, res) => {
     return res.json({ ok: true });
   } catch (e) {
     console.error("announcements/seen error:", e);
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
-    const seenSet = new Set(seen.map((x) => x.announcementId));
-
-    const filtered = active.filter((a) => {
-      // اختیاری‌ها همیشه می‌تونن دوباره نمایش داده بشن
-      if (a.dismissible) return true;
-      // اجباری‌ها فقط اگر قبلاً seen نشده باشند نمایش داده شوند
-      return !seenSet.has(a.id);
-    });
-
-    return res.json({ ok: true, data: filtered });
-  } catch (e) {
-    console.error("announcements/active error:", e);
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
