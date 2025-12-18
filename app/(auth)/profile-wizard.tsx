@@ -147,15 +147,18 @@ export default function ProfileWizard() {
   const [banner, setBanner] = useState<{ type: BannerType; title: string; message?: string } | null>(null);
   const bannerAnim = useRef(new Animated.Value(0)).current;
 
-  const showBanner = useCallback((type: BannerType, title: string, message?: string, autoHideMs = 3500) => {
-    setBanner({ type, title, message });
-    Animated.timing(bannerAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
-    if (autoHideMs > 0) {
-      setTimeout(() => {
-        Animated.timing(bannerAnim, { toValue: 0, duration: 160, useNativeDriver: true }).start(() => setBanner(null));
-      }, autoHideMs);
-    }
-  }, [bannerAnim]);
+  const showBanner = useCallback(
+    (type: BannerType, title: string, message?: string, autoHideMs = 3500) => {
+      setBanner({ type, title, message });
+      Animated.timing(bannerAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+      if (autoHideMs > 0) {
+        setTimeout(() => {
+          Animated.timing(bannerAnim, { toValue: 0, duration: 160, useNativeDriver: true }).start(() => setBanner(null));
+        }, autoHideMs);
+      }
+    },
+    [bannerAnim]
+  );
 
   const hideBanner = useCallback(() => {
     Animated.timing(bannerAnim, { toValue: 0, duration: 160, useNativeDriver: true }).start(() => setBanner(null));
@@ -164,6 +167,12 @@ export default function ProfileWizard() {
   const mounted = useRef(true);
   const submittingRef = useRef(false);
   const redirectedRef = useRef(false);
+
+  // ✅ NEW: جلوگیری از نمایش بنر عدم شماره در ورود صفحه
+  const initialMountRef = useRef(true);
+  useEffect(() => {
+    initialMountRef.current = false;
+  }, []);
 
   // اسکرول امن
   const scrollRef = useRef<ScrollView>(null);
@@ -174,7 +183,10 @@ export default function ProfileWizard() {
   useEffect(() => {
     const showSub = Keyboard.addListener("keyboardDidShow", (e) => setKbH(e.endCoordinates?.height ?? 0));
     const hideSub = Keyboard.addListener("keyboardDidHide", () => setKbH(0));
-    return () => { showSub.remove(); hideSub.remove(); };
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
   }, []);
 
   const scrollToName = useCallback(() => {
@@ -185,7 +197,9 @@ export default function ProfileWizard() {
 
   useEffect(() => {
     mounted.current = true;
-    return () => { mounted.current = false; };
+    return () => {
+      mounted.current = false;
+    };
   }, []);
 
   /* ------- resolve phone: Context → SecureStore → AsyncStorage ------- */
@@ -193,47 +207,70 @@ export default function ProfileWizard() {
     let alive = true;
     (async () => {
       try {
-        if (phone) { if (alive) setResolvedPhone(phone); return; }
+        if (phone) {
+          if (alive) setResolvedPhone(phone);
+          return;
+        }
         const ss = await SecureStore.getItemAsync(SECURE_KEYS.OTP_PHONE);
-        if (ss) { if (alive) setResolvedPhone(ss); return; }
+        if (ss) {
+          if (alive) setResolvedPhone(ss);
+          return;
+        }
         const as = await AsyncStorage.getItem(SECURE_KEYS.OTP_PHONE);
         if (alive) setResolvedPhone(as || null);
-        if (__DEV__) console.log("[profile-wizard] resolvePhone", { ctx: phone ?? null, ss: ss ?? null, as: as ?? null, key: SECURE_KEYS.OTP_PHONE });
+        if (__DEV__)
+          console.log("[profile-wizard] resolvePhone", {
+            ctx: phone ?? null,
+            ss: ss ?? null,
+            as: as ?? null,
+            key: SECURE_KEYS.OTP_PHONE,
+          });
       } catch (e) {
         if (__DEV__) console.log("[profile-wizard] resolvePhone error:", e);
         if (alive) setResolvedPhone(null);
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [phone]);
 
   // پیش‌پر از سرور
   useEffect(() => {
     if (redirectedRef.current) return;
     if (authLoading) return;
-    if (!resolvedPhone) { setBootChecking(false); setBootError(null); return; }
+
+    // ✅ اینجا فقط ساکت برگرد؛ هیچ بنری برای "شماره نیست" در ورود صفحه نمایش نده
+    if (!resolvedPhone) {
+      setBootChecking(false);
+      setBootError(null);
+      return;
+    }
 
     (async () => {
       try {
         setBootChecking(true);
         setBootError(null);
         const r = await getMeByPhone(resolvedPhone);
+
         if (!r.ok) {
           if (r.error === "USER_NOT_FOUND") {
             await AsyncStorage.removeItem("profile_completed_flag");
             await AsyncStorage.removeItem("phoenix_profile");
-            showBanner("info", "پروفایل پیدا نشد", "لطفاً اطلاعات را دوباره تکمیل کن.");
+            showBanner("info", "خوش اومدی", "لطفاً اطلاعاتت رو تکمیل کن.");
             return;
           }
           setBootError(r.error || "NETWORK_ERROR");
           showBanner("error", "خطا در ارتباط با سرور", r.error || "NETWORK_ERROR", 4500);
           return;
         }
+
         if (!r.data) {
           await AsyncStorage.removeItem("profile_completed_flag");
           await AsyncStorage.removeItem("phoenix_profile");
           return;
         }
+
         const d = r.data as any;
 
         if (d.profileCompleted === true && !redirectedRef.current) {
@@ -247,8 +284,7 @@ export default function ProfileWizard() {
         if (d.gender) setGender(d.gender as Gender);
         if (d.birthDate) setBirthDate(normalizeIsoDateOnly(String(d.birthDate)));
 
-        let safeAvatar: string | null =
-          (d.avatarUrl as string | undefined) ?? (avatarUrl || undefined) ?? null;
+        let safeAvatar: string | null = (d.avatarUrl as string | undefined) ?? (avatarUrl || undefined) ?? null;
 
         if (!safeAvatar && d.gender) {
           safeAvatar = d.gender === "male" ? "icon:male" : d.gender === "female" ? "icon:female" : "avatar:phoenix";
@@ -283,41 +319,57 @@ export default function ProfileWizard() {
   /* ---------------- Image Pickers ---------------- */
   async function ensureMediaPermission() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") { showBanner("error", "اجازه لازم است", "برای انتخاب عکس، دسترسی گالری را فعال کن.", 4500); return false; }
+    if (status !== "granted") {
+      showBanner("error", "اجازه لازم است", "برای انتخاب عکس، دسترسی گالری را فعال کن.", 4500);
+      return false;
+    }
     return true;
   }
   async function ensureCameraPermission() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== "granted") { showBanner("error", "اجازه لازم است", "برای عکس‌برداری، دسترسی دوربین را فعال کن.", 4500); return false; }
+    if (status !== "granted") {
+      showBanner("error", "اجازه لازم است", "برای عکس‌برداری، دسترسی دوربین را فعال کن.", 4500);
+      return false;
+    }
     return true;
   }
 
   const pickFromGallery = async () => {
     try {
-      const ok = await ensureMediaPermission(); if (!ok) return;
+      const ok = await ensureMediaPermission();
+      if (!ok) return;
       const mediaField =
         (ImagePicker as any).MediaType
           ? { mediaTypes: [(ImagePicker as any).MediaType.Image] }
           : { mediaTypes: (ImagePicker as any).MediaTypeOptions.Images };
       const res = await ImagePicker.launchImageLibraryAsync({
-        ...mediaField, allowsEditing: true, aspect: [1, 1], quality: 0.85, selectionLimit: 1,
+        ...mediaField,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+        selectionLimit: 1,
       });
       if (!res.canceled) {
         const uri = (res as any).assets?.[0]?.uri;
         if (uri) setAvatarUrlState(uri);
       }
-    } catch (e) { showBanner("error", "خطا", "در باز کردن گالری مشکلی پیش آمد.", 4500); }
+    } catch (e) {
+      showBanner("error", "خطا", "در باز کردن گالری مشکلی پیش آمد.", 4500);
+    }
   };
 
   const pickFromCamera = async () => {
     try {
-      const ok = await ensureCameraPermission(); if (!ok) return;
+      const ok = await ensureCameraPermission();
+      if (!ok) return;
       const res = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.85 });
       if (!res.canceled) {
         const uri = (res as any).assets?.[0]?.uri;
         if (uri) setAvatarUrlState(uri);
       }
-    } catch (e) { showBanner("error", "خطا", "در باز کردن دوربین مشکلی پیش آمد.", 4500); }
+    } catch (e) {
+      showBanner("error", "خطا", "در باز کردن دوربین مشکلی پیش آمد.", 4500);
+    }
   };
 
   /* ---------------- Avatar (نمایش) ---------------- */
@@ -365,9 +417,11 @@ export default function ProfileWizard() {
               borderWidth: 1,
             }}
           >
-            {IconName === "account"
-              ? <MaterialCommunityIcons name="account" size={46} color={color} />
-              : <Ionicons name={IconName as any} size={46} color={color} />}
+            {IconName === "account" ? (
+              <MaterialCommunityIcons name="account" size={46} color={color} />
+            ) : (
+              <Ionicons name={IconName as any} size={46} color={color} />
+            )}
           </View>
         </View>
       );
@@ -400,15 +454,30 @@ export default function ProfileWizard() {
   /* ---------------- Validation ---------------- */
   const validate = () => {
     const n = (fullName || "").trim();
-    if (n.length < 2) { showBanner("error", "نام معتبر نیست", "نام و نام خانوادگی را کامل وارد کن.", 4500); return false; }
-    if (!gender) { showBanner("error", "جنسیت انتخاب نشده", "لطفاً جنسیت را انتخاب کن.", 4500); return false; }
+    if (n.length < 2) {
+      showBanner("error", "نام معتبر نیست", "نام و نام خانوادگی را کامل وارد کن.", 4500);
+      return false;
+    }
+    if (!gender) {
+      showBanner("error", "جنسیت انتخاب نشده", "لطفاً جنسیت را انتخاب کن.", 4500);
+      return false;
+    }
     return true;
   };
 
   /* ---------------- Submit ---------------- */
   const onSubmit = async () => {
-    if (bootChecking) { showBanner("info", "لطفاً کمی صبر کن", "در حال بررسی وضعیت پروفایل از سرور…", 2500); return; }
-    if (!resolvedPhone) { showBanner("error", "شماره یافت نشد", "لطفاً یک‌بار خارج شو و دوباره وارد شو.", 4500); return; }
+    if (bootChecking) {
+      showBanner("info", "لطفاً کمی صبر کن", "در حال بررسی وضعیت پروفایل از سرور…", 2500);
+      return;
+    }
+
+    // ✅ بنر "عدم شماره" فقط هنگام کلیک کاربر
+    if (!resolvedPhone) {
+      showBanner("error", "شماره یافت نشد", "لطفاً یک‌بار خارج شو و دوباره وارد شو.", 4500);
+      return;
+    }
+
     if (submittingRef.current) return;
     if (!validate()) return;
 
@@ -430,7 +499,10 @@ export default function ProfileWizard() {
       submittingRef.current = true;
       setSaving(true);
       const r = await upsertUserByPhone(resolvedPhone, body);
-      if (!r.ok) { showBanner("error", "ذخیره ناموفق بود", r.error || "HTTP_400", 4500); return; }
+      if (!r.ok) {
+        showBanner("error", "ذخیره ناموفق بود", r.error || "HTTP_400", 4500);
+        return;
+      }
 
       await AsyncStorage.setItem("profile_completed_flag", "1");
 
@@ -460,7 +532,10 @@ export default function ProfileWizard() {
       );
 
       await refresh({ force: true }).catch(() => {});
-      if (!redirectedRef.current) { redirectedRef.current = true; router.replace("/(tabs)"); }
+      if (!redirectedRef.current) {
+        redirectedRef.current = true;
+        router.replace("/(tabs)");
+      }
     } catch (e: any) {
       showBanner("error", "مشکل شبکه", e?.message || "NETWORK_ERROR", 4500);
     } finally {
@@ -567,7 +642,7 @@ export default function ProfileWizard() {
                   height: 160,
                   alignItems: "center",
                   justifyContent: "center",
-                  paddingTop: 18,   // ← بالاتر آوردیم تا زیر کادر نرود
+                  paddingTop: 18,
                   paddingBottom: 12,
                 }}
               >
@@ -617,11 +692,7 @@ export default function ProfileWizard() {
                     </Text>
                   </View>
 
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ paddingVertical: 2, gap: 10 }}
-                  >
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 2, gap: 10 }}>
                     {PRESET_AVATARS.map((av) => {
                       const selected = (avatarUrl || "avatar:phoenix") === av.id;
                       return (

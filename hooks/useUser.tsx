@@ -86,28 +86,25 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         if (!resp.ok) {
           // ✅ USER_NOT_FOUND در onboarding طبیعی است → نباید signOut کند
           if (resp.error === "USER_NOT_FOUND") {
-            if (__DEV__) {
-              console.warn(
-                "[useUser.refresh] USER_NOT_FOUND → keep auth/phone, just clear me"
-              );
-            }
-            lastLoadedPhoneRef.current = null;
-            lastFetchAtRef.current = 0;
-            if (mountedRef.current) setMe(null);
-            return;
-          }
+  if (__DEV__) {
+    console.warn("[useUser.refresh] USER_NOT_FOUND with active session → signOut(keepPhone) + go wizard");
+  }
 
-          // ✅ اگر status هم داشته باشیم (401/403) => signOut
-          const status = (resp as any)?.status;
-          if (status === 401 || status === 403) {
-            if (__DEV__)
-              console.warn("[useUser.refresh] AUTH_STATUS → signOut", status);
-            lastLoadedPhoneRef.current = null;
-            lastFetchAtRef.current = 0;
-            if (mountedRef.current) setMe(null);
-            await signOut();
-            return;
-          }
+  lastLoadedPhoneRef.current = null;
+  lastFetchAtRef.current = 0;
+  if (mountedRef.current) setMe(null);
+
+  // ✅ یک فلگ برای اینکه روت‌لی‌آوت بفهمد باید برود ویزارد
+  try {
+    const AsyncStorage = require("@react-native-async-storage/async-storage").default;
+    await AsyncStorage.setItem("force_profile_wizard_v1", "1");
+  } catch {}
+
+  // ✅ خروج اجباری، اما شماره را نگه دار
+  await signOut({ keepPhone: true });
+
+  return;
+}
 
           // ✅ فقط خطاهای احراز هویت → signOut
           if (

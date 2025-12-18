@@ -27,9 +27,8 @@ type AuthState = {
 type AuthContextValue = AuthState & {
   setToken: (t: string | null) => Promise<void>;
   setPhone: (p: string | null) => Promise<void>;
-  signOut: () => Promise<void>;
+  signOut: (opts?: { keepPhone?: boolean }) => Promise<void>; // ✅ تغییر
   refreshFromStore: () => Promise<void>;
-  /** OTP flow */
   requestCode: (phone: string) => Promise<{ ok: true }>;
   verifyOtp: (code: string) => Promise<{ ok: true }>;
 };
@@ -257,33 +256,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState((s) => ({ ...s, otpToken: t }));
   };
 
-  const signOut = async () => {
-    if (signingOutRef.current) return;
-    signingOutRef.current = true;
-    try {
-      await Promise.all([
-        safeDel(SECURE_KEYS.SESSION),
-        SECURE_KEYS.REFRESH_TOKEN ? safeDel(SECURE_KEYS.REFRESH_TOKEN) : Promise.resolve(),
-        SECURE_KEYS.OTP_TOKEN ? safeDel(SECURE_KEYS.OTP_TOKEN) : Promise.resolve(),
-        safeDel(SECURE_KEYS.OTP_PHONE),
+  const signOut = async (opts?: { keepPhone?: boolean }) => {
+  if (signingOutRef.current) return;
+  signingOutRef.current = true;
 
-        // 👇 کلیدهای AsyncStorage هم پاک شوند
-        AsyncStorage.removeItem(SECURE_KEYS.OTP_PHONE),
-        AsyncStorage.removeItem("session_v1"), // ✅ مهم
-      ]);
+  const keepPhone = opts?.keepPhone === true;
 
-      if (!mountedRef.current) return;
-      setState((s) => ({
-        ...s,
-        token: null,
-        isAuthenticated: false,
-        phone: null,
-        otpToken: null,
-      }));
-    } finally {
-      signingOutRef.current = false;
-    }
-  };
+  try {
+    await Promise.all([
+      safeDel(SECURE_KEYS.SESSION),
+      SECURE_KEYS.REFRESH_TOKEN ? safeDel(SECURE_KEYS.REFRESH_TOKEN) : Promise.resolve(),
+      SECURE_KEYS.OTP_TOKEN ? safeDel(SECURE_KEYS.OTP_TOKEN) : Promise.resolve(),
+
+      // ✅ فقط اگر keepPhone نبود، phone پاک شود
+      keepPhone ? Promise.resolve() : safeDel(SECURE_KEYS.OTP_PHONE),
+      keepPhone ? Promise.resolve() : AsyncStorage.removeItem(SECURE_KEYS.OTP_PHONE),
+    ]);
+
+    if (!mountedRef.current) return;
+
+    setState((s) => ({
+      ...s,
+      token: null,
+      isAuthenticated: false,
+      phone: keepPhone ? s.phone : null, // ✅
+      otpToken: null,
+    }));
+  } finally {
+    signingOutRef.current = false;
+  }
+};
 
   /* ==============================
       🔹 OTP ACTIONS
