@@ -1,7 +1,6 @@
 // app/(auth)/profile-wizard.tsx
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import {
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -13,6 +12,7 @@ import {
   View,
   Keyboard,
   ActivityIndicator,
+  Animated,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -45,6 +45,9 @@ const P = {
   ok: "#22c55e",
   okSoft: "rgba(34,197,94,.16)",
   danger: "rgba(248,113,113,1)",
+  dangerSoft: "rgba(248,113,113,.14)",
+  infoSoft: "rgba(59,130,246,.14)",
+  info: "#60a5fa",
 };
 
 const shadow = Platform.select({
@@ -84,13 +87,48 @@ function normalizeIsoDateOnly(value?: string | null): string | undefined {
   return undefined;
 }
 
+/* ----------------- Pretty in-app banner (instead of Android Alert) ----------------- */
+type BannerType = "error" | "info" | "success";
+function bannerStyle(type: BannerType) {
+  if (type === "success") {
+    return {
+      bg: "rgba(34,197,94,.14)",
+      border: "rgba(34,197,94,.28)",
+      icon: "checkmark-circle-outline" as const,
+      iconColor: P.ok,
+      titleColor: P.text,
+      msgColor: P.muted,
+    };
+  }
+  if (type === "info") {
+    return {
+      bg: P.infoSoft,
+      border: "rgba(96,165,250,.28)",
+      icon: "information-circle-outline" as const,
+      iconColor: P.info,
+      titleColor: P.text,
+      msgColor: P.muted,
+    };
+  }
+  return {
+    bg: P.dangerSoft,
+    border: "rgba(248,113,113,.30)",
+    icon: "alert-circle-outline" as const,
+    iconColor: P.danger,
+    titleColor: P.text,
+    msgColor: P.muted,
+  };
+}
+
 export default function ProfileWizard() {
-  const { phone } = useAuth();
+  const { phone, loading: authLoading } = useAuth();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const { setProfileName, setAvatarUrl } = usePhoenix();
   const { refresh } = useUser() as any;
+
+  const [resolvedPhone, setResolvedPhone] = useState<string | null>(phone ?? null);
 
   const [fullName, setFullName] = useState("");
   const [nameConfirmed, setNameConfirmed] = useState(false);
@@ -103,6 +141,44 @@ export default function ProfileWizard() {
   const [bootChecking, setBootChecking] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
 
+  // ✅ Banner
+  const [banner, setBanner] = useState<{
+    type: BannerType;
+    title: string;
+    message?: string;
+  } | null>(null);
+  const bannerAnim = useRef(new Animated.Value(0)).current;
+
+  const showBanner = useCallback(
+    (type: BannerType, title: string, message?: string, autoHideMs = 3500) => {
+      setBanner({ type, title, message });
+      Animated.timing(bannerAnim, {
+        toValue: 1,
+        duration: 180,
+        useNativeDriver: true,
+      }).start();
+
+      if (autoHideMs > 0) {
+        setTimeout(() => {
+          Animated.timing(bannerAnim, {
+            toValue: 0,
+            duration: 160,
+            useNativeDriver: true,
+          }).start(() => setBanner(null));
+        }, autoHideMs);
+      }
+    },
+    [bannerAnim]
+  );
+
+  const hideBanner = useCallback(() => {
+    Animated.timing(bannerAnim, {
+      toValue: 0,
+      duration: 160,
+      useNativeDriver: true,
+    }).start(() => setBanner(null));
+  }, [bannerAnim]);
+
   const mounted = useRef(true);
   const submittingRef = useRef(false);
   const redirectedRef = useRef(false);
@@ -111,10 +187,25 @@ export default function ProfileWizard() {
   const scrollRef = useRef<ScrollView>(null);
   const nameBlockYRef = useRef(0);
 
+  // ✅ KEYBOARD FIX: ارتفاع کیبورد برای paddingBottom و اسکرول درست
+  const [kbH, setKbH] = useState(0);
+  useEffect(() => {
+    const showSub = Keyboard.addListener("keyboardDidShow", (e) => {
+      setKbH(e.endCoordinates?.height ?? 0);
+    });
+    const hideSub = Keyboard.addListener("keyboardDidHide", () => {
+      setKbH(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
   const scrollToName = useCallback(() => {
     setTimeout(() => {
       scrollRef.current?.scrollTo({
-        y: Math.max(0, nameBlockYRef.current - 160),
+        y: Math.max(0, nameBlockYRef.current - 40),
         animated: true,
       });
     }, 80);
@@ -127,19 +218,41 @@ export default function ProfileWizard() {
     };
   }, []);
 
-  // ✅ حذف کامل ریدایرکت بر اساس فلگ محلی
-  // (هیچ useEffect مربوط به profile_completed_flag برای redirect نداریم)
+  // ✅ resolve phone: اگر Context دیر رسید، از AsyncStorage بخوان
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (phone) {
+        if (alive) setResolvedPhone(phone);
+        return;
+      }
+      const p = await AsyncStorage.getItem("otp_phone_v1");
+      if (alive) setResolvedPhone(p || null);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [phone]);
 
   // ✅ پیش‌پر کردن فیلدها از سرور (مرجع نهایی)
   useEffect(() => {
-    if (!phone || redirectedRef.current) return;
+    if (redirectedRef.current) return;
+
+    // تا وقتی auth loading یا resolvePhone هنوز معلوم نشده، بوت‌چک را نگه داریم
+    if (authLoading) return;
+    if (!resolvedPhone) {
+      // این یعنی هنوز لاگین/OTP کامل نشده یا storage خالیه
+      setBootChecking(false);
+      setBootError(null);
+      return;
+    }
 
     (async () => {
       try {
         setBootChecking(true);
         setBootError(null);
 
-        const r = await getMeByPhone(phone);
+        const r = await getMeByPhone(resolvedPhone);
         if (__DEV__) console.log("[profile-wizard] getMeByPhone →", r);
 
         // اگر کاربر وجود ندارد: فلگ‌ها پاک و در ویزارد بمان
@@ -151,9 +264,11 @@ export default function ProfileWizard() {
               console.log(
                 "[profile-wizard] USER_NOT_FOUND → stay in wizard, cleared local flags"
               );
+            showBanner("info", "پروفایل پیدا نشد", "لطفاً اطلاعات را دوباره تکمیل کن.");
             return;
           }
           setBootError(r.error || "NETWORK_ERROR");
+          showBanner("error", "خطا در ارتباط با سرور", r.error || "NETWORK_ERROR", 4500);
           return;
         }
 
@@ -162,9 +277,7 @@ export default function ProfileWizard() {
           await AsyncStorage.removeItem("profile_completed_flag");
           await AsyncStorage.removeItem("phoenix_profile");
           if (__DEV__)
-            console.log(
-              "[profile-wizard] me=null → stay in wizard, cleared local flags"
-            );
+            console.log("[profile-wizard] me=null → stay in wizard, cleared local flags");
           return;
         }
 
@@ -182,8 +295,7 @@ export default function ProfileWizard() {
         // پیش‌پر کردن فرم از داده سرور
         if (d.fullName) setFullName(String(d.fullName));
         if (d.gender) setGender(d.gender as Gender);
-        if (d.birthDate)
-          setBirthDate(normalizeIsoDateOnly(String(d.birthDate)));
+        if (d.birthDate) setBirthDate(normalizeIsoDateOnly(String(d.birthDate)));
 
         let safeAvatar: string | null =
           (d.avatarUrl as string | undefined) ?? (avatarUrl || undefined) ?? null;
@@ -217,18 +329,19 @@ export default function ProfileWizard() {
       } catch (e: any) {
         if (__DEV__) console.log("[profile-wizard] getMeByPhone error:", e);
         setBootError(e?.message || "NETWORK_ERROR");
+        showBanner("error", "مشکل شبکه", e?.message || "NETWORK_ERROR", 4500);
       } finally {
         setBootChecking(false);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phone, router, setAvatarUrl, setProfileName]);
+  }, [resolvedPhone, authLoading, router, setAvatarUrl, setProfileName]);
 
   /* ---------------- Image Pickers ---------------- */
   async function ensureMediaPermission() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("اجازه لازم است", "برای انتخاب عکس، دسترسی گالری را فعال کن.");
+      showBanner("error", "اجازه لازم است", "برای انتخاب عکس، دسترسی گالری را فعال کن.", 4500);
       return false;
     }
     return true;
@@ -236,7 +349,7 @@ export default function ProfileWizard() {
   async function ensureCameraPermission() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("اجازه لازم است", "برای عکس‌برداری، دسترسی دوربین را فعال کن.");
+      showBanner("error", "اجازه لازم است", "برای عکس‌برداری، دسترسی دوربین را فعال کن.", 4500);
       return false;
     }
     return true;
@@ -265,7 +378,7 @@ export default function ProfileWizard() {
       }
     } catch (e) {
       if (__DEV__) console.log("pickFromGallery error:", e);
-      Alert.alert("خطا", "در باز کردن گالری مشکلی پیش آمد.");
+      showBanner("error", "خطا", "در باز کردن گالری مشکلی پیش آمد.", 4500);
     }
   };
 
@@ -284,7 +397,7 @@ export default function ProfileWizard() {
       }
     } catch (e) {
       if (__DEV__) console.log("pickFromCamera error:", e);
-      Alert.alert("خطا", "در باز کردن دوربین مشکلی پیش آمد.");
+      showBanner("error", "خطا", "در باز کردن دوربین مشکلی پیش آمد.", 4500);
     }
   };
 
@@ -387,15 +500,27 @@ export default function ProfileWizard() {
   /* ---------------- Validation ---------------- */
   const validate = () => {
     const n = (fullName || "").trim();
-    if (n.length < 2)
-      return Alert.alert("خطا", "نام و نام خانوادگی را کامل وارد کن."), false;
-    if (!gender) return Alert.alert("خطا", "جنسیت را انتخاب کن."), false;
+    if (n.length < 2) {
+      showBanner("error", "نام معتبر نیست", "نام و نام خانوادگی را کامل وارد کن.", 4500);
+      return false;
+    }
+    if (!gender) {
+      showBanner("error", "جنسیت انتخاب نشده", "لطفاً جنسیت را انتخاب کن.", 4500);
+      return false;
+    }
     return true;
   };
 
   /* ---------------- Submit ---------------- */
   const onSubmit = async () => {
-    if (!phone) return Alert.alert("خطا", "شماره یافت نشد؛ دوباره وارد شو.");
+    if (bootChecking) {
+      showBanner("info", "لطفاً کمی صبر کن", "در حال بررسی وضعیت پروفایل از سرور…", 2500);
+      return;
+    }
+    if (!resolvedPhone) {
+      showBanner("error", "شماره یافت نشد", "لطفاً یک‌بار خارج شو و دوباره وارد شو.", 4500);
+      return;
+    }
     if (submittingRef.current) return;
     if (!validate()) return;
 
@@ -418,18 +543,19 @@ export default function ProfileWizard() {
       setSaving(true);
 
       if (__DEV__)
-        console.log("[profile-wizard] upsert by phone →", phone, body);
+        console.log("[profile-wizard] upsert by phone →", resolvedPhone, body);
 
-      const r = await upsertUserByPhone(phone, body);
+      const r = await upsertUserByPhone(resolvedPhone, body);
       if (!r.ok) {
-        return Alert.alert("خطا", r.error || "HTTP_400");
+        showBanner("error", "ذخیره ناموفق بود", r.error || "HTTP_400", 4500);
+        return;
       }
 
       // فقط cache (تصمیم‌گیری با سرور است)
       await AsyncStorage.setItem("profile_completed_flag", "1");
 
       // ✅ تصمیم نهایی: سرور
-      const finalMe = await getMeByPhone(phone).catch(
+      const finalMe = await getMeByPhone(resolvedPhone).catch(
         () => ({ ok: false } as any)
       );
 
@@ -439,7 +565,8 @@ export default function ProfileWizard() {
         (finalMe.data as any).profileCompleted !== true
       ) {
         await AsyncStorage.removeItem("profile_completed_flag");
-        return Alert.alert("خطا", "ذخیره روی سرور تایید نشد. دوباره تلاش کن.");
+        showBanner("error", "تایید سرور انجام نشد", "ذخیره روی سرور تایید نشد. دوباره تلاش کن.", 4500);
+        return;
       }
 
       const d = finalMe.data as any;
@@ -470,7 +597,7 @@ export default function ProfileWizard() {
         router.replace("/(tabs)");
       }
     } catch (e: any) {
-      Alert.alert("خطا", e?.message || "مشکل شبکه");
+      showBanner("error", "مشکل شبکه", e?.message || "NETWORK_ERROR", 4500);
     } finally {
       if (mounted.current) setSaving(false);
       submittingRef.current = false;
@@ -486,6 +613,59 @@ export default function ProfileWizard() {
   };
 
   /* ---------------- UI ---------------- */
+  const bannerUI = (() => {
+    if (!banner) return null;
+    const S = bannerStyle(banner.type);
+    return (
+      <Animated.View
+        style={{
+          transform: [
+            { translateY: bannerAnim.interpolate({ inputRange: [0, 1], outputRange: [-14, 0] }) },
+          ],
+          opacity: bannerAnim,
+          marginTop: 12,
+          width: "92%",
+          borderRadius: 18,
+          borderWidth: 1,
+          borderColor: S.border,
+          backgroundColor: S.bg,
+          paddingVertical: 10,
+          paddingHorizontal: 12,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
+        <Ionicons name={S.icon} size={18} color={S.iconColor} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: S.titleColor, fontWeight: "900", fontSize: 12, textAlign: "right" }}>
+            {banner.title}
+          </Text>
+          {!!banner.message ? (
+            <Text style={{ color: S.msgColor, fontWeight: "700", fontSize: 11, marginTop: 2, textAlign: "right" }}>
+              {banner.message}
+            </Text>
+          ) : null}
+        </View>
+        <TouchableOpacity
+          onPress={hideBanner}
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 12,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(255,255,255,.06)",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,.10)",
+          }}
+        >
+          <Ionicons name="close" size={16} color={P.text} />
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  })();
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: P.pageBg }}>
       <KeyboardAvoidingView
@@ -521,15 +701,18 @@ export default function ProfileWizard() {
           <ScrollView
             ref={scrollRef}
             contentContainerStyle={{
-              paddingBottom: insets.bottom + 24,
+              paddingBottom: insets.bottom + 24 + (kbH ? kbH + 24 : 0),
               alignItems: "center",
             }}
             keyboardShouldPersistTaps="handled"
           >
+            {/* ✅ Pretty banner */}
+            {bannerUI}
+
             <View
               style={{
                 width: "92%",
-                marginTop: 16,
+                marginTop: banner ? 10 : 16,
                 borderRadius: 28,
                 backgroundColor: P.cardBg,
                 borderWidth: 1,
@@ -781,7 +964,7 @@ export default function ProfileWizard() {
                   }}
                 >
                   <Text style={{ color: P.text, fontWeight: "800", textAlign: "right", writingDirection: "rtl" }}>
-                    {phone || "-"}
+                    {resolvedPhone || "-"}
                   </Text>
                 </View>
 
@@ -816,7 +999,7 @@ export default function ProfileWizard() {
                         if (nameConfirmed) setNameConfirmed(false);
                       }}
                       onFocus={scrollToName}
-                      placeholder="مثلاً: پژمان"
+                      placeholder="نام و نام خانوادگی"
                       placeholderTextColor="rgba(231,238,247,.45)"
                       style={{
                         flex: 1,
@@ -963,7 +1146,7 @@ export default function ProfileWizard() {
                     Keyboard.dismiss();
                     onSubmit();
                   }}
-                  disabled={saving}
+                  disabled={saving || bootChecking}
                   activeOpacity={0.9}
                   style={{
                     height: 54,
@@ -974,15 +1157,14 @@ export default function ProfileWizard() {
                     alignItems: "center",
                     justifyContent: "center",
                     marginTop: 18,
-                    opacity: bootChecking ? 0.65 : 1,
+                    opacity: saving || bootChecking ? 0.65 : 1,
                   }}
                 >
                   <Text style={{ color: P.text, fontSize: 14, fontWeight: "900" }}>
-                    {saving ? "در حال ذخیره…" : "ذخیره و شروع"}
+                    {saving ? "در حال ذخیره…" : bootChecking ? "در حال بررسی…" : "ذخیره و شروع"}
                   </Text>
                 </TouchableOpacity>
 
-                {/* هشدار کوچک اگر هنوز بوت‌چک داریم */}
                 {bootChecking ? (
                   <Text style={{ color: P.muted2, fontSize: 11, marginTop: 10, textAlign: "center" }}>
                     لطفاً چند ثانیه صبر کن تا وضعیت از سرور بررسی شود.
