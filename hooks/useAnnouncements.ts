@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "./useAuth";
 
 export type AnnouncementLevel = "info" | "warning" | "critical";
+
 export type Announcement = {
   id: string;
   title: string | null;
@@ -18,9 +19,9 @@ export type Announcement = {
 type ApiResponse = { ok: boolean; data: Announcement[]; error?: string };
 
 const API_BASE =
-  (process.env.EXPO_PUBLIC_BACKEND_URL && String(process.env.EXPO_PUBLIC_BACKEND_URL).trim()) ||
   (process.env.EXPO_PUBLIC_APP_API_URL && String(process.env.EXPO_PUBLIC_APP_API_URL).trim()) ||
-  "https://qoqnoos.app";
+  (process.env.EXPO_PUBLIC_BACKEND_URL && String(process.env.EXPO_PUBLIC_BACKEND_URL).trim()) ||
+  "https://api.qoqnoos.app";
 
 type Options = {
   enabled?: boolean;
@@ -37,13 +38,35 @@ export function useAnnouncements(opts: Options = {}) {
   const dismissedRef = useRef<Set<string>>(new Set());
 
   const fetchAnnouncements = useCallback(async () => {
-    if (!enabled) return;
-    if (!isAuthenticated || !phone) return;
+    // ✅ لاگ بدون شرط برای قفل‌کردن «محیط واقعی اپ»
+    console.log("[ann] fetch:ctx →", {
+      enabled,
+      isAuthenticated,
+      phone: phone ? String(phone) : null,
+      API_BASE,
+    });
+
+    if (!enabled) {
+      console.log("[ann] fetch:skip → enabled=false");
+      return;
+    }
+    if (!isAuthenticated || !phone) {
+      console.log("[ann] fetch:skip → not authenticated or no phone", {
+        isAuthenticated,
+        phone: phone ? String(phone) : null,
+      });
+      return;
+    }
 
     setLoading(true);
+
     try {
       const qs = `?phone=${encodeURIComponent(String(phone))}`;
       const url = `${API_BASE}/api/announcements/active${qs}`;
+
+      // ✅ لاگ بدون شرط (همون چیزی که لازم داشتیم)
+      console.log("[ann] url =", url);
+
       if (__DEV__) console.log("[ann] fetch →", url);
 
       const res = await fetch(url, {
@@ -63,6 +86,7 @@ export function useAnnouncements(opts: Options = {}) {
       }
 
       const json = JSON.parse(text) as ApiResponse;
+
       if (!res.ok || !json?.ok) {
         if (__DEV__) console.warn("[ann] ok=false:", json?.error || `HTTP_${res.status}`);
         return;
@@ -99,6 +123,7 @@ export function useAnnouncements(opts: Options = {}) {
 
       try {
         const url = `${API_BASE}/api/announcements/seen`;
+
         const res = await fetch(url, {
           method: "POST",
           headers: {
