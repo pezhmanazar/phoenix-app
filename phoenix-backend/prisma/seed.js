@@ -1,12 +1,13 @@
-/* prisma/seed.js */
-const { PrismaClient } = require("@prisma/client");
+// prisma/seed.js
+import { PrismaClient } from "@prisma/client";
+
 const prisma = new PrismaClient();
 
 async function main() {
   console.log("🌱 Seeding...");
 
-  // نمونه: اگر خواستی admin اولیه بسازی، اینجا انجام بده
-  // (الان چون مدل Admin نیاز به passwordHash/apiKey دارد، بدون تصمیم قبلی نمی‌سازم)
+  // فعلاً چیزی نمی‌سازیم تا با دیتا/سیاست ادمین تداخل نکنه.
+  // بعداً می‌تونیم: ساخت Admin اولیه، Announcement تستی، ...
 
   console.log("✅ Seed done.");
 }
