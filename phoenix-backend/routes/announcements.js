@@ -4,6 +4,9 @@ import prisma from "../utils/prisma.js";
 
 const router = express.Router();
 
+// چند روز مونده به انقضا = expiring
+const EXPIRING_DAYS = 7;
+
 function noStore(res) {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0");
   res.setHeader("Pragma", "no-cache");
@@ -12,36 +15,30 @@ function noStore(res) {
   res.setHeader("Vary", "Origin");
 }
 
-function getPlanBucket(user, now = new Date()) {
-  const plan = String(user?.plan || "free");
-  const exp = user?.planExpiresAt ? new Date(user.planExpiresAt) : null;
-
-  // expired
-  if (exp && exp.getTime() < now.getTime()) return "expired";
-
-  // expiring (1..7 days)
-  if (exp) {
-    const ms = exp.getTime() - now.getTime();
-    const daysLeft = Math.ceil(ms / (1000 * 60 * 60 * 24));
-    if (daysLeft > 0 && daysLeft <= 7) return "expiring";
+function computeUserFlags(user, now) {
+  // اگر کاربر نداریم → پیش‌فرض: free
+  if (!user) {
+    return { isFree: true, isPro: false, isExpiring: false, isExpired: false };
   }
 
-  // pro / free
-  if (plan === "pro") return "pro";
-  return "free";
+  const plan = String(user.plan || "free").toLowerCase();
+  const exp = user.planExpiresAt ? new Date(user.planExpiresAt) : null;
+
+  const isFree = plan === "free";
+
+  // pro/vip فعال یعنی تاریخ انقضا داریم و آینده است
+  const isPaidPlan = plan === "pro" || plan === "vip";
+  const isActivePaid = isPaidPlan && exp && exp.getTime() > now.getTime();
+
+  const isPro = isActivePaid; // اینجا pro یعنی "پلن پولی فعال" (pro/vip)
+  const isExpired = isPaidPlan && (!exp || exp.getTime() <= now.getTime());
+
+  const diffMs = exp ? exp.getTime() - now.getTime() : Infinity;
+  const isExpiring = isActivePaid && diffMs <= EXPIRING_DAYS * 24 * 3600 * 1000;
+
+  return { isFree, isPro, isExpiring, isExpired };
 }
 
-function targetWhere(bucket) {
-  if (bucket === "expired") return { targetExpired: true };
-  if (bucket === "expiring") return { targetExpiring: true };
-  if (bucket === "pro") return { targetPro: true };
-  return { targetFree: true };
-}
-
-/**
- * GET /api/announcements/active?phone=...
- * خروجی: بنرهای فعال، مخصوص همان کاربر، و unseen
- */
 router.get("/active", async (req, res) => {
   try {
     noStore(res);
@@ -49,63 +46,39 @@ router.get("/active", async (req, res) => {
     const phone = String(req.query?.phone || "").trim();
     const now = new Date();
 
-    // اگر phone نداریم: برای دیباگ/سرویس‌های عمومی، بنرهای فعال عمومی برگردان
-    // (بدون target و بدون seen)
-    if (!phone) {
-      const active = await prisma.announcement.findMany({
-        where: {
-          enabled: true,
-          placement: "top_banner",
-          AND: [
-            { OR: [{ startAt: null }, { startAt: { lte: now } }] },
-            { OR: [{ endAt: null }, { endAt: { gte: now } }] },
-          ],
-        },
-        orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
-        take: 20,
-        select: {
-          id: true,
-          title: true,
-          message: true,
-          level: true,
-          placement: true,
-          dismissible: true,
-          enabled: true,
-          startAt: true,
-          endAt: true,
-          priority: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
+    // user (برای تعیین گروه)
+    const user = phone
+      ? await prisma.user.findUnique({
+          where: { phone },
+          select: { id: true, plan: true, planExpiresAt: true },
+        })
+      : null;
 
-      return res.json({ ok: true, data: active });
+    const { isFree, isPro, isExpiring, isExpired } = computeUserFlags(user, now);
+
+    // شرط گروه‌ها (فقط گروه‌های مربوط به همین کاربر)
+    const targetOR = [];
+    if (isFree) targetOR.push({ targetFree: true });
+    if (isPro) targetOR.push({ targetPro: true });
+    if (isExpiring) targetOR.push({ targetExpiring: true });
+    if (isExpired) targetOR.push({ targetExpired: true });
+
+    // اگر به هر دلیلی هیچ گروهی نشد (نباید بشه) → هیچی
+    if (targetOR.length === 0) {
+      return res.json({ ok: true, data: [] });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { phone },
-      select: { id: true, plan: true, planExpiresAt: true },
-    });
-
-    if (!user) return res.json({ ok: true, data: [] });
-
-    const bucket = getPlanBucket(user, now);
-
-    const rows = await prisma.announcement.findMany({
+    const active = await prisma.announcement.findMany({
       where: {
         enabled: true,
-        placement: "top_banner",
-        ...targetWhere(bucket),
         AND: [
           { OR: [{ startAt: null }, { startAt: { lte: now } }] },
           { OR: [{ endAt: null }, { endAt: { gte: now } }] },
+          { OR: targetOR }, // ✅ فیلتر گروه‌ها
         ],
-
-        // ✅ unseen برای همه‌ی بنرها
-        seenBy: { none: { userId: user.id } },
       },
       orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
-      take: 20,
+      take: 10,
       select: {
         id: true,
         title: true,
@@ -119,20 +92,40 @@ router.get("/active", async (req, res) => {
         priority: true,
         createdAt: true,
         updatedAt: true,
+        // برای دیباگ/ادمین مفیده، اگه نمیخوای حذفش کن
+        targetFree: true,
+        targetPro: true,
+        targetExpiring: true,
+        targetExpired: true,
       },
     });
 
-    return res.json({ ok: true, data: rows });
+    // اگر phone نداریم یا user نداریم → فقط همین لیست رو بده (مثل free)
+    if (!phone || !user) return res.json({ ok: true, data: active });
+
+    // seen logic: فقط dismissible ها اگر seen شدند مخفی شوند
+    const seen = await prisma.announcementSeen.findMany({
+      where: { userId: user.id },
+      select: { announcementId: true },
+      take: 2000,
+    });
+
+    const seenSet = new Set(seen.map((x) => x.announcementId));
+
+    const filtered = active.filter((a) => {
+      // اجباری‌ها (dismissible=false) همیشه نمایش داده شوند
+      if (!a.dismissible) return true;
+      // اختیاری‌ها فقط اگر دیده نشده‌اند نمایش داده شوند
+      return !seenSet.has(a.id);
+    });
+
+    return res.json({ ok: true, data: filtered });
   } catch (e) {
     console.error("announcements/active error:", e);
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 
-/**
- * POST /api/announcements/seen
- * body: { phone, announcementId }
- */
 router.post("/seen", async (req, res) => {
   try {
     noStore(res);
