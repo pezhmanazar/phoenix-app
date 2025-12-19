@@ -20,6 +20,7 @@ import Svg, { Path } from "react-native-svg";
 import { useUser } from "../../hooks/useUser";
 import { getPlanStatus, PRO_FLAG_KEY } from "../../lib/plan";
 import PlanStatusBadge from "../../components/PlanStatusBadge";
+import TopBanner from "../../components/TopBanner";
 
 /* --------------------------- مدل و دادهٔ اولیه --------------------------- */
 type StepDef = { id: string; title: string; days: number };
@@ -109,6 +110,7 @@ export default function PelekanScreen() {
   const [loading, setLoading] = useState(true);
 
   const [planView, setPlanView] = useState<PlanView>("free");
+  const [headerHeight, setHeaderHeight] = useState(0);
 
   // مودال برای FREE / EXPIRED
   const [planInfoModal, setPlanInfoModal] = useState<null | "free" | "expired">(null);
@@ -475,7 +477,16 @@ export default function PelekanScreen() {
       <View pointerEvents="none" style={styles.bgGlowTop} />
       <View pointerEvents="none" style={styles.bgGlowBottom} />
 
-      <Header me={me} gems={progress.gems} streak={progress.streak} />
+      <View
+  onLayout={(e) => {
+    const h = e?.nativeEvent?.layout?.height ?? 0;
+    if (h && h !== headerHeight) setHeaderHeight(h);
+  }}
+>
+  <Header me={me} gems={progress.gems} streak={progress.streak} />
+</View>
+
+<TopBanner enabled headerHeight={headerHeight} />
 
       <FlatList
         data={pathItems}

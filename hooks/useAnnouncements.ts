@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useUser } from "../hooks/useUser"; // اگر مسیرت فرق داره، همین یک خط رو اصلاح کن
+import { useAuth } from "./useAuth";
 
 export type AnnouncementLevel = "info" | "warning" | "critical";
 export type Announcement = {
@@ -15,91 +15,108 @@ export type Announcement = {
   priority: number;
 };
 
-type ApiResponse = { ok: boolean; data: Announcement[] };
+type ApiResponse = { ok: boolean; data: Announcement[]; error?: string };
 
-// ✅ نکته: ثابت کردن به دامنه، در مهاجرت اذیتت می‌کند
-// بهتر: از env یا fallback
 const API_BASE =
-  (process.env.EXPO_PUBLIC_BACKEND_URL &&
-    String(process.env.EXPO_PUBLIC_BACKEND_URL).trim()) ||
+  (process.env.EXPO_PUBLIC_BACKEND_URL && String(process.env.EXPO_PUBLIC_BACKEND_URL).trim()) ||
+  (process.env.EXPO_PUBLIC_APP_API_URL && String(process.env.EXPO_PUBLIC_APP_API_URL).trim()) ||
   "https://qoqnoos.app";
 
 type Options = {
-  /** فقط وقتی true شد (بعد از ورود و لود اولیه)، fetch فعال شود */
   enabled?: boolean;
 };
 
 export function useAnnouncements(opts: Options = {}) {
   const enabled = opts.enabled ?? true;
-
-  // ✅ اینجا فرض می‌گیرم useUser داری و phone توش هست
-  // اگر ساختارت فرق دارد، فقط همین بخش را با واقعیت پروژه‌ات هماهنگ کن.
-  const { phone, isAuthenticated } = (useUser as any)?.() ?? {
-    phone: null,
-    isAuthenticated: false,
-  };
+  const { phone, isAuthenticated } = useAuth();
 
   const [items, setItems] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // فقط برای “dismiss” لوکال (اختیاری‌ها)
   const dismissedRef = useRef<Set<string>>(new Set());
 
   const fetchAnnouncements = useCallback(async () => {
     if (!enabled) return;
+    if (!isAuthenticated || !phone) return;
 
     setLoading(true);
     try {
-      const qs = phone ? `?phone=${encodeURIComponent(String(phone))}` : "";
-      const res = await fetch(`${API_BASE}/api/announcements/active${qs}`, {
+      const qs = `?phone=${encodeURIComponent(String(phone))}`;
+      const url = `${API_BASE}/api/announcements/active${qs}`;
+      if (__DEV__) console.log("[ann] fetch →", url);
+
+      const res = await fetch(url, {
         cache: "no-store",
+        headers: { Accept: "application/json" },
       });
 
-      const json = (await res.json().catch(() => null)) as ApiResponse | null;
-      if (json?.ok) setItems(json.data || []);
+      const ct = res.headers.get("content-type") || "";
+      const text = await res.text();
+
+      if (__DEV__) console.log("[ann] status =", res.status, "ct =", ct);
+
+      if (!ct.includes("application/json")) {
+        if (__DEV__) console.warn("[ann] Non-JSON response:", text.slice(0, 160));
+        // اینجا “خالی کردن items” بدترین کاره چون UI را بی‌دلیل می‌پرونه
+        return;
+      }
+
+      const json = JSON.parse(text) as ApiResponse;
+      if (!res.ok || !json?.ok) {
+        if (__DEV__) console.warn("[ann] ok=false:", json?.error || `HTTP_${res.status}`);
+        return;
+      }
+
+      setItems(json.data || []);
+      if (__DEV__) console.log("[ann] items =", (json.data || []).length);
     } catch (e) {
-      console.warn("fetch announcements failed", e);
+      console.warn("[ann] fetch failed", e);
     } finally {
       setLoading(false);
     }
-  }, [enabled, phone]);
+  }, [enabled, isAuthenticated, phone]);
 
-  // ✅ جلوگیری از نمایش روی splash/gate:
-  // فقط وقتی enabled=true و ترجیحاً کاربر لاگین/phone آماده شد fetch کن
   useEffect(() => {
-    if (!enabled) return;
-
-    // اگر می‌خوای حتی قبل از لاگین هم بنر ببینی: این if را حذف کن
-    // ولی تو گفتی "بعد از ورود و لود صفحات" پس نگه می‌داریم
-    if (!isAuthenticated || !phone) return;
-
     fetchAnnouncements();
-  }, [enabled, isAuthenticated, phone, fetchAnnouncements]);
+  }, [fetchAnnouncements]);
 
   const topBanners = useMemo(() => {
     return (items || [])
       .filter((a) => a.placement === "top_banner" && !dismissedRef.current.has(a.id))
-      .sort((a, b) => b.priority - a.priority);
+      .sort((a, b) => {
+        const p = (b.priority ?? 0) - (a.priority ?? 0);
+        if (p !== 0) return p;
+        // tie-break پایدار (قدیمی‌تر اول نمایش داده شود یا برعکس؟ اینجا جدیدتر اول)
+        return String(b.startAt ?? "").localeCompare(String(a.startAt ?? ""));
+      });
   }, [items]);
 
-  // ✅ ثبت seen در بک‌اند (با phone)
   const markSeen = useCallback(
     async (announcementId: string) => {
       if (!announcementId) return;
-      if (!phone) return; // بدون phone، بک‌اندت phone_required می‌دهد
+      if (!phone) return;
 
       try {
-        await fetch(`${API_BASE}/api/announcements/seen`, {
+        const url = `${API_BASE}/api/announcements/seen`;
+        const res = await fetch(url, {
           method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
           body: JSON.stringify({ phone: String(phone), announcementId }),
         });
+
+        if (__DEV__) console.log("[ann] seen →", announcementId, "status=", res.status);
       } catch (e) {
-        console.warn("markSeen failed", e);
+        console.warn("[ann] markSeen failed", e);
       }
     },
     [phone]
   );
 
-  // ✅ حذف فقط در UI
+  // ✅ dismiss فقط لوکال؛ برای اجباری‌ها ما از markSeen استفاده می‌کنیم
   const dismissLocal = useCallback((id: string) => {
     dismissedRef.current.add(id);
     setItems((prev) => prev.filter((x) => x.id !== id));

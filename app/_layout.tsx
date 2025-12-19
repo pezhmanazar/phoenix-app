@@ -5,7 +5,7 @@ import {
   Theme,
   ThemeProvider,
 } from "@react-navigation/native";
-import { Stack, usePathname } from "expo-router";
+import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useMemo } from "react";
 import { Text, TextInput } from "react-native";
@@ -13,17 +13,14 @@ import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import { PhoenixProvider, usePhoenix } from "../hooks/PhoenixContext";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-// ✅ NEW: Global Top Banner
-import TopBanner from "../components/TopBanner";
+
 // 🔌 Context modules
 import * as AuthModule from "../hooks/useAuth";
 import * as UserModule from "../hooks/useUser";
 import * as PlanModule from "../hooks/usePlanStatus";
 
 /* ---------------- Providers ---------------- */
-const AuthProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+const AuthProviderWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const Comp =
     (AuthModule as any).AuthProvider ??
     (AuthModule as any).default ??
@@ -31,9 +28,7 @@ const AuthProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
   return <Comp>{children}</Comp>;
 };
 
-const UserProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+const UserProviderWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const Comp =
     (UserModule as any).UserProvider ??
     (UserModule as any).default ??
@@ -41,9 +36,7 @@ const UserProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
   return <Comp>{children}</Comp>;
 };
 
-const PlanStatusProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+const PlanStatusProviderWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const Comp =
     (PlanModule as any).PlanStatusProvider ??
     (PlanModule as any).default ??
@@ -52,35 +45,12 @@ const PlanStatusProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
 };
 
 /* ---------------- Navigation ---------------- */
-
 function RootStack() {
-  const pathname = usePathname();
-  const { appReady, setAppReady } = usePhoenix();
-
-  // ✅ فقط وقتی از splash رد شدیم و وارد مسیرهای اصلی شدیم، appReady=true
-  useEffect(() => {
-    // pathname نمونه‌ها:
-    // "/splash" , "/gate" , "/onboarding" , "/(tabs)" , "/(auth)" , "/pay/index" ...
-    if (!pathname) return;
-
-    // تا وقتی روی splash هستیم بنر/چیزهای global را نشان نده
-    if (pathname.startsWith("/splash")) return;
-
-    // اولین بار که وارد هر مسیر غیر-splash شدیم → آماده
-    if (!appReady) setAppReady(true);
-  }, [pathname, appReady, setAppReady]);
-
   return (
     <>
       <StatusBar style="auto" />
-
-      {/* ✅ بنر فقط بعد از آماده شدن اپ */}
-      {appReady ? <TopBanner headerHeight={64} /> : null}
-
       <Stack screenOptions={{ headerShown: false }}>
-        {/* splash: بدون انیمیشن تا چشمک/پرش تولید نکند */}
         <Stack.Screen name="splash" options={{ animation: "none" }} />
-        {/* بقیه: fade نرم و یکدست */}
         <Stack.Screen name="gate" options={{ animation: "fade" }} />
         <Stack.Screen name="onboarding" options={{ animation: "fade" }} />
         <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
@@ -114,15 +84,14 @@ export default function RootLayout() {
     "Anjoman-Bold": require("../assets/fonts/Anjoman-Bold.ttf"),
   });
 
-  // ✅ امن: بعد از mount شدن runtime — فقط prevent، نه hide
   useEffect(() => {
     SplashScreen.preventAutoHideAsync().catch(() => {});
     console.log("🟢 SPLASH PREVENT (SAFE)");
   }, []);
 
-  // فونت پیش‌فرض برای Text / TextInput
   useEffect(() => {
     if (!fontsLoaded) return;
+
     const oldTextRender = (Text as any).render;
     (Text as any).render = function (...args: any[]) {
       const origin = oldTextRender.call(this, ...args);
@@ -130,6 +99,7 @@ export default function RootLayout() {
         style: [{ fontFamily: "Anjoman-Regular" }, origin.props.style],
       });
     };
+
     const oldInputRender = (TextInput as any).render;
     (TextInput as any).render = function (...args: any[]) {
       const origin = oldInputRender.call(this, ...args);
@@ -139,7 +109,6 @@ export default function RootLayout() {
     };
   }, [fontsLoaded]);
 
-  // تا آماده شدن فونت‌ها چیزی رندر نشود (Native splash می‌ماند)
   if (!fontsLoaded) return null;
 
   return (

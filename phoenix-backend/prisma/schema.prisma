@@ -21,7 +21,7 @@ enum TicketStatus {
 
 // ⬅️ نوع تیکت
 enum TicketType {
-  tech // پشتیبانی فنی
+  tech    // پشتیبانی فنی
   therapy // ارتباط با درمانگر
 }
 
@@ -65,7 +65,7 @@ model Message {
   mime        String?
   size        Int?
   durationSec Int?
-  createdAt   DateTime    @default(now())
+  createdAt   DateTime @default(now())
 
   @@index([ticketId])
 }
@@ -176,6 +176,22 @@ enum AnnouncementLevel {
   critical
 }
 
+/**
+ * ✅ NEW: تعیین مخاطب اعلان
+ * - all: همه کاربران
+ * - free: فقط رایگان‌ها
+ * - pro: فقط پروها (شامل expiring هم، چون پرو محسوب می‌شود)
+ * - expiring: فقط نزدیک‌انقضاها
+ * - expired: فقط منقضی‌ها
+ */
+enum AnnouncementTarget {
+  all
+  free
+  pro
+  expiring
+  expired
+}
+
 model Announcement {
   id        String                @id @default(uuid())
   title     String?
@@ -188,6 +204,9 @@ model Announcement {
 
   // ✅ فعال/غیرفعال
   enabled Boolean @default(true)
+
+  // ✅ NEW: مخاطب (پیش‌فرض همه)
+  target AnnouncementTarget @default(all)
 
   // زمان‌بندی
   startAt DateTime?
