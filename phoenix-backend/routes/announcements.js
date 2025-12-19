@@ -16,7 +16,6 @@ function noStore(res) {
 }
 
 function computeUserFlags(user, now) {
-  // اگر کاربر نداریم → پیش‌فرض: free
   if (!user) {
     return { isFree: true, isPro: false, isExpiring: false, isExpired: false };
   }
@@ -24,17 +23,18 @@ function computeUserFlags(user, now) {
   const plan = String(user.plan || "free").toLowerCase();
   const exp = user.planExpiresAt ? new Date(user.planExpiresAt) : null;
 
-  const isFree = plan === "free" || isExpired;
+  const isFree = plan === "free";
 
-  // pro/vip فعال یعنی تاریخ انقضا داریم و آینده است
   const isPaidPlan = plan === "pro" || plan === "vip";
   const isActivePaid = isPaidPlan && exp && exp.getTime() > now.getTime();
 
-  const isPro = isActivePaid; // اینجا pro یعنی "پلن پولی فعال" (pro/vip)
   const isExpired = isPaidPlan && (!exp || exp.getTime() <= now.getTime());
 
   const diffMs = exp ? exp.getTime() - now.getTime() : Infinity;
-  const isExpiring = isActivePaid && diffMs <= EXPIRING_DAYS * 24 * 3600 * 1000;
+  const isExpiring =
+    isActivePaid && diffMs <= EXPIRING_DAYS * 24 * 3600 * 1000;
+
+  const isPro = isActivePaid; // یعنی پلن پولیِ فعال (pro یا vip)
 
   return { isFree, isPro, isExpiring, isExpired };
 }
