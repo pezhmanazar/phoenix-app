@@ -92,7 +92,8 @@ router.get("/active", async (req, res) => {
         priority: true,
         createdAt: true,
         updatedAt: true,
-        // برای دیباگ/ادمین مفیده، اگه نمیخوای حذفش کن
+
+        // (اختیاری) برای دیباگ
         targetFree: true,
         targetPro: true,
         targetExpiring: true,
@@ -100,7 +101,7 @@ router.get("/active", async (req, res) => {
       },
     });
 
-    // اگر phone نداریم یا user نداریم → فقط همین لیست رو بده (مثل free)
+    // اگر phone نداریم یا user نداریم → فقط همین لیست رو بده
     if (!phone || !user) return res.json({ ok: true, data: active });
 
     // seen logic: فقط dismissible ها اگر seen شدند مخفی شوند
@@ -115,6 +116,7 @@ router.get("/active", async (req, res) => {
     const filtered = active.filter((a) => {
       // اجباری‌ها (dismissible=false) همیشه نمایش داده شوند
       if (!a.dismissible) return true;
+
       // اختیاری‌ها فقط اگر دیده نشده‌اند نمایش داده شوند
       return !seenSet.has(a.id);
     });
@@ -125,6 +127,8 @@ router.get("/active", async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
+//----
 
 router.post("/seen", async (req, res) => {
   try {
