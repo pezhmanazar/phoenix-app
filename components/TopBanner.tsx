@@ -216,7 +216,7 @@ export default function TopBanner({ headerHeight = 64, enabled = false }: Props)
               </Pressable>
             ) : (
               <Pressable
-                onPress={() => closeWithAnim({ seen: false })}
+                onPress={() => closeWithAnim({ seen: true })}
                 style={({ pressed }) => [styles.btnWideSolid, pressed ? { opacity: 0.85 } : null]}
               >
                 <Text style={styles.btnTextSolid}>بستن</Text>

@@ -6,6 +6,8 @@ const router = express.Router();
 
 // چند روز مونده به انقضا = expiring
 const EXPIRING_DAYS = 7;
+// اجباری‌ها بعد از acknowledge تا این مدت دوباره نمایش داده نشوند
+const FORCED_COOLDOWN_HOURS = 24;
 
 function noStore(res) {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0");
@@ -106,20 +108,31 @@ router.get("/active", async (req, res) => {
 
     // seen logic: فقط dismissible ها اگر seen شدند مخفی شوند
     const seen = await prisma.announcementSeen.findMany({
-      where: { userId: user.id },
-      select: { announcementId: true },
-      take: 2000,
-    });
+  where: { userId: user.id },
+  select: { announcementId: true, seenAt: true },
+  take: 2000,
+});
 
-    const seenSet = new Set(seen.map((x) => x.announcementId));
+// map: announcementId -> seenAt
+const seenMap = new Map(seen.map((x) => [x.announcementId, x.seenAt]));
 
-    const filtered = active.filter((a) => {
-      // اجباری‌ها (dismissible=false) همیشه نمایش داده شوند
-      if (!a.dismissible) return true;
+const cooldownMs = FORCED_COOLDOWN_HOURS * 3600 * 1000;
 
-      // اختیاری‌ها فقط اگر دیده نشده‌اند نمایش داده شوند
-      return !seenSet.has(a.id);
-    });
+const filtered = active.filter((a) => {
+  const lastSeenAt = seenMap.get(a.id);
+
+  // اختیاری‌ها: اگر یک بار دیده شده باشند، دیگر نمایش داده نشوند
+  if (a.dismissible) {
+    return !lastSeenAt;
+  }
+
+  // اجباری‌ها: اگر دیده نشده‌اند نمایش بده
+  if (!lastSeenAt) return true;
+
+  // اجباری‌ها: اگر داخل cooldown دیده شده‌اند، فعلاً نمایش نده
+  const diff = now.getTime() - new Date(lastSeenAt).getTime();
+  return diff >= cooldownMs;
+});
 
     return res.json({ ok: true, data: filtered });
   } catch (e) {
