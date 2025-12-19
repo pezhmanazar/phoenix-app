@@ -24,7 +24,7 @@ function computeUserFlags(user, now) {
   const plan = String(user.plan || "free").toLowerCase();
   const exp = user.planExpiresAt ? new Date(user.planExpiresAt) : null;
 
-  const isFree = plan === "free";
+  const isFree = plan === "free" || isExpired;
 
   // pro/vip فعال یعنی تاریخ انقضا داریم و آینده است
   const isPaidPlan = plan === "pro" || plan === "vip";
