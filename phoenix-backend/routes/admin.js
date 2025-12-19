@@ -546,35 +546,61 @@ router.get("/stats", allow("manager", "owner"), async (_req, res) => {
 
 /* ====================== ✅ ANNOUNCEMENTS ====================== */
 
+function toBool(v) {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "string") {
+    const s = v.trim().toLowerCase();
+    if (s === "true") return true;
+    if (s === "false") return false;
+  }
+  return undefined;
+}
+
+function parseDateOrNull(v, fieldName) {
+  if (v === undefined) return { ok: true, value: undefined }; // یعنی اصلاً آپدیت نکن
+  if (v === null || v === "") return { ok: true, value: null }; // یعنی null کن
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return { ok: false, error: `invalid_${fieldName}` };
+  return { ok: true, value: d };
+}
+
+function validateTargets(t) {
+  return !!(t.targetFree || t.targetPro || t.targetExpiring || t.targetExpired);
+}
+
+/**
+ * ✅ GET /api/admin/announcements?q=&placement=top_banner&enabled=true|false&page=1&limit=50
+ */
 router.get("/announcements", allow("agent", "manager", "owner"), async (req, res) => {
   try {
     const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
     const placement = typeof req.query.placement === "string" ? req.query.placement.trim() : "";
-    const enabledRaw = typeof req.query.enabled === "string" ? req.query.enabled.trim() : "";
+    const enabledRaw = typeof req.query.enabled === "string" ? req.query.enabled.trim().toLowerCase() : "";
 
     const page = Math.max(1, Number(req.query.page || 1) || 1);
     const limitRaw = Number(req.query.limit || 50) || 50;
     const limit = Math.min(200, Math.max(10, limitRaw));
     const skip = (page - 1) * limit;
 
-    const where = { AND: [] };
+    const where = {};
+    const AND = [];
 
     if (enabledRaw) {
-      if (!["true", "false"].includes(enabledRaw.toLowerCase())) {
+      if (!["true", "false"].includes(enabledRaw)) {
         return res.status(400).json({ ok: false, error: "invalid_enabled" });
       }
-      where.AND.push({ enabled: enabledRaw.toLowerCase() === "true" });
+      AND.push({ enabled: enabledRaw === "true" });
     }
 
     if (placement) {
       if (!["top_banner"].includes(placement)) {
         return res.status(400).json({ ok: false, error: "invalid_placement" });
       }
-      where.AND.push({ placement });
+      AND.push({ placement });
     }
 
     if (q) {
-      where.AND.push({
+      AND.push({
         OR: [
           { id: { contains: q, mode: "insensitive" } },
           { title: { contains: q, mode: "insensitive" } },
@@ -583,7 +609,7 @@ router.get("/announcements", allow("agent", "manager", "owner"), async (req, res
       });
     }
 
-    if (where.AND.length === 0) delete where.AND;
+    if (AND.length) where.AND = AND;
 
     const [total, items] = await Promise.all([
       prisma.announcement.count({ where }),
@@ -592,6 +618,26 @@ router.get("/announcements", allow("agent", "manager", "owner"), async (req, res
         orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
         skip,
         take: limit,
+        select: {
+          id: true,
+          title: true,
+          message: true,
+          level: true,
+          placement: true,
+          dismissible: true,
+          enabled: true,
+          startAt: true,
+          endAt: true,
+          priority: true,
+          createdAt: true,
+          updatedAt: true,
+
+          // ✅ targets
+          targetFree: true,
+          targetPro: true,
+          targetExpiring: true,
+          targetExpired: true,
+        },
       }),
     ]);
 
@@ -611,34 +657,37 @@ router.get("/announcements", allow("agent", "manager", "owner"), async (req, res
   }
 });
 
+/**
+ * ✅ POST /api/admin/announcements
+ * body: { title?, message, level?, placement?, dismissible?, enabled?, startAt?, endAt?, priority?,
+ *         targetFree?, targetPro?, targetExpiring?, targetExpired? }
+ */
 router.post("/announcements", allow("manager", "owner"), async (req, res) => {
   try {
     const body = req.body || {};
     const message = typeof body.message === "string" ? body.message.trim() : "";
     if (!message) return res.status(400).json({ ok: false, error: "message_required" });
 
-    const id = body.id ? String(body.id).trim() : undefined;
     const title = body.title !== undefined ? (body.title ? String(body.title).trim() : null) : undefined;
 
-    const level = body.level ? String(body.level).trim() : undefined;
-    if (level && !["info", "warning", "critical"].includes(level)) {
+    const level = body.level !== undefined ? String(body.level).trim() : undefined;
+    if (level !== undefined && level !== "" && !["info", "warning", "critical"].includes(level)) {
       return res.status(400).json({ ok: false, error: "invalid_level" });
     }
 
-    const placement = body.placement ? String(body.placement).trim() : undefined;
-    if (placement && !["top_banner"].includes(placement)) {
+    const placement = body.placement !== undefined ? String(body.placement).trim() : undefined;
+    if (placement !== undefined && placement !== "" && !["top_banner"].includes(placement)) {
       return res.status(400).json({ ok: false, error: "invalid_placement" });
     }
 
-    const toBool = (v) =>
-      typeof v === "boolean" ? v : typeof v === "string" ? v.toLowerCase() === "true" : undefined;
-
-    const dismissible = body.dismissible !== undefined ? toBool(body.dismissible) : undefined;
+    const dismissible =
+      body.dismissible !== undefined ? toBool(body.dismissible) : undefined;
     if (body.dismissible !== undefined && dismissible === undefined) {
       return res.status(400).json({ ok: false, error: "invalid_dismissible" });
     }
 
-    const enabled = body.enabled !== undefined ? toBool(body.enabled) : undefined;
+    const enabled =
+      body.enabled !== undefined ? toBool(body.enabled) : undefined;
     if (body.enabled !== undefined && enabled === undefined) {
       return res.status(400).json({ ok: false, error: "invalid_enabled" });
     }
@@ -648,27 +697,60 @@ router.post("/announcements", allow("manager", "owner"), async (req, res) => {
       return res.status(400).json({ ok: false, error: "invalid_priority" });
     }
 
-    const startAt = body.startAt ? new Date(body.startAt) : undefined;
-    if (body.startAt !== undefined && body.startAt !== null && isNaN(startAt.getTime())) {
-      return res.status(400).json({ ok: false, error: "invalid_startAt" });
+    const startAtParsed = parseDateOrNull(body.startAt, "startAt");
+    if (!startAtParsed.ok) return res.status(400).json({ ok: false, error: startAtParsed.error });
+
+    const endAtParsed = parseDateOrNull(body.endAt, "endAt");
+    if (!endAtParsed.ok) return res.status(400).json({ ok: false, error: endAtParsed.error });
+
+    // ✅ targets (پیش‌فرض عمومی)
+    const targetFree = body.targetFree !== undefined ? toBool(body.targetFree) : true;
+    const targetPro = body.targetPro !== undefined ? toBool(body.targetPro) : true;
+    const targetExpiring = body.targetExpiring !== undefined ? toBool(body.targetExpiring) : false;
+    const targetExpired = body.targetExpired !== undefined ? toBool(body.targetExpired) : false;
+
+    if ([targetFree, targetPro, targetExpiring, targetExpired].some((x) => x === undefined)) {
+      return res.status(400).json({ ok: false, error: "invalid_targets" });
     }
-    const endAt = body.endAt ? new Date(body.endAt) : undefined;
-    if (body.endAt !== undefined && body.endAt !== null && isNaN(endAt.getTime())) {
-      return res.status(400).json({ ok: false, error: "invalid_endAt" });
+    if (!validateTargets({ targetFree, targetPro, targetExpiring, targetExpired })) {
+      return res.status(400).json({ ok: false, error: "target_required" });
     }
 
     const created = await prisma.announcement.create({
       data: {
-        ...(id ? { id } : {}),
         ...(title !== undefined ? { title } : {}),
         message,
         ...(level ? { level } : {}),
         ...(placement ? { placement } : {}),
         ...(dismissible !== undefined ? { dismissible } : {}),
         ...(enabled !== undefined ? { enabled } : {}),
-        ...(body.startAt !== undefined ? { startAt: body.startAt ? startAt : null } : {}),
-        ...(body.endAt !== undefined ? { endAt: body.endAt ? endAt : null } : {}),
+        ...(startAtParsed.value !== undefined ? { startAt: startAtParsed.value } : {}),
+        ...(endAtParsed.value !== undefined ? { endAt: endAtParsed.value } : {}),
         ...(priority !== undefined ? { priority } : {}),
+
+        // ✅ targets
+        targetFree,
+        targetPro,
+        targetExpiring,
+        targetExpired,
+      },
+      select: {
+        id: true,
+        title: true,
+        message: true,
+        level: true,
+        placement: true,
+        dismissible: true,
+        enabled: true,
+        startAt: true,
+        endAt: true,
+        priority: true,
+        createdAt: true,
+        updatedAt: true,
+        targetFree: true,
+        targetPro: true,
+        targetExpiring: true,
+        targetExpired: true,
       },
     });
 
@@ -680,6 +762,10 @@ router.post("/announcements", allow("manager", "owner"), async (req, res) => {
   }
 });
 
+/**
+ * ✅ PATCH /api/admin/announcements/:id
+ * body: هر فیلدی از announcement + targets
+ */
 router.patch("/announcements/:id", allow("manager", "owner"), async (req, res) => {
   try {
     const id = String(req.params.id);
@@ -710,9 +796,6 @@ router.patch("/announcements/:id", allow("manager", "owner"), async (req, res) =
       data.placement = placement;
     }
 
-    const toBool = (v) =>
-      typeof v === "boolean" ? v : typeof v === "string" ? v.toLowerCase() === "true" : undefined;
-
     if (body.dismissible !== undefined) {
       const v = toBool(body.dismissible);
       if (v === undefined) return res.status(400).json({ ok: false, error: "invalid_dismissible" });
@@ -732,28 +815,97 @@ router.patch("/announcements/:id", allow("manager", "owner"), async (req, res) =
     }
 
     if (body.startAt !== undefined) {
-      if (body.startAt === null || body.startAt === "") data.startAt = null;
-      else {
-        const d = new Date(body.startAt);
-        if (isNaN(d.getTime())) return res.status(400).json({ ok: false, error: "invalid_startAt" });
-        data.startAt = d;
-      }
+      const parsed = parseDateOrNull(body.startAt, "startAt");
+      if (!parsed.ok) return res.status(400).json({ ok: false, error: parsed.error });
+      data.startAt = parsed.value;
     }
 
     if (body.endAt !== undefined) {
-      if (body.endAt === null || body.endAt === "") data.endAt = null;
-      else {
-        const d = new Date(body.endAt);
-        if (isNaN(d.getTime())) return res.status(400).json({ ok: false, error: "invalid_endAt" });
-        data.endAt = d;
-      }
+      const parsed = parseDateOrNull(body.endAt, "endAt");
+      if (!parsed.ok) return res.status(400).json({ ok: false, error: parsed.error });
+      data.endAt = parsed.value;
+    }
+
+    // ✅ targets
+    if (body.targetFree !== undefined) {
+      const v = toBool(body.targetFree);
+      if (v === undefined) return res.status(400).json({ ok: false, error: "invalid_targetFree" });
+      data.targetFree = v;
+    }
+    if (body.targetPro !== undefined) {
+      const v = toBool(body.targetPro);
+      if (v === undefined) return res.status(400).json({ ok: false, error: "invalid_targetPro" });
+      data.targetPro = v;
+    }
+    if (body.targetExpiring !== undefined) {
+      const v = toBool(body.targetExpiring);
+      if (v === undefined) return res.status(400).json({ ok: false, error: "invalid_targetExpiring" });
+      data.targetExpiring = v;
+    }
+    if (body.targetExpired !== undefined) {
+      const v = toBool(body.targetExpired);
+      if (v === undefined) return res.status(400).json({ ok: false, error: "invalid_targetExpired" });
+      data.targetExpired = v;
     }
 
     if (Object.keys(data).length === 0) {
       return res.status(400).json({ ok: false, error: "no_fields_to_update" });
     }
 
-    const updated = await prisma.announcement.update({ where: { id }, data });
+    // ✅ جلوگیری از "همه false"
+    const touchedTargets =
+      data.targetFree !== undefined ||
+      data.targetPro !== undefined ||
+      data.targetExpiring !== undefined ||
+      data.targetExpired !== undefined;
+
+    if (touchedTargets) {
+      const cur = await prisma.announcement.findUnique({
+        where: { id },
+        select: {
+          targetFree: true,
+          targetPro: true,
+          targetExpiring: true,
+          targetExpired: true,
+        },
+      });
+      if (!cur) return res.status(404).json({ ok: false, error: "not_found" });
+
+      const merged = {
+        targetFree: data.targetFree ?? cur.targetFree,
+        targetPro: data.targetPro ?? cur.targetPro,
+        targetExpiring: data.targetExpiring ?? cur.targetExpiring,
+        targetExpired: data.targetExpired ?? cur.targetExpired,
+      };
+
+      if (!validateTargets(merged)) {
+        return res.status(400).json({ ok: false, error: "target_required" });
+      }
+    }
+
+    const updated = await prisma.announcement.update({
+      where: { id },
+      data,
+      select: {
+        id: true,
+        title: true,
+        message: true,
+        level: true,
+        placement: true,
+        dismissible: true,
+        enabled: true,
+        startAt: true,
+        endAt: true,
+        priority: true,
+        createdAt: true,
+        updatedAt: true,
+        targetFree: true,
+        targetPro: true,
+        targetExpiring: true,
+        targetExpired: true,
+      },
+    });
+
     return res.json({ ok: true, item: updated });
   } catch (e) {
     if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
@@ -762,6 +914,9 @@ router.patch("/announcements/:id", allow("manager", "owner"), async (req, res) =
   }
 });
 
+/**
+ * ✅ POST /api/admin/announcements/:id/delete
+ */
 router.post("/announcements/:id/delete", allow("manager", "owner"), async (req, res) => {
   try {
     const id = String(req.params.id);
