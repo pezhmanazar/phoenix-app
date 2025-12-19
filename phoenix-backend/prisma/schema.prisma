@@ -263,7 +263,7 @@ model PelekanProgress {
   dayIndex  Int @default(0) // ✅ 0-based
 
   gems   Int @default(0)
-  streak Int @default(1) // ✅ با پیش‌فرض اپ همخوان‌تر
+  streak Int @default(0) // ✅ با پیش‌فرض اپ همخوان‌تر
 
   // تحلیل و سینک
   startedAt    DateTime @default(now())
