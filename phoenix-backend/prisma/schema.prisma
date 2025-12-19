@@ -118,16 +118,14 @@ enum SubscriptionStatus {
   canceled
 }
 
-// ❌ enum Plan را حذف کردیم تا لازم نباشه type دیتابیسی public.Plan بسازیم
 // ✅ پلن را به صورت رشته ذخیره می‌کنیم: 'free' | 'pro' | 'vip'
 model User {
   id        String    @id @default(uuid())
   phone     String    @unique
   fullName  String?   @default("")
-  gender    String? // male / female / other (ساده نگه می‌داریم)
+  gender    String? // male / female / other
   birthDate DateTime?
 
-  // ✅ فیلدهای رسمی اشتراک - به صورت String
   plan          String    @default("free") // 'free' | 'pro' | 'vip'
   planExpiresAt DateTime?
 
@@ -138,8 +136,14 @@ model User {
 
   subscriptions Subscription[]
 
-  // ✅ همین یک خط، مشکل P1012 را حل می‌کند:
+  // ✅ Announcements
   announcementSeen AnnouncementSeen[]
+
+  // ✅ NEW: پیشرفت پلکان (یک رکورد برای هر کاربر)
+  pelekanProgress PelekanProgress?
+
+  // ✅ NEW: نتایج آزمون‌ها
+  assessments AssessmentResult[]
 }
 
 model Subscription {
@@ -166,6 +170,10 @@ model Subscription {
   @@index([phone])
 }
 
+/**
+ * -------------------- Announcements --------------------
+ */
+
 enum AnnouncementPlacement {
   top_banner
 }
@@ -174,22 +182,6 @@ enum AnnouncementLevel {
   info
   warning
   critical
-}
-
-/**
- * ✅ NEW: تعیین مخاطب اعلان
- * - all: همه کاربران
- * - free: فقط رایگان‌ها
- * - pro: فقط پروها (شامل expiring هم، چون پرو محسوب می‌شود)
- * - expiring: فقط نزدیک‌انقضاها
- * - expired: فقط منقضی‌ها
- */
-enum AnnouncementTarget {
-  all
-  free
-  pro
-  expiring
-  expired
 }
 
 model Announcement {
@@ -205,8 +197,20 @@ model Announcement {
   // ✅ فعال/غیرفعال
   enabled Boolean @default(true)
 
-  // ✅ NEW: مخاطب (پیش‌فرض همه)
-  target AnnouncementTarget @default(all)
+  /**
+   * ✅ مخاطب‌ها (چندتا با هم)
+   * - عمومی: free+pro=true
+   * - فقط رایگان: targetFree=true, بقیه false
+   * - فقط پرو: targetPro=true, بقیه false
+   * - تمدید: targetExpiring=true و/یا targetExpired=true
+   *
+   * نکته: اینجا دیتابیس جلوی "همه false" را نمی‌گیرد؛
+   * باید در API validate کنی حداقل یکی true باشد.
+   */
+  targetFree     Boolean @default(true)
+  targetPro      Boolean @default(true)
+  targetExpiring Boolean @default(false)
+  targetExpired  Boolean @default(false)
 
   // زمان‌بندی
   startAt DateTime?
@@ -219,6 +223,10 @@ model Announcement {
   updatedAt DateTime @updatedAt
 
   seenBy AnnouncementSeen[]
+
+  // ✅ indexes برای کوئری active
+  @@index([enabled, placement, priority])
+  @@index([startAt, endAt])
 }
 
 model AnnouncementSeen {
@@ -233,4 +241,84 @@ model AnnouncementSeen {
   @@unique([announcementId, userId])
   @@index([userId])
   @@index([announcementId])
+}
+
+/**
+ * -------------------- Pelekan Progress --------------------
+ * هدف:
+ * - ذخیره‌ی وضعیت مسیر (step/day/gems/streak)
+ * - سینک بین دستگاه‌ها
+ * - ثبت آخرین تعامل و ریست/شروع از صفر
+ *
+ * نکته مهم: dayIndex اینجا 0-based است.
+ */
+
+model PelekanProgress {
+  id String @id @default(uuid())
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  stepIndex Int @default(1) // مثلا 1..3
+  dayIndex  Int @default(0) // ✅ 0-based
+
+  gems   Int @default(0)
+  streak Int @default(1) // ✅ با پیش‌فرض اپ همخوان‌تر
+
+  // تحلیل و سینک
+  startedAt    DateTime @default(now())
+  lastActiveAt DateTime @default(now())
+
+  resetCount Int      @default(0)
+  resetAt    DateTime?
+
+  // اگر خواستی جلوی overwrite قدیمی‌تر را بگیری (برای سینک):
+  version Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([lastActiveAt])
+  @@index([updatedAt])
+}
+
+/**
+ * -------------------- Assessments --------------------
+ * دو جای آزمون:
+ * - نوع A: بدون زیرمقیاس (total فقط)
+ * - نوع B: با زیرمقیاس‌ها (JSON)
+ *
+ * نکته: چون Prisma شرطی ندارد، enforce کردن اینکه
+ * heartbreak_simple حتما totalScore داشته باشد را در API انجام می‌دهیم.
+ */
+
+enum AssessmentKind {
+  heartbreak_simple   // آزمون فعلیِ بدون زیرمقیاس
+  heartbreak_scales   // آزمون آینده‌دار با زیرمقیاس
+}
+
+model AssessmentResult {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  kind AssessmentKind
+
+  // امتیاز کلی (برای simple باید اجباری باشد؛ enforce در API)
+  totalScore Int?
+
+  // زیرمقیاس‌ها / آیتم‌ها / متادیتا
+  // مثال: {"avoidance":12,"rumination":18,"sleep":7}
+  scales Json?
+
+  // موج/دفعه: baseline=1, followup1=2, followup2=3
+  wave Int @default(1)
+
+  takenAt DateTime @default(now())
+
+  @@unique([userId, kind, wave])
+  @@index([userId])
+  @@index([kind])
+  @@index([userId, kind])
 }
