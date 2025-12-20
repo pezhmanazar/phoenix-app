@@ -34,6 +34,7 @@ const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*";
 const PUBLIC_DIR = path.join(process.cwd(), "public");
 
 // ---------- CORS & Logger ----------
+app.disable("etag");
 app.set("trust proxy", true);
 
 app.use(
