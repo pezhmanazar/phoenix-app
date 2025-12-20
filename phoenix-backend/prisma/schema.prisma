@@ -340,23 +340,21 @@ model PelekanStage {
 }
 
 model PelekanDay {
-  id String @id @default(uuid())
+  id      String       @id @default(uuid())
   stageId String
-  stage PelekanStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  stage   PelekanStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
 
   dayNumberInStage Int
   globalDayNumber  Int @unique
 
-  titleFa     String
+  title       String?
   description String?
 
   requiredPercent Int @default(70)
 
-  tasks        PelekanTask[]
-  userProgress PelekanDayProgress[]
-
-  // ✅ opposite relation
-  taskProgresses PelekanTaskProgress[]
+  tasks          PelekanTask[]
+  userProgress   PelekanDayProgress[]
+  taskProgresses PelekanTaskProgress[] // ✅ opposite relation for PelekanTaskProgress.day
 
   @@index([stageId, dayNumberInStage])
 }
