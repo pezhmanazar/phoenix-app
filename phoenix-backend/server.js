@@ -27,6 +27,7 @@ const __dirname = path.dirname(__filename);
 
 // ---------- App ----------
 const app = express();
+app.set("etag", false);
 const PORT = process.env.PORT || 4000;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*";
 
