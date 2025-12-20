@@ -19,6 +19,7 @@ import authRouter from "./routes/auth.js";       // 🔹 روتر جدید اح�
 import payRouter from "./routes/pay.js";         // 🔹 روتر پرداخت / زرین‌پال (جدید)
 import paymentsRouter from "./routes/payments.js";
 import announcementsRouter from "./routes/announcements.js";
+import pelekanRouter from "./routes/pelekan.js";
 
 // ---------- Paths ----------
 const __filename = fileURLToPath(import.meta.url);
@@ -291,6 +292,8 @@ app.get("/mock-pay", (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.send(html);
 });
+
+app.use("/api/pelekan", pelekanRouter);
 
 // ---------- ✅ PING ----------
 app.get("/api/ping", (_req, res) => {
