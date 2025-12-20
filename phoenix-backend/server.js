@@ -293,7 +293,6 @@ app.get("/mock-pay", (req, res) => {
   res.send(html);
 });
 
-app.use("/api/pelekan", pelekanRouter);
 
 // ---------- ✅ PING ----------
 app.get("/api/ping", (_req, res) => {
@@ -342,6 +341,8 @@ app.use("/api/admin", adminRouter);
 app.get("/api/admin/me", adminAuth, (req, res) =>
   res.json({ ok: true, admin: req.admin })
 );
+
+app.use("/api/pelekan", pelekanRouter);
 
 // ---------- 404 ----------
 app.use((req, res) =>
