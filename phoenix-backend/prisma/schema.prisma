@@ -139,11 +139,20 @@ model User {
   // ✅ Announcements
   announcementSeen AnnouncementSeen[]
 
-  // ✅ NEW: پیشرفت پلکان (یک رکورد برای هر کاربر)
+  // ✅ Pelekan (legacy root state)
   pelekanProgress PelekanProgress?
 
-  // ✅ NEW: نتایج آزمون‌ها
+  // ✅ Assessments (legacy, keep)
   assessments AssessmentResult[]
+
+  // ✅ Pelekan (new relations)
+  pelekanDayProgress  PelekanDayProgress[]
+  pelekanTaskProgress PelekanTaskProgress[]
+  xpLedger            XpLedger[]
+  medals              UserMedal[]
+  identityBadges      UserIdentityBadge[]
+  streak              PelekanStreak?
+  noContactLogs       NoContactLog[]
 }
 
 model Subscription {
@@ -197,16 +206,6 @@ model Announcement {
   // ✅ فعال/غیرفعال
   enabled Boolean @default(true)
 
-  /**
-   * ✅ مخاطب‌ها (چندتا با هم)
-   * - عمومی: free+pro=true
-   * - فقط رایگان: targetFree=true, بقیه false
-   * - فقط پرو: targetPro=true, بقیه false
-   * - تمدید: targetExpiring=true و/یا targetExpired=true
-   *
-   * نکته: اینجا دیتابیس جلوی "همه false" را نمی‌گیرد؛
-   * باید در API validate کنی حداقل یکی true باشد.
-   */
   targetFree     Boolean @default(true)
   targetPro      Boolean @default(true)
   targetExpiring Boolean @default(false)
@@ -224,7 +223,6 @@ model Announcement {
 
   seenBy AnnouncementSeen[]
 
-  // ✅ indexes برای کوئری active
   @@index([enabled, placement, priority])
   @@index([startAt, endAt])
 }
@@ -244,13 +242,9 @@ model AnnouncementSeen {
 }
 
 /**
- * -------------------- Pelekan Progress --------------------
- * هدف:
- * - ذخیره‌ی وضعیت مسیر (step/day/gems/streak)
- * - سینک بین دستگاه‌ها
- * - ثبت آخرین تعامل و ریست/شروع از صفر
- *
- * نکته مهم: dayIndex اینجا 0-based است.
+ * -------------------- Pelekan Progress (legacy root) --------------------
+ * ✅ نگه می‌داریم تا منطق فعلی اپ نشکند.
+ * ولی برای پلکان واقعی، جداول Day/Task/XP/Medal/Badge/… اضافه شده‌اند.
  */
 
 model PelekanProgress {
@@ -259,11 +253,12 @@ model PelekanProgress {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  stepIndex Int @default(1) // مثلا 1..3
-  dayIndex  Int @default(0) // ✅ 0-based
+  stepIndex Int @default(1)
+  dayIndex  Int @default(0)
 
+  // ⚠️ فعلاً نگه داشته شده (در عمل می‌تواند نقش XP را بازی کند)
   gems   Int @default(0)
-  streak Int @default(0) // ✅ با پیش‌فرض اپ همخوان‌تر
+  streak Int @default(0)
 
   // تحلیل و سینک
   startedAt    DateTime @default(now())
@@ -272,7 +267,6 @@ model PelekanProgress {
   resetCount Int      @default(0)
   resetAt    DateTime?
 
-  // اگر خواستی جلوی overwrite قدیمی‌تر را بگیری (برای سینک):
   version Int @default(1)
 
   createdAt DateTime @default(now())
@@ -283,18 +277,17 @@ model PelekanProgress {
 }
 
 /**
- * -------------------- Assessments --------------------
- * دو جای آزمون:
- * - نوع A: بدون زیرمقیاس (total فقط)
- * - نوع B: با زیرمقیاس‌ها (JSON)
- *
- * نکته: چون Prisma شرطی ندارد، enforce کردن اینکه
- * heartbreak_simple حتما totalScore داشته باشد را در API انجام می‌دهیم.
+ * -------------------- Assessments (legacy) --------------------
+ * ✅ منطق فعلی را خراب نمی‌کنیم.
+ * فقط kindهای جدید برای «بازسنجی رابطه» اضافه می‌کنیم.
  */
 
 enum AssessmentKind {
   heartbreak_simple   // آزمون فعلیِ بدون زیرمقیاس
   heartbreak_scales   // آزمون آینده‌دار با زیرمقیاس
+
+  // ✅ NEW: بازسنجی رابطه (نتیجه ممکن است PRO-lock شود)
+  relationship_rescan
 }
 
 model AssessmentResult {
@@ -305,20 +298,233 @@ model AssessmentResult {
 
   kind AssessmentKind
 
-  // امتیاز کلی (برای simple باید اجباری باشد؛ enforce در API)
   totalScore Int?
-
-  // زیرمقیاس‌ها / آیتم‌ها / متادیتا
-  // مثال: {"avoidance":12,"rumination":18,"sleep":7}
   scales Json?
 
-  // موج/دفعه: baseline=1, followup1=2, followup2=3
   wave Int @default(1)
-
   takenAt DateTime @default(now())
+
+  // ✅ NEW (برای بازسنجی رابطه): آیا نمایش نتیجه برای کاربر قفل است؟
+  proLocked Boolean @default(false)
 
   @@unique([userId, kind, wave])
   @@index([userId])
   @@index([kind])
   @@index([userId, kind])
+}
+
+/**
+ * ======================================================================
+ * =========================  PELEKAN v1 MODELS  =========================
+ * ======================================================================
+ * هدف: مسیر ۷ مرحله‌ای + روزها + تسک‌ها + قوانین ۷۰٪/۲۴ساعت + XP/Medal/Badge/Streak/NoContact
+ */
+
+enum PelekanStageCode {
+  bastan
+  gosastan
+  sookhtan
+  sarashtan
+  ziestan
+  sakhtan
+  rastan
+}
+
+model PelekanStage {
+  id       String           @id @default(uuid())
+  code     PelekanStageCode @unique
+  titleFa  String
+  sortOrder Int
+
+  days PelekanDay[]
+}
+
+model PelekanDay {
+  id        String       @id @default(uuid())
+  stageId   String
+  stage     PelekanStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  dayNumberInStage Int
+  globalDayNumber  Int @unique
+
+  titleFa     String
+  description String?
+
+  requiredPercent Int @default(70)
+
+  tasks        PelekanTask[]
+  userProgress PelekanDayProgress[]
+
+  @@index([stageId, dayNumberInStage])
+}
+
+model PelekanTask {
+  id          String    @id @default(uuid())
+  dayId       String
+  day         PelekanDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+
+  titleFa     String
+  description String?
+  sortOrder   Int @default(0)
+
+  // اگر فعلاً وزن دقیق نداری، همه 10 یا 20 بده.
+  weightPercent Int @default(10)
+
+  xpReward   Int @default(0)
+  isRequired Boolean @default(false)
+
+  userProgress PelekanTaskProgress[]
+
+  @@index([dayId, sortOrder])
+}
+
+enum PelekanDayStatus {
+  active
+  completed
+  failed
+}
+
+model PelekanDayProgress {
+  id        String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  dayId String
+  day   PelekanDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+
+  status PelekanDayStatus @default(active)
+
+  completionPercent Int @default(0)
+
+  startedAt      DateTime @default(now())
+  deadlineAt     DateTime
+  lastActivityAt DateTime @default(now())
+  completedAt    DateTime?
+
+  xpEarned Int @default(0)
+
+  @@unique([userId, dayId])
+  @@index([userId, status])
+  @@index([userId, startedAt])
+}
+
+model PelekanTaskProgress {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  taskId String
+  task   PelekanTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  dayId String
+  day   PelekanDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+
+  isDone Boolean  @default(false)
+  doneAt DateTime?
+
+  @@unique([userId, taskId])
+  @@index([userId, dayId])
+}
+
+model XpLedger {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  amount Int
+  reason String // TASK_DONE / DAY_COMPLETE / NO_CONTACT / STREAK_BONUS / PENALTY_RESET_DAY / ...
+
+  refType String?
+  refId   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model Medal {
+  id          String  @id @default(uuid())
+  code        String  @unique
+  titleFa     String
+  description String?
+  iconKey     String?
+  createdAt   DateTime @default(now())
+
+  users UserMedal[]
+}
+
+model UserMedal {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  medalId String
+  medal   Medal @relation(fields: [medalId], references: [id], onDelete: Cascade)
+
+  earnedAt DateTime @default(now())
+
+  @@unique([userId, medalId])
+  @@index([userId])
+}
+
+model IdentityBadge {
+  id          String  @id @default(uuid())
+  code        String  @unique
+  titleFa     String
+  description String?
+  iconKey     String?
+  createdAt   DateTime @default(now())
+
+  users UserIdentityBadge[]
+}
+
+model UserIdentityBadge {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  badgeId String
+  badge   IdentityBadge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  earnedAt DateTime @default(now())
+
+  @@unique([userId, badgeId])
+  @@index([userId])
+}
+
+model PelekanStreak {
+  userId String @id
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  currentDays Int @default(0)
+  bestDays    Int @default(0)
+
+  lastCompletedAt DateTime?
+  yellowCardAt    DateTime?
+
+  updatedAt DateTime @updatedAt
+}
+
+model NoContactLog {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // ✅ بسیار مهم: "YYYY-MM-DD" به وقت تهران (نه UTC)
+  dateKey String
+
+  // false = رعایت کرده | true = تماس/چک/ارتباط داشته
+  hadContact Boolean @default(false)
+  note       String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, dateKey])
+  @@index([userId, dateKey])
 }
