@@ -34,7 +34,7 @@ function noStore(res) {
 /* ---------- GET /api/pelekan/state ---------- */
 router.get("/state", authUser, async (req, res) => {
   try {
-    noStore(res);
+    //noStore(res);
 
     const phone = req.userPhone;
 
