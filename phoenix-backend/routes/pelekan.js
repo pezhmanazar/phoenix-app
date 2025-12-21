@@ -62,13 +62,6 @@ function computeActiveDayId({ stages, dayProgress }) {
   return active?.dayId || firstDay?.id || null;
 }
 
-/** tabState resolver v1: align with hasAnyProgressFinal */
-function resolveTabStateV1({ hasContent, hasAnyProgressFinal }) {
-  if (!hasContent) return "idle";
-  if (hasAnyProgressFinal) return "treating";
-  return "idle";
-}
-
 /** access model for fairness */
 function computeTreatmentAccess(planStatus, hasAnyProgressFinal) {
   if (planStatus === "pro" || planStatus === "expiring") return "full";
@@ -108,6 +101,195 @@ function applyDebugProgress(req, hasAnyProgress) {
   return hasAnyProgressFinal;
 }
 
+// -------------------- Baseline Assessment (hb_baseline) --------------------
+
+const HB_BASELINE = {
+  kind: "hb_baseline",
+  consentSteps: [
+    {
+      id: "quiet_place",
+      text: "اين آزمون را بايد در يك مكان ساكت و بدون مزاحمت انجام دهيد",
+      optionText: "متوجه شدم",
+    },
+    {
+      id: "read_calmly",
+      text: "هر سوال رو با دقت و آرامش بخون و بعد از فهم دقيق اون، روي اولين جوابی كه به ذهنت اومد كليك کن",
+      optionText: "متوجه شدم",
+    },
+  ],
+  questions: [
+    {
+      id: "q1_thoughts",
+      text:
+        "موقعی كه بيداری، چقدر به شكست عشقی که تجربه کردی فكر می‌کنی؟\n( اين فكر كردن شامل تصاوير، افكار، احساسات، خيال پردازی‌ها، يادآوری خاطرات و حسرت‌های مربوط به شكست عشقي ميشه.)",
+      options: [
+        { label: "اصلا فكر نمی‌كنم", score: 0 },
+        { label: "گاهی فكر می‌كنم (كمتر از 25 درصد زمان بيداری)", score: 1 },
+        { label: "بعضی وقت‌ها فكر می‌كنم (در حدود 50 درصد از زمان بيداری)", score: 2 },
+        { label: "بيشتر وقت‌ها فكر می‌كنم (حداقل 75 درصد از زمان بيداری)", score: 3 },
+      ],
+    },
+    {
+      id: "q2_body_sick",
+      text:
+        "زمانی كه به شكست عشقی خودت فكر می‌كنی تا چه اندازه به لحاظ جسمی، احساس مريض بودن می‌كنی‌؟\nمثل خستگی، عصبانيت، بی‌حالی، حالت تهوع سردرد و غيره",
+      options: [
+        { label: "اصلا. هيچ احساس جسمی ناخوشايندی مربوط به شكست عشقی در من وجود نداره", score: 0 },
+        { label: "يكم ناخوشم. تا اندازه‌ای احساس جسمی ناخوشايندی درون من وجود داره و معمولا احساس آشفتگی جسمی، عصبانيت و برانگيختگی ناخوشايند به صورت گذرا دارم", score: 1 },
+        { label: "تا اندازه‌ای ناخوشم. احساس واضح آشفتگی جسمی، عصبانيت و برانگيختگی ناخوشايندی دارم كه در كمتر از ده دقيقه از بين ميره", score: 2 },
+        { label: "خيلی ناخوشم. احساس عميق آشفتگی جسمی، عصبانيت و برانگيختی ناخوشايند دارم كه بين چند دقيقه تا چند ساعت طول ميكشه", score: 3 },
+      ],
+    },
+    {
+      id: "q3_acceptance",
+      text: "تا چه اندازه پذيرش واقعيت و درد شكست عشقی برات راحته؟",
+      options: [
+        { label: "پذيرش و قبول كردن شكست عشقی برام خيلی سخته... نمی‌تونم باور كنم كه اين اتفاق افتاده", score: 3 },
+        { label: "تا اندازه‌ای پذيرش شكست عشقی برام سخته... ولی معمولا می‌تونم اون رو تحمل كنم", score: 2 },
+        { label: "يكم پذيرش شكست عشقی برام سخته... و می‌تونم اون رو تحمل كنم", score: 1 },
+        { label: "پذيرش شكست عشقی اصلا برام سخت نيست... و هميشه می‌تونم ناراحتيش رو تحمل كنم", score: 0 },
+      ],
+    },
+    {
+      id: "q4_duration",
+      text: "چند وقته درگير شكست عشقی هستی؟",
+      options: [
+        { label: "كمتر از يك‌ماه", score: 1 },
+        { label: "بيشتر از يك‌ماه و كمتر از شش‌ماه", score: 1 }, // مطابق متن شما
+        { label: "بيشتر از شش‌ماه و كمتر از يك‌سال", score: 2 },
+        { label: "بيشتر از يك‌سال و كمتر از سه‌سال", score: 3 },
+        { label: "بيشتر از سه‌سال", score: 4 },
+      ],
+    },
+    {
+      id: "q5_dreams",
+      text:
+        "معمولا چقدر خواب مرتبط با اين شكست عشقی رو می‌بينی؟\nاين خواب‌ها بايد مرتبط به شكست عشقی، رابطه قبلی و پارتنر سابقت باشه",
+      options: [
+        { label: "حداقل هفته‌ای يك‌بار و حداکثر هر شب", score: 3 },
+        { label: "حداقل دو هفته يك‌بار", score: 2 },
+        { label: "حداقل ماهی یک‌بار", score: 1 },
+        { label: "هيچ خوابی مرتبط با شكست عشقی خودم ندارم", score: 0 },
+      ],
+    },
+    {
+      id: "q6_resistance",
+      text:
+        "مقاومت و ايستادگيت در برابر افكار، احساسات و خاطرات مرتبط به رابطه قبلی و شكست عشقيت تا چه اندازه برات آسونه؟\nمنظور از ايستادگي... مثلا ميتونی به طور موفقيت‌آميزی حواس خودت رو با يه كار ديگه يا فكر كردن در مورد يه چيز ديگه پرت كنی؟",
+      options: [
+        { label: "معمولا نمی‌تونم... و اون‌ها برای چند دقيقه تا چند ساعت ذهنم رو اذيت می‌كنند", score: 3 },
+        { label: "بيشتر اوقات نمی‌تونم... و بين 10 تا 20 دقيقه ذهنم رو اذيت می‌كنند", score: 2 },
+        { label: "بيشتر اوقات می‌تونم... و فقط چند دقيقه كوتاه من رو اذيت می‌كنند", score: 1 },
+        { label: "هميشه می‌تونم... و بيشترين زمانی كه اين افكار تو ذهنم می‌مونند يك دقيقه است", score: 0 },
+      ],
+    },
+    {
+      id: "q7_hope",
+      text:
+        "فكر می‌کنی كه بتونی يه روز بر اين احساس مريضی مرتبط با شكست عشقيت غلبه كنی و برای هميشه فراموشش كني؟\n( آيا اميد به بهبودی كامل داری؟)",
+      options: [
+        { label: "فكر نمی‌کنم به طور كامل حالم خوب شه", score: 3 },
+        { label: "در مورد بهتر شدن حالم، بدبينم", score: 2 },
+        { label: "تا حد زيادی در مورد بهتر شدن حالم خوش بينم", score: 1 },
+        { label: "در مورد بهتر شدن حالم به طور كامل خوش بينم", score: 0 },
+      ],
+    },
+    {
+      id: "q8_avoidance",
+      text:
+        "تا چه اندازه به منظور دوری از چيزهايی كه شكست عشقيت رو برات يادآوری می‌كنند،مسير خودت رو تغيير ميدی؟\nمثلا تا چه اندازه از جاهايی... يا تا چه اندازه ديدن يادگاری‌ها... برات آزاردهندست",
+      options: [
+        { label: "من هميشه از چيزها يا نشانه‌هايی كه مرتبط با شكست عشقی هستند دوری می‌كنم", score: 3 },
+        { label: "فقط بعضی مواقع از محرك‌ها و نشونه‌های مرتبط با شكست عشقی دوری می‌كنم", score: 2 },
+        { label: "خيلی كم از محرك‌ها و نشونه‌های مرتبط با شكست عشقی، دوری می‌کنم", score: 1 },
+        { label: "هيچ وقت از محرك‌ها و نشونه‌های مرتبط با شكست عشقی دوری نمی‌كنم", score: 0 },
+      ],
+    },
+    {
+      id: "q9_sleep",
+      text:
+        "آيا به دليل اين شكست عشقی و احساس بيماری و اضطراب ناشی از اون در خوابيدن و بيدار شدن دچار مشكل شدي؟\nمشكلاتی مثل: دير به خواب رفتن... احساس خستگی زياد موقع بيدار شدن و غيره",
+      options: [
+        { label: "تقريبا هر شب... مشكلات خواب و بيداری دارم", score: 3 },
+        { label: "گهگاهی... مشكلات خواب و بيداری دارم", score: 2 },
+        { label: "به ندرت... مشكلات خواب و بيداری دارم", score: 1 },
+        { label: "اصلا... مشكلات خواب و بيداری ندارم", score: 0 },
+      ],
+    },
+    {
+      id: "q10_emotions",
+      text:
+        "چند وقت یک‌بار احساساتی مثل زير گريه‌زدن، عصبانی شدن يا بی‌قراری بخاطر شکست عشقی که تجربه کردی، بهت دست ميده؟",
+      options: [
+        { label: "حداقل روزی يك‌بار", score: 3 },
+        { label: "حداقل هفته‌ای يك‌بار", score: 2 },
+        { label: "حداقل ماهی يك‌بار", score: 1 },
+        { label: "هيچ‌وقت چنين احساساتی ندارم", score: 0 },
+      ],
+    },
+  ],
+  interpretation: [
+    {
+      min: 20,
+      max: 31,
+      level: "severe",
+      text:
+        "نمره شما نشان‌دهنده تجربه جدی و شديد اختلال شكست عشقی است و بهتر است به‌صورت اورژانسی تحت درمان قرار بگيريد. اين اختلال می‌تواند کیفیت زندگی و عملکرد اجتماعی/تحصیلی/حرفه‌ای شما را به شدت تحت تأثير قرار دهد و خطر افسردگی، اضطراب و وسواس را بالا ببرد.",
+    },
+    {
+      min: 10,
+      max: 19,
+      level: "moderate",
+      text:
+        "نمره شما نشان می‌دهد مبتلا به اختلال شكست عشقی هستيد اما شدت آن از حالت شديد کمتر است. بهتر است برای درمان اقدام کنيد تا شدت علائم بیشتر نشود.",
+    },
+    {
+      min: 0,
+      max: 9,
+      level: "manageable",
+      text:
+        "نمره شما نشان می‌دهد علائم اختلال شكست عشقی در سطح قابل تحمل و قابل کنترل است و به‌طور جدی زندگی شما را تخریب نمی‌کند.",
+    },
+  ],
+};
+
+function computeHbBaselineScore(answersByQid) {
+  let total = 0;
+
+  for (const q of HB_BASELINE.questions) {
+    const idx = answersByQid?.[q.id];
+    if (typeof idx !== "number") return { ok: false, error: "MISSING_ANSWER", missingQid: q.id };
+    const opt = q.options[idx];
+    if (!opt) return { ok: false, error: "INVALID_ANSWER", qid: q.id };
+    total += opt.score;
+  }
+
+  const band = HB_BASELINE.interpretation.find((b) => total >= b.min && total <= b.max) || null;
+
+  return {
+    ok: true,
+    totalScore: total,
+    level: band?.level || null,
+    text: band?.text || null,
+  };
+}
+
+function toBaselineUiContent() {
+  return {
+    kind: HB_BASELINE.kind,
+    consentSteps: HB_BASELINE.consentSteps.map((s) => ({
+      id: s.id,
+      text: s.text,
+      optionText: s.optionText,
+    })),
+    questions: HB_BASELINE.questions.map((q) => ({
+      id: q.id,
+      text: q.text,
+      options: q.options.map((o) => ({ label: o.label })), // ✅ بدون score برای UI
+    })),
+  };
+}
+
 /* ---------- GET /api/pelekan/state ---------- */
 router.get("/state", authUser, async (req, res) => {
   try {
@@ -122,7 +304,27 @@ router.get("/state", authUser, async (req, res) => {
     if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
 
     const basePlan = getPlanStatus(user.plan, user.planExpiresAt);
-    const { planStatusFinal, daysLeftFinal } = applyDebugPlan(req, basePlan.planStatus, basePlan.daysLeft);
+    const { planStatusFinal, daysLeftFinal } = applyDebugPlan(
+      req,
+      basePlan.planStatus,
+      basePlan.daysLeft
+    );
+
+    // 0) baseline session (hb_baseline)
+    const baselineSession = await prisma.assessmentSession.findUnique({
+      where: { userId_kind: { userId: user.id, kind: HB_BASELINE.kind } },
+      select: {
+        id: true,
+        kind: true,
+        status: true,
+        currentIndex: true,
+        totalItems: true,
+        startedAt: true,
+        completedAt: true,
+        totalScore: true,
+        scalesJson: true,
+      },
+    });
 
     // 1) content (read-only)
     const stages = await prisma.pelekanStage.findMany({
@@ -140,10 +342,13 @@ router.get("/state", authUser, async (req, res) => {
     // no content
     if (!stages.length) {
       const hasAnyProgressFinal = applyDebugProgress(req, false);
-      const tabState = resolveTabStateV1({ hasContent: false, hasAnyProgressFinal });
-
       const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasAnyProgressFinal);
       const paywall = computePaywall(planStatusFinal, hasAnyProgressFinal);
+
+      // tabState based on baseline (when no content, still can run baseline + choose_path UI)
+      let tabState = "idle";
+      if (baselineSession?.status === "in_progress") tabState = "baseline_assessment";
+      if (baselineSession?.status === "completed") tabState = "choose_path";
 
       return res.json({
         ok: true,
@@ -152,7 +357,14 @@ router.get("/state", authUser, async (req, res) => {
           user: { planStatus: planStatusFinal, daysLeft: daysLeftFinal },
           treatmentAccess,
           ui: { paywall },
-          baseline: null,
+
+          baseline: baselineSession
+            ? {
+                session: baselineSession,
+                content: toBaselineUiContent(),
+              }
+            : null,
+
           path: null,
           review: null,
           bastanIntro: null,
@@ -203,8 +415,16 @@ router.get("/state", authUser, async (req, res) => {
     const hasAnyProgress = Array.isArray(dayProgress) && dayProgress.length > 0;
     const hasAnyProgressFinal = applyDebugProgress(req, hasAnyProgress);
 
-    // ✅ tabState aligned with access (v1)
-    const tabState = resolveTabStateV1({ hasContent: true, hasAnyProgressFinal });
+    // ✅ tabState (full flow)
+    // priority:
+    // 1) if user has any treatment progress -> treating
+    // 2) else if baseline exists/in_progress -> baseline_assessment
+    // 3) else if baseline completed -> choose_path
+    // 4) else -> idle
+    let tabState = "idle";
+    if (hasAnyProgressFinal) tabState = "treating";
+    else if (baselineSession?.status === "in_progress") tabState = "baseline_assessment";
+    else if (baselineSession?.status === "completed") tabState = "choose_path";
 
     const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasAnyProgressFinal);
     const paywall = computePaywall(planStatusFinal, hasAnyProgressFinal);
@@ -221,7 +441,7 @@ router.get("/state", authUser, async (req, res) => {
         activeDay: activeDay?.dayNumberInStage || null,
         stages: stages.map((s) => ({
           code: s.code,
-          title: s.title,
+          title: s.titleFa, // ✅ FIX: was s.title (wrong)
           status: s.id === activeStage?.id ? "active" : "locked",
         })),
         day: activeDay
@@ -247,13 +467,22 @@ router.get("/state", authUser, async (req, res) => {
         user: { planStatus: planStatusFinal, daysLeft: daysLeftFinal },
         treatmentAccess,
         ui: { paywall },
-        baseline: null,
+
+        baseline: baselineSession
+          ? {
+              session: baselineSession,
+              content: toBaselineUiContent(),
+            }
+          : null,
+
+        // these will be filled later
         path: null,
         review: null,
         bastanIntro: null,
+
         treatment,
 
-        // legacy payload
+        // legacy payload (keep for now)
         hasContent: true,
         stages,
         progress: {
@@ -268,6 +497,195 @@ router.get("/state", authUser, async (req, res) => {
     });
   } catch (e) {
     console.error("[pelekan.state] error:", e);
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
+// POST /api/pelekan/baseline/start
+router.post("/baseline/start", authUser, async (req, res) => {
+  try {
+    const phone = req.userPhone;
+    const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
+    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+
+    const existing = await prisma.assessmentSession.findUnique({
+      where: { userId_kind: { userId: user.id, kind: HB_BASELINE.kind } },
+      select: { id: true, status: true, currentIndex: true, totalItems: true, completedAt: true },
+    });
+
+    if (existing) {
+      return res.json({
+        ok: true,
+        data: {
+          sessionId: existing.id,
+          status: existing.status,
+          currentIndex: existing.currentIndex,
+          totalItems: existing.totalItems,
+          completedAt: existing.completedAt,
+        },
+      });
+    }
+
+    const created = await prisma.assessmentSession.create({
+      data: {
+        userId: user.id,
+        kind: HB_BASELINE.kind,
+        status: "in_progress",
+        currentIndex: 0,
+        totalItems: HB_BASELINE.consentSteps.length + HB_BASELINE.questions.length,
+        answersJson: {
+          consent: {},
+          answers: {},
+        },
+      },
+      select: { id: true, status: true, currentIndex: true, totalItems: true, startedAt: true },
+    });
+
+    return res.json({
+      ok: true,
+      data: {
+        sessionId: created.id,
+        status: created.status,
+        currentIndex: created.currentIndex,
+        totalItems: created.totalItems,
+        startedAt: created.startedAt,
+      },
+    });
+  } catch (e) {
+    console.error("[pelekan.baseline.start] error:", e);
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
+// POST /api/pelekan/baseline/answer
+router.post("/baseline/answer", authUser, async (req, res) => {
+  try {
+    const phone = req.userPhone;
+    const { stepType, stepId, optionIndex, acknowledged } = req.body || {};
+
+    const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
+    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+
+    const session = await prisma.assessmentSession.findUnique({
+      where: { userId_kind: { userId: user.id, kind: HB_BASELINE.kind } },
+      select: { id: true, status: true, answersJson: true, currentIndex: true, totalItems: true },
+    });
+    if (!session) return res.status(400).json({ ok: false, error: "SESSION_NOT_FOUND" });
+    if (session.status !== "in_progress")
+      return res.status(400).json({ ok: false, error: "SESSION_NOT_IN_PROGRESS" });
+
+    const aj = session.answersJson || { consent: {}, answers: {} };
+    const next = { ...aj, consent: { ...(aj.consent || {}) }, answers: { ...(aj.answers || {}) } };
+
+    if (stepType === "consent") {
+      const exists = HB_BASELINE.consentSteps.some((s) => s.id === stepId);
+      if (!exists) return res.status(400).json({ ok: false, error: "INVALID_STEP" });
+      if (acknowledged !== true) return res.status(400).json({ ok: false, error: "ACK_REQUIRED" });
+      next.consent[stepId] = true;
+    } else if (stepType === "question") {
+      const q = HB_BASELINE.questions.find((qq) => qq.id === stepId);
+      if (!q) return res.status(400).json({ ok: false, error: "INVALID_STEP" });
+      if (typeof optionIndex !== "number")
+        return res.status(400).json({ ok: false, error: "OPTION_REQUIRED" });
+      if (!q.options[optionIndex]) return res.status(400).json({ ok: false, error: "OPTION_INVALID" });
+      next.answers[stepId] = optionIndex;
+    } else {
+      return res.status(400).json({ ok: false, error: "INVALID_STEP_TYPE" });
+    }
+
+    // NOTE: currentIndex increment (UI-driven navigation is allowed)
+    const newIndex = Math.min(session.totalItems, (session.currentIndex || 0) + 1);
+
+    const updated = await prisma.assessmentSession.update({
+      where: { id: session.id },
+      data: {
+        answersJson: next,
+        currentIndex: newIndex,
+      },
+      select: { id: true, currentIndex: true, totalItems: true },
+    });
+
+    return res.json({ ok: true, data: updated });
+  } catch (e) {
+    console.error("[pelekan.baseline.answer] error:", e);
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
+// POST /api/pelekan/baseline/submit
+router.post("/baseline/submit", authUser, async (req, res) => {
+  try {
+    const phone = req.userPhone;
+    const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
+    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+
+    const session = await prisma.assessmentSession.findUnique({
+      where: { userId_kind: { userId: user.id, kind: HB_BASELINE.kind } },
+      select: { id: true, status: true, answersJson: true },
+    });
+    if (!session) return res.status(400).json({ ok: false, error: "SESSION_NOT_FOUND" });
+    if (session.status !== "in_progress")
+      return res.status(400).json({ ok: false, error: "SESSION_NOT_IN_PROGRESS" });
+
+    const aj = session.answersJson || {};
+    const consent = aj.consent || {};
+    const answers = aj.answers || {};
+
+    for (const s of HB_BASELINE.consentSteps) {
+      if (consent[s.id] !== true)
+        return res.status(400).json({ ok: false, error: "CONSENT_REQUIRED", stepId: s.id });
+    }
+
+    const calc = computeHbBaselineScore(answers);
+    if (!calc.ok)
+      return res.status(400).json({ ok: false, error: calc.error, missingQid: calc.missingQid });
+
+    const updated = await prisma.assessmentSession.update({
+      where: { id: session.id },
+      data: {
+        status: "completed",
+        completedAt: new Date(),
+        totalScore: calc.totalScore,
+        scalesJson: {
+          level: calc.level,
+          interpretationText: calc.text,
+        },
+      },
+      select: { id: true, status: true, totalScore: true, scalesJson: true, completedAt: true },
+    });
+
+    // keep legacy record in AssessmentResult (optional but useful)
+    await prisma.assessmentResult.upsert({
+      where: { userId_kind_wave: { userId: user.id, kind: HB_BASELINE.kind, wave: 1 } },
+      create: {
+        userId: user.id,
+        kind: HB_BASELINE.kind,
+        totalScore: calc.totalScore,
+        scales: { level: calc.level, interpretationText: calc.text },
+        wave: 1,
+        proLocked: false,
+      },
+      update: {
+        totalScore: calc.totalScore,
+        scales: { level: calc.level, interpretationText: calc.text },
+        takenAt: new Date(),
+        proLocked: false,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      data: {
+        session: updated,
+        interpretation: {
+          level: calc.level,
+          text: calc.text,
+          score: calc.totalScore,
+        },
+      },
+    });
+  } catch (e) {
+    console.error("[pelekan.baseline.submit] error:", e);
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
