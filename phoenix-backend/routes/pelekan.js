@@ -346,7 +346,6 @@ function getFirstMissingStep(answersJson) {
   return missing.length ? missing[0] : null;
 }
 
-
 /** WCDN workaround: for baseline endpoints, prefer 200 + {ok:false} instead of 4xx (to avoid HTML error pages) */
 function baselineError(res, error, extra = {}) {
   return res.json({ ok: false, error, ...extra });
@@ -384,6 +383,9 @@ router.get("/state", authUser, async (req, res) => {
       },
     });
 
+    const isBaselineInProgress = baselineSession?.status === "in_progress";
+    const isBaselineCompleted = baselineSession?.status === "completed";
+
     // content
     const stages = await prisma.pelekanStage.findMany({
       orderBy: { sortOrder: "asc" },
@@ -400,12 +402,17 @@ router.get("/state", authUser, async (req, res) => {
     // no content
     if (!stages.length) {
       const hasAnyProgressFinal = applyDebugProgress(req, false);
-      const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasAnyProgressFinal);
-      const paywall = computePaywall(planStatusFinal, hasAnyProgressFinal);
 
       let tabState = "idle";
-      if (baselineSession?.status === "in_progress") tabState = "baseline_assessment";
-      if (baselineSession?.status === "completed") tabState = "choose_path";
+      if (isBaselineInProgress) tabState = "baseline_assessment";
+      if (isBaselineCompleted) tabState = "choose_path";
+
+      const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasAnyProgressFinal);
+
+      const suppressPaywall = tabState === "baseline_assessment";
+      const paywall = suppressPaywall
+        ? { needed: false, reason: null }
+        : computePaywall(planStatusFinal, hasAnyProgressFinal);
 
       return res.json({
         ok: true,
@@ -413,7 +420,10 @@ router.get("/state", authUser, async (req, res) => {
           tabState,
           user: { planStatus: planStatusFinal, daysLeft: daysLeftFinal },
           treatmentAccess,
-          ui: { paywall },
+          ui: {
+            paywall,
+            flags: { suppressPaywall, isBaselineInProgress, isBaselineCompleted },
+          },
           baseline: baselineSession ? { session: baselineSession, content: toBaselineUiContent() } : null,
           path: null,
           review: null,
@@ -465,11 +475,16 @@ router.get("/state", authUser, async (req, res) => {
 
     let tabState = "idle";
     if (hasAnyProgressFinal) tabState = "treating";
-    else if (baselineSession?.status === "in_progress") tabState = "baseline_assessment";
-    else if (baselineSession?.status === "completed") tabState = "choose_path";
+    else if (isBaselineInProgress) tabState = "baseline_assessment";
+    else if (isBaselineCompleted) tabState = "choose_path";
 
     const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasAnyProgressFinal);
-    const paywall = computePaywall(planStatusFinal, hasAnyProgressFinal);
+
+    // ✅ IMPORTANT: do NOT show paywall while baseline is in progress
+    const suppressPaywall = tabState === "baseline_assessment";
+    const paywall = suppressPaywall
+      ? { needed: false, reason: null }
+      : computePaywall(planStatusFinal, hasAnyProgressFinal);
 
     let treatment = null;
     if (tabState === "treating") {
@@ -503,7 +518,10 @@ router.get("/state", authUser, async (req, res) => {
         tabState,
         user: { planStatus: planStatusFinal, daysLeft: daysLeftFinal },
         treatmentAccess,
-        ui: { paywall },
+        ui: {
+          paywall,
+          flags: { suppressPaywall, isBaselineInProgress, isBaselineCompleted },
+        },
         baseline: baselineSession ? { session: baselineSession, content: toBaselineUiContent() } : null,
         path: null,
         review: null,
@@ -581,7 +599,6 @@ router.post("/baseline/start", authUser, async (req, res) => {
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
-
 
 // POST /api/pelekan/baseline/answer
 router.post("/baseline/answer", authUser, async (req, res) => {
