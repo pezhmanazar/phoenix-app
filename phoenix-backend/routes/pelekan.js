@@ -346,6 +346,25 @@ function getFirstMissingStep(answersJson) {
   return missing.length ? missing[0] : null;
 }
 
+function getMissingSteps(answersJson) {
+  const aj = answersJson || {};
+  const consent = aj?.consent || {};
+  const answers = aj?.answers || {};
+
+  const missing = [];
+
+  for (const s of HB_BASELINE.consentSteps) {
+    if (consent[s.id] !== true) missing.push({ type: "consent", id: s.id });
+  }
+
+  for (const q of HB_BASELINE.questions) {
+    const v = answers[q.id];
+    if (typeof v !== "number") missing.push({ type: "question", id: q.id });
+  }
+
+  return missing;
+}
+
 /** WCDN workaround: for baseline endpoints, prefer 200 + {ok:false} instead of 4xx (to avoid HTML error pages) */
 function baselineError(res, error, extra = {}) {
   return res.json({ ok: false, error, ...extra });
