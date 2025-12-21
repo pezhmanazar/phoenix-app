@@ -1,11 +1,9 @@
 // routes/pelekan.js
 import express from "express";
 import prisma from "../utils/prisma.js";
-
 const router = express.Router();
 router.use(express.json());
 
-/* ---------- helpers (copy from users.js for consistency) ---------- */
 function normalizePhone(input) {
   const digits = String(input || "").replace(/\D/g, "");
   if (digits.startsWith("989") && digits.length === 12) return "0" + digits.slice(2);
@@ -13,7 +11,6 @@ function normalizePhone(input) {
   if (digits.startsWith("9") && digits.length === 10) return "0" + digits;
   return null;
 }
-
 function authUser(req, res, next) {
   const fromQuery = normalizePhone(req.query?.phone);
   const fromBody = normalizePhone(req.body?.phone);
@@ -22,7 +19,6 @@ function authUser(req, res, next) {
   req.userPhone = phone;
   return next();
 }
-
 function noStore(res) {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0");
   res.setHeader("Pragma", "no-cache");
@@ -31,10 +27,45 @@ function noStore(res) {
   res.setHeader("Vary", "Origin");
 }
 
-/* ---------- GET /api/pelekan/state ---------- */
+/** planStatus + daysLeft (minimal, consistent) */
+function getPlanStatus(plan, planExpiresAt) {
+  const now = new Date();
+  if (plan === "pro") {
+    if (!planExpiresAt) return { planStatus: "pro", daysLeft: 0 };
+    const exp = new Date(planExpiresAt);
+    const msLeft = exp.getTime() - now.getTime();
+    const daysLeft = Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60 * 24)));
+    if (msLeft <= 0) return { planStatus: "expired", daysLeft: 0 };
+    // اگر خواستی expiring هم داشته باشی (مثلاً <=7 روز) همین‌جا اضافه کن
+    return { planStatus: "pro", daysLeft };
+  }
+  return { planStatus: "free", daysLeft: 0 };
+}
+
+/** pick active day from current data */
+function computeActiveDayId({ stages, dayProgress }) {
+  const active = dayProgress
+    .filter((d) => d.status === "active")
+    .sort((a, b) => new Date(b.lastActivityAt || 0).getTime() - new Date(a.lastActivityAt || 0).getTime())[0];
+
+  const firstDay = stages?.[0]?.days?.[0];
+  return active?.dayId || firstDay?.id || null;
+}
+
+/** minimal resolver v0: only idle vs treating based on whether user has any progress */
+function resolveTabStateV0({ hasContent, dayProgress, activeDayId }) {
+  if (!hasContent) return "idle"; // یا یه حالت maintenance جدا بساز
+  // اگر هیچ progress ثبت نشده، یعنی هنوز شروع نکرده
+  const hasAnyProgress = Array.isArray(dayProgress) && dayProgress.length > 0;
+  if (!hasAnyProgress) return "idle";
+  if (activeDayId) return "treating";
+  return "idle";
+}
+
 router.get("/state", authUser, async (req, res) => {
   try {
-    //noStore(res);
+    // پیشنهاد من: noStore باید روشن باشد
+    noStore(res);
 
     const phone = req.userPhone;
 
@@ -44,24 +75,34 @@ router.get("/state", authUser, async (req, res) => {
     });
     if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
 
-    // 1) content: stages/days/tasks (read-only)
+    const { planStatus, daysLeft } = getPlanStatus(user.plan, user.planExpiresAt);
+
+    // 1) content (read-only)
     const stages = await prisma.pelekanStage.findMany({
       orderBy: { sortOrder: "asc" },
       include: {
         days: {
           orderBy: { dayNumberInStage: "asc" },
-          include: {
-            tasks: { orderBy: { sortOrder: "asc" } },
-          },
+          include: { tasks: { orderBy: { sortOrder: "asc" } } },
         },
       },
     });
 
-    // اگر هنوز seed نکردی
     if (!stages.length) {
       return res.json({
         ok: true,
         data: {
+          // ✅ قرارداد جدید
+          tabState: "idle",
+          user: { planStatus, daysLeft },
+          ui: { paywall: { needed: false, reason: null } },
+          baseline: null,
+          path: null,
+          review: null,
+          bastanIntro: null,
+          treatment: null,
+
+          // ✅ خروجی قبلی برای سازگاری
           hasContent: false,
           message: "pelekan_content_empty",
           stages: [],
@@ -70,7 +111,7 @@ router.get("/state", authUser, async (req, res) => {
       });
     }
 
-    // 2) user progress
+    // 2) progress (read-only)
     const dayProgress = await prisma.pelekanDayProgress.findMany({
       where: { userId: user.id },
       select: {
@@ -82,6 +123,13 @@ router.get("/state", authUser, async (req, res) => {
         lastActivityAt: true,
         completedAt: true,
         xpEarned: true,
+
+        // اگر تو اسکیما v2 داری، بعداً این‌ها رو هم اضافه می‌کنیم
+        // minDoneAt: true,
+        // fullDoneAt: true,
+        // unlockedNextAt: true,
+        // resetCount: true,
+        // lastResetAt: true,
       },
     });
 
@@ -95,55 +143,71 @@ router.get("/state", authUser, async (req, res) => {
       select: { currentDays: true, bestDays: true, lastCompletedAt: true, yellowCardAt: true },
     });
 
-    // xp total
     const xpAgg = await prisma.xpLedger.aggregate({
       where: { userId: user.id },
       _sum: { amount: true },
     });
     const xpTotal = xpAgg?._sum?.amount || 0;
 
-    // active day selection:
-    // rule: اگر dayProgress با status=active داریم، همون active day است.
-    // اگر نداریم، اولین روز (globalDayNumber کم‌تر) را active می‌گیریم (تا وقتی start/day logic را نوشتیم)
-    const active = dayProgress
-      .filter((d) => d.status === "active")
-      .sort((a, b) => new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime())[0];
+    const activeDayId = computeActiveDayId({ stages, dayProgress });
 
-    const firstDay = stages[0]?.days?.[0];
-    const activeDayId = active?.dayId || firstDay?.id || null;
+    // ✅ tabState (فعلاً v0)
+    const tabState = resolveTabStateV0({
+      hasContent: true,
+      dayProgress,
+      activeDayId,
+    });
 
-    // ✅ mirror into legacy pelekanProgress (بدون اینکه منطق فعلی بشکند)
-    // stepIndex/dayIndex فعلاً فقط best-effort است تا UI قدیمی خراب نشود.
-    // dayIndex را بر اساس globalDayNumber-1 می‌گذاریم (0-based).
-    if (activeDayId) {
-      const activeDay = stages.flatMap((s) => s.days).find((d) => d.id === activeDayId);
-      const dayIndex0 = activeDay ? Math.max(0, (activeDay.globalDayNumber || 1) - 1) : 0;
+    // ✅ treatment minimal payload
+    let treatment = null;
+    if (tabState === "treating" && activeDayId) {
+      const allDays = stages.flatMap((s) => s.days);
+      const activeDay = allDays.find((d) => d.id === activeDayId) || null;
+      const activeStage = activeDay ? stages.find((s) => s.id === activeDay.stageId) : null;
 
-      // stepIndex = stage.sortOrder (به شرطی که از 1 شروع کنی)
-      const stageIndex = activeDay ? (stages.find((s) => s.id === activeDay.stageId)?.sortOrder || 1) : 1;
-
-      await prisma.pelekanProgress.upsert({
-        where: { userId: user.id },
-        create: {
-          userId: user.id,
-          stepIndex: stageIndex,
-          dayIndex: dayIndex0,
-          gems: 0,
-          streak: streak?.currentDays || 0,
-        },
-        update: {
-          stepIndex: stageIndex,
-          dayIndex: dayIndex0,
-          streak: streak?.currentDays || 0,
-          lastActiveAt: new Date(),
-          version: { increment: 1 },
-        },
-      });
+      treatment = {
+        activeStage: activeStage?.code || null,
+        activeDay: activeDay?.dayNumberInStage || null,
+        stages: stages.map((s) => ({
+          code: s.code,
+          title: s.title,
+          status: s.id === activeStage?.id ? "active" : "locked", // فعلاً ساده؛ بعداً done/locked دقیق می‌کنیم
+        })),
+        day: activeDay
+          ? {
+              number: activeDay.dayNumberInStage,
+              status: "active",
+              minPercent: 70,
+              percentDone:
+                dayProgress.find((dp) => dp.dayId === activeDayId)?.completionPercent ?? 0,
+              timing: {
+                unlockedNextAt: null,
+                minDoneAt: null,
+                fullDoneAt: null,
+              },
+            }
+          : null,
+      };
     }
+
+    // ❌ مهم: نوشتن دیتابیس در GET را قطع کن
+    // (upsert pelekanProgress) را فعلاً کامنت می‌کنیم تا state endpoint pure بماند.
+    // اگر UI قدیمی بهش نیاز دارد، بعداً یک endpoint جدا می‌زنیم یا فقط هنگام تغییر روز update می‌کنیم.
 
     return res.json({
       ok: true,
       data: {
+        // ✅ قرارداد جدید
+        tabState,
+        user: { planStatus, daysLeft },
+        ui: { paywall: { needed: false, reason: null } },
+        baseline: null,
+        path: null,
+        review: null,
+        bastanIntro: null,
+        treatment,
+
+        // ✅ خروجی قبلی برای سازگاری (فعلاً نگه می‌داریم)
         hasContent: true,
         stages,
         progress: {
