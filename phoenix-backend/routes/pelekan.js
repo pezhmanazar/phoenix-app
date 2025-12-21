@@ -35,7 +35,6 @@ function noStore(res) {
 function getPlanStatus(plan, planExpiresAt) {
   const now = new Date();
 
-  // minimal: free | pro | expired (expiring را بعداً می‌تونیم اضافه کنیم)
   if (plan === "pro") {
     if (!planExpiresAt) return { planStatus: "pro", daysLeft: 0 };
 
@@ -63,7 +62,7 @@ function computeActiveDayId({ stages, dayProgress }) {
   return active?.dayId || firstDay?.id || null;
 }
 
-/** minimal resolver v0 */
+/** tabState resolver v1: align with hasAnyProgressFinal */
 function resolveTabStateV1({ hasContent, hasAnyProgressFinal }) {
   if (!hasContent) return "idle";
   if (hasAnyProgressFinal) return "treating";
@@ -71,21 +70,42 @@ function resolveTabStateV1({ hasContent, hasAnyProgressFinal }) {
 }
 
 /** access model for fairness */
-function computeTreatmentAccess(planStatus, hasAnyProgress) {
+function computeTreatmentAccess(planStatus, hasAnyProgressFinal) {
   if (planStatus === "pro" || planStatus === "expiring") return "full";
-  if (hasAnyProgress) return "frozen_current"; // قبلاً پیشرفت داشته؛ ادامه قفل، آرشیو باز
-  return "archive_only"; // هنوز شروع نکرده؛ برای شروع نیاز به پرو
+  if (hasAnyProgressFinal) return "frozen_current";
+  return "archive_only";
 }
 
 /** paywall model */
-function computePaywall(planStatus, hasAnyProgress) {
+function computePaywall(planStatus, hasAnyProgressFinal) {
   if (planStatus !== "pro" && planStatus !== "expiring") {
     return {
       needed: true,
-      reason: hasAnyProgress ? "continue_treatment" : "start_treatment",
+      reason: hasAnyProgressFinal ? "continue_treatment" : "start_treatment",
     };
   }
   return { needed: false, reason: null };
+}
+
+/** debug overrides */
+function applyDebugPlan(req, planStatus, daysLeft) {
+  let planStatusFinal = planStatus;
+  let daysLeftFinal = daysLeft;
+
+  const debugPlan = String(req.query?.debugPlan || "").toLowerCase().trim();
+  if (debugPlan === "pro") planStatusFinal = "pro";
+  if (debugPlan === "expired") planStatusFinal = "expired";
+  if (debugPlan === "free") planStatusFinal = "free";
+
+  return { planStatusFinal, daysLeftFinal };
+}
+
+function applyDebugProgress(req, hasAnyProgress) {
+  let hasAnyProgressFinal = hasAnyProgress;
+  const debugProgress = String(req.query?.debugProgress || "").toLowerCase().trim();
+  if (debugProgress === "has") hasAnyProgressFinal = true;
+  if (debugProgress === "none") hasAnyProgressFinal = false;
+  return hasAnyProgressFinal;
 }
 
 /* ---------- GET /api/pelekan/state ---------- */
@@ -101,25 +121,10 @@ router.get("/state", authUser, async (req, res) => {
     });
     if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
 
-    const planInfo = getPlanStatus(user.plan, user.planExpiresAt);
+    const basePlan = getPlanStatus(user.plan, user.planExpiresAt);
+    const { planStatusFinal, daysLeftFinal } = applyDebugPlan(req, basePlan.planStatus, basePlan.daysLeft);
 
-    // -------------------- DEBUG OVERRIDES (for testing) --------------------
-    // Usage:
-    //  ?debugPlan=free|pro|expired
-    //  ?debugProgress=none|has
-    // NOTE: Later we can restrict this to DEV only via ENV.
-    let planStatusFinal = planInfo.planStatus;
-    let daysLeftFinal = planInfo.daysLeft;
-
-    const debugPlan = String(req.query?.debugPlan || "").toLowerCase().trim();
-    if (debugPlan === "pro") planStatusFinal = "pro";
-    if (debugPlan === "expired") planStatusFinal = "expired";
-    if (debugPlan === "free") planStatusFinal = "free";
-    // keep daysLeftFinal as-is; you can override if needed later
-
-    // ----------------------------------------------------------------------
-
-    // 1) content: stages/days/tasks (read-only)
+    // 1) content (read-only)
     const stages = await prisma.pelekanStage.findMany({
       orderBy: { sortOrder: "asc" },
       include: {
@@ -132,14 +137,10 @@ router.get("/state", authUser, async (req, res) => {
       },
     });
 
-    // اگر هنوز seed نکردی
+    // no content
     if (!stages.length) {
-      let hasAnyProgressFinal = false;
-
-      // debugProgress override
-      const debugProgress = String(req.query?.debugProgress || "").toLowerCase().trim();
-      if (debugProgress === "has") hasAnyProgressFinal = true;
-      if (debugProgress === "none") hasAnyProgressFinal = false;
+      const hasAnyProgressFinal = applyDebugProgress(req, false);
+      const tabState = resolveTabStateV1({ hasContent: false, hasAnyProgressFinal });
 
       const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasAnyProgressFinal);
       const paywall = computePaywall(planStatusFinal, hasAnyProgressFinal);
@@ -147,8 +148,7 @@ router.get("/state", authUser, async (req, res) => {
       return res.json({
         ok: true,
         data: {
-          // ✅ new contract
-          tabState: "idle",
+          tabState,
           user: { planStatus: planStatusFinal, daysLeft: daysLeftFinal },
           treatmentAccess,
           ui: { paywall },
@@ -158,7 +158,6 @@ router.get("/state", authUser, async (req, res) => {
           bastanIntro: null,
           treatment: null,
 
-          // ✅ legacy payload
           hasContent: false,
           message: "pelekan_content_empty",
           stages: [],
@@ -167,7 +166,7 @@ router.get("/state", authUser, async (req, res) => {
       });
     }
 
-    // 2) user progress (read-only)
+    // 2) progress (read-only)
     const dayProgress = await prisma.pelekanDayProgress.findMany({
       where: { userId: user.id },
       select: {
@@ -192,7 +191,6 @@ router.get("/state", authUser, async (req, res) => {
       select: { currentDays: true, bestDays: true, lastCompletedAt: true, yellowCardAt: true },
     });
 
-    // xp total
     const xpAgg = await prisma.xpLedger.aggregate({
       where: { userId: user.id },
       _sum: { amount: true },
@@ -201,25 +199,21 @@ router.get("/state", authUser, async (req, res) => {
 
     const activeDayId = computeActiveDayId({ stages, dayProgress });
 
-    // tabState v0
-    const tabState = resolveTabStateV1({ hasContent: true, hasAnyProgressFinal });
-
+    // ✅ compute hasAnyProgressFinal FIRST (fix TDZ)
     const hasAnyProgress = Array.isArray(dayProgress) && dayProgress.length > 0;
+    const hasAnyProgressFinal = applyDebugProgress(req, hasAnyProgress);
 
-    // debugProgress override (after real progress computed)
-    let hasAnyProgressFinal = hasAnyProgress;
-    const debugProgress = String(req.query?.debugProgress || "").toLowerCase().trim();
-    if (debugProgress === "has") hasAnyProgressFinal = true;
-    if (debugProgress === "none") hasAnyProgressFinal = false;
+    // ✅ tabState aligned with access (v1)
+    const tabState = resolveTabStateV1({ hasContent: true, hasAnyProgressFinal });
 
     const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasAnyProgressFinal);
     const paywall = computePaywall(planStatusFinal, hasAnyProgressFinal);
 
-    // ✅ treatment minimal payload
+    // ✅ treatment payload (can be null if no activeDayId)
     let treatment = null;
-    if (tabState === "treating" && activeDayId) {
+    if (tabState === "treating") {
       const allDays = stages.flatMap((s) => s.days);
-      const activeDay = allDays.find((d) => d.id === activeDayId) || null;
+      const activeDay = activeDayId ? allDays.find((d) => d.id === activeDayId) : null;
       const activeStage = activeDay ? stages.find((s) => s.id === activeDay.stageId) : null;
 
       treatment = {
@@ -246,13 +240,9 @@ router.get("/state", authUser, async (req, res) => {
       };
     }
 
-    // ❌ IMPORTANT: do not write to DB in GET /state
-    // previously you had upsert pelekanProgress here; keep it out.
-
     return res.json({
       ok: true,
       data: {
-        // ✅ new contract
         tabState,
         user: { planStatus: planStatusFinal, daysLeft: daysLeftFinal },
         treatmentAccess,
@@ -263,7 +253,7 @@ router.get("/state", authUser, async (req, res) => {
         bastanIntro: null,
         treatment,
 
-        // ✅ legacy payload for backward compatibility
+        // legacy payload
         hasContent: true,
         stages,
         progress: {
