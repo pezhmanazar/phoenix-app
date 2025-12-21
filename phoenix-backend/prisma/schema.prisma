@@ -145,6 +145,9 @@ model User {
   // ✅ Assessments (legacy, keep)
   assessments AssessmentResult[]
 
+  // ✅ NEW: Assessment Sessions (برای ذخیره پایدار آزمون‌های در حال انجام)
+  assessmentSessions AssessmentSession[] // ✅ NEW
+
   // ✅ Pelekan (new relations)
   pelekanDayProgress  PelekanDayProgress[]
   pelekanTaskProgress PelekanTaskProgress[]
@@ -292,6 +295,9 @@ model PelekanProgress {
  */
 
 enum AssessmentKind {
+  // ✅ NEW: Baseline اختلال شکست عشقی برای شروع پلکان
+  hb_baseline
+
   heartbreak_simple   // آزمون فعلیِ بدون زیرمقیاس
   heartbreak_scales   // آزمون آینده‌دار با زیرمقیاس
 
@@ -322,6 +328,47 @@ model AssessmentResult {
   @@unique([userId, kind, wave])
   @@index([userId])
   @@index([kind])
+  @@index([userId, kind])
+}
+
+// ✅ NEW: Session برای ذخیره پایدار آزمون‌های در حال انجام + نتیجه نهایی
+enum AssessmentSessionStatus {
+  in_progress
+  completed
+}
+
+model AssessmentSession {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  kind AssessmentKind
+
+  status AssessmentSessionStatus @default(in_progress)
+
+  // progress
+  currentIndex Int @default(0)
+  totalItems   Int @default(0)
+
+  // ذخیره لحظه‌ای پاسخ‌ها
+  answersJson Json?
+
+  // نتیجه نهایی
+  totalScore Int?
+  scalesJson Json?
+
+  // قفل نتیجه برای PRO (برای بازسنجی/تحلیل‌های پولی)
+  proLocked Boolean @default(false)
+
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // هر kind فقط یکبار برای هر کاربر
+  @@unique([userId, kind])
   @@index([userId, kind])
 }
 
@@ -583,18 +630,18 @@ model PelekanReviewSession {
   currentIndex Int @default(0) // شماره سوال/آیتم جاری // ✅ NEW
 
   // ✅ زمان‌ها
-  startedAt     DateTime @default(now())
-  completedAt   DateTime?
+  startedAt      DateTime @default(now())
+  completedAt    DateTime?
   paywallShownAt DateTime?
-  unlockedAt    DateTime?
+  unlockedAt     DateTime?
 
   // ✅ قفل «یک‌بار بودن»
   test1CompletedAt DateTime? // بازسنجی رابطه
   test2CompletedAt DateTime? // آیا برمی‌گرده؟
 
   // ✅ پاسخ‌ها و نتیجه
-  answersJson Json?  // همه پاسخ‌ها + اسکورهای A/B/C
-  resultJson  Json?  // وضعیت قرمز/زرد/سبز + پیام‌ها
+  answersJson Json? // همه پاسخ‌ها + اسکورهای A/B/C
+  resultJson  Json? // وضعیت قرمز/زرد/سبز + پیام‌ها
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
