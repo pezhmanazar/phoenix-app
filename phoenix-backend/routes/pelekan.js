@@ -819,5 +819,8 @@ router.get("/baseline/state", authUser, async (req, res) => {
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
-
+// GET /api/pelekan/_debug/400  => must return JSON 400 (no HTML)
+router.get("/_debug/400", (req, res) => {
+  res.status(400).json({ ok: false, error: "DEBUG_400", ts: new Date().toISOString() });
+});
 export default router;
