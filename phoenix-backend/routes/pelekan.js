@@ -54,8 +54,7 @@ function computeActiveDayId({ stages, dayProgress }) {
   const active = (dayProgress || [])
     .filter((d) => d.status === "active")
     .sort(
-      (a, b) =>
-        new Date(b.lastActivityAt || 0).getTime() - new Date(a.lastActivityAt || 0).getTime()
+      (a, b) => new Date(b.lastActivityAt || 0).getTime() - new Date(a.lastActivityAt || 0).getTime()
     )[0];
 
   const firstDay = stages?.[0]?.days?.[0];
@@ -113,7 +112,8 @@ const HB_BASELINE = {
     },
     {
       id: "read_calmly",
-      text: "هر سوال رو با دقت و آرامش بخون و بعد از فهم دقيق اون، روي اولين جوابی كه به ذهنت اومد كليك کن",
+      text:
+        "هر سوال رو با دقت و آرامش بخون و بعد از فهم دقيق اون، روي اولين جوابی كه به ذهنت اومد كليك کن",
       optionText: "متوجه شدم",
     },
   ],
@@ -135,9 +135,21 @@ const HB_BASELINE = {
         "زمانی كه به شكست عشقی خودت فكر می‌كنی تا چه اندازه به لحاظ جسمی، احساس مريض بودن می‌كنی‌؟\nمثل خستگی، عصبانيت، بی‌حالی، حالت تهوع سردرد و غيره",
       options: [
         { label: "اصلا. هيچ احساس جسمی ناخوشايندی مربوط به شكست عشقی در من وجود نداره", score: 0 },
-        { label: "يكم ناخوشم. تا اندازه‌ای احساس جسمی ناخوشايندی درون من وجود داره و معمولا احساس آشفتگی جسمی، عصبانيت و برانگيختگی ناخوشايند به صورت گذرا دارم", score: 1 },
-        { label: "تا اندازه‌ای ناخوشم. احساس واضح آشفتگی جسمی، عصبانيت و برانگيختگی ناخوشايندی دارم كه در كمتر از ده دقيقه از بين ميره", score: 2 },
-        { label: "خيلی ناخوشم. احساس عميق آشفتگی جسمی، عصبانيت و برانگيختی ناخوشايند دارم كه بين چند دقيقه تا چند ساعت طول ميكشه", score: 3 },
+        {
+          label:
+            "يكم ناخوشم. تا اندازه‌ای احساس جسمی ناخوشايندی درون من وجود داره و معمولا احساس آشفتگی جسمی، عصبانيت و برانگيختگی ناخوشايند به صورت گذرا دارم",
+          score: 1,
+        },
+        {
+          label:
+            "تا اندازه‌ای ناخوشم. احساس واضح آشفتگی جسمی، عصبانيت و برانگيختگی ناخوشايندی دارم كه در كمتر از ده دقيقه از بين ميره",
+          score: 2,
+        },
+        {
+          label:
+            "خيلی ناخوشم. احساس عميق آشفتگی جسمی، عصبانيت و برانگيختی ناخوشايند دارم كه بين چند دقيقه تا چند ساعت طول ميكشه",
+          score: 3,
+        },
       ],
     },
     {
@@ -155,7 +167,7 @@ const HB_BASELINE = {
       text: "چند وقته درگير شكست عشقی هستی؟",
       options: [
         { label: "كمتر از يك‌ماه", score: 1 },
-        { label: "بيشتر از يك‌ماه و كمتر از شش‌ماه", score: 1 }, // مطابق متن شما
+        { label: "بيشتر از يك‌ماه و كمتر از شش‌ماه", score: 1 },
         { label: "بيشتر از شش‌ماه و كمتر از يك‌سال", score: 2 },
         { label: "بيشتر از يك‌سال و كمتر از سه‌سال", score: 3 },
         { label: "بيشتر از سه‌سال", score: 4 },
@@ -285,9 +297,30 @@ function toBaselineUiContent() {
     questions: HB_BASELINE.questions.map((q) => ({
       id: q.id,
       text: q.text,
-      options: q.options.map((o) => ({ label: o.label })), // ✅ بدون score برای UI
+      options: q.options.map((o) => ({ label: o.label })), // no scores to UI
     })),
   };
+}
+
+function buildBaselineStepsLinear() {
+  return [
+    ...HB_BASELINE.consentSteps.map((s) => ({ type: "consent", ...s })),
+    ...HB_BASELINE.questions.map((q) => ({ type: "question", ...q })),
+  ];
+}
+
+function getSelectedIndexForStep(session, step) {
+  const aj = session?.answersJson || {};
+  const consent = aj?.consent || {};
+  const answers = aj?.answers || {};
+
+  if (!step) return null;
+  if (step.type === "consent") return consent?.[step.id] === true ? 1 : null; // just for internal checks
+  if (step.type === "question") {
+    const v = answers?.[step.id];
+    return typeof v === "number" ? v : null;
+  }
+  return null;
 }
 
 /* ---------- GET /api/pelekan/state ---------- */
@@ -304,13 +337,9 @@ router.get("/state", authUser, async (req, res) => {
     if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
 
     const basePlan = getPlanStatus(user.plan, user.planExpiresAt);
-    const { planStatusFinal, daysLeftFinal } = applyDebugPlan(
-      req,
-      basePlan.planStatus,
-      basePlan.daysLeft
-    );
+    const { planStatusFinal, daysLeftFinal } = applyDebugPlan(req, basePlan.planStatus, basePlan.daysLeft);
 
-    // 0) baseline session (hb_baseline)
+    // baseline session (hb_baseline)
     const baselineSession = await prisma.assessmentSession.findUnique({
       where: { userId_kind: { userId: user.id, kind: HB_BASELINE.kind } },
       select: {
@@ -326,7 +355,7 @@ router.get("/state", authUser, async (req, res) => {
       },
     });
 
-    // 1) content (read-only)
+    // content
     const stages = await prisma.pelekanStage.findMany({
       orderBy: { sortOrder: "asc" },
       include: {
@@ -345,7 +374,6 @@ router.get("/state", authUser, async (req, res) => {
       const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasAnyProgressFinal);
       const paywall = computePaywall(planStatusFinal, hasAnyProgressFinal);
 
-      // tabState based on baseline (when no content, still can run baseline + choose_path UI)
       let tabState = "idle";
       if (baselineSession?.status === "in_progress") tabState = "baseline_assessment";
       if (baselineSession?.status === "completed") tabState = "choose_path";
@@ -357,19 +385,11 @@ router.get("/state", authUser, async (req, res) => {
           user: { planStatus: planStatusFinal, daysLeft: daysLeftFinal },
           treatmentAccess,
           ui: { paywall },
-
-          baseline: baselineSession
-            ? {
-                session: baselineSession,
-                content: toBaselineUiContent(),
-              }
-            : null,
-
+          baseline: baselineSession ? { session: baselineSession, content: toBaselineUiContent() } : null,
           path: null,
           review: null,
           bastanIntro: null,
           treatment: null,
-
           hasContent: false,
           message: "pelekan_content_empty",
           stages: [],
@@ -378,7 +398,7 @@ router.get("/state", authUser, async (req, res) => {
       });
     }
 
-    // 2) progress (read-only)
+    // progress
     const dayProgress = await prisma.pelekanDayProgress.findMany({
       where: { userId: user.id },
       select: {
@@ -411,11 +431,9 @@ router.get("/state", authUser, async (req, res) => {
 
     const activeDayId = computeActiveDayId({ stages, dayProgress });
 
-    // ✅ compute hasAnyProgressFinal FIRST (fix TDZ)
     const hasAnyProgress = Array.isArray(dayProgress) && dayProgress.length > 0;
     const hasAnyProgressFinal = applyDebugProgress(req, hasAnyProgress);
 
-    // ✅ tabState (full flow)
     let tabState = "idle";
     if (hasAnyProgressFinal) tabState = "treating";
     else if (baselineSession?.status === "in_progress") tabState = "baseline_assessment";
@@ -424,7 +442,6 @@ router.get("/state", authUser, async (req, res) => {
     const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasAnyProgressFinal);
     const paywall = computePaywall(planStatusFinal, hasAnyProgressFinal);
 
-    // ✅ treatment payload (can be null if no activeDayId)
     let treatment = null;
     if (tabState === "treating") {
       const allDays = stages.flatMap((s) => s.days);
@@ -436,7 +453,7 @@ router.get("/state", authUser, async (req, res) => {
         activeDay: activeDay?.dayNumberInStage || null,
         stages: stages.map((s) => ({
           code: s.code,
-          title: s.titleFa, // ✅ FIX: was s.title (wrong)
+          title: s.titleFa,
           status: s.id === activeStage?.id ? "active" : "locked",
         })),
         day: activeDay
@@ -444,13 +461,8 @@ router.get("/state", authUser, async (req, res) => {
               number: activeDay.dayNumberInStage,
               status: "active",
               minPercent: 70,
-              percentDone:
-                dayProgress.find((dp) => dp.dayId === activeDayId)?.completionPercent ?? 0,
-              timing: {
-                unlockedNextAt: null,
-                minDoneAt: null,
-                fullDoneAt: null,
-              },
+              percentDone: dayProgress.find((dp) => dp.dayId === activeDayId)?.completionPercent ?? 0,
+              timing: { unlockedNextAt: null, minDoneAt: null, fullDoneAt: null },
             }
           : null,
       };
@@ -463,22 +475,11 @@ router.get("/state", authUser, async (req, res) => {
         user: { planStatus: planStatusFinal, daysLeft: daysLeftFinal },
         treatmentAccess,
         ui: { paywall },
-
-        baseline: baselineSession
-          ? {
-              session: baselineSession,
-              content: toBaselineUiContent(),
-            }
-          : null,
-
-        // these will be filled later
+        baseline: baselineSession ? { session: baselineSession, content: toBaselineUiContent() } : null,
         path: null,
         review: null,
         bastanIntro: null,
-
         treatment,
-
-        // legacy payload (keep for now)
         hasContent: true,
         stages,
         progress: {
@@ -486,8 +487,7 @@ router.get("/state", authUser, async (req, res) => {
           dayProgress,
           taskProgress,
           xpTotal,
-          streak:
-            streak || { currentDays: 0, bestDays: 0, lastCompletedAt: null, yellowCardAt: null },
+          streak: streak || { currentDays: 0, bestDays: 0, lastCompletedAt: null, yellowCardAt: null },
         },
       },
     });
@@ -506,7 +506,7 @@ router.post("/baseline/start", authUser, async (req, res) => {
 
     const existing = await prisma.assessmentSession.findUnique({
       where: { userId_kind: { userId: user.id, kind: HB_BASELINE.kind } },
-      select: { id: true, status: true, currentIndex: true, totalItems: true, completedAt: true },
+      select: { id: true, status: true, currentIndex: true, totalItems: true, completedAt: true, startedAt: true },
     });
 
     if (existing) {
@@ -517,6 +517,7 @@ router.post("/baseline/start", authUser, async (req, res) => {
           status: existing.status,
           currentIndex: existing.currentIndex,
           totalItems: existing.totalItems,
+          startedAt: existing.startedAt,
           completedAt: existing.completedAt,
         },
       });
@@ -529,10 +530,7 @@ router.post("/baseline/start", authUser, async (req, res) => {
         status: "in_progress",
         currentIndex: 0,
         totalItems: HB_BASELINE.consentSteps.length + HB_BASELINE.questions.length,
-        answersJson: {
-          consent: {},
-          answers: {},
-        },
+        answersJson: { consent: {}, answers: {} },
       },
       select: { id: true, status: true, currentIndex: true, totalItems: true, startedAt: true },
     });
@@ -567,37 +565,51 @@ router.post("/baseline/answer", authUser, async (req, res) => {
       select: { id: true, status: true, answersJson: true, currentIndex: true, totalItems: true },
     });
     if (!session) return res.status(400).json({ ok: false, error: "SESSION_NOT_FOUND" });
-    if (session.status !== "in_progress")
+    if (session.status !== "in_progress") {
       return res.status(400).json({ ok: false, error: "SESSION_NOT_IN_PROGRESS" });
+    }
+
+    const total = session.totalItems || (HB_BASELINE.consentSteps.length + HB_BASELINE.questions.length);
+    const index = Math.max(0, Math.min(total, session.currentIndex || 0));
+
+    const steps = buildBaselineStepsLinear();
+    const expected = steps[index];
+
+    if (!expected) {
+      return res.status(400).json({ ok: false, error: "INVALID_INDEX" });
+    }
+
+    // ✅ enforce one-way: only answer the CURRENT step
+    if (expected.type !== stepType || expected.id !== stepId) {
+      return res.status(400).json({
+        ok: false,
+        error: "STEP_MISMATCH",
+        expected: { type: expected.type, id: expected.id, index },
+      });
+    }
 
     const aj = session.answersJson || { consent: {}, answers: {} };
     const next = { ...aj, consent: { ...(aj.consent || {}) }, answers: { ...(aj.answers || {}) } };
 
     if (stepType === "consent") {
-      const exists = HB_BASELINE.consentSteps.some((s) => s.id === stepId);
-      if (!exists) return res.status(400).json({ ok: false, error: "INVALID_STEP" });
       if (acknowledged !== true) return res.status(400).json({ ok: false, error: "ACK_REQUIRED" });
       next.consent[stepId] = true;
     } else if (stepType === "question") {
       const q = HB_BASELINE.questions.find((qq) => qq.id === stepId);
       if (!q) return res.status(400).json({ ok: false, error: "INVALID_STEP" });
-      if (typeof optionIndex !== "number")
-        return res.status(400).json({ ok: false, error: "OPTION_REQUIRED" });
+      if (typeof optionIndex !== "number") return res.status(400).json({ ok: false, error: "OPTION_REQUIRED" });
       if (!q.options[optionIndex]) return res.status(400).json({ ok: false, error: "OPTION_INVALID" });
       next.answers[stepId] = optionIndex;
     } else {
       return res.status(400).json({ ok: false, error: "INVALID_STEP_TYPE" });
     }
 
-    // NOTE: currentIndex increment (UI-driven navigation is allowed)
-    const newIndex = Math.min(session.totalItems, (session.currentIndex || 0) + 1);
+    // ✅ always move forward by 1 when current step is answered
+    const newIndex = Math.min(total, index + 1);
 
     const updated = await prisma.assessmentSession.update({
       where: { id: session.id },
-      data: {
-        answersJson: next,
-        currentIndex: newIndex,
-      },
+      data: { answersJson: next, currentIndex: newIndex },
       select: { id: true, currentIndex: true, totalItems: true },
     });
 
@@ -620,21 +632,24 @@ router.post("/baseline/submit", authUser, async (req, res) => {
       select: { id: true, status: true, answersJson: true },
     });
     if (!session) return res.status(400).json({ ok: false, error: "SESSION_NOT_FOUND" });
-    if (session.status !== "in_progress")
+    if (session.status !== "in_progress") {
       return res.status(400).json({ ok: false, error: "SESSION_NOT_IN_PROGRESS" });
+    }
 
     const aj = session.answersJson || {};
     const consent = aj.consent || {};
     const answers = aj.answers || {};
 
     for (const s of HB_BASELINE.consentSteps) {
-      if (consent[s.id] !== true)
+      if (consent[s.id] !== true) {
         return res.status(400).json({ ok: false, error: "CONSENT_REQUIRED", stepId: s.id });
+      }
     }
 
     const calc = computeHbBaselineScore(answers);
-    if (!calc.ok)
+    if (!calc.ok) {
       return res.status(400).json({ ok: false, error: calc.error, missingQid: calc.missingQid });
+    }
 
     const updated = await prisma.assessmentSession.update({
       where: { id: session.id },
@@ -642,15 +657,11 @@ router.post("/baseline/submit", authUser, async (req, res) => {
         status: "completed",
         completedAt: new Date(),
         totalScore: calc.totalScore,
-        scalesJson: {
-          level: calc.level,
-          interpretationText: calc.text,
-        },
+        scalesJson: { level: calc.level, interpretationText: calc.text },
       },
       select: { id: true, status: true, totalScore: true, scalesJson: true, completedAt: true },
     });
 
-    // keep legacy record in AssessmentResult (optional but useful)
     await prisma.assessmentResult.upsert({
       where: { userId_kind_wave: { userId: user.id, kind: HB_BASELINE.kind, wave: 1 } },
       create: {
@@ -673,11 +684,7 @@ router.post("/baseline/submit", authUser, async (req, res) => {
       ok: true,
       data: {
         session: updated,
-        interpretation: {
-          level: calc.level,
-          text: calc.text,
-          score: calc.totalScore,
-        },
+        interpretation: { level: calc.level, text: calc.text, score: calc.totalScore },
       },
     });
   } catch (e) {
@@ -710,18 +717,19 @@ router.get("/baseline/state", authUser, async (req, res) => {
       },
     });
 
+    const totalFallback = HB_BASELINE.consentSteps.length + HB_BASELINE.questions.length;
+
     if (!session) {
       return res.json({
         ok: true,
         data: {
           started: false,
           kind: HB_BASELINE.kind,
-          totalItems: HB_BASELINE.consentSteps.length + HB_BASELINE.questions.length,
+          totalItems: totalFallback,
         },
       });
     }
 
-    // completed => return result for UI
     if (session.status === "completed") {
       return res.json({
         ok: true,
@@ -740,52 +748,57 @@ router.get("/baseline/state", authUser, async (req, res) => {
       });
     }
 
-    const total =
-      session.totalItems ||
-      HB_BASELINE.consentSteps.length + HB_BASELINE.questions.length;
-
+    const total = session.totalItems || totalFallback;
     const index = Math.max(0, Math.min(total, session.currentIndex || 0));
 
-    // Build linear steps: [consent..., questions...]
-    const steps = [
-      ...HB_BASELINE.consentSteps.map((s) => ({ type: "consent", ...s })),
-      ...HB_BASELINE.questions.map((q) => ({ type: "question", ...q })),
-    ];
-
+    const steps = buildBaselineStepsLinear();
     const step = steps[index] || null;
 
-    // nav flags
+    const aj = session.answersJson || {};
+    const consent = aj.consent || {};
+    const answers = aj.answers || {};
+
+    // compute selectedIndex for UI
+    let selectedIndex = null;
+    if (step?.type === "question") {
+      const v = answers?.[step.id];
+      selectedIndex = typeof v === "number" ? v : null;
+    }
+
+    // ✅ enforce forced-answer navigation flags
+    let canNext = false;
+    if (step?.type === "consent") {
+      canNext = consent?.[step.id] === true;
+    } else if (step?.type === "question") {
+      canNext = selectedIndex !== null;
+    }
+
+    // ✅ no back navigation at all
     const nav = {
       index,
       total,
-      canPrev: index > 0,
-      canNext: index < total,
-      canSubmit: index >= total - 1,
+      canPrev: false,
+      canNext,
+      canSubmit: index >= total - 1 && canNext, // only if last step is answered
     };
 
-    // normalize payload for UI
     let uiStep = null;
     if (step) {
       if (step.type === "consent") {
-        const isAcked = !!(session.answersJson?.consent?.[step.id]);
         uiStep = {
           type: "consent",
           id: step.id,
           text: step.text,
           optionText: step.optionText || "متوجه شدم",
-          selected: isAcked, // ✅ NEW: برای هایلایت/تیک consent
+          acknowledged: consent?.[step.id] === true,
         };
       } else {
-        const selectedIndexRaw = session.answersJson?.answers?.[step.id];
-        const selectedIndex =
-          typeof selectedIndexRaw === "number" ? selectedIndexRaw : null;
-
         uiStep = {
           type: "question",
           id: step.id,
           text: step.text,
           options: (step.options || []).map((o, i) => ({ index: i, label: o.label })),
-          selectedIndex, // ✅ NEW: برای هایلایت گزینه انتخاب‌شده
+          selectedIndex,
         };
       }
     }
