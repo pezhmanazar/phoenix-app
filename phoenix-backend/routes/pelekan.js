@@ -581,40 +581,6 @@ router.post("/baseline/start", authUser, async (req, res) => {
   }
 });
 
-// ✅ NEW: POST /api/pelekan/baseline/reset  (forced restart when session is inconsistent)
-router.post("/baseline/reset", authUser, async (req, res) => {
-  try {
-    const phone = req.userPhone;
-    const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
-    if (!user) return baselineError(res, "USER_NOT_FOUND");
-
-    const session = await prisma.assessmentSession.findUnique({
-      where: { userId_kind: { userId: user.id, kind: HB_BASELINE.kind } },
-      select: { id: true, status: true },
-    });
-    if (!session) return baselineError(res, "SESSION_NOT_FOUND");
-    if (session.status === "completed") return baselineError(res, "SESSION_ALREADY_COMPLETED");
-
-    const steps = buildBaselineStepsLinear();
-
-    const updated = await prisma.assessmentSession.update({
-      where: { id: session.id },
-      data: {
-        status: "in_progress",
-        currentIndex: 0,
-        totalItems: steps.length,
-        answersJson: { consent: {}, answers: {} },
-        // keep startedAt as-is; you can reset it too if you want
-      },
-      select: { id: true, status: true, currentIndex: true, totalItems: true },
-    });
-
-    return res.json({ ok: true, data: updated });
-  } catch (e) {
-    console.error("[pelekan.baseline.reset] error:", e);
-    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
-  }
-});
 
 // POST /api/pelekan/baseline/answer
 router.post("/baseline/answer", authUser, async (req, res) => {
