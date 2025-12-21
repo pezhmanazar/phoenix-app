@@ -18,7 +18,11 @@ function authUser(req, res, next) {
   const fromQuery = normalizePhone(req.query?.phone);
   const fromBody = normalizePhone(req.body?.phone);
   const phone = fromQuery || fromBody;
+
+  // NOTE: for baseline endpoints behind WCDN, 4xx becomes HTML.
+  // But authUser is shared across routes; keep 401 here.
   if (!phone) return res.status(401).json({ ok: false, error: "PHONE_REQUIRED" });
+
   req.userPhone = phone;
   return next();
 }
@@ -156,7 +160,11 @@ const HB_BASELINE = {
       id: "q3_acceptance",
       text: "تا چه اندازه پذيرش واقعيت و درد شكست عشقی برات راحته؟",
       options: [
-        { label: "پذيرش و قبول كردن شكست عشقی برام خيلی سخته... نمی‌تونم باور كنم كه اين اتفاق افتاده", score: 3 },
+        {
+          label:
+            "پذيرش و قبول كردن شكست عشقی برام خيلی سخته... نمی‌تونم باور كنم كه اين اتفاق افتاده",
+          score: 3,
+        },
         { label: "تا اندازه‌ای پذيرش شكست عشقی برام سخته... ولی معمولا می‌تونم اون رو تحمل كنم", score: 2 },
         { label: "يكم پذيرش شكست عشقی برام سخته... و می‌تونم اون رو تحمل كنم", score: 1 },
         { label: "پذيرش شكست عشقی اصلا برام سخت نيست... و هميشه می‌تونم ناراحتيش رو تحمل كنم", score: 0 },
@@ -309,18 +317,29 @@ function buildBaselineStepsLinear() {
   ];
 }
 
-function getSelectedIndexForStep(session, step) {
-  const aj = session?.answersJson || {};
+/**
+ * Finds the first missing step in a session.
+ * - consent: any consentSteps not acknowledged
+ * - question: any question without a numeric answer
+ */
+function getFirstMissingStep(answersJson) {
+  const aj = answersJson || {};
   const consent = aj?.consent || {};
   const answers = aj?.answers || {};
 
-  if (!step) return null;
-  if (step.type === "consent") return consent?.[step.id] === true ? 1 : null; // just for internal checks
-  if (step.type === "question") {
-    const v = answers?.[step.id];
-    return typeof v === "number" ? v : null;
+  for (const s of HB_BASELINE.consentSteps) {
+    if (consent[s.id] !== true) return { type: "consent", id: s.id };
+  }
+  for (const q of HB_BASELINE.questions) {
+    const v = answers[q.id];
+    if (typeof v !== "number") return { type: "question", id: q.id };
   }
   return null;
+}
+
+/** WCDN workaround: for baseline endpoints, prefer 200 + {ok:false} instead of 4xx (to avoid HTML error pages) */
+function baselineError(res, error, extra = {}) {
+  return res.json({ ok: false, error, ...extra });
 }
 
 /* ---------- GET /api/pelekan/state ---------- */
@@ -502,7 +521,7 @@ router.post("/baseline/start", authUser, async (req, res) => {
   try {
     const phone = req.userPhone;
     const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
-    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+    if (!user) return baselineError(res, "USER_NOT_FOUND");
 
     const existing = await prisma.assessmentSession.findUnique({
       where: { userId_kind: { userId: user.id, kind: HB_BASELINE.kind } },
@@ -523,13 +542,15 @@ router.post("/baseline/start", authUser, async (req, res) => {
       });
     }
 
+    const steps = buildBaselineStepsLinear();
+
     const created = await prisma.assessmentSession.create({
       data: {
         userId: user.id,
         kind: HB_BASELINE.kind,
         status: "in_progress",
         currentIndex: 0,
-        totalItems: HB_BASELINE.consentSteps.length + HB_BASELINE.questions.length,
+        totalItems: steps.length,
         answersJson: { consent: {}, answers: {} },
       },
       select: { id: true, status: true, currentIndex: true, totalItems: true, startedAt: true },
@@ -558,54 +579,67 @@ router.post("/baseline/answer", authUser, async (req, res) => {
     const { stepType, stepId, optionIndex, acknowledged } = req.body || {};
 
     const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
-    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+    if (!user) return baselineError(res, "USER_NOT_FOUND");
 
     const session = await prisma.assessmentSession.findUnique({
       where: { userId_kind: { userId: user.id, kind: HB_BASELINE.kind } },
       select: { id: true, status: true, answersJson: true, currentIndex: true, totalItems: true },
     });
-    if (!session) return res.status(400).json({ ok: false, error: "SESSION_NOT_FOUND" });
-    if (session.status !== "in_progress") {
-      return res.status(400).json({ ok: false, error: "SESSION_NOT_IN_PROGRESS" });
-    }
-
-    const total = session.totalItems || (HB_BASELINE.consentSteps.length + HB_BASELINE.questions.length);
-    const index = Math.max(0, Math.min(total, session.currentIndex || 0));
+    if (!session) return baselineError(res, "SESSION_NOT_FOUND");
+    if (session.status !== "in_progress") return baselineError(res, "SESSION_NOT_IN_PROGRESS");
 
     const steps = buildBaselineStepsLinear();
-    const expected = steps[index];
+    const total = steps.length;
 
-    if (!expected) {
-      return res.status(400).json({ ok: false, error: "INVALID_INDEX" });
+    const indexRaw = session.currentIndex || 0;
+
+    // If user reached end but something is missing, only allow answering the first missing step.
+    if (indexRaw >= total) {
+      const missing = getFirstMissingStep(session.answersJson);
+      if (!missing) return baselineError(res, "ALREADY_COMPLETE");
+
+      if (stepType !== missing.type || stepId !== missing.id) {
+        const expectedIndex = Math.max(
+          0,
+          steps.findIndex((s) => s.type === missing.type && s.id === missing.id)
+        );
+        return baselineError(res, "STEP_MISMATCH", {
+          expected: { type: missing.type, id: missing.id, index: expectedIndex },
+        });
+      }
     }
 
-    // ✅ enforce one-way: only answer the CURRENT step
-    if (expected.type !== stepType || expected.id !== stepId) {
-      return res.status(400).json({
-        ok: false,
-        error: "STEP_MISMATCH",
-        expected: { type: expected.type, id: expected.id, index },
-      });
+    // Normal one-way: only answer CURRENT step
+    const index = Math.max(0, Math.min(total - 1, indexRaw));
+    const expected = steps[index];
+
+    if (indexRaw < total) {
+      if (!expected) return baselineError(res, "INVALID_INDEX");
+      if (expected.type !== stepType || expected.id !== stepId) {
+        return baselineError(res, "STEP_MISMATCH", {
+          expected: { type: expected.type, id: expected.id, index },
+        });
+      }
     }
 
     const aj = session.answersJson || { consent: {}, answers: {} };
     const next = { ...aj, consent: { ...(aj.consent || {}) }, answers: { ...(aj.answers || {}) } };
 
     if (stepType === "consent") {
-      if (acknowledged !== true) return res.status(400).json({ ok: false, error: "ACK_REQUIRED" });
+      if (acknowledged !== true) return baselineError(res, "ACK_REQUIRED");
       next.consent[stepId] = true;
     } else if (stepType === "question") {
       const q = HB_BASELINE.questions.find((qq) => qq.id === stepId);
-      if (!q) return res.status(400).json({ ok: false, error: "INVALID_STEP" });
-      if (typeof optionIndex !== "number") return res.status(400).json({ ok: false, error: "OPTION_REQUIRED" });
-      if (!q.options[optionIndex]) return res.status(400).json({ ok: false, error: "OPTION_INVALID" });
+      if (!q) return baselineError(res, "INVALID_STEP");
+      if (typeof optionIndex !== "number") return baselineError(res, "OPTION_REQUIRED");
+      if (!q.options[optionIndex]) return baselineError(res, "OPTION_INVALID");
       next.answers[stepId] = optionIndex;
     } else {
-      return res.status(400).json({ ok: false, error: "INVALID_STEP_TYPE" });
+      return baselineError(res, "INVALID_STEP_TYPE");
     }
 
-    // ✅ always move forward by 1 when current step is answered
-    const newIndex = Math.min(total, index + 1);
+    // Move forward ONLY if we are in normal flow (< total). If already at end, keep index at total.
+    let newIndex = indexRaw >= total ? total : Math.min(total, index + 1);
 
     const updated = await prisma.assessmentSession.update({
       where: { id: session.id },
@@ -625,16 +659,14 @@ router.post("/baseline/submit", authUser, async (req, res) => {
   try {
     const phone = req.userPhone;
     const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
-    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+    if (!user) return baselineError(res, "USER_NOT_FOUND");
 
     const session = await prisma.assessmentSession.findUnique({
       where: { userId_kind: { userId: user.id, kind: HB_BASELINE.kind } },
       select: { id: true, status: true, answersJson: true },
     });
-    if (!session) return res.status(400).json({ ok: false, error: "SESSION_NOT_FOUND" });
-    if (session.status !== "in_progress") {
-      return res.status(400).json({ ok: false, error: "SESSION_NOT_IN_PROGRESS" });
-    }
+    if (!session) return baselineError(res, "SESSION_NOT_FOUND");
+    if (session.status !== "in_progress") return baselineError(res, "SESSION_NOT_IN_PROGRESS");
 
     const aj = session.answersJson || {};
     const consent = aj.consent || {};
@@ -642,13 +674,13 @@ router.post("/baseline/submit", authUser, async (req, res) => {
 
     for (const s of HB_BASELINE.consentSteps) {
       if (consent[s.id] !== true) {
-        return res.status(400).json({ ok: false, error: "CONSENT_REQUIRED", stepId: s.id });
+        return baselineError(res, "CONSENT_REQUIRED", { stepId: s.id });
       }
     }
 
     const calc = computeHbBaselineScore(answers);
     if (!calc.ok) {
-      return res.status(400).json({ ok: false, error: calc.error, missingQid: calc.missingQid });
+      return baselineError(res, calc.error, { missingQid: calc.missingQid, qid: calc.qid });
     }
 
     const updated = await prisma.assessmentSession.update({
@@ -700,7 +732,7 @@ router.get("/baseline/state", authUser, async (req, res) => {
 
     const phone = req.userPhone;
     const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
-    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+    if (!user) return baselineError(res, "USER_NOT_FOUND");
 
     const session = await prisma.assessmentSession.findUnique({
       where: { userId_kind: { userId: user.id, kind: HB_BASELINE.kind } },
@@ -717,7 +749,8 @@ router.get("/baseline/state", authUser, async (req, res) => {
       },
     });
 
-    const totalFallback = HB_BASELINE.consentSteps.length + HB_BASELINE.questions.length;
+    const steps = buildBaselineStepsLinear();
+    const total = steps.length;
 
     if (!session) {
       return res.json({
@@ -725,7 +758,7 @@ router.get("/baseline/state", authUser, async (req, res) => {
         data: {
           started: false,
           kind: HB_BASELINE.kind,
-          totalItems: totalFallback,
+          totalItems: total,
         },
       });
     }
@@ -748,15 +781,31 @@ router.get("/baseline/state", authUser, async (req, res) => {
       });
     }
 
-    const total = session.totalItems || totalFallback;
-    const index = Math.max(0, Math.min(total, session.currentIndex || 0));
-
-    const steps = buildBaselineStepsLinear();
-    const step = steps[index] || null;
-
     const aj = session.answersJson || {};
     const consent = aj.consent || {};
     const answers = aj.answers || {};
+
+    const missing = getFirstMissingStep(session.answersJson);
+
+    // index selection:
+    // - normal: clamp currentIndex to [0..total-1]
+    // - if currentIndex >= total BUT something missing => point UI to the first missing step
+    // - if currentIndex >= total AND nothing missing => step=null (ready to submit)
+    let indexRaw = session.currentIndex || 0;
+    let index = Math.max(0, Math.min(total - 1, indexRaw));
+    let step = steps[index] || null;
+
+    if (indexRaw >= total) {
+      if (missing) {
+        const mi = steps.findIndex((s) => s.type === missing.type && s.id === missing.id);
+        index = Math.max(0, mi >= 0 ? mi : 0);
+        step = steps[index] || null;
+      } else {
+        // complete answers but still in_progress => allow submit
+        step = null;
+        index = total; // UI info only
+      }
+    }
 
     // compute selectedIndex for UI
     let selectedIndex = null;
@@ -765,21 +814,20 @@ router.get("/baseline/state", authUser, async (req, res) => {
       selectedIndex = typeof v === "number" ? v : null;
     }
 
-    // ✅ enforce forced-answer navigation flags
+    // forced-answer navigation flags (NO back)
     let canNext = false;
-    if (step?.type === "consent") {
-      canNext = consent?.[step.id] === true;
-    } else if (step?.type === "question") {
-      canNext = selectedIndex !== null;
-    }
+    if (step?.type === "consent") canNext = consent?.[step.id] === true;
+    else if (step?.type === "question") canNext = selectedIndex !== null;
+    else canNext = false; // step null
 
-    // ✅ no back navigation at all
+    const canSubmit = !missing && (step === null || index >= total - 1);
+
     const nav = {
       index,
       total,
       canPrev: false,
       canNext,
-      canSubmit: index >= total - 1 && canNext, // only if last step is answered
+      canSubmit,
     };
 
     let uiStep = null;
@@ -819,8 +867,10 @@ router.get("/baseline/state", authUser, async (req, res) => {
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
+
 // GET /api/pelekan/_debug/400  => must return JSON 400 (no HTML)
 router.get("/_debug/400", (req, res) => {
   res.status(400).json({ ok: false, error: "DEBUG_400", ts: new Date().toISOString() });
 });
+
 export default router;
