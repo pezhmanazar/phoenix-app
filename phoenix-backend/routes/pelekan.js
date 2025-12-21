@@ -928,11 +928,26 @@ router.get("/_debug/400", (req, res) => {
 router.post("/baseline/reset", authUser, async (req, res) => {
   try {
     const phone = req.userPhone;
+    const force = req.body?.force === true;
 
     const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
     if (!user) return baselineError(res, "USER_NOT_FOUND");
 
-    // Delete session + wave1 result for clean re-run
+    const session = await prisma.assessmentSession.findUnique({
+      where: { userId_kind: { userId: user.id, kind: HB_BASELINE.kind } },
+      select: { id: true, status: true },
+    });
+
+    if (!session) {
+      return res.json({ ok: true, data: { reset: true, note: "NO_SESSION" } });
+    }
+
+    // اگر completed بود و force ندادی، ریست نکن
+    if (session.status === "completed" && !force) {
+      return baselineError(res, "SESSION_ALREADY_COMPLETED");
+    }
+
+    // پاک کردن نتیجه و سشن (clean slate)
     await prisma.assessmentResult.deleteMany({
       where: { userId: user.id, kind: HB_BASELINE.kind, wave: 1 },
     });
@@ -941,7 +956,7 @@ router.post("/baseline/reset", authUser, async (req, res) => {
       where: { userId: user.id, kind: HB_BASELINE.kind },
     });
 
-    return res.json({ ok: true, data: { reset: true } });
+    return res.json({ ok: true, data: { reset: true, forced: force } });
   } catch (e) {
     console.error("[pelekan.baseline.reset] error:", e);
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
