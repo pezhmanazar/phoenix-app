@@ -416,11 +416,6 @@ router.get("/state", authUser, async (req, res) => {
     const hasAnyProgressFinal = applyDebugProgress(req, hasAnyProgress);
 
     // ✅ tabState (full flow)
-    // priority:
-    // 1) if user has any treatment progress -> treating
-    // 2) else if baseline exists/in_progress -> baseline_assessment
-    // 3) else if baseline completed -> choose_path
-    // 4) else -> idle
     let tabState = "idle";
     if (hasAnyProgressFinal) tabState = "treating";
     else if (baselineSession?.status === "in_progress") tabState = "baseline_assessment";
@@ -449,7 +444,8 @@ router.get("/state", authUser, async (req, res) => {
               number: activeDay.dayNumberInStage,
               status: "active",
               minPercent: 70,
-              percentDone: dayProgress.find((dp) => dp.dayId === activeDayId)?.completionPercent ?? 0,
+              percentDone:
+                dayProgress.find((dp) => dp.dayId === activeDayId)?.completionPercent ?? 0,
               timing: {
                 unlockedNextAt: null,
                 minDoneAt: null,
@@ -689,6 +685,7 @@ router.post("/baseline/submit", authUser, async (req, res) => {
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
+
 // GET /api/pelekan/baseline/state
 router.get("/baseline/state", authUser, async (req, res) => {
   try {
@@ -743,7 +740,10 @@ router.get("/baseline/state", authUser, async (req, res) => {
       });
     }
 
-    const total = session.totalItems || (HB_BASELINE.consentSteps.length + HB_BASELINE.questions.length);
+    const total =
+      session.totalItems ||
+      HB_BASELINE.consentSteps.length + HB_BASELINE.questions.length;
+
     const index = Math.max(0, Math.min(total, session.currentIndex || 0));
 
     // Build linear steps: [consent..., questions...]
@@ -759,28 +759,33 @@ router.get("/baseline/state", authUser, async (req, res) => {
       index,
       total,
       canPrev: index > 0,
-      // canNext is controlled in UI by whether current step has an answer;
-      // here we just expose overall boundaries
       canNext: index < total,
-      canSubmit: index >= total - 1, // UI can enable submit when last answered (or just always show on last)
+      canSubmit: index >= total - 1,
     };
 
     // normalize payload for UI
     let uiStep = null;
     if (step) {
       if (step.type === "consent") {
+        const isAcked = !!(session.answersJson?.consent?.[step.id]);
         uiStep = {
           type: "consent",
           id: step.id,
           text: step.text,
           optionText: step.optionText || "متوجه شدم",
+          selected: isAcked, // ✅ NEW: برای هایلایت/تیک consent
         };
       } else {
+        const selectedIndexRaw = session.answersJson?.answers?.[step.id];
+        const selectedIndex =
+          typeof selectedIndexRaw === "number" ? selectedIndexRaw : null;
+
         uiStep = {
           type: "question",
           id: step.id,
           text: step.text,
           options: (step.options || []).map((o, i) => ({ index: i, label: o.label })),
+          selectedIndex, // ✅ NEW: برای هایلایت گزینه انتخاب‌شده
         };
       }
     }
@@ -801,4 +806,5 @@ router.get("/baseline/state", authUser, async (req, res) => {
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
+
 export default router;
