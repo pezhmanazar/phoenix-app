@@ -64,11 +64,9 @@ function computeActiveDayId({ stages, dayProgress }) {
 }
 
 /** minimal resolver v0 */
-function resolveTabStateV0({ hasContent, dayProgress, activeDayId }) {
+function resolveTabStateV1({ hasContent, hasAnyProgressFinal }) {
   if (!hasContent) return "idle";
-  const hasAnyProgress = Array.isArray(dayProgress) && dayProgress.length > 0;
-  if (!hasAnyProgress) return "idle";
-  if (activeDayId) return "treating";
+  if (hasAnyProgressFinal) return "treating";
   return "idle";
 }
 
@@ -204,7 +202,7 @@ router.get("/state", authUser, async (req, res) => {
     const activeDayId = computeActiveDayId({ stages, dayProgress });
 
     // tabState v0
-    const tabState = resolveTabStateV0({ hasContent: true, dayProgress, activeDayId });
+    const tabState = resolveTabStateV1({ hasContent: true, hasAnyProgressFinal });
 
     const hasAnyProgress = Array.isArray(dayProgress) && dayProgress.length > 0;
 
