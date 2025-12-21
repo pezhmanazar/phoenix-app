@@ -689,5 +689,116 @@ router.post("/baseline/submit", authUser, async (req, res) => {
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
+// GET /api/pelekan/baseline/state
+router.get("/baseline/state", authUser, async (req, res) => {
+  try {
+    noStore(res);
 
+    const phone = req.userPhone;
+    const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
+    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+
+    const session = await prisma.assessmentSession.findUnique({
+      where: { userId_kind: { userId: user.id, kind: HB_BASELINE.kind } },
+      select: {
+        id: true,
+        status: true,
+        currentIndex: true,
+        totalItems: true,
+        answersJson: true,
+        totalScore: true,
+        scalesJson: true,
+        startedAt: true,
+        completedAt: true,
+      },
+    });
+
+    if (!session) {
+      return res.json({
+        ok: true,
+        data: {
+          started: false,
+          kind: HB_BASELINE.kind,
+          totalItems: HB_BASELINE.consentSteps.length + HB_BASELINE.questions.length,
+        },
+      });
+    }
+
+    // completed => return result for UI
+    if (session.status === "completed") {
+      return res.json({
+        ok: true,
+        data: {
+          started: true,
+          sessionId: session.id,
+          status: session.status,
+          kind: HB_BASELINE.kind,
+          result: {
+            totalScore: session.totalScore,
+            level: session.scalesJson?.level || null,
+            interpretationText: session.scalesJson?.interpretationText || null,
+            completedAt: session.completedAt,
+          },
+        },
+      });
+    }
+
+    const total = session.totalItems || (HB_BASELINE.consentSteps.length + HB_BASELINE.questions.length);
+    const index = Math.max(0, Math.min(total, session.currentIndex || 0));
+
+    // Build linear steps: [consent..., questions...]
+    const steps = [
+      ...HB_BASELINE.consentSteps.map((s) => ({ type: "consent", ...s })),
+      ...HB_BASELINE.questions.map((q) => ({ type: "question", ...q })),
+    ];
+
+    const step = steps[index] || null;
+
+    // nav flags
+    const nav = {
+      index,
+      total,
+      canPrev: index > 0,
+      // canNext is controlled in UI by whether current step has an answer;
+      // here we just expose overall boundaries
+      canNext: index < total,
+      canSubmit: index >= total - 1, // UI can enable submit when last answered (or just always show on last)
+    };
+
+    // normalize payload for UI
+    let uiStep = null;
+    if (step) {
+      if (step.type === "consent") {
+        uiStep = {
+          type: "consent",
+          id: step.id,
+          text: step.text,
+          optionText: step.optionText || "متوجه شدم",
+        };
+      } else {
+        uiStep = {
+          type: "question",
+          id: step.id,
+          text: step.text,
+          options: (step.options || []).map((o, i) => ({ index: i, label: o.label })),
+        };
+      }
+    }
+
+    return res.json({
+      ok: true,
+      data: {
+        started: true,
+        sessionId: session.id,
+        status: session.status,
+        kind: HB_BASELINE.kind,
+        nav,
+        step: uiStep,
+      },
+    });
+  } catch (e) {
+    console.error("[pelekan.baseline.state] error:", e);
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
 export default router;
