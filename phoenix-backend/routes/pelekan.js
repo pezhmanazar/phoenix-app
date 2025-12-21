@@ -924,4 +924,28 @@ router.get("/_debug/400", (req, res) => {
   res.status(400).json({ ok: false, error: "DEBUG_400", ts: new Date().toISOString() });
 });
 
+// POST /api/pelekan/baseline/reset
+router.post("/baseline/reset", authUser, async (req, res) => {
+  try {
+    const phone = req.userPhone;
+
+    const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
+    if (!user) return baselineError(res, "USER_NOT_FOUND");
+
+    // Delete session + wave1 result for clean re-run
+    await prisma.assessmentResult.deleteMany({
+      where: { userId: user.id, kind: HB_BASELINE.kind, wave: 1 },
+    });
+
+    await prisma.assessmentSession.deleteMany({
+      where: { userId: user.id, kind: HB_BASELINE.kind },
+    });
+
+    return res.json({ ok: true, data: { reset: true } });
+  } catch (e) {
+    console.error("[pelekan.baseline.reset] error:", e);
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
 export default router;
