@@ -317,24 +317,33 @@ function buildBaselineStepsLinear() {
   ];
 }
 
+/** Returns ALL missing steps (for review_missing UI) */
+function getMissingSteps(answersJson) {
+  const aj = answersJson || {};
+  const consent = aj?.consent || {};
+  const answers = aj?.answers || {};
+
+  const missing = [];
+
+  for (const s of HB_BASELINE.consentSteps) {
+    if (consent[s.id] !== true) missing.push({ type: "consent", id: s.id });
+  }
+  for (const q of HB_BASELINE.questions) {
+    const v = answers[q.id];
+    if (typeof v !== "number") missing.push({ type: "question", id: q.id });
+  }
+
+  return missing;
+}
+
 /**
  * Finds the first missing step in a session.
  * - consent: any consentSteps not acknowledged
  * - question: any question without a numeric answer
  */
 function getFirstMissingStep(answersJson) {
-  const aj = answersJson || {};
-  const consent = aj?.consent || {};
-  const answers = aj?.answers || {};
-
-  for (const s of HB_BASELINE.consentSteps) {
-    if (consent[s.id] !== true) return { type: "consent", id: s.id };
-  }
-  for (const q of HB_BASELINE.questions) {
-    const v = answers[q.id];
-    if (typeof v !== "number") return { type: "question", id: q.id };
-  }
-  return null;
+  const missing = getMissingSteps(answersJson);
+  return missing.length ? missing[0] : null;
 }
 
 /** WCDN workaround: for baseline endpoints, prefer 200 + {ok:false} instead of 4xx (to avoid HTML error pages) */
@@ -572,6 +581,41 @@ router.post("/baseline/start", authUser, async (req, res) => {
   }
 });
 
+// ✅ NEW: POST /api/pelekan/baseline/reset  (forced restart when session is inconsistent)
+router.post("/baseline/reset", authUser, async (req, res) => {
+  try {
+    const phone = req.userPhone;
+    const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
+    if (!user) return baselineError(res, "USER_NOT_FOUND");
+
+    const session = await prisma.assessmentSession.findUnique({
+      where: { userId_kind: { userId: user.id, kind: HB_BASELINE.kind } },
+      select: { id: true, status: true },
+    });
+    if (!session) return baselineError(res, "SESSION_NOT_FOUND");
+    if (session.status === "completed") return baselineError(res, "SESSION_ALREADY_COMPLETED");
+
+    const steps = buildBaselineStepsLinear();
+
+    const updated = await prisma.assessmentSession.update({
+      where: { id: session.id },
+      data: {
+        status: "in_progress",
+        currentIndex: 0,
+        totalItems: steps.length,
+        answersJson: { consent: {}, answers: {} },
+        // keep startedAt as-is; you can reset it too if you want
+      },
+      select: { id: true, status: true, currentIndex: true, totalItems: true },
+    });
+
+    return res.json({ ok: true, data: updated });
+  } catch (e) {
+    console.error("[pelekan.baseline.reset] error:", e);
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
 // POST /api/pelekan/baseline/answer
 router.post("/baseline/answer", authUser, async (req, res) => {
   try {
@@ -593,33 +637,27 @@ router.post("/baseline/answer", authUser, async (req, res) => {
 
     const indexRaw = session.currentIndex || 0;
 
-    // If user reached end but something is missing, only allow answering the first missing step.
+    // ✅ If user is at end but answers missing -> force reset (NO back/repair here)
     if (indexRaw >= total) {
-      const missing = getFirstMissingStep(session.answersJson);
-      if (!missing) return baselineError(res, "ALREADY_COMPLETE");
-
-      if (stepType !== missing.type || stepId !== missing.id) {
-        const expectedIndex = Math.max(
-          0,
-          steps.findIndex((s) => s.type === missing.type && s.id === missing.id)
-        );
-        return baselineError(res, "STEP_MISMATCH", {
-          expected: { type: missing.type, id: missing.id, index: expectedIndex },
+      const missingAll = getMissingSteps(session.answersJson);
+      if (missingAll.length > 0) {
+        return baselineError(res, "NEEDS_RESET", {
+          message: "Session reached end but some answers are missing. Reset required.",
+          missing: missingAll,
         });
       }
+      return baselineError(res, "ALREADY_COMPLETE");
     }
 
     // Normal one-way: only answer CURRENT step
     const index = Math.max(0, Math.min(total - 1, indexRaw));
     const expected = steps[index];
+    if (!expected) return baselineError(res, "INVALID_INDEX");
 
-    if (indexRaw < total) {
-      if (!expected) return baselineError(res, "INVALID_INDEX");
-      if (expected.type !== stepType || expected.id !== stepId) {
-        return baselineError(res, "STEP_MISMATCH", {
-          expected: { type: expected.type, id: expected.id, index },
-        });
-      }
+    if (expected.type !== stepType || expected.id !== stepId) {
+      return baselineError(res, "STEP_MISMATCH", {
+        expected: { type: expected.type, id: expected.id, index },
+      });
     }
 
     const aj = session.answersJson || { consent: {}, answers: {} };
@@ -638,12 +676,12 @@ router.post("/baseline/answer", authUser, async (req, res) => {
       return baselineError(res, "INVALID_STEP_TYPE");
     }
 
-    // Move forward ONLY if we are in normal flow (< total). If already at end, keep index at total.
-    let newIndex = indexRaw >= total ? total : Math.min(total, index + 1);
+    // Move forward by 1
+    const newIndex = Math.min(total, index + 1);
 
     const updated = await prisma.assessmentSession.update({
       where: { id: session.id },
-      data: { answersJson: next, currentIndex: newIndex },
+      data: { answersJson: next, currentIndex: newIndex, totalItems: total },
       select: { id: true, currentIndex: true, totalItems: true },
     });
 
@@ -785,27 +823,39 @@ router.get("/baseline/state", authUser, async (req, res) => {
     const consent = aj.consent || {};
     const answers = aj.answers || {};
 
-    const missing = getFirstMissingStep(session.answersJson);
+    const missingAll = getMissingSteps(session.answersJson);
 
-    // index selection:
-    // - normal: clamp currentIndex to [0..total-1]
-    // - if currentIndex >= total BUT something missing => point UI to the first missing step
-    // - if currentIndex >= total AND nothing missing => step=null (ready to submit)
     let indexRaw = session.currentIndex || 0;
-    let index = Math.max(0, Math.min(total - 1, indexRaw));
-    let step = steps[index] || null;
 
-    if (indexRaw >= total) {
-      if (missing) {
-        const mi = steps.findIndex((s) => s.type === missing.type && s.id === missing.id);
-        index = Math.max(0, mi >= 0 ? mi : 0);
-        step = steps[index] || null;
-      } else {
-        // complete answers but still in_progress => allow submit
-        step = null;
-        index = total; // UI info only
-      }
+    // ✅ CRITICAL FIX:
+    // If index is at end (>=total) but something missing -> return review_missing (NO step:null)
+    if (indexRaw >= total && missingAll.length > 0) {
+      return res.json({
+        ok: true,
+        data: {
+          started: true,
+          sessionId: session.id,
+          status: session.status,
+          kind: HB_BASELINE.kind,
+          nav: {
+            index: total,
+            total,
+            canPrev: false,
+            canNext: false,
+            canSubmit: false,
+          },
+          step: {
+            type: "review_missing",
+            message: "چند پاسخ ثبت نشده. لطفاً آزمون را از ابتدا دوباره انجام بده.",
+            missing: missingAll,
+          },
+        },
+      });
     }
+
+    // Normal index clamp
+    const index = Math.max(0, Math.min(total - 1, indexRaw));
+    const step = steps[index] || null;
 
     // compute selectedIndex for UI
     let selectedIndex = null;
@@ -818,9 +868,10 @@ router.get("/baseline/state", authUser, async (req, res) => {
     let canNext = false;
     if (step?.type === "consent") canNext = consent?.[step.id] === true;
     else if (step?.type === "question") canNext = selectedIndex !== null;
-    else canNext = false; // step null
 
-    const canSubmit = !missing && (step === null || index >= total - 1);
+    // submit allowed only when nothing missing AND we are at last step and it is answered
+    const isLast = index >= total - 1;
+    const canSubmit = missingAll.length === 0 && isLast && canNext;
 
     const nav = {
       index,
