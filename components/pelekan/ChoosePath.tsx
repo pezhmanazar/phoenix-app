@@ -1,5 +1,5 @@
 // components/pelekan/ChoosePath.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -13,20 +13,36 @@ import BACKEND_URL from "../../constants/backend";
 
 type Props = {
   me: any;
-  state?: any;
+  state: any;
   onRefresh?: () => Promise<void> | void;
 };
 
 type BusyKind = null | "skip_review" | "review";
 
+type ToastState = {
+  visible: boolean;
+  title: string;
+  message?: string;
+  tone: "info" | "success" | "danger";
+};
+
 export default function ChoosePath({ me, onRefresh }: Props) {
   const [busy, setBusy] = useState<BusyKind>(null);
 
-  // --- nice modal instead of Android Alert ---
-  const [err, setErr] = useState<null | { title: string; message: string }>(null);
-
+  // entrance animation
   const fade = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(10)).current;
+
+  // toast animation
+  const toastY = useRef(new Animated.Value(14)).current;
+  const toastA = useRef(new Animated.Value(0)).current;
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [toast, setToast] = useState<ToastState>({
+    visible: false,
+    title: "",
+    message: "",
+    tone: "info",
+  });
 
   useEffect(() => {
     fade.setValue(0);
@@ -62,111 +78,174 @@ export default function ChoosePath({ me, onRefresh }: Props) {
       mintBorder: "rgba(74, 222, 128, .22)",
       blueBorder: "rgba(96, 165, 250, .22)",
 
-      danger: "rgba(248,113,113,.18)",
-      dangerBorder: "rgba(248,113,113,.35)",
+      toastGlass: "rgba(3,7,18,.92)",
+      toastBorder: "rgba(255,255,255,.14)",
+      toneInfo: "rgba(96,165,250,.22)",
+      toneSuccess: "rgba(74,222,128,.22)",
+      toneDanger: "rgba(248,113,113,.22)",
     }),
     []
   );
 
-  const phone = (me?.phone as string | undefined) || undefined;
+  const phone = me?.phone as string | undefined;
 
-  // ✅ real endpoint we already tested with curl:
-  // POST /api/pelekan/review/choose { phone, choice: "review" | "skip_review" }
-  const CHOOSE_URL = `${BACKEND_URL}/api/pelekan/review/choose`;
+  const showToast = useCallback(
+    (next: Omit<ToastState, "visible">, ms = 2400) => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
 
-  const safeParseJson = (text: string) => {
-    try {
-      return text ? JSON.parse(text) : null;
-    } catch {
-      return null;
-    }
-  };
+      setToast({ visible: true, ...next });
 
-  const postChoose = async (choice: "review" | "skip_review") => {
-    const res = await fetch(CHOOSE_URL, {
+      toastA.setValue(0);
+      toastY.setValue(14);
+
+      Animated.parallel([
+        Animated.timing(toastA, {
+          toValue: 1,
+          duration: 160,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(toastY, {
+          toValue: 0,
+          duration: 160,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      toastTimer.current = setTimeout(() => {
+        Animated.parallel([
+          Animated.timing(toastA, {
+            toValue: 0,
+            duration: 180,
+            easing: Easing.in(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(toastY, {
+            toValue: 10,
+            duration: 180,
+            easing: Easing.in(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          setToast((t) => ({ ...t, visible: false }));
+        });
+      }, ms);
+    },
+    [toastA, toastY]
+  );
+
+  const postJsonSafe = async (url: string, body: any) => {
+    const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone, choice }),
+      body: JSON.stringify(body),
     });
 
     const text = await res.text();
-    const json = safeParseJson(text);
+    let json: any = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = null;
+    }
     return { res, json, text };
   };
 
-  const showNiceError = (title: string, message: string) => {
-    setErr({ title, message });
-  };
-
-  const handleHttpError = (res: Response, text: string) => {
+  const handleBadResponse = (res: Response, json: any, text: string) => {
+    // اگر روت نبود
     if (res.status === 404) {
-      showNiceError(
-        "هنوز آماده نیست",
-        "این بخش روی سرور پیدا نشد. احتمالاً روت هنوز دیپلوی نشده یا آدرس بک‌اند اشتباه است."
+      showToast(
+        {
+          tone: "info",
+          title: "هنوز آماده نیست",
+          message: "این بخش هنوز روی سرور فعال نشده.",
+        },
+        2800
       );
       return;
     }
-    if (res.status === 401 || res.status === 403) {
-      showNiceError("عدم دسترسی", "اجازه دسترسی ندارید. یک‌بار از حساب خارج و دوباره وارد شوید.");
+
+    // اگر JSON استاندارد داشت
+    if (json && typeof json === "object") {
+      const err = json.error || json.message || "REQUEST_FAILED";
+      showToast(
+        {
+          tone: "danger",
+          title: "درخواست ناموفق بود",
+          message: `(${res.status}) ${String(err)}`,
+        },
+        3200
+      );
       return;
     }
-    showNiceError(
-      "خطا",
-      `درخواست ناموفق بود (HTTP ${res.status}).\n${
-        text ? text.slice(0, 160) : "پاسخی از سرور دریافت نشد."
-      }`
+
+    // fallback
+    showToast(
+      {
+        tone: "danger",
+        title: "خطای ارتباط",
+        message: `پاسخ معتبر نبود. (HTTP ${res.status})`,
+      },
+      3200
     );
   };
 
-  const choose = async (choice: "review" | "skip_review") => {
+  // ✅ مسیر درست: review/choose
+  const CHOOSE_URL = `${BACKEND_URL}/api/pelekan/review/choose`;
+
+  const choose = async (choice: "skip_review" | "review") => {
     if (!phone) {
-      showNiceError("مشکل حساب", "شماره کاربر پیدا نشد. اول وارد حساب شو و دوباره امتحان کن.");
+      showToast({ tone: "danger", title: "خطا", message: "شماره کاربر پیدا نشد." }, 2800);
       return;
     }
 
     try {
       setBusy(choice);
 
-      const { res, json, text } = await postChoose(choice);
+      const { res, json, text } = await postJsonSafe(CHOOSE_URL, { phone, choice });
 
-      if (!res.ok) {
-        handleHttpError(res, text);
-        return;
+      if (!res.ok || !json?.ok) {
+        return handleBadResponse(res, json, text);
       }
 
-      if (!json?.ok) {
-        showNiceError("خطا", "پاسخ سرور معتبر نبود. لطفاً دوباره تلاش کن.");
-        return;
-      }
+      showToast(
+        {
+          tone: "success",
+          title: "ثبت شد",
+          message: choice === "review" ? "می‌ریم برای بازسنجی رابطه." : "می‌ریم برای شروع مسیر فراموش کردن.",
+        },
+        1800
+      );
 
-      // ✅ refresh state so tabState changes (review flow / treating flow)
       await onRefresh?.();
-    } catch (e: any) {
-      showNiceError(
-        "ارتباط برقرار نشد",
-        "اتصال به سرور برقرار نشد. اینترنت/فیلترشکن/آدرس API را بررسی کن."
+    } catch (e) {
+      showToast(
+        {
+          tone: "danger",
+          title: "ارتباط برقرار نشد",
+          message: "اینترنت یا دسترسی به سرور را بررسی کن و دوباره بزن.",
+        },
+        3200
       );
     } finally {
       setBusy(null);
     }
   };
 
+  const toneBorder = toast.tone === "success" ? palette.toneSuccess : toast.tone === "danger" ? palette.toneDanger : palette.toneInfo;
+
   return (
     <View style={[styles.full, { backgroundColor: palette.bg }]}>
-      <Animated.View
-        style={[
-          styles.centerWrap,
-          { opacity: fade, transform: [{ translateY: slide }] },
-        ]}
-      >
+      <Animated.View style={[styles.centerWrap, { opacity: fade, transform: [{ translateY: slide }] }]}>
         <View style={[styles.card, { backgroundColor: palette.glass, borderColor: palette.border }]}>
           <Text style={[styles.title, { color: palette.text }]}>انتخاب مسیر</Text>
 
           <Text style={[styles.subText, { color: palette.sub }]}>
-            دو انتخاب داری: یا وارد مسیر «فراموشی و درمان» بشی، یا «واقع‌بینانه رابطه رو بازسنجی کنی».
+            یکی برای «رها کردن و جلو رفتن»، یکی برای «بررسی واقع‌بینانه احتمال ترمیم رابطه».
           </Text>
 
-          {/* Option 1: skip review -> go to treatment */}
+          {/* گزینه ۱: فراموش کردن */}
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={() => choose("skip_review")}
@@ -180,28 +259,24 @@ export default function ChoosePath({ me, onRefresh }: Props) {
               },
             ]}
           >
-            <Text style={[styles.choiceTitle, { color: palette.text }]}>
-              می‌خوام فراموشش کنم
-            </Text>
-            <Text style={[styles.choiceDesc, { color: palette.faint }]}>
-              ورود به پلکان و شروع مسیر درمان
-            </Text>
+            <Text style={[styles.choiceTitle, { color: palette.text }]}>می‌خوام فراموشش کنم</Text>
+            <Text style={[styles.choiceDesc, { color: palette.faint }]}>ورود به پلکان و شروع مسیر درمان</Text>
 
             <View style={{ marginTop: 12 }}>
               <View style={[styles.glassBtn, { backgroundColor: palette.btnBg, borderColor: palette.btnBorder }]}>
                 {busy === "skip_review" ? (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                     <ActivityIndicator />
-                    <Text style={[styles.glassBtnText, { color: palette.text }]}>در حال شروع…</Text>
+                    <Text style={[styles.glassBtnText, { color: palette.text }]}>در حال ثبت…</Text>
                   </View>
                 ) : (
-                  <Text style={[styles.glassBtnText, { color: palette.text }]}>شروع مسیر</Text>
+                  <Text style={[styles.glassBtnText, { color: palette.text }]}>ادامه</Text>
                 )}
               </View>
             </View>
           </TouchableOpacity>
 
-          {/* Option 2: review */}
+          {/* گزینه ۲: بازسنجی رابطه */}
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={() => choose("review")}
@@ -220,7 +295,7 @@ export default function ChoosePath({ me, onRefresh }: Props) {
               می‌خوام احتمال درست شدن رابطه رو بررسی کنم
             </Text>
             <Text style={[styles.choiceDesc, { color: palette.faint }]}>
-              بازسنجی رابطه + آزمون دوم (نتیجه‌ی نهایی بعد از PRO نمایش داده می‌شود)
+              بازسنجی رابطه با آزمون‌ها (نتیجه نهایی بعد از PRO نمایش داده می‌شود)
             </Text>
 
             <View style={{ marginTop: 12 }}>
@@ -228,10 +303,10 @@ export default function ChoosePath({ me, onRefresh }: Props) {
                 {busy === "review" ? (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                     <ActivityIndicator />
-                    <Text style={[styles.glassBtnText, { color: palette.text }]}>در حال شروع…</Text>
+                    <Text style={[styles.glassBtnText, { color: palette.text }]}>در حال ثبت…</Text>
                   </View>
                 ) : (
-                  <Text style={[styles.glassBtnText, { color: palette.text }]}>شروع بازسنجی</Text>
+                  <Text style={[styles.glassBtnText, { color: palette.text }]}>ادامه</Text>
                 )}
               </View>
             </View>
@@ -239,25 +314,39 @@ export default function ChoosePath({ me, onRefresh }: Props) {
         </View>
       </Animated.View>
 
-      {/* ✅ glass error modal */}
-      {err && (
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: palette.glass, borderColor: palette.dangerBorder }]}>
-            <Text style={[styles.modalTitle, { color: palette.text }]}>{err.title}</Text>
-            <Text style={[styles.modalBody, { color: palette.sub }]}>{err.message}</Text>
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() => setErr(null)}
-              style={[
-                styles.modalBtn,
-                { backgroundColor: palette.btnBg, borderColor: palette.btnBorder },
-              ]}
-            >
-              <Text style={[styles.modalBtnText, { color: palette.text }]}>باشه</Text>
-            </TouchableOpacity>
+      {/* Toast */}
+      {toast.visible ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.toastWrap,
+            {
+              opacity: toastA,
+              transform: [{ translateY: toastY }],
+            },
+          ]}
+        >
+          <View
+            style={[
+              styles.toastCard,
+              {
+                backgroundColor: palette.toastGlass,
+                borderColor: palette.toastBorder,
+              },
+            ]}
+          >
+            <View style={[styles.toastTone, { backgroundColor: toneBorder }]} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.toastTitle, { color: palette.text }]}>{toast.title}</Text>
+              {!!toast.message ? (
+                <Text style={[styles.toastMsg, { color: palette.sub }]} numberOfLines={3}>
+                  {toast.message}
+                </Text>
+              ) : null}
+            </View>
           </View>
-        </View>
-      )}
+        </Animated.View>
+      ) : null}
     </View>
   );
 }
@@ -265,7 +354,6 @@ export default function ChoosePath({ me, onRefresh }: Props) {
 const styles = StyleSheet.create({
   full: { flex: 1 },
   centerWrap: { flex: 1, paddingHorizontal: 16, justifyContent: "center" },
-
   card: { borderWidth: 1, borderRadius: 18, paddingVertical: 16, paddingHorizontal: 16 },
   title: { fontSize: 18, fontWeight: "900", textAlign: "center" },
   subText: { marginTop: 10, fontSize: 13, lineHeight: 20, textAlign: "center", fontWeight: "700" },
@@ -277,24 +365,25 @@ const styles = StyleSheet.create({
   glassBtn: { paddingVertical: 12, borderRadius: 14, alignItems: "center", justifyContent: "center", borderWidth: 1 },
   glassBtnText: { fontSize: 13, fontWeight: "900" },
 
-  modalOverlay: {
+  toastWrap: {
     position: "absolute",
-    top: 0, right: 0, bottom: 0, left: 0,
-    backgroundColor: "rgba(0,0,0,.55)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 18,
+    left: 14,
+    right: 14,
+    bottom: 18,
   },
-  modalCard: {
-    width: "100%",
-    maxWidth: 440,
-    borderRadius: 18,
+  toastCard: {
     borderWidth: 1,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+    borderRadius: 16,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
-  modalTitle: { fontSize: 16, fontWeight: "900", textAlign: "right" },
-  modalBody: { marginTop: 10, fontSize: 13, lineHeight: 20, textAlign: "right", fontWeight: "700" },
-  modalBtn: { marginTop: 14, borderRadius: 14, paddingVertical: 12, alignItems: "center", borderWidth: 1 },
-  modalBtnText: { fontSize: 13, fontWeight: "900" },
+  toastTone: {
+    width: 10,
+    height: 40,
+    borderRadius: 8,
+  },
+  toastTitle: { fontSize: 13, fontWeight: "900", textAlign: "right" },
+  toastMsg: { marginTop: 4, fontSize: 12, fontWeight: "700", textAlign: "right", lineHeight: 18 },
 });
