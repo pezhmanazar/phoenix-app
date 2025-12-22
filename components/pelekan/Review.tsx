@@ -3,7 +3,8 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+  Animated,
+  Easing,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -59,6 +60,16 @@ type ReviewStateResponse = {
   };
 };
 
+type ResultResponse = {
+  ok: boolean;
+  error?: string;
+  data?: {
+    status: "in_progress" | "completed_locked" | "unlocked";
+    canEnterPelekan?: boolean;
+    result: any | null; // {locked:boolean,message:string,meta?:{didSkipTest2:boolean}}
+  };
+};
+
 const API_BASE = "https://qoqnoos.app/api/pelekan/review";
 
 export default function Review({ me, state, onRefresh }: Props) {
@@ -86,39 +97,35 @@ export default function Review({ me, state, onRefresh }: Props) {
   // ✅ ضد دابل‌کلیک / چند submit پشت هم
   const submitLockRef = useRef(false);
 
-  // ✅ Confirm شیشه‌ای (جایگزین Alert) - نسخه دو دکمه‌ای
+  // ✅ Confirm شیشه‌ای (جایگزین Alert)
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState("");
   const [confirmMsg, setConfirmMsg] = useState("");
-  const [confirmPrimaryText, setConfirmPrimaryText] = useState("بله، ادامه");
-  const [confirmSecondaryText, setConfirmSecondaryText] = useState("نه");
-  const confirmPrimaryRef = useRef<null | (() => Promise<void> | void)>(null);
-  const confirmSecondaryRef = useRef<null | (() => Promise<void> | void)>(null);
+  const confirmActionRef = useRef<null | (() => Promise<void> | void)>(null);
 
-  const openConfirm = useCallback(
-    (
-      t: string,
-      m: string,
-      primaryText: string,
-      primaryAction: () => Promise<void> | void,
-      secondaryText?: string,
-      secondaryAction?: (() => Promise<void> | void) | null
-    ) => {
-      confirmPrimaryRef.current = primaryAction;
-      confirmSecondaryRef.current = secondaryAction ?? null;
-      setConfirmTitle(t);
-      setConfirmMsg(m);
-      setConfirmPrimaryText(primaryText || "بله، ادامه");
-      setConfirmSecondaryText(secondaryText || "نه");
-      setConfirmOpen(true);
-    },
-    []
-  );
+  // ✅ نمایش نتیجه (بعد از finish)
+  const [resultOpen, setResultOpen] = useState(false);
+  const [resultLoading, setResultLoading] = useState(false);
+  const [resultError, setResultError] = useState<string | null>(null);
+  const [resultData, setResultData] = useState<any | null>(null);
+
+  // ✅ انتخاب گزینه + دکمه ادامه (برای جلوگیری از لمس اشتباهی)
+  const [selectedValue, setSelectedValue] = useState<number | null>(null);
+
+  // ✅ ترنزیشن نرم بین سوال‌ها
+  const fade = useRef(new Animated.Value(0)).current;
+  const slideY = useRef(new Animated.Value(10)).current;
+
+  const openConfirm = useCallback((t: string, m: string, action: () => Promise<void> | void) => {
+    confirmActionRef.current = action;
+    setConfirmTitle(t);
+    setConfirmMsg(m);
+    setConfirmOpen(true);
+  }, []);
 
   const closeConfirm = useCallback(() => {
     setConfirmOpen(false);
-    confirmPrimaryRef.current = null;
-    confirmSecondaryRef.current = null;
+    confirmActionRef.current = null;
   }, []);
 
   const palette = useMemo(
@@ -128,12 +135,20 @@ export default function Review({ me, state, onRefresh }: Props) {
       border: "rgba(255,255,255,.10)",
       text: "#F9FAFB",
       sub: "rgba(231,238,247,.75)",
+      sub2: "rgba(231,238,247,.55)",
       gold: "#D4AF37",
       orange: "#E98A15",
       red: "#ef4444",
+      lime: "#86efac", // سبز فسفری ملایم (برای تاکید)
     }),
     []
   );
+
+  const accentColor = useMemo(() => {
+    // تست ۱ طلایی، تست ۲ نارنجی
+    const t = reviewState?.session?.currentTest ?? 1;
+    return t === 1 ? palette.gold : palette.orange;
+  }, [reviewState?.session?.currentTest, palette.gold, palette.orange]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -175,6 +190,37 @@ export default function Review({ me, state, onRefresh }: Props) {
 
     return json.data.questionSet.id;
   }, []);
+
+  const fetchResult = useCallback(async () => {
+    if (!phone) return null;
+
+    setResultLoading(true);
+    setResultError(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/result?phone=${encodeURIComponent(phone)}`, {
+        headers: { "Cache-Control": "no-store" },
+      });
+
+      const json: ResultResponse = await res.json().catch(() => ({ ok: false } as any));
+      if (!json?.ok) throw new Error(json?.error || "RESULT_FAILED");
+
+      const r = json?.data?.result ?? null;
+      if (mountedRef.current) setResultData(r);
+
+      return r;
+    } catch (e: any) {
+      if (mountedRef.current) setResultError(String(e?.message || "RESULT_FAILED"));
+      return null;
+    } finally {
+      if (mountedRef.current) setResultLoading(false);
+    }
+  }, [phone]);
+
+  const openResultScreen = useCallback(async () => {
+    setResultOpen(true);
+    await fetchResult();
+  }, [fetchResult]);
 
   // ✅ فقط وقتی session.questionSetId خالیه start بزن، با lock
   const ensureStarted = useCallback(
@@ -234,12 +280,18 @@ export default function Review({ me, state, onRefresh }: Props) {
 
   // ✅ bootstrap خودکار فقط یکبار برای هر phone
   useEffect(() => {
-    // reset guards when phone changes
     if (bootRef.current.phone !== phone) {
       bootRef.current.phone = phone;
       bootRef.current.done = false;
       startLockRef.current = false;
       submitLockRef.current = false;
+
+      setResultOpen(false);
+      setResultData(null);
+      setResultError(null);
+      setResultLoading(false);
+
+      setSelectedValue(null);
     }
 
     if (!phone) return;
@@ -259,81 +311,43 @@ export default function Review({ me, state, onRefresh }: Props) {
   const questions = currentTest === 1 ? test1 : test2;
   const currentQuestion = questions[currentIndex] || null;
 
-  // ✅ لاگِ رندر (اختیاری)
+  // ✅ وقتی سوال عوض شد: انتخاب ریست + انیمیشن
   useEffect(() => {
-    console.log("[Review] render", {
-      currentTest,
-      currentIndex,
-      qLen: questions?.length ?? 0,
-      hasQuestion: !!currentQuestion,
-      sessionStatus: session?.status,
-      qsId: session?.questionSetId,
-    });
+    setSelectedValue(null);
+    fade.setValue(0);
+    slideY.setValue(10);
+
+    Animated.parallel([
+      Animated.timing(fade, {
+        toValue: 1,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideY, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTest, currentIndex, questions?.length, !!currentQuestion, session?.status, session?.questionSetId]);
+  }, [currentTest, currentIndex]);
 
   const title = useMemo(() => {
     if (currentTest === 1) return "آزمون بازسنجی";
     return "آزمون «آیا برمی‌گرده؟»";
   }, [currentTest]);
 
+  const titleColor = useMemo(() => {
+    return currentTest === 1 ? palette.gold : palette.orange;
+  }, [currentTest, palette.gold, palette.orange]);
+
   const isEndOfTest = useMemo(() => {
     if (!session) return false;
     if (!questions?.length) return false;
     return (session.currentIndex ?? 0) >= questions.length;
   }, [session, questions]);
-
-  const isPro = !!reviewState?.user?.isPro;
-
-  const goToAnalysis = useCallback(
-    (mode: "test1" | "final") => {
-      // ✅ به‌جای string، مسیر رو با pathname/params بده تا TS قرمز نشه
-      const analysisNav = {
-        pathname: "/pelekan/review/analysis",
-        params: { mode },
-      } as const;
-
-      if (isPro) {
-        // @ts-ignore - expo-router بعضی وقت‌ها روی object route هم گیر می‌دهد
-        router.push(analysisNav);
-        return;
-      }
-
-      // ✅ next را به شکل string ساده نگه می‌داریم (برای صفحه اشتراک)
-      const next = `/pelekan/review/analysis?mode=${encodeURIComponent(mode)}`;
-
-      // @ts-ignore
-      router.push({
-        pathname: "/(tabs)/Subscription",
-        params: { next },
-      });
-    },
-    [isPro, router]
-  );
-
-  const goToPelekanStart = useCallback(() => {
-    router.replace("/(tabs)/Pelekan");
-  }, [router]);
-
-  const ensureCompleteTest1 = useCallback(async () => {
-    if (!phone) return { ok: false };
-    if (reviewState?.session?.test1CompletedAt) return { ok: true };
-
-    const res = await fetch(`${API_BASE}/complete-test`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone, testNo: 1 }),
-    }).then((r) => r.json());
-
-    if (!res?.ok) {
-      Alert.alert("خطا", res?.error || "SERVER_ERROR");
-      return { ok: false };
-    }
-
-    await fetchReviewState();
-    onRefresh?.();
-    return { ok: true };
-  }, [phone, reviewState?.session?.test1CompletedAt, fetchReviewState, onRefresh]);
 
   const submitAnswer = useCallback(
     async (value: number) => {
@@ -354,14 +368,14 @@ export default function Review({ me, state, onRefresh }: Props) {
 
         const json = await res.json().catch(() => null);
         if (!json?.ok) {
-          Alert.alert("خطا", json?.error || "SERVER_ERROR");
+          setError(json?.error || "SERVER_ERROR");
           return;
         }
 
         await fetchReviewState();
         onRefresh?.();
       } catch (e: any) {
-        Alert.alert("خطا", e?.message || "SERVER_ERROR");
+        setError(e?.message || "SERVER_ERROR");
       } finally {
         setLoading(false);
         submitLockRef.current = false;
@@ -370,8 +384,8 @@ export default function Review({ me, state, onRefresh }: Props) {
     [phone, session, currentTest, fetchReviewState, onRefresh]
   );
 
-  // ✅ دکمه «ادامه» در پایان آزمون ۱: فقط وارد آزمون ۲ شود
-  const goToTest2FromEndOfTest1 = useCallback(async () => {
+  // ✅ ادامه بعد از پایان آزمون 1: برو آزمون 2
+  const goToTest2 = useCallback(async () => {
     if (!phone) return;
 
     if (submitLockRef.current) return;
@@ -383,27 +397,24 @@ export default function Review({ me, state, onRefresh }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone, testNo: 1 }),
-      }).then((r) => r.json());
+      });
 
-      if (!res?.ok) {
-        Alert.alert("خطا", res?.error || "SERVER_ERROR");
+      const json = await res.json().catch(() => null);
+      if (!json?.ok) {
+        setError(json?.error || "SERVER_ERROR");
         return;
       }
 
       await fetchReviewState();
       onRefresh?.();
-      // ✅ با آپدیت state، خود کامپوننت میره روی test2
     } finally {
       setLoading(false);
       submitLockRef.current = false;
     }
   }, [phone, fetchReviewState, onRefresh]);
 
-  // ✅ عبور از آزمون دوم از پایان آزمون ۱: اگر کاربر «ورود به پلکان» را انتخاب کرد
-  // 1) complete-test(1)
-  // 2) skip-test2
-  // 3) finish
-  const passTest2AndEnterPelekanFromEndTest1 = useCallback(async () => {
+  // ✅ عبور از آزمون دوم از پایان آزمون ۱ => finish => نتیجه (قفل/باز) => امکان رفتن پلکان
+  const passTest2FromEndOfTest1 = useCallback(async () => {
     if (!phone) return;
 
     if (submitLockRef.current) return;
@@ -418,7 +429,7 @@ export default function Review({ me, state, onRefresh }: Props) {
       }).then((r) => r.json());
 
       if (!c1?.ok) {
-        Alert.alert("خطا", c1?.error || "SERVER_ERROR");
+        setError(c1?.error || "SERVER_ERROR");
         return;
       }
 
@@ -429,7 +440,7 @@ export default function Review({ me, state, onRefresh }: Props) {
       }).then((r) => r.json());
 
       if (!s2?.ok) {
-        Alert.alert("خطا", s2?.error || "SERVER_ERROR");
+        setError(s2?.error || "SERVER_ERROR");
         return;
       }
 
@@ -440,24 +451,24 @@ export default function Review({ me, state, onRefresh }: Props) {
       }).then((r) => r.json());
 
       if (!f?.ok) {
-        Alert.alert("خطا", f?.error || "SERVER_ERROR");
+        setError(f?.error || "SERVER_ERROR");
         return;
       }
 
       await fetchReviewState();
       onRefresh?.();
-      goToPelekanStart();
+      await openResultScreen();
     } finally {
       setLoading(false);
       submitLockRef.current = false;
     }
-  }, [phone, fetchReviewState, onRefresh, goToPelekanStart]);
+  }, [phone, fetchReviewState, onRefresh, openResultScreen]);
 
-  // ✅ پایان آزمون ۲: قبل از تحلیل/پلکان باید complete-test2 + finish انجام شود
-  const finalizeAfterTest2 = useCallback(async () => {
-    if (!phone) return { ok: false as const };
+  // ✅ پایان آزمون 2 => finish => نتیجه
+  const finishAfterTest2 = useCallback(async () => {
+    if (!phone) return;
 
-    if (submitLockRef.current) return { ok: false as const };
+    if (submitLockRef.current) return;
     submitLockRef.current = true;
 
     setLoading(true);
@@ -469,8 +480,8 @@ export default function Review({ me, state, onRefresh }: Props) {
       }).then((r) => r.json());
 
       if (!c?.ok) {
-        Alert.alert("خطا", c?.error || "SERVER_ERROR");
-        return { ok: false as const };
+        setError(c?.error || "SERVER_ERROR");
+        return;
       }
 
       const f = await fetch(`${API_BASE}/finish`, {
@@ -480,23 +491,21 @@ export default function Review({ me, state, onRefresh }: Props) {
       }).then((r) => r.json());
 
       if (!f?.ok) {
-        Alert.alert("خطا", f?.error || "SERVER_ERROR");
-        return { ok: false as const };
+        setError(f?.error || "SERVER_ERROR");
+        return;
       }
 
       await fetchReviewState();
       onRefresh?.();
-      return { ok: true as const };
+      await openResultScreen();
     } finally {
       setLoading(false);
       submitLockRef.current = false;
     }
-  }, [phone, fetchReviewState, onRefresh]);
+  }, [phone, fetchReviewState, onRefresh, openResultScreen]);
 
-  // ✅ عبور از آزمون دوم وقتی داخل آزمون دوم هستی:
-  // 1) skip-test2
-  // 2) finish
-  const passTest2FromInsideTest2 = useCallback(async () => {
+  // ✅ عبور از آزمون دوم (داخل تست۲) => finish => نتیجه
+  const passTest2 = useCallback(async () => {
     if (!phone) return;
 
     if (submitLockRef.current) return;
@@ -511,7 +520,7 @@ export default function Review({ me, state, onRefresh }: Props) {
       }).then((r) => r.json());
 
       if (!s2?.ok) {
-        Alert.alert("خطا", s2?.error || "SERVER_ERROR");
+        setError(s2?.error || "SERVER_ERROR");
         return;
       }
 
@@ -522,19 +531,18 @@ export default function Review({ me, state, onRefresh }: Props) {
       }).then((r) => r.json());
 
       if (!f?.ok) {
-        Alert.alert("خطا", f?.error || "SERVER_ERROR");
+        setError(f?.error || "SERVER_ERROR");
         return;
       }
 
       await fetchReviewState();
       onRefresh?.();
-
-      goToPelekanStart();
+      await openResultScreen();
     } finally {
       setLoading(false);
       submitLockRef.current = false;
     }
-  }, [phone, fetchReviewState, onRefresh, goToPelekanStart]);
+  }, [phone, fetchReviewState, onRefresh, openResultScreen]);
 
   const manualReload = useCallback(() => {
     bootRef.current.done = false;
@@ -549,21 +557,28 @@ export default function Review({ me, state, onRefresh }: Props) {
     return (
       <View style={styles.confirmOverlay}>
         <View style={[styles.confirmCard, { backgroundColor: palette.glass, borderColor: palette.border }]}>
-          <Text style={{ color: palette.text, fontWeight: "900", fontSize: 16 }}>{confirmTitle}</Text>
-          <Text style={{ color: palette.sub, marginTop: 8, lineHeight: 22, fontSize: 12 }}>{confirmMsg}</Text>
+          <Text style={[styles.rtlText, { color: palette.text, fontWeight: "900", fontSize: 16, textAlign: "center" }]}>
+            {confirmTitle}
+          </Text>
+          <Text style={[styles.rtlText, { color: palette.sub, marginTop: 10, lineHeight: 22, fontSize: 12, textAlign: "right" }]}>
+            {confirmMsg}
+          </Text>
 
           <View style={{ height: 14 }} />
 
           <Pressable
             disabled={loading}
-            style={[styles.btn, { borderColor: palette.border }]}
+            style={[
+              styles.btnPrimary,
+              { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)" },
+            ]}
             onPress={async () => {
-              const fn = confirmPrimaryRef.current;
+              const fn = confirmActionRef.current;
               closeConfirm();
               if (fn) await fn();
             }}
           >
-            <Text style={[styles.btnText, { color: palette.text }]}>{loading ? "..." : confirmPrimaryText}</Text>
+            <Text style={[styles.btnText, { color: palette.text }]}>{loading ? "..." : "بله، ادامه"}</Text>
           </Pressable>
 
           <View style={{ height: 10 }} />
@@ -574,27 +589,95 @@ export default function Review({ me, state, onRefresh }: Props) {
               styles.btnGhost,
               { borderColor: palette.border, backgroundColor: "rgba(255,255,255,.04)" },
             ]}
-            onPress={async () => {
-              const fn = confirmSecondaryRef.current;
-              closeConfirm();
-              if (fn) await fn();
-            }}
+            onPress={closeConfirm}
           >
-            <Text style={[styles.btnText, { color: palette.sub }]}>{loading ? "..." : confirmSecondaryText}</Text>
+            <Text style={[styles.btnText, { color: palette.sub }]}>{loading ? "..." : "نه"}</Text>
           </Pressable>
         </View>
       </View>
     );
-  }, [
-    confirmOpen,
-    confirmTitle,
-    confirmMsg,
-    confirmPrimaryText,
-    confirmSecondaryText,
-    palette,
-    loading,
-    closeConfirm,
-  ]);
+  }, [confirmOpen, confirmTitle, confirmMsg, palette, loading, closeConfirm]);
+
+  const ResultScreen = useMemo(() => {
+    if (!resultOpen) return null;
+
+    const locked = !!resultData?.locked;
+    const didSkipTest2 = !!resultData?.meta?.didSkipTest2;
+
+    const resultTitle = didSkipTest2 ? "نتیجه آزمون بازسنجی" : "نتیجه دو آزمون";
+    const msg = String(
+      resultData?.message ||
+        (locked ? "برای دیدن تحلیل کامل باید PRO را فعال کنی." : "نتیجه آماده است.")
+    );
+
+    return (
+      <View style={[styles.container, { backgroundColor: palette.bg, justifyContent: "center" }]}>
+        <View style={[styles.card, styles.cardFancy, { backgroundColor: palette.glass, borderColor: palette.border }]}>
+          <View style={[styles.accentBarTop, { backgroundColor: locked ? palette.red : palette.lime }]} />
+
+          <Text style={[styles.title, { color: locked ? palette.red : palette.lime, textAlign: "center" }]}>
+            {resultTitle}
+          </Text>
+
+          <Text style={[styles.rtlText, { color: palette.sub, marginTop: 10, lineHeight: 22, textAlign: "right" }]}>
+            {msg}
+          </Text>
+
+          {!!resultError && (
+            <Text style={[styles.rtlText, { color: palette.red, marginTop: 10, fontSize: 12, textAlign: "right" }]}>
+              {resultError}
+            </Text>
+          )}
+
+          <View style={{ height: 16 }} />
+
+          {resultLoading ? (
+            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 10 }}>
+              <ActivityIndicator color={palette.gold} />
+              <Text style={{ color: palette.sub, marginTop: 10, fontSize: 12 }}>در حال دریافت نتیجه…</Text>
+            </View>
+          ) : (
+            <>
+              {locked && (
+                <>
+                  <Pressable
+                    style={[
+                      styles.btnPrimary,
+                      { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)" },
+                    ]}
+                    onPress={() => router.push("/(tabs)/Subscription")}
+                  >
+                    <Text style={[styles.btnText, { color: palette.text }]}>فعال‌سازی PRO برای دیدن تحلیل</Text>
+                  </Pressable>
+
+                  <View style={{ height: 10 }} />
+                </>
+              )}
+
+              <Pressable
+                style={[styles.btn, { borderColor: palette.border }]}
+                onPress={() => {
+                  setResultOpen(false);
+                  router.replace("/(tabs)/Pelekan");
+                }}
+              >
+                <Text style={[styles.btnText, { color: palette.text }]}>فعلاً رفتن به پلکان</Text>
+              </Pressable>
+
+              <View style={{ height: 10 }} />
+
+              <Pressable
+                style={[styles.btnGhost, { borderColor: palette.border, backgroundColor: "rgba(255,255,255,.04)" }]}
+                onPress={() => setResultOpen(false)}
+              >
+                <Text style={[styles.btnText, { color: palette.sub }]}>بازگشت</Text>
+              </Pressable>
+            </>
+          )}
+        </View>
+      </View>
+    );
+  }, [resultOpen, resultData, resultLoading, resultError, palette, router]);
 
   if (!phone) {
     return (
@@ -616,8 +699,10 @@ export default function Review({ me, state, onRefresh }: Props) {
   if (error) {
     return (
       <View style={[styles.root, { backgroundColor: palette.bg, paddingHorizontal: 18 }]}>
-        <Text style={{ color: palette.red, fontWeight: "900", marginBottom: 8 }}>خطا در دریافت داده‌ها</Text>
-        <Text style={{ color: palette.sub, fontSize: 12, lineHeight: 18 }}>{error}</Text>
+        <Text style={{ color: palette.red, fontWeight: "900", marginBottom: 8, textAlign: "center" }}>خطا</Text>
+        <Text style={[styles.rtlText, { color: palette.sub, fontSize: 12, lineHeight: 18, textAlign: "right" }]}>
+          {error}
+        </Text>
 
         <View style={{ height: 14 }} />
 
@@ -628,23 +713,30 @@ export default function Review({ me, state, onRefresh }: Props) {
     );
   }
 
+  // ✅ اگر نتیجه باز است
+  if (resultOpen) {
+    return <View style={{ flex: 1, backgroundColor: palette.bg }}>{ResultScreen}</View>;
+  }
+
   // پایان آزمون 1
   if (session && currentTest === 1 && isEndOfTest) {
     return (
-      <View style={[styles.container, { backgroundColor: palette.bg }]}>
-        <View style={[styles.card, { backgroundColor: palette.glass, borderColor: palette.border }]}>
-          <Text style={[styles.title, { color: palette.text }]}>پایان آزمون بازسنجی</Text>
+      <View style={[styles.container, { backgroundColor: palette.bg, justifyContent: "center" }]}>
+        <View style={[styles.card, styles.cardFancy, { backgroundColor: palette.glass, borderColor: palette.border }]}>
+          <View style={[styles.accentBarTop, { backgroundColor: palette.gold }]} />
 
-          <Text style={{ color: palette.sub, marginTop: 8, lineHeight: 22 }}>
-            آماده‌ای بریم آزمون دوم («آیا برمی‌گرده؟»)؟
+          <Text style={[styles.title, { color: palette.gold, textAlign: "center" }]}>پایان آزمون بازسنجی</Text>
+
+          <Text style={[styles.rtlText, { color: palette.sub, marginTop: 10, lineHeight: 22, textAlign: "right" }]}>
+            آزمون بازسنجی به پایان رسید و پاسخ‌های تو ثبت شد.
+            {"\n"}
+            اگر «ادامه» را بزنی، وارد آزمون دوم («آیا برمی‌گرده؟») می‌شوی و در پایان، نتیجه‌ی کامل نمایش داده می‌شود.
           </Text>
 
           <View style={{ height: 14 }} />
 
-          <Pressable style={[styles.btn, { borderColor: palette.border }]} onPress={goToTest2FromEndOfTest1} disabled={loading}>
-            <Text style={[styles.btnText, { color: palette.text }]}>
-              {loading ? "..." : "ادامه → رفتن به آزمون دوم"}
-            </Text>
+          <Pressable style={[styles.btnPrimary, { borderColor: palette.border }]} onPress={goToTest2} disabled={loading}>
+            <Text style={[styles.btnText, { color: palette.text }]}>{loading ? "..." : "ادامه → رفتن به آزمون دوم"}</Text>
           </Pressable>
 
           <View style={{ height: 10 }} />
@@ -655,25 +747,13 @@ export default function Review({ me, state, onRefresh }: Props) {
             onPress={() =>
               openConfirm(
                 "عبور از آزمون دوم",
-                "قبل از عبور، می‌تونی تحلیل آزمون بازسنجی رو ببینی. تحلیل فقط برای کاربران پرو فعاله.\n\nمی‌خوای تحلیل رو ببینی یا فعلاً وارد پلکان بشی؟",
-                "دیدن تحلیل آزمون اول (پرو)",
-                async () => {
-                  const r = await ensureCompleteTest1();
-                  if (r?.ok) goToAnalysis("test1");
-                },
-                "فعلاً نه، ورود به پلکان",
-                passTest2AndEnterPelekanFromEndTest1
+                "اگر عبور کنی، آزمون دوم انجام نمی‌شود.\nابتدا نتیجه‌ی آزمون بازسنجی نمایش داده می‌شود (ممکن است قفل PRO باشد) و بعد می‌توانی وارد پلکان شوی.",
+                passTest2FromEndOfTest1
               )
             }
           >
-            <Text style={[styles.btnText, { color: palette.red }]}>
-              {loading ? "..." : "عبور از آزمون دوم"}
-            </Text>
+            <Text style={[styles.btnText, { color: palette.red }]}>{loading ? "..." : "عبور از آزمون دوم"}</Text>
           </Pressable>
-
-          <Text style={{ color: "rgba(231,238,247,.55)", marginTop: 10, fontSize: 12 }}>
-            نکته: با «ادامه»، وارد آزمون دوم می‌شوی.
-          </Text>
         </View>
 
         {ConfirmGlass}
@@ -684,37 +764,40 @@ export default function Review({ me, state, onRefresh }: Props) {
   // پایان آزمون 2
   if (session && currentTest === 2 && isEndOfTest) {
     return (
-      <View style={[styles.container, { backgroundColor: palette.bg }]}>
-        <View style={[styles.card, { backgroundColor: palette.glass, borderColor: palette.border }]}>
-          <Text style={[styles.title, { color: palette.text }]}>پایان آزمون «آیا برمی‌گرده؟»</Text>
+      <View style={[styles.container, { backgroundColor: palette.bg, justifyContent: "center" }]}>
+        <View style={[styles.card, styles.cardFancy, { backgroundColor: palette.glass, borderColor: palette.border }]}>
+          <View style={[styles.accentBarTop, { backgroundColor: palette.orange }]} />
 
-          <Text style={{ color: palette.sub, marginTop: 8, lineHeight: 22 }}>
-            حالا می‌تونی تحلیل نهایی (ترکیب دو آزمون) رو ببینی. تحلیل فقط برای کاربران پرو فعاله.
+          <Text style={[styles.title, { color: palette.orange, textAlign: "center" }]}>
+            پایان آزمون «آیا برمی‌گرده؟»
+          </Text>
+
+          <Text style={[styles.rtlText, { color: palette.sub, marginTop: 10, lineHeight: 22, textAlign: "right" }]}>
+            با «ثبت نهایی»، نتیجه‌ی درمان‌محور دو آزمون نمایش داده می‌شود.
+            {"\n"}
+            (ممکن است برای دیدن تحلیل کامل نیاز به PRO باشد.)
           </Text>
 
           <View style={{ height: 14 }} />
 
+          <Pressable style={[styles.btnPrimary, { borderColor: palette.border }]} onPress={finishAfterTest2} disabled={loading}>
+            <Text style={[styles.btnText, { color: palette.text }]}>{loading ? "..." : "ثبت نهایی و رفتن به نتیجه"}</Text>
+          </Pressable>
+
+          <View style={{ height: 10 }} />
+
           <Pressable
-            style={[styles.btn, { borderColor: palette.border }]}
+            style={[styles.btnGhost, { borderColor: "rgba(239,68,68,.45)" }]}
             disabled={loading}
             onPress={() =>
               openConfirm(
-                "تحلیل نهایی دو آزمون",
-                "می‌خوای تحلیل نهایی رو ببینی یا فعلاً وارد پلکان بشی؟",
-                "دیدن تحلیل دو آزمون (پرو)",
-                async () => {
-                  const r = await finalizeAfterTest2();
-                  if (r?.ok) goToAnalysis("final");
-                },
-                "فعلاً نه، ورود به پلکان",
-                async () => {
-                  const r = await finalizeAfterTest2();
-                  if (r?.ok) goToPelekanStart();
-                }
+                "عبور از آزمون دوم",
+                "اگر عبور کنی، آزمون دوم تکمیل نمی‌شود.\nنتیجه ممکن است قفل PRO باشد، ولی می‌توانی وارد پلکان شوی.",
+                passTest2
               )
             }
           >
-            <Text style={[styles.btnText, { color: palette.text }]}>{loading ? "..." : "ادامه"}</Text>
+            <Text style={[styles.btnText, { color: palette.red }]}>{loading ? "..." : "عبور از آزمون دوم"}</Text>
           </Pressable>
         </View>
 
@@ -741,64 +824,122 @@ export default function Review({ me, state, onRefresh }: Props) {
 
   return (
     <View style={[styles.container, { backgroundColor: palette.bg }]}>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 28 }} showsVerticalScrollIndicator={false}>
-        <View style={[styles.card, { backgroundColor: palette.glass, borderColor: palette.border }]}>
-          <Text style={[styles.title, { color: palette.text }]}>{title}</Text>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Animated.View
+          style={[
+            styles.card,
+            styles.cardFancy,
+            {
+              backgroundColor: palette.glass,
+              borderColor: palette.border,
+              opacity: fade,
+              transform: [{ translateY: slideY }],
+            },
+          ]}
+        >
+          <View style={[styles.accentBarTop, { backgroundColor: accentColor }]} />
 
-          <Text style={{ color: palette.sub, marginTop: 6, fontSize: 12 }}>
+          {/* عنوان */}
+          <Text style={[styles.title, { color: titleColor, textAlign: "center" }]}>{title}</Text>
+
+          {/* پیشرفت */}
+          <Text style={[styles.centerText, { color: palette.sub, marginTop: 6, fontSize: 12 }]}>
             سوال {currentIndex + 1} از {questions.length}
           </Text>
 
           <View style={styles.hr} />
 
-          <Text style={[styles.qText, { color: palette.text }]}>{currentQuestion.textFa}</Text>
+          {/* متن سوال */}
+          <Text style={[styles.qText, styles.rtlText, { color: palette.text }]}>
+            {currentQuestion.textFa}
+          </Text>
 
           {!!currentQuestion.helpFa && (
-            <Text style={{ color: "rgba(231,238,247,.55)", marginTop: 8, lineHeight: 20 }}>
+            <Text style={[styles.rtlText, { color: palette.sub2, marginTop: 10, lineHeight: 20, textAlign: "right" }]}>
               {currentQuestion.helpFa}
             </Text>
           )}
 
           <View style={{ height: 16 }} />
 
-          {currentQuestion.options.map((op) => (
-            <Pressable
-              key={`${currentQuestion.index}-${op.value}`}
-              onPress={() => submitAnswer(op.value)}
-              disabled={loading}
-              // @ts-ignore
-              pointerEvents={loading ? "none" : "auto"}
-              style={({ pressed }) => [
-                styles.option,
-                { borderColor: palette.border, opacity: pressed ? 0.85 : 1 },
-              ]}
-            >
-              <Text style={{ color: palette.text, fontSize: 14 }}>{op.labelFa}</Text>
-            </Pressable>
-          ))}
+          {/* گزینه‌ها */}
+          {currentQuestion.options.map((op) => {
+            const isSelected = selectedValue === op.value;
+            return (
+              <Pressable
+                key={`${currentQuestion.index}-${op.value}`}
+                disabled={loading}
+                onPress={() => setSelectedValue(op.value)}
+                style={({ pressed }) => [
+                  styles.option,
+                  {
+                    borderColor: isSelected ? accentColor : palette.border,
+                    backgroundColor: isSelected ? "rgba(255,255,255,.06)" : "transparent",
+                    opacity: pressed ? 0.9 : 1,
+                    transform: [{ scale: pressed ? 0.995 : 1 }],
+                  },
+                ]}
+              >
+                <Text style={[styles.centerText, styles.rtlText, { color: palette.text, fontSize: 14 }]}>
+                  {op.labelFa}
+                </Text>
+              </Pressable>
+            );
+          })}
 
+          {/* CTA ادامه */}
+          <View style={{ height: 6 }} />
+
+          <Pressable
+            disabled={loading || selectedValue === null}
+            onPress={() => {
+              if (selectedValue === null) return;
+              submitAnswer(selectedValue);
+            }}
+            style={[
+              styles.btnPrimary,
+              {
+                borderColor: selectedValue === null ? palette.border : "rgba(212,175,55,.35)",
+                backgroundColor: selectedValue === null ? "rgba(255,255,255,.04)" : "rgba(212,175,55,.10)",
+                opacity: loading ? 0.85 : 1,
+              },
+            ]}
+          >
+            <Text style={[styles.btnText, { color: selectedValue === null ? palette.sub : palette.text }]}>
+              {loading ? "..." : "ادامه"}
+            </Text>
+          </Pressable>
+
+          {/* فقط داخل آزمون دوم: یک دکمه عبور (نه کنار هر گزینه، نه تکراری) */}
           {currentTest === 2 && (
             <>
-              <View style={{ height: 14 }} />
+              <View style={{ height: 10 }} />
               <Pressable
                 disabled={loading}
                 onPress={() =>
                   openConfirm(
                     "عبور از آزمون دوم",
-                    "اگر عبور کنی، آزمون دوم ثبت نمی‌شود ولی می‌توانی وارد پلکان شوی. ادامه؟",
-                    "بله، عبور و ورود به پلکان",
-                    passTest2FromInsideTest2,
-                    "نه",
-                    null
+                    "اگر عبور کنی، آزمون دوم تکمیل نمی‌شود.\nنتیجه ممکن است قفل PRO باشد، ولی می‌توانی وارد پلکان شوی.",
+                    passTest2
                   )
                 }
-                style={[styles.btnGhost, { borderColor: "rgba(239,68,68,.45)" }]}
+                style={[
+                  styles.btnGhost,
+                  {
+                    borderColor: "rgba(239,68,68,.45)",
+                    backgroundColor: "rgba(239,68,68,.06)",
+                  },
+                ]}
               >
                 <Text style={[styles.btnText, { color: palette.red }]}>{loading ? "..." : "عبور از آزمون دوم"}</Text>
               </Pressable>
             </>
           )}
-        </View>
+        </Animated.View>
       </ScrollView>
 
       {ConfirmGlass}
@@ -807,20 +948,55 @@ export default function Review({ me, state, onRefresh }: Props) {
 }
 
 const styles = StyleSheet.create({
+  rtlText: { writingDirection: "rtl" as any },
+  centerText: { textAlign: "center" as any, writingDirection: "rtl" as any },
+
   root: { flex: 1, alignItems: "center", justifyContent: "center" },
   container: { flex: 1 },
+
+  scrollContent: {
+    flexGrow: 1,
+    padding: 16,
+    paddingBottom: 28,
+    justifyContent: "center",
+  },
+
   card: {
     borderWidth: 1,
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 16,
+    overflow: "hidden",
   },
+
+  // کمی رنگ و لعاب (بدون شلوغی)
+  cardFancy: {
+    backgroundColor: "rgba(3,7,18,.92)",
+    shadowColor: "#000",
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
+  },
+
+  accentBarTop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    opacity: 0.95,
+  },
+
   title: { fontSize: 18, fontWeight: "900" },
+
   hr: {
     height: 1,
     backgroundColor: "rgba(255,255,255,.08)",
     marginVertical: 14,
   },
-  qText: { fontSize: 16, fontWeight: "800", lineHeight: 24 },
+
+  qText: { fontSize: 16, fontWeight: "800", lineHeight: 26, textAlign: "right" as any },
+
   option: {
     borderWidth: 1,
     borderRadius: 14,
@@ -828,19 +1004,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     marginBottom: 10,
   },
+
   btn: {
     borderWidth: 1,
     borderRadius: 14,
     paddingVertical: 12,
     alignItems: "center",
   },
+
+  btnPrimary: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+
   btnGhost: {
     borderWidth: 1,
     borderRadius: 14,
     paddingVertical: 12,
     alignItems: "center",
-    backgroundColor: "rgba(239,68,68,.06)",
   },
+
   btnText: { fontSize: 14, fontWeight: "900" },
 
   confirmOverlay: {
