@@ -668,6 +668,7 @@ model PelekanReviewSession {
 
   test1CompletedAt DateTime?
   test2CompletedAt DateTime?
+  test2SkippedAt   DateTime? 
 
   answersJson Json?
   resultJson  Json?
