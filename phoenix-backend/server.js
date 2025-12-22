@@ -2,24 +2,25 @@
 import cors from "cors";
 import "dotenv/config";
 import express from "express";
-import morgan from "morgan";
-import path from "path";
 import fs from "fs";
-import multer from "multer";
 import mime from "mime-types";
+import morgan from "morgan";
+import multer from "multer";
+import path from "path";
 import { fileURLToPath } from "url";
 
 import adminAuth from "./middleware/adminAuth.js";
 import adminRouter from "./routes/admin.js";
-import ticketsRouter from "./routes/tickets.js";
-import publicRouter from "./routes/public.js";   // روتر عمومی که /tickets هم دارد
-import aiRouter from "./routes/ai.js";           // روتر پشتیبانی هوش مصنوعی
-import usersRouter from "./routes/users.js";     // 🔹 روتر یوزرها
-import authRouter from "./routes/auth.js";       // 🔹 روتر جدید احراز هویت / OTP
-import payRouter from "./routes/pay.js";         // 🔹 روتر پرداخت / زرین‌پال (جدید)
-import paymentsRouter from "./routes/payments.js";
+import aiRouter from "./routes/ai.js"; // روتر پشتیبانی هوش مصنوعی
 import announcementsRouter from "./routes/announcements.js";
+import authRouter from "./routes/auth.js"; // 🔹 روتر جدید احراز هویت / OTP
+import payRouter from "./routes/pay.js"; // 🔹 روتر پرداخت / زرین‌پال (جدید)
+import paymentsRouter from "./routes/payments.js";
 import pelekanRouter from "./routes/pelekan.js";
+import pelekanReviewRoutes from "./routes/pelekanReview.js";
+import publicRouter from "./routes/public.js"; // روتر عمومی که /tickets هم دارد
+import ticketsRouter from "./routes/tickets.js";
+import usersRouter from "./routes/users.js"; // 🔹 روتر یوزرها
 
 // ---------- Paths ----------
 const __filename = fileURLToPath(import.meta.url);
@@ -345,7 +346,7 @@ app.get("/api/admin/me", adminAuth, (req, res) =>
 );
 
 app.use("/api/pelekan", pelekanRouter);
-
+app.use("/api/pelekan/review", pelekanReviewRoutes);
 // ---------- 404 ----------
 app.use((req, res) =>
   res.status(404).json({ ok: false, error: "not_found" })

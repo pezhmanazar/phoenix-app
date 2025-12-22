@@ -1,19 +1,19 @@
 // app/(tabs)/_layout.tsx
-import React, { useEffect, useState, useCallback } from "react";
-import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "@react-navigation/native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import BACKEND_URL from "../../constants/backend";
-import { useUser } from "../../hooks/useUser";
+import { useTheme } from "@react-navigation/native";
+import { Tabs } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   AppState,
   AppStateStatus,
-  View,
-  Text,
   I18nManager,
+  Text,
+  View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import BACKEND_URL from "../../constants/backend";
+import { useUser } from "../../hooks/useUser";
 
 /* ===== helpers برای unread ===== */
 const SEEN_KEY = (type: "tech" | "therapy") => `support:lastSeenAdmin:${type}`;
