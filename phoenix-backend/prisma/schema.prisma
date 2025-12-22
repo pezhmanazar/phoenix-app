@@ -21,7 +21,7 @@ enum TicketStatus {
 
 // ⬅️ نوع تیکت
 enum TicketType {
-  tech    // پشتیبانی فنی
+  tech // پشتیبانی فنی
   therapy // ارتباط با درمانگر
 }
 
@@ -65,7 +65,7 @@ model Message {
   mime        String?
   size        Int?
   durationSec Int?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime    @default(now())
 
   @@index([ticketId])
 }
@@ -270,7 +270,7 @@ model PelekanProgress {
   startedAt    DateTime @default(now())
   lastActiveAt DateTime @default(now())
 
-  resetCount Int      @default(0)
+  resetCount Int       @default(0)
   resetAt    DateTime?
 
   version Int @default(1)
@@ -298,8 +298,8 @@ enum AssessmentKind {
   // ✅ NEW: Baseline اختلال شکست عشقی برای شروع پلکان
   hb_baseline
 
-  heartbreak_simple   // آزمون فعلیِ بدون زیرمقیاس
-  heartbreak_scales   // آزمون آینده‌دار با زیرمقیاس
+  heartbreak_simple // آزمون فعلیِ بدون زیرمقیاس
+  heartbreak_scales // آزمون آینده‌دار با زیرمقیاس
 
   // ✅ NEW: بازسنجی رابطه (نتیجه ممکن است PRO-lock شود)
   relationship_rescan
@@ -317,9 +317,9 @@ model AssessmentResult {
   kind AssessmentKind
 
   totalScore Int?
-  scales Json?
+  scales     Json?
 
-  wave Int @default(1)
+  wave    Int      @default(1)
   takenAt DateTime @default(now())
 
   // ✅ NEW (برای بازسنجی رابطه): آیا نمایش نتیجه برای کاربر قفل است؟
@@ -361,7 +361,7 @@ model AssessmentSession {
   // قفل نتیجه برای PRO (برای بازسنجی/تحلیل‌های پولی)
   proLocked Boolean @default(false)
 
-  startedAt   DateTime @default(now())
+  startedAt   DateTime  @default(now())
   completedAt DateTime?
 
   createdAt DateTime @default(now())
@@ -419,18 +419,18 @@ model PelekanDay {
 }
 
 model PelekanTask {
-  id          String     @id @default(uuid())
-  dayId       String
-  day         PelekanDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  id    String     @id @default(uuid())
+  dayId String
+  day   PelekanDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
 
   titleFa     String
   description String?
-  sortOrder   Int @default(0)
+  sortOrder   Int     @default(0)
 
   // اگر فعلاً وزن دقیق نداری، همه 10 یا 20 بده.
   weightPercent Int @default(10)
 
-  xpReward   Int @default(0)
+  xpReward   Int     @default(0)
   isRequired Boolean @default(false)
 
   userProgress PelekanTaskProgress[]
@@ -457,9 +457,9 @@ model PelekanDayProgress {
 
   completionPercent Int @default(0)
 
-  startedAt      DateTime @default(now())
+  startedAt      DateTime  @default(now())
   deadlineAt     DateTime? // ✅ UPDATED: اختیاری (اپ/بک‌اند هنگام start تنظیم می‌کند)
-  lastActivityAt DateTime @default(now())
+  lastActivityAt DateTime  @default(now())
   completedAt    DateTime?
 
   // ✅ NEW: تمایز «۷۰٪ رسید» و «۱۰۰٪ شد»
@@ -470,8 +470,8 @@ model PelekanDayProgress {
   unlockedNextAt DateTime? // ✅ NEW (معمولاً startedAt + 24h)
 
   // ✅ NEW: اگر به 70% نرسید و روز ریست شد
-  resetCount Int      @default(0) // ✅ NEW
-  lastResetAt DateTime?           // ✅ NEW
+  resetCount  Int       @default(0) // ✅ NEW
+  lastResetAt DateTime? // ✅ NEW
 
   xpEarned Int @default(0)
 
@@ -492,7 +492,7 @@ model PelekanTaskProgress {
   dayId String
   day   PelekanDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
 
-  isDone Boolean  @default(false)
+  isDone Boolean   @default(false)
   doneAt DateTime?
 
   @@unique([userId, taskId])
@@ -534,7 +534,7 @@ model UserMedal {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   medalId String
-  medal   Medal @relation(fields: [medalId], references: [id], onDelete: Cascade)
+  medal   Medal  @relation(fields: [medalId], references: [id], onDelete: Cascade)
 
   earnedAt DateTime @default(now())
 
@@ -612,24 +612,26 @@ enum ReviewTestNo {
 }
 
 model ReviewQuestionSet {
-  id          String   @id @default(uuid())
-  code        String   // e.g. "review"
-  version     Int      // 1,2,3...
+  id          String  @id @default(uuid())
+  code        String // e.g. "review"
+  version     Int // 1,2,3...
   titleFa     String?
   description String?
-  isActive    Boolean  @default(true)
+  isActive    Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   questions ReviewQuestion[]
 
+  sessions PelekanReviewSession[]
+
   @@unique([code, version])
   @@index([code, isActive])
 }
 
 model ReviewQuestion {
-  id            String   @id @default(uuid())
+  id            String            @id @default(uuid())
   questionSetId String
   questionSet   ReviewQuestionSet @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
 
@@ -676,8 +678,8 @@ model ReviewOption {
 
 enum PelekanReviewStatus {
   in_progress
-  completed_locked  // هر دو آزمون تمام شده، نتیجه پشت paywall
-  unlocked          // پرو شده و نتیجه قابل نمایش
+  completed_locked // هر دو آزمون تمام شده، نتیجه پشت paywall
+  unlocked // پرو شده و نتیجه قابل نمایش
 }
 
 model PelekanReviewSession {
@@ -696,7 +698,7 @@ model PelekanReviewSession {
   currentIndex Int @default(0) // شماره سوال/آیتم جاری
 
   // ✅ زمان‌ها
-  startedAt      DateTime @default(now())
+  startedAt      DateTime  @default(now())
   completedAt    DateTime?
   paywallShownAt DateTime?
   unlockedAt     DateTime?
