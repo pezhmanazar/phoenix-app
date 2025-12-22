@@ -11,6 +11,8 @@ import { useUser } from "../../hooks/useUser";
 import Baseline from "../../components/pelekan/Baseline";
 import ChoosePath from "../../components/pelekan/ChoosePath";
 import IdlePlaceholder from "../../components/pelekan/IdlePlaceholder";
+import Review from "../../components/pelekan/Review";
+
 import TreatmentView, {
   ListItem,
   PelekanDay,
@@ -21,8 +23,8 @@ import TreatmentView, {
 /* ----------------------------- Types ----------------------------- */
 type PlanStatus = "free" | "pro" | "expired" | "expiring";
 
-// ✅ اینجا review رو هم اضافه کن (همون چیزی که سرور می‌فرسته)
-type TabState = "idle" | "baseline_assessment" | "choose_path" | "treating" | "review";
+// ✅ سرور tabState=review می‌فرسته، پس باید اینجا هم باشه
+type TabState = "idle" | "baseline_assessment" | "choose_path" | "review" | "treating";
 
 type Paywall = {
   needed: boolean;
@@ -152,6 +154,7 @@ export default function PelekanTab() {
   // ✅ لیست پلکان فقط وقتی treating هست
   const pathItems: ListItem[] = useMemo(() => {
     if (state.tabState !== "treating") return [];
+
     const stages = state.stages || [];
     const list: ListItem[] = [];
     let zigCounter = 0;
@@ -172,6 +175,7 @@ export default function PelekanTab() {
 
   const onTapActiveDay = useCallback((day: PelekanDay) => {
     // TODO: بعداً route بده به صفحه day/tasks
+    // router.push(`/pelekan/day/${day.id}`)
   }, []);
 
   if (loading) {
@@ -188,10 +192,7 @@ export default function PelekanTab() {
   }
 
   return (
-    <SafeAreaView
-      style={[styles.root, { backgroundColor: palette.bg }]}
-      edges={["top", "left", "right", "bottom"]}
-    >
+    <SafeAreaView style={[styles.root, { backgroundColor: palette.bg }]} edges={["top", "left", "right", "bottom"]}>
       <View pointerEvents="none" style={[styles.bgGlowTop, { backgroundColor: palette.glowTop }]} />
       <View pointerEvents="none" style={[styles.bgGlowBottom, { backgroundColor: palette.glowBottom }]} />
 
@@ -225,19 +226,13 @@ export default function PelekanTab() {
         ) : state.tabState === "choose_path" ? (
           <ChoosePath me={me} state={state} onRefresh={fetchState} />
         ) : state.tabState === "review" ? (
-          // ✅ فعلاً placeholder
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 }}>
-            <Text style={{ color: "#F9FAFB", fontWeight: "900", fontSize: 16 }}>بازسنجی رابطه</Text>
-            <Text style={{ color: "rgba(231,238,247,.70)", fontWeight: "700", marginTop: 8, textAlign: "center" }}>
-              این بخش در حال تکمیل است. (state=review)
-            </Text>
-          </View>
+          // ✅ ریویو واقعی (نه placeholder)
+          <Review me={me} state={state} onRefresh={fetchState} />
         ) : state.tabState === "treating" ? (
           <FlatList
             data={pathItems}
             keyExtractor={(it) => it.id}
             renderItem={({ item, index }) => (
-              // ✅ اینجا TreatmentView تایپ خودش رو می‌خواد؛ ما state رو به همون شکل cast می‌کنیم
               <TreatmentView
                 item={item}
                 index={index}
