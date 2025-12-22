@@ -362,6 +362,26 @@ router.get("/state", authUser, async (req, res) => {
       where: { phone },
       select: { id: true, plan: true, planExpiresAt: true },
     });
+
+    // ✅ review session (بازسنجی رابطه / آیا برمی‌گرده؟)
+    const reviewSession = await prisma.pelekanReviewSession.findUnique({
+      where: { userId: user.id },
+      select: {
+        id: true,
+        status: true,
+        chosenPath: true,
+        currentTest: true,
+        currentIndex: true,
+        test1CompletedAt: true,
+        test2CompletedAt: true,
+        paywallShownAt: true,
+        unlockedAt: true,
+        startedAt: true,
+        completedAt: true,
+        updatedAt: true,
+      },
+    });
+
     if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
 
     const basePlan = getPlanStatus(user.plan, user.planExpiresAt);
@@ -426,7 +446,10 @@ router.get("/state", authUser, async (req, res) => {
           },
           baseline: baselineSession ? { session: baselineSession, content: toBaselineUiContent() } : null,
           path: null,
-          review: null,
+          review: {
+            hasSession: !!reviewSession,
+            session: reviewSession,
+          },
           bastanIntro: null,
           treatment: null,
           hasContent: false,
@@ -524,7 +547,10 @@ router.get("/state", authUser, async (req, res) => {
         },
         baseline: baselineSession ? { session: baselineSession, content: toBaselineUiContent() } : null,
         path: null,
-        review: null,
+        review: {
+          hasSession: !!reviewSession,
+          session: reviewSession,
+        },
         bastanIntro: null,
         treatment,
         hasContent: true,
