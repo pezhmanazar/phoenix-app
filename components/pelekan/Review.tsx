@@ -647,7 +647,7 @@ export default function Review({ me, state, onRefresh }: Props) {
                     ]}
                     onPress={() => router.push("/(tabs)/Subscription")}
                   >
-                    <Text style={[styles.btnText, { color: palette.text }]}>فعال‌سازی PRO برای دیدن تحلیل</Text>
+                    <Text style={[styles.btnText, { color: palette.text }]}>فعال‌سازی اشتراک پرو برای دیدن تحلیل</Text>
                   </Pressable>
 
                   <View style={{ height: 10 }} />
@@ -661,7 +661,7 @@ export default function Review({ me, state, onRefresh }: Props) {
                   router.replace("/(tabs)/Pelekan");
                 }}
               >
-                <Text style={[styles.btnText, { color: palette.text }]}>فعلاً رفتن به پلکان</Text>
+                <Text style={[styles.btnText, { color: palette.text }]}>رفتن به پلکان درمان</Text>
               </Pressable>
 
               <View style={{ height: 10 }} />
@@ -772,10 +772,8 @@ export default function Review({ me, state, onRefresh }: Props) {
             پایان آزمون «آیا برمی‌گرده؟»
           </Text>
 
-          <Text style={[styles.rtlText, { color: palette.sub, marginTop: 10, lineHeight: 22, textAlign: "right" }]}>
+          <Text style={[styles.rtlText, { color: palette.sub, marginTop: 10, lineHeight: 22, textAlign: "center" }]}>
             با «ثبت نهایی»، نتیجه‌ی درمان‌محور دو آزمون نمایش داده می‌شود.
-            {"\n"}
-            (ممکن است برای دیدن تحلیل کامل نیاز به PRO باشد.)
           </Text>
 
           <View style={{ height: 14 }} />
@@ -785,20 +783,6 @@ export default function Review({ me, state, onRefresh }: Props) {
           </Pressable>
 
           <View style={{ height: 10 }} />
-
-          <Pressable
-            style={[styles.btnGhost, { borderColor: "rgba(239,68,68,.45)" }]}
-            disabled={loading}
-            onPress={() =>
-              openConfirm(
-                "عبور از آزمون دوم",
-                "اگر عبور کنی، آزمون دوم تکمیل نمی‌شود.\nنتیجه ممکن است قفل PRO باشد، ولی می‌توانی وارد پلکان شوی.",
-                passTest2
-              )
-            }
-          >
-            <Text style={[styles.btnText, { color: palette.red }]}>{loading ? "..." : "عبور از آزمون دوم"}</Text>
-          </Pressable>
         </View>
 
         {ConfirmGlass}
@@ -913,32 +897,6 @@ export default function Review({ me, state, onRefresh }: Props) {
               {loading ? "..." : "ادامه"}
             </Text>
           </Pressable>
-
-          {/* فقط داخل آزمون دوم: یک دکمه عبور (نه کنار هر گزینه، نه تکراری) */}
-          {currentTest === 2 && (
-            <>
-              <View style={{ height: 10 }} />
-              <Pressable
-                disabled={loading}
-                onPress={() =>
-                  openConfirm(
-                    "عبور از آزمون دوم",
-                    "اگر عبور کنی، آزمون دوم تکمیل نمی‌شود.\nنتیجه ممکن است قفل PRO باشد، ولی می‌توانی وارد پلکان شوی.",
-                    passTest2
-                  )
-                }
-                style={[
-                  styles.btnGhost,
-                  {
-                    borderColor: "rgba(239,68,68,.45)",
-                    backgroundColor: "rgba(239,68,68,.06)",
-                  },
-                ]}
-              >
-                <Text style={[styles.btnText, { color: palette.red }]}>{loading ? "..." : "عبور از آزمون دوم"}</Text>
-              </Pressable>
-            </>
-          )}
         </Animated.View>
       </ScrollView>
 
