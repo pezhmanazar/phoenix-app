@@ -13,7 +13,7 @@ import BACKEND_URL from "../../constants/backend";
 
 type Props = {
   me: any;
-  state: any;
+  state: any; // <-- مهم: این باید از parent پاس داده بشه
   onRefresh?: () => Promise<void> | void;
 };
 
@@ -26,7 +26,7 @@ type ToastState = {
   tone: "info" | "success" | "danger";
 };
 
-export default function ChoosePath({ me, onRefresh }: Props) {
+export default function ChoosePath({ me, state, onRefresh }: Props) {
   const [busy, setBusy] = useState<BusyKind>(null);
 
   // entrance animation
@@ -37,6 +37,7 @@ export default function ChoosePath({ me, onRefresh }: Props) {
   const toastY = useRef(new Animated.Value(14)).current;
   const toastA = useRef(new Animated.Value(0)).current;
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [toast, setToast] = useState<ToastState>({
     visible: false,
     title: "",
@@ -63,6 +64,14 @@ export default function ChoosePath({ me, onRefresh }: Props) {
     ]).start();
   }, [fade, slide]);
 
+  // ✅ فقط برای دیباگ (اختیاری)
+  useEffect(() => {
+    if (!state) return;
+    console.log("[ChoosePath] state.tabState =", state?.tabState);
+    console.log("[ChoosePath] state.review =", state?.review?.session);
+    console.log("[ChoosePath] state.paywall =", state?.ui?.paywall);
+  }, [state]);
+
   const palette = useMemo(
     () => ({
       bg: "#0b0f14",
@@ -71,13 +80,10 @@ export default function ChoosePath({ me, onRefresh }: Props) {
       faint: "rgba(231,238,247,.55)",
       glass: "rgba(3,7,18,.86)",
       border: "rgba(255,255,255,.10)",
-
       btnBg: "rgba(255,255,255,.06)",
       btnBorder: "rgba(255,255,255,.14)",
-
       mintBorder: "rgba(74, 222, 128, .22)",
       blueBorder: "rgba(96, 165, 250, .22)",
-
       toastGlass: "rgba(3,7,18,.92)",
       toastBorder: "rgba(255,255,255,.14)",
       toneInfo: "rgba(96,165,250,.22)",
@@ -92,7 +98,6 @@ export default function ChoosePath({ me, onRefresh }: Props) {
   const showToast = useCallback(
     (next: Omit<ToastState, "visible">, ms = 2400) => {
       if (toastTimer.current) clearTimeout(toastTimer.current);
-
       setToast({ visible: true, ...next });
 
       toastA.setValue(0);
@@ -141,8 +146,8 @@ export default function ChoosePath({ me, onRefresh }: Props) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-
     const text = await res.text();
+
     let json: any = null;
     try {
       json = text ? JSON.parse(text) : null;
@@ -153,40 +158,25 @@ export default function ChoosePath({ me, onRefresh }: Props) {
   };
 
   const handleBadResponse = (res: Response, json: any, text: string) => {
-    // اگر روت نبود
     if (res.status === 404) {
       showToast(
-        {
-          tone: "info",
-          title: "هنوز آماده نیست",
-          message: "این بخش هنوز روی سرور فعال نشده.",
-        },
+        { tone: "info", title: "هنوز آماده نیست", message: "این بخش هنوز روی سرور فعال نشده." },
         2800
       );
       return;
     }
 
-    // اگر JSON استاندارد داشت
     if (json && typeof json === "object") {
       const err = json.error || json.message || "REQUEST_FAILED";
       showToast(
-        {
-          tone: "danger",
-          title: "درخواست ناموفق بود",
-          message: `(${res.status}) ${String(err)}`,
-        },
+        { tone: "danger", title: "درخواست ناموفق بود", message: `(${res.status}) ${String(err)}` },
         3200
       );
       return;
     }
 
-    // fallback
     showToast(
-      {
-        tone: "danger",
-        title: "خطای ارتباط",
-        message: `پاسخ معتبر نبود. (HTTP ${res.status})`,
-      },
+      { tone: "danger", title: "خطای ارتباط", message: `پاسخ معتبر نبود. (HTTP ${res.status})` },
       3200
     );
   };
@@ -202,7 +192,6 @@ export default function ChoosePath({ me, onRefresh }: Props) {
 
     try {
       setBusy(choice);
-
       const { res, json, text } = await postJsonSafe(CHOOSE_URL, { phone, choice });
 
       if (!res.ok || !json?.ok) {
@@ -219,13 +208,12 @@ export default function ChoosePath({ me, onRefresh }: Props) {
       );
 
       await onRefresh?.();
+
+      // ✅ دیباگ بعد از refresh (اگر parent سریع state رو آپدیت کنه)
+      console.log("[ChoosePath] after refresh -> expecting tabState='review' when choice=review");
     } catch (e) {
       showToast(
-        {
-          tone: "danger",
-          title: "ارتباط برقرار نشد",
-          message: "اینترنت یا دسترسی به سرور را بررسی کن و دوباره بزن.",
-        },
+        { tone: "danger", title: "ارتباط برقرار نشد", message: "اینترنت یا دسترسی به سرور را بررسی کن و دوباره بزن." },
         3200
       );
     } finally {
@@ -233,14 +221,14 @@ export default function ChoosePath({ me, onRefresh }: Props) {
     }
   };
 
-  const toneBorder = toast.tone === "success" ? palette.toneSuccess : toast.tone === "danger" ? palette.toneDanger : palette.toneInfo;
+  const toneBorder =
+    toast.tone === "success" ? palette.toneSuccess : toast.tone === "danger" ? palette.toneDanger : palette.toneInfo;
 
   return (
     <View style={[styles.full, { backgroundColor: palette.bg }]}>
       <Animated.View style={[styles.centerWrap, { opacity: fade, transform: [{ translateY: slide }] }]}>
         <View style={[styles.card, { backgroundColor: palette.glass, borderColor: palette.border }]}>
           <Text style={[styles.title, { color: palette.text }]}>انتخاب مسیر</Text>
-
           <Text style={[styles.subText, { color: palette.sub }]}>
             یکی برای «رها کردن و جلو رفتن»، یکی برای «بررسی واقع‌بینانه احتمال ترمیم رابطه».
           </Text>
@@ -261,7 +249,6 @@ export default function ChoosePath({ me, onRefresh }: Props) {
           >
             <Text style={[styles.choiceTitle, { color: palette.text }]}>می‌خوام فراموشش کنم</Text>
             <Text style={[styles.choiceDesc, { color: palette.faint }]}>ورود به پلکان و شروع مسیر درمان</Text>
-
             <View style={{ marginTop: 12 }}>
               <View style={[styles.glassBtn, { backgroundColor: palette.btnBg, borderColor: palette.btnBorder }]}>
                 {busy === "skip_review" ? (
@@ -297,7 +284,6 @@ export default function ChoosePath({ me, onRefresh }: Props) {
             <Text style={[styles.choiceDesc, { color: palette.faint }]}>
               بازسنجی رابطه با آزمون‌ها (نتیجه نهایی بعد از PRO نمایش داده می‌شود)
             </Text>
-
             <View style={{ marginTop: 12 }}>
               <View style={[styles.glassBtn, { backgroundColor: palette.btnBg, borderColor: palette.btnBorder }]}>
                 {busy === "review" ? (
@@ -357,20 +343,12 @@ const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 18, paddingVertical: 16, paddingHorizontal: 16 },
   title: { fontSize: 18, fontWeight: "900", textAlign: "center" },
   subText: { marginTop: 10, fontSize: 13, lineHeight: 20, textAlign: "center", fontWeight: "700" },
-
   choiceCard: { borderRadius: 16, borderWidth: 1, paddingVertical: 14, paddingHorizontal: 14 },
   choiceTitle: { fontSize: 14, fontWeight: "900", textAlign: "right", lineHeight: 20 },
   choiceDesc: { marginTop: 6, fontSize: 12, fontWeight: "700", textAlign: "right", lineHeight: 18 },
-
   glassBtn: { paddingVertical: 12, borderRadius: 14, alignItems: "center", justifyContent: "center", borderWidth: 1 },
   glassBtnText: { fontSize: 13, fontWeight: "900" },
-
-  toastWrap: {
-    position: "absolute",
-    left: 14,
-    right: 14,
-    bottom: 18,
-  },
+  toastWrap: { position: "absolute", left: 14, right: 14, bottom: 18 },
   toastCard: {
     borderWidth: 1,
     borderRadius: 16,
@@ -379,11 +357,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
-  toastTone: {
-    width: 10,
-    height: 40,
-    borderRadius: 8,
-  },
+  toastTone: { width: 10, height: 40, borderRadius: 8 },
   toastTitle: { fontSize: 13, fontWeight: "900", textAlign: "right" },
   toastMsg: { marginTop: 4, fontSize: 12, fontWeight: "700", textAlign: "right", lineHeight: 18 },
 });

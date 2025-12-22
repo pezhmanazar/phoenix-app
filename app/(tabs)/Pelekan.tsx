@@ -3,25 +3,32 @@ import { useFocusEffect } from "@react-navigation/native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useUser } from "../../hooks/useUser";
 
 import PlanStatusBadge from "../../components/PlanStatusBadge";
 import TopBanner from "../../components/TopBanner";
+import { useUser } from "../../hooks/useUser";
 
 import Baseline from "../../components/pelekan/Baseline";
 import ChoosePath from "../../components/pelekan/ChoosePath";
 import IdlePlaceholder from "../../components/pelekan/IdlePlaceholder";
-
-// ✅ این همون فایل جدیدته: components/pelekan/TreatmentView.tsx
-import TreatmentView, { ListItem, PelekanDay, PelekanStage } from "../../components/pelekan/TreatmentView";
+import TreatmentView, {
+  ListItem,
+  PelekanDay,
+  PelekanStage,
+  PelekanState as TreatmentViewState,
+} from "../../components/pelekan/TreatmentView";
 
 /* ----------------------------- Types ----------------------------- */
 type PlanStatus = "free" | "pro" | "expired" | "expiring";
-type TabState = "idle" | "baseline_assessment" | "choose_path" | "treating";
+
+// ✅ اینجا review رو هم اضافه کن (همون چیزی که سرور می‌فرسته)
+type TabState = "idle" | "baseline_assessment" | "choose_path" | "treating" | "review";
+
 type Paywall = {
   needed: boolean;
   reason: "start_treatment" | "continue_treatment" | null;
 };
+
 type PelekanFlags = {
   suppressPaywall?: boolean;
   isBaselineInProgress?: boolean;
@@ -40,19 +47,18 @@ type PelekanState = {
   path: any | null;
   review: any | null;
   bastanIntro: any | null;
-
-  // ✅ برای TS: ممکنه سرور بده یا نده
   treatment: any | null;
-
   hasContent: boolean;
-  stages: PelekanStage[]; // ✅ از تایپ TreatmentView استفاده کردیم
-  progress: {
-    activeDayId: string | null;
-    dayProgress: any[];
-    taskProgress: any[];
-    xpTotal: number;
-    streak: any;
-  } | null;
+  stages: PelekanStage[];
+  progress:
+    | {
+        activeDayId: string | null;
+        dayProgress: any[];
+        taskProgress: any[];
+        xpTotal: number;
+        streak: any;
+      }
+    | null;
 };
 
 const initialState: PelekanState = {
@@ -94,13 +100,14 @@ export default function PelekanTab() {
         { headers: { "Cache-Control": "no-store" } }
       );
 
-      const json = await res.json();
+      const json = await res.json().catch(() => null);
       if (!json?.ok) {
         setState(initialState);
         return;
       }
 
       const data = json.data || {};
+
       const merged: PelekanState = {
         ...initialState,
         ...data,
@@ -142,7 +149,7 @@ export default function PelekanTab() {
     []
   );
 
-  // ✅ لیست پلکان برای FlatList (فقط وقتی treating هست)
+  // ✅ لیست پلکان فقط وقتی treating هست
   const pathItems: ListItem[] = useMemo(() => {
     if (state.tabState !== "treating") return [];
     const stages = state.stages || [];
@@ -164,10 +171,7 @@ export default function PelekanTab() {
   }, [state.tabState, state.stages]);
 
   const onTapActiveDay = useCallback((day: PelekanDay) => {
-    // فعلاً فقط اینجاست تا کلیک کار کنه.
-    // بعداً اینجا می‌فرستی به صفحه Day / Task.
-    // مثلا: router.push(`/pelekan/day/${day.id}`)
-    // فعلاً هیچ کاری نمی‌کنیم.
+    // TODO: بعداً route بده به صفحه day/tasks
   }, []);
 
   if (loading) {
@@ -184,11 +188,14 @@ export default function PelekanTab() {
   }
 
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: palette.bg }]} edges={["top", "left", "right", "bottom"]}>
+    <SafeAreaView
+      style={[styles.root, { backgroundColor: palette.bg }]}
+      edges={["top", "left", "right", "bottom"]}
+    >
       <View pointerEvents="none" style={[styles.bgGlowTop, { backgroundColor: palette.glowTop }]} />
       <View pointerEvents="none" style={[styles.bgGlowBottom, { backgroundColor: palette.glowBottom }]} />
 
-      {/* Header (همون ساختار قبلی) */}
+      {/* Header */}
       <View
         onLayout={(e) => {
           const h = e?.nativeEvent?.layout?.height ?? 0;
@@ -201,12 +208,10 @@ export default function PelekanTab() {
         </View>
 
         <View style={[styles.topCol, styles.colCenter]}>
-          {/* فعلاً placeholder — بعداً XP و استریک جدید رو اینجا می‌ذاریم */}
           <Text style={{ color: palette.text, fontWeight: "900" }}>پلکان</Text>
         </View>
 
         <View style={[styles.topCol, styles.colRight]}>
-          {/* فعلاً placeholder */}
           <Text style={{ color: "rgba(231,238,247,.7)", fontWeight: "900" }}> </Text>
         </View>
       </View>
@@ -219,12 +224,26 @@ export default function PelekanTab() {
           <Baseline me={me} state={state} onRefresh={fetchState} />
         ) : state.tabState === "choose_path" ? (
           <ChoosePath me={me} state={state} onRefresh={fetchState} />
+        ) : state.tabState === "review" ? (
+          // ✅ فعلاً placeholder
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 }}>
+            <Text style={{ color: "#F9FAFB", fontWeight: "900", fontSize: 16 }}>بازسنجی رابطه</Text>
+            <Text style={{ color: "rgba(231,238,247,.70)", fontWeight: "700", marginTop: 8, textAlign: "center" }}>
+              این بخش در حال تکمیل است. (state=review)
+            </Text>
+          </View>
         ) : state.tabState === "treating" ? (
           <FlatList
             data={pathItems}
             keyExtractor={(it) => it.id}
             renderItem={({ item, index }) => (
-              <TreatmentView item={item} index={index} state={state} onTapActiveDay={onTapActiveDay} />
+              // ✅ اینجا TreatmentView تایپ خودش رو می‌خواد؛ ما state رو به همون شکل cast می‌کنیم
+              <TreatmentView
+                item={item}
+                index={index}
+                state={state as unknown as TreatmentViewState}
+                onTapActiveDay={onTapActiveDay}
+              />
             )}
             inverted
             contentContainerStyle={{
@@ -245,7 +264,6 @@ export default function PelekanTab() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-
   bgGlowTop: {
     position: "absolute",
     top: -260,
@@ -262,7 +280,6 @@ const styles = StyleSheet.create({
     height: 560,
     borderRadius: 999,
   },
-
   topBar: {
     borderBottomWidth: 1,
     paddingHorizontal: 16,

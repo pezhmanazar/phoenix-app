@@ -8,6 +8,9 @@ import Svg, { Path } from "react-native-svg";
 export type PlanStatus = "free" | "pro" | "expired" | "expiring";
 export type TreatmentAccess = "full" | "frozen_current" | "archive_only";
 
+// ✅ اینجا review رو اضافه کردیم
+export type TabState = "idle" | "baseline_assessment" | "choose_path" | "treating" | "review";
+
 export type PelekanTask = {
   id: string;
   titleFa: string;
@@ -47,7 +50,7 @@ export type DayProgressRow = {
 };
 
 export type PelekanState = {
-  tabState: "idle" | "baseline_assessment" | "choose_path" | "treating";
+  tabState: TabState;
   user: { planStatus: PlanStatus; daysLeft: number };
   treatmentAccess: TreatmentAccess;
   stages: PelekanStage[];
@@ -192,7 +195,6 @@ export default function TreatmentView({ item, state, onTapActiveDay }: Props) {
   if (item.kind === "header") {
     const { stage } = item;
     const icon = stageIcon(stage.code);
-
     return (
       <View style={{ alignItems: "center", alignSelf: "center", width: PATH_W }}>
         <View
@@ -227,7 +229,6 @@ export default function TreatmentView({ item, state, onTapActiveDay }: Props) {
   const available = !!activeDayId && day.id === activeDayId;
   const done = isDone(day.id);
   const locked = !done && !available;
-
   const canEnter = available ? canEnterActive : false;
 
   const nodeX = zig === "L" ? NODE_X_LEFT : NODE_X_RIGHT;
@@ -239,6 +240,7 @@ export default function TreatmentView({ item, state, onTapActiveDay }: Props) {
 
   const bottomY = CELL_H;
   const topY = 0;
+
   const pathD = `
     M ${MID_X} ${bottomY}
     C ${MID_X} ${bottomY - 30}, ${nodeX} ${CELL_H * 0.65}, ${nodeX} ${CELL_H * 0.5}
@@ -264,7 +266,11 @@ export default function TreatmentView({ item, state, onTapActiveDay }: Props) {
         },
       ]}
     >
-      <Ionicons name={done ? "checkmark-circle" : locked ? "lock-closed-outline" : "star"} size={22} color={iconCol} />
+      <Ionicons
+        name={done ? "checkmark-circle" : locked ? "lock-closed-outline" : "star"}
+        size={22}
+        color={iconCol}
+      />
       <Text style={[styles.nodeText, { color: labelCol }]}>روز {day.dayNumberInStage}</Text>
     </TouchableOpacity>
   );
@@ -304,7 +310,6 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   stepHeaderText: { fontWeight: "900", fontSize: 16 },
-
   node: {
     position: "absolute",
     width: NODE_R * 2,
