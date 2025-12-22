@@ -601,6 +601,72 @@ model NoContactLog {
 }
 
 /**
+ * -------------------- Review Question Bank (DB) --------------------
+ * ✅ بانک سوالات نسخه‌بندی‌شده برای Review (Test1/Test2)
+ * ✅ سشن‌ها به یک QuestionSet قفل می‌شوند تا وسط کار با آپدیت سوالات خراب نشود.
+ */
+
+enum ReviewTestNo {
+  TEST1
+  TEST2
+}
+
+model ReviewQuestionSet {
+  id          String   @id @default(uuid())
+  code        String   // e.g. "review"
+  version     Int      // 1,2,3...
+  titleFa     String?
+  description String?
+  isActive    Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  questions ReviewQuestion[]
+
+  @@unique([code, version])
+  @@index([code, isActive])
+}
+
+model ReviewQuestion {
+  id            String   @id @default(uuid())
+  questionSetId String
+  questionSet   ReviewQuestionSet @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
+
+  testNo ReviewTestNo
+  order  Int
+
+  key    String?
+  textFa String
+  helpFa String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  options ReviewOption[]
+
+  @@unique([questionSetId, testNo, order])
+  @@index([questionSetId, testNo])
+}
+
+model ReviewOption {
+  id String @id @default(uuid())
+
+  questionId String
+  question   ReviewQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  order   Int
+  labelFa String
+  value   Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([questionId, order])
+  @@unique([questionId, value])
+}
+
+/**
  * -------------------- Pelekan Review Session (NEW) --------------------
  * ✅ این جدول «ضروری» است چون:
  * - هر دو آزمون پشت سر هم انجام می‌شوند
@@ -623,11 +689,11 @@ model PelekanReviewSession {
   status PelekanReviewStatus @default(in_progress)
 
   // ✅ مسیر انتخابی بعد از آزمون heartbreak: skip_review یا do_review
-  chosenPath String? // "skip_review" | "review" // ✅ NEW
+  chosenPath String? // "skip_review" | "review"
 
   // ✅ پیشرفت قدم‌به‌قدم داخل دو آزمون (برای resume بعد از خروج)
-  currentTest  Int @default(1) // 1 یا 2  // ✅ NEW
-  currentIndex Int @default(0) // شماره سوال/آیتم جاری // ✅ NEW
+  currentTest  Int @default(1) // 1 یا 2
+  currentIndex Int @default(0) // شماره سوال/آیتم جاری
 
   // ✅ زمان‌ها
   startedAt      DateTime @default(now())
@@ -643,6 +709,12 @@ model PelekanReviewSession {
   answersJson Json? // همه پاسخ‌ها + اسکورهای A/B/C
   resultJson  Json? // وضعیت قرمز/زرد/سبز + پیام‌ها
 
+  // ✅ NEW: قفل شدن سشن به نسخه سوالات
+  questionSetId String?
+  questionSet   ReviewQuestionSet? @relation(fields: [questionSetId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([questionSetId])
 }
