@@ -336,16 +336,6 @@ function getMissingSteps(answersJson) {
   return missing;
 }
 
-/**
- * Finds the first missing step in a session.
- * - consent: any consentSteps not acknowledged
- * - question: any question without a numeric answer
- */
-function getFirstMissingStep(answersJson) {
-  const missing = getMissingSteps(answersJson);
-  return missing.length ? missing[0] : null;
-}
-
 /** WCDN workaround: for baseline endpoints, prefer 200 + {ok:false} instead of 4xx (to avoid HTML error pages) */
 function baselineError(res, error, extra = {}) {
   return res.json({ ok: false, error, ...extra });
@@ -358,18 +348,14 @@ router.get("/state", authUser, async (req, res) => {
 
     const phone = req.userPhone;
 
+    // ✅ 1) user first
     const user = await prisma.user.findUnique({
       where: { phone },
       select: { id: true, plan: true, planExpiresAt: true },
     });
-
-    const review = reviewSession
-      ? { hasSession: true, session: reviewSession }
-      : { hasSession: false, session: null };
-
     if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
 
-    // ✅ review session (PelekanReviewSession)
+    // ✅ 2) reviewSession AFTER user
     const reviewSession = await prisma.pelekanReviewSession.findUnique({
       where: { userId: user.id },
       select: {
@@ -388,8 +374,17 @@ router.get("/state", authUser, async (req, res) => {
       },
     });
 
+    // ✅ 3) review object safely
+    const review = reviewSession
+      ? { hasSession: true, session: reviewSession }
+      : { hasSession: false, session: null };
+
     const basePlan = getPlanStatus(user.plan, user.planExpiresAt);
-    const { planStatusFinal, daysLeftFinal } = applyDebugPlan(req, basePlan.planStatus, basePlan.daysLeft);
+    const { planStatusFinal, daysLeftFinal } = applyDebugPlan(
+      req,
+      basePlan.planStatus,
+      basePlan.daysLeft
+    );
 
     // baseline session (hb_baseline)
     const baselineSession = await prisma.assessmentSession.findUnique({
@@ -430,7 +425,7 @@ router.get("/state", authUser, async (req, res) => {
       let tabState = "idle";
       if (isBaselineInProgress) tabState = "baseline_assessment";
 
-      // ✅ اگر کاربر مسیر بازسنجی را انتخاب کرده، از choose_path عبور کن
+      // ✅ اگر مسیر بازسنجی انتخاب شده، از choose_path عبور کن
       if (!isBaselineInProgress && reviewSession?.chosenPath === "review") {
         tabState = "review";
       } else if (isBaselineCompleted) {
@@ -456,10 +451,7 @@ router.get("/state", authUser, async (req, res) => {
           },
           baseline: baselineSession ? { session: baselineSession, content: toBaselineUiContent() } : null,
           path: null,
-          review: {
-            hasSession: !!reviewSession,
-            session: reviewSession,
-          },
+          review,
           bastanIntro: null,
           treatment: null,
           hasContent: false,
@@ -559,10 +551,7 @@ router.get("/state", authUser, async (req, res) => {
         },
         baseline: baselineSession ? { session: baselineSession, content: toBaselineUiContent() } : null,
         path: null,
-        review: {
-          hasSession: !!reviewSession,
-          session: reviewSession,
-        },
+        review,
         bastanIntro: null,
         treatment,
         hasContent: true,
