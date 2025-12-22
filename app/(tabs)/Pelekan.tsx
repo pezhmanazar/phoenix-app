@@ -1,5 +1,6 @@
 // app/(tabs)/Pelekan.tsx
 import { useFocusEffect } from "@react-navigation/native";
+import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -12,7 +13,6 @@ import Baseline from "../../components/pelekan/Baseline";
 import ChoosePath from "../../components/pelekan/ChoosePath";
 import IdlePlaceholder from "../../components/pelekan/IdlePlaceholder";
 import Review from "../../components/pelekan/Review";
-
 import TreatmentView, {
   ListItem,
   PelekanDay,
@@ -20,10 +20,9 @@ import TreatmentView, {
   PelekanState as TreatmentViewState,
 } from "../../components/pelekan/TreatmentView";
 
+
 /* ----------------------------- Types ----------------------------- */
 type PlanStatus = "free" | "pro" | "expired" | "expiring";
-
-// ✅ سرور tabState=review می‌فرسته، پس باید اینجا هم باشه
 type TabState = "idle" | "baseline_assessment" | "choose_path" | "review" | "treating";
 
 type Paywall = {
@@ -80,6 +79,7 @@ const initialState: PelekanState = {
 
 /* ----------------------------- Screen ----------------------------- */
 export default function PelekanTab() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { me } = useUser();
 
@@ -97,10 +97,9 @@ export default function PelekanTab() {
         return;
       }
 
-      const res = await fetch(
-        `https://qoqnoos.app/api/pelekan/state?phone=${encodeURIComponent(phone)}`,
-        { headers: { "Cache-Control": "no-store" } }
-      );
+      const res = await fetch(`https://qoqnoos.app/api/pelekan/state?phone=${encodeURIComponent(phone)}`, {
+        headers: { "Cache-Control": "no-store" },
+      });
 
       const json = await res.json().catch(() => null);
       if (!json?.ok) {
@@ -109,7 +108,6 @@ export default function PelekanTab() {
       }
 
       const data = json.data || {};
-
       const merged: PelekanState = {
         ...initialState,
         ...data,
@@ -173,10 +171,23 @@ export default function PelekanTab() {
     return list;
   }, [state.tabState, state.stages]);
 
-  const onTapActiveDay = useCallback((day: PelekanDay) => {
-    // TODO: بعداً route بده به صفحه day/tasks
-    // router.push(`/pelekan/day/${day.id}`)
-  }, []);
+  // ✅ کلیک روی روز فعال:
+  // - اگر paywall لازم بود یا دسترسی کامل نبود => کاربر بره به intro/paywall
+  // - اگر کامل بود => بره صفحه روز/تسک‌ها
+  const onTapActiveDay = useCallback(
+  (day: PelekanDay) => {
+    const paywallNeeded = !!state?.ui?.paywall?.needed;
+    const noFullAccess = state?.treatmentAccess !== "full";
+
+    if (paywallNeeded || noFullAccess) {
+      router.push("/(tabs)/Subscription");
+      return;
+    }
+
+    router.push({ pathname: "/pelekan/day/[id]", params: { id: day.id } });
+  },
+  [router, state?.ui?.paywall?.needed, state?.treatmentAccess]
+);
 
   if (loading) {
     return (
@@ -192,7 +203,10 @@ export default function PelekanTab() {
   }
 
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: palette.bg }]} edges={["top", "left", "right", "bottom"]}>
+    <SafeAreaView
+      style={[styles.root, { backgroundColor: palette.bg }]}
+      edges={["top", "left", "right", "bottom"]}
+    >
       <View pointerEvents="none" style={[styles.bgGlowTop, { backgroundColor: palette.glowTop }]} />
       <View pointerEvents="none" style={[styles.bgGlowBottom, { backgroundColor: palette.glowBottom }]} />
 
@@ -226,7 +240,6 @@ export default function PelekanTab() {
         ) : state.tabState === "choose_path" ? (
           <ChoosePath me={me} state={state} onRefresh={fetchState} />
         ) : state.tabState === "review" ? (
-          // ✅ ریویو واقعی (نه placeholder)
           <Review me={me} state={state} onRefresh={fetchState} />
         ) : state.tabState === "treating" ? (
           <FlatList
@@ -259,6 +272,7 @@ export default function PelekanTab() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
+
   bgGlowTop: {
     position: "absolute",
     top: -260,
@@ -275,6 +289,7 @@ const styles = StyleSheet.create({
     height: 560,
     borderRadius: 999,
   },
+
   topBar: {
     borderBottomWidth: 1,
     paddingHorizontal: 16,
