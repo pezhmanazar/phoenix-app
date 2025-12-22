@@ -1,5 +1,6 @@
 // phoenix-app/components/pelekan/Review.tsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -24,8 +25,10 @@ type ReviewQuestion = {
   helpFa?: string | null;
   options: ReviewOption[];
 };
+
 type QuestionSetResponse = {
   ok: boolean;
+  error?: string;
   data?: {
     questionSet: { id: string; code: string; version: number; titleFa?: string | null };
     tests: { test1: ReviewQuestion[]; test2: ReviewQuestion[] };
@@ -34,6 +37,7 @@ type QuestionSetResponse = {
 
 type ReviewStateResponse = {
   ok: boolean;
+  error?: string;
   data?: {
     hasSession: boolean;
     canEnterPelekan?: boolean;
@@ -42,7 +46,7 @@ type ReviewStateResponse = {
       id: string;
       status: "in_progress" | "completed_locked" | "unlocked";
       chosenPath: "skip_review" | "review" | null;
-      currentTest: number; // 1 | 2
+      currentTest: number;
       currentIndex: number;
       test1CompletedAt?: string | null;
       test2CompletedAt?: string | null;
@@ -57,16 +61,65 @@ type ReviewStateResponse = {
 
 const API_BASE = "https://qoqnoos.app/api/pelekan/review";
 
-export default function Review({ me, onRefresh }: Props) {
+export default function Review({ me, state, onRefresh }: Props) {
+  const router = useRouter();
   const phone = String(me?.phone || "").trim();
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [qsLoading, setQsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [reviewState, setReviewState] = useState<ReviewStateResponse["data"] | null>(null);
   const [questionSetId, setQuestionSetId] = useState<string | null>(null);
   const [test1, setTest1] = useState<ReviewQuestion[]>([]);
   const [test2, setTest2] = useState<ReviewQuestion[]>([]);
+
+  // ✅ ضد-لوپ برای bootstrap: برای هر phone فقط یکبار خودکار
+  const bootRef = useRef<{ phone: string | null; done: boolean }>({ phone: null, done: false });
+
+  // ✅ ضد-تکرار برای start (اگر سرور کند بود یا رندرها زیاد شدند)
+  const startLockRef = useRef(false);
+
+  // ✅ جلوگیری از setState بعد از unmount
+  const mountedRef = useRef(true);
+
+  // ✅ ضد دابل‌کلیک / چند submit پشت هم
+  const submitLockRef = useRef(false);
+
+  // ✅ Confirm شیشه‌ای (جایگزین Alert) - نسخه دو دکمه‌ای
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState("");
+  const [confirmMsg, setConfirmMsg] = useState("");
+  const [confirmPrimaryText, setConfirmPrimaryText] = useState("بله، ادامه");
+  const [confirmSecondaryText, setConfirmSecondaryText] = useState("نه");
+  const confirmPrimaryRef = useRef<null | (() => Promise<void> | void)>(null);
+  const confirmSecondaryRef = useRef<null | (() => Promise<void> | void)>(null);
+
+  const openConfirm = useCallback(
+    (
+      t: string,
+      m: string,
+      primaryText: string,
+      primaryAction: () => Promise<void> | void,
+      secondaryText?: string,
+      secondaryAction?: (() => Promise<void> | void) | null
+    ) => {
+      confirmPrimaryRef.current = primaryAction;
+      confirmSecondaryRef.current = secondaryAction ?? null;
+      setConfirmTitle(t);
+      setConfirmMsg(m);
+      setConfirmPrimaryText(primaryText || "بله، ادامه");
+      setConfirmSecondaryText(secondaryText || "نه");
+      setConfirmOpen(true);
+    },
+    []
+  );
+
+  const closeConfirm = useCallback(() => {
+    setConfirmOpen(false);
+    confirmPrimaryRef.current = null;
+    confirmSecondaryRef.current = null;
+  }, []);
 
   const palette = useMemo(
     () => ({
@@ -82,73 +135,122 @@ export default function Review({ me, onRefresh }: Props) {
     []
   );
 
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const fetchReviewState = useCallback(async () => {
-    if (!phone) return;
+    if (!phone) return null;
+
     const res = await fetch(`${API_BASE}/state?phone=${encodeURIComponent(phone)}`, {
       headers: { "Cache-Control": "no-store" },
     });
+
     const json: ReviewStateResponse = await res.json().catch(() => ({ ok: false } as any));
-    if (!json?.ok) throw new Error("STATE_FAILED");
-    setReviewState(json.data || null);
+    if (!json?.ok) throw new Error(json?.error || "STATE_FAILED");
+
+    if (mountedRef.current) setReviewState(json.data || null);
+    return json.data || null;
   }, [phone]);
 
   const fetchQuestionSet = useCallback(async () => {
     const res = await fetch(`${API_BASE}/question-set`, {
       headers: { "Cache-Control": "no-store" },
     });
+
     const json: QuestionSetResponse = await res.json().catch(() => ({ ok: false } as any));
-    if (!json?.ok || !json?.data?.tests) throw new Error("QS_FAILED");
+
+    if (!json?.ok || !json?.data?.tests || !json?.data?.questionSet?.id) {
+      throw new Error(json?.error || "QS_FAILED");
+    }
+
+    if (!mountedRef.current) return null;
+
     setQuestionSetId(json.data.questionSet.id);
-    setTest1(json.data.tests.test1 || []);
-    setTest2(json.data.tests.test2 || []);
+    setTest1(Array.isArray(json.data.tests.test1) ? json.data.tests.test1 : []);
+    setTest2(Array.isArray(json.data.tests.test2) ? json.data.tests.test2 : []);
+
+    return json.data.questionSet.id;
   }, []);
 
-  const ensureStarted = useCallback(async () => {
-    // اگر session نداشت یا questionSetId نداشت، start می‌زنیم تا سشن قفل بشه به بانک سوالات
-    if (!phone) return;
-    const st = reviewState?.session;
-    if (!st || !st.questionSetId) {
-      await fetch(`${API_BASE}/start`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
-      })
-        .then((r) => r.json())
-        .catch(() => null);
-      await fetchReviewState();
-      onRefresh?.();
-    }
-  }, [phone, reviewState?.session, fetchReviewState, onRefresh]);
+  // ✅ فقط وقتی session.questionSetId خالیه start بزن، با lock
+  const ensureStarted = useCallback(
+    async (stData: ReviewStateResponse["data"] | null) => {
+      if (!phone) return;
 
-  useEffect(() => {
-    let mounted = true;
+      const st = stData?.session;
+      if (st?.questionSetId) return;
 
-    (async () => {
+      if (startLockRef.current) return;
+      startLockRef.current = true;
+
       try {
-        setLoading(true);
-        setQsLoading(true);
+        const r = await fetch(`${API_BASE}/start`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone }),
+        })
+          .then((x) => x.json())
+          .catch(() => null);
+
+        console.log("[Review] start response", r);
 
         await fetchReviewState();
-        if (!mounted) return;
-
-        await fetchQuestionSet();
-        if (!mounted) return;
-
-        setQsLoading(false);
-
-        // سشن رو اگر لازم بود استارت کن (قفل به questionSetId)
-        await ensureStarted();
-      } catch (e) {
-        // silent
+        onRefresh?.();
       } finally {
-        if (mounted) setLoading(false);
+        startLockRef.current = false;
       }
-    })();
+    },
+    [phone, fetchReviewState, onRefresh]
+  );
 
-    return () => {
-      mounted = false;
-    };
-  }, [fetchReviewState, fetchQuestionSet, ensureStarted]);
+  const bootstrap = useCallback(async () => {
+    if (!phone) return;
+
+    setError(null);
+    setQsLoading(true);
+
+    try {
+      console.log("[Review] bootstrap begin", { phone });
+
+      const st = await fetchReviewState();
+      console.log("[Review] state", st);
+
+      const qsid = await fetchQuestionSet();
+      console.log("[Review] question-set loaded", { qsid });
+
+      await ensureStarted(st);
+      console.log("[Review] ensureStarted done");
+    } catch (e: any) {
+      console.log("[Review] bootstrap error", e?.message || e);
+      if (mountedRef.current) setError(String(e?.message || "UNKNOWN_ERROR"));
+    } finally {
+      if (mountedRef.current) setQsLoading(false);
+    }
+  }, [phone, fetchReviewState, fetchQuestionSet, ensureStarted]);
+
+  // ✅ bootstrap خودکار فقط یکبار برای هر phone
+  useEffect(() => {
+    // reset guards when phone changes
+    if (bootRef.current.phone !== phone) {
+      bootRef.current.phone = phone;
+      bootRef.current.done = false;
+      startLockRef.current = false;
+      submitLockRef.current = false;
+    }
+
+    if (!phone) return;
+    if (bootRef.current.done) return;
+
+    (async () => {
+      await bootstrap();
+      if (!mountedRef.current) return;
+      bootRef.current.done = true;
+    })();
+  }, [phone, bootstrap]);
 
   const session = reviewState?.session || null;
   const currentTest = session?.currentTest ?? 1;
@@ -157,16 +259,91 @@ export default function Review({ me, onRefresh }: Props) {
   const questions = currentTest === 1 ? test1 : test2;
   const currentQuestion = questions[currentIndex] || null;
 
+  // ✅ لاگِ رندر (اختیاری)
+  useEffect(() => {
+    console.log("[Review] render", {
+      currentTest,
+      currentIndex,
+      qLen: questions?.length ?? 0,
+      hasQuestion: !!currentQuestion,
+      sessionStatus: session?.status,
+      qsId: session?.questionSetId,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTest, currentIndex, questions?.length, !!currentQuestion, session?.status, session?.questionSetId]);
+
   const title = useMemo(() => {
     if (currentTest === 1) return "آزمون بازسنجی";
     return "آزمون «آیا برمی‌گرده؟»";
   }, [currentTest]);
 
+  const isEndOfTest = useMemo(() => {
+    if (!session) return false;
+    if (!questions?.length) return false;
+    return (session.currentIndex ?? 0) >= questions.length;
+  }, [session, questions]);
+
+  const isPro = !!reviewState?.user?.isPro;
+
+  const goToAnalysis = useCallback(
+    (mode: "test1" | "final") => {
+      // ✅ به‌جای string، مسیر رو با pathname/params بده تا TS قرمز نشه
+      const analysisNav = {
+        pathname: "/pelekan/review/analysis",
+        params: { mode },
+      } as const;
+
+      if (isPro) {
+        // @ts-ignore - expo-router بعضی وقت‌ها روی object route هم گیر می‌دهد
+        router.push(analysisNav);
+        return;
+      }
+
+      // ✅ next را به شکل string ساده نگه می‌داریم (برای صفحه اشتراک)
+      const next = `/pelekan/review/analysis?mode=${encodeURIComponent(mode)}`;
+
+      // @ts-ignore
+      router.push({
+        pathname: "/(tabs)/Subscription",
+        params: { next },
+      });
+    },
+    [isPro, router]
+  );
+
+  const goToPelekanStart = useCallback(() => {
+    router.replace("/(tabs)/Pelekan");
+  }, [router]);
+
+  const ensureCompleteTest1 = useCallback(async () => {
+    if (!phone) return { ok: false };
+    if (reviewState?.session?.test1CompletedAt) return { ok: true };
+
+    const res = await fetch(`${API_BASE}/complete-test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone, testNo: 1 }),
+    }).then((r) => r.json());
+
+    if (!res?.ok) {
+      Alert.alert("خطا", res?.error || "SERVER_ERROR");
+      return { ok: false };
+    }
+
+    await fetchReviewState();
+    onRefresh?.();
+    return { ok: true };
+  }, [phone, reviewState?.session?.test1CompletedAt, fetchReviewState, onRefresh]);
+
   const submitAnswer = useCallback(
     async (value: number) => {
       if (!phone || !session) return;
+
+      if (submitLockRef.current) return;
+      submitLockRef.current = true;
+
       const idx = session.currentIndex ?? 0;
-      // optimistic: disable taps by temp loading
+
       setLoading(true);
       try {
         const res = await fetch(`${API_BASE}/answer`, {
@@ -174,57 +351,88 @@ export default function Review({ me, onRefresh }: Props) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ phone, testNo: currentTest, index: idx, value }),
         });
+
         const json = await res.json().catch(() => null);
         if (!json?.ok) {
           Alert.alert("خطا", json?.error || "SERVER_ERROR");
           return;
         }
+
         await fetchReviewState();
         onRefresh?.();
+      } catch (e: any) {
+        Alert.alert("خطا", e?.message || "SERVER_ERROR");
       } finally {
         setLoading(false);
+        submitLockRef.current = false;
       }
     },
     [phone, session, currentTest, fetchReviewState, onRefresh]
   );
 
-  const completeTest1 = useCallback(async () => {
+  // ✅ دکمه «ادامه» در پایان آزمون ۱: فقط وارد آزمون ۲ شود
+  const goToTest2FromEndOfTest1 = useCallback(async () => {
     if (!phone) return;
+
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
+
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/complete-test`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone, testNo: 1 }),
-      });
-      const json = await res.json().catch(() => null);
-      if (!json?.ok) {
-        Alert.alert("خطا", json?.error || "SERVER_ERROR");
+      }).then((r) => r.json());
+
+      if (!res?.ok) {
+        Alert.alert("خطا", res?.error || "SERVER_ERROR");
         return;
       }
+
       await fetchReviewState();
       onRefresh?.();
+      // ✅ با آپدیت state، خود کامپوننت میره روی test2
     } finally {
       setLoading(false);
+      submitLockRef.current = false;
     }
   }, [phone, fetchReviewState, onRefresh]);
 
-  const finishAfterTest2 = useCallback(async () => {
+  // ✅ عبور از آزمون دوم از پایان آزمون ۱: اگر کاربر «ورود به پلکان» را انتخاب کرد
+  // 1) complete-test(1)
+  // 2) skip-test2
+  // 3) finish
+  const passTest2AndEnterPelekanFromEndTest1 = useCallback(async () => {
     if (!phone) return;
+
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
+
     setLoading(true);
     try {
-      // اول test2 رو complete کن
-      const c = await fetch(`${API_BASE}/complete-test`, {
+      const c1 = await fetch(`${API_BASE}/complete-test`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, testNo: 2 }),
+        body: JSON.stringify({ phone, testNo: 1 }),
       }).then((r) => r.json());
-      if (!c?.ok) {
-        Alert.alert("خطا", c?.error || "SERVER_ERROR");
+
+      if (!c1?.ok) {
+        Alert.alert("خطا", c1?.error || "SERVER_ERROR");
         return;
       }
 
-      // بعد finish
+      const s2 = await fetch(`${API_BASE}/skip-test2`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      }).then((r) => r.json());
+
+      if (!s2?.ok) {
+        Alert.alert("خطا", s2?.error || "SERVER_ERROR");
+        return;
+      }
+
       const f = await fetch(`${API_BASE}/finish`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -238,38 +446,155 @@ export default function Review({ me, onRefresh }: Props) {
 
       await fetchReviewState();
       onRefresh?.();
+      goToPelekanStart();
     } finally {
       setLoading(false);
+      submitLockRef.current = false;
     }
-  }, [phone, fetchReviewState, onRefresh]);
+  }, [phone, fetchReviewState, onRefresh, goToPelekanStart]);
 
-  const skipTest2 = useCallback(async () => {
-    if (!phone) return;
+  // ✅ پایان آزمون ۲: قبل از تحلیل/پلکان باید complete-test2 + finish انجام شود
+  const finalizeAfterTest2 = useCallback(async () => {
+    if (!phone) return { ok: false as const };
+
+    if (submitLockRef.current) return { ok: false as const };
+    submitLockRef.current = true;
+
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/skip-test2`, {
+      const c = await fetch(`${API_BASE}/complete-test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, testNo: 2 }),
+      }).then((r) => r.json());
+
+      if (!c?.ok) {
+        Alert.alert("خطا", c?.error || "SERVER_ERROR");
+        return { ok: false as const };
+      }
+
+      const f = await fetch(`${API_BASE}/finish`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone }),
-      });
-      const json = await res.json().catch(() => null);
-      if (!json?.ok) {
-        Alert.alert("خطا", json?.error || "SERVER_ERROR");
-        return;
+      }).then((r) => r.json());
+
+      if (!f?.ok) {
+        Alert.alert("خطا", f?.error || "SERVER_ERROR");
+        return { ok: false as const };
       }
+
       await fetchReviewState();
       onRefresh?.();
+      return { ok: true as const };
     } finally {
       setLoading(false);
+      submitLockRef.current = false;
     }
   }, [phone, fetchReviewState, onRefresh]);
 
-  // اگر سوال‌ها تمام شد:
-  const isEndOfTest = useMemo(() => {
-    if (!session) return false;
-    if (!questions?.length) return false;
-    return (session.currentIndex ?? 0) >= questions.length;
-  }, [session, questions]);
+  // ✅ عبور از آزمون دوم وقتی داخل آزمون دوم هستی:
+  // 1) skip-test2
+  // 2) finish
+  const passTest2FromInsideTest2 = useCallback(async () => {
+    if (!phone) return;
+
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
+
+    setLoading(true);
+    try {
+      const s2 = await fetch(`${API_BASE}/skip-test2`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      }).then((r) => r.json());
+
+      if (!s2?.ok) {
+        Alert.alert("خطا", s2?.error || "SERVER_ERROR");
+        return;
+      }
+
+      const f = await fetch(`${API_BASE}/finish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      }).then((r) => r.json());
+
+      if (!f?.ok) {
+        Alert.alert("خطا", f?.error || "SERVER_ERROR");
+        return;
+      }
+
+      await fetchReviewState();
+      onRefresh?.();
+
+      goToPelekanStart();
+    } finally {
+      setLoading(false);
+      submitLockRef.current = false;
+    }
+  }, [phone, fetchReviewState, onRefresh, goToPelekanStart]);
+
+  const manualReload = useCallback(() => {
+    bootRef.current.done = false;
+    startLockRef.current = false;
+    submitLockRef.current = false;
+    bootstrap();
+  }, [bootstrap]);
+
+  const ConfirmGlass = useMemo(() => {
+    if (!confirmOpen) return null;
+
+    return (
+      <View style={styles.confirmOverlay}>
+        <View style={[styles.confirmCard, { backgroundColor: palette.glass, borderColor: palette.border }]}>
+          <Text style={{ color: palette.text, fontWeight: "900", fontSize: 16 }}>{confirmTitle}</Text>
+          <Text style={{ color: palette.sub, marginTop: 8, lineHeight: 22, fontSize: 12 }}>{confirmMsg}</Text>
+
+          <View style={{ height: 14 }} />
+
+          <Pressable
+            disabled={loading}
+            style={[styles.btn, { borderColor: palette.border }]}
+            onPress={async () => {
+              const fn = confirmPrimaryRef.current;
+              closeConfirm();
+              if (fn) await fn();
+            }}
+          >
+            <Text style={[styles.btnText, { color: palette.text }]}>{loading ? "..." : confirmPrimaryText}</Text>
+          </Pressable>
+
+          <View style={{ height: 10 }} />
+
+          <Pressable
+            disabled={loading}
+            style={[
+              styles.btnGhost,
+              { borderColor: palette.border, backgroundColor: "rgba(255,255,255,.04)" },
+            ]}
+            onPress={async () => {
+              const fn = confirmSecondaryRef.current;
+              closeConfirm();
+              if (fn) await fn();
+            }}
+          >
+            <Text style={[styles.btnText, { color: palette.sub }]}>{loading ? "..." : confirmSecondaryText}</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }, [
+    confirmOpen,
+    confirmTitle,
+    confirmMsg,
+    confirmPrimaryText,
+    confirmSecondaryText,
+    palette,
+    loading,
+    closeConfirm,
+  ]);
 
   if (!phone) {
     return (
@@ -288,66 +613,128 @@ export default function Review({ me, onRefresh }: Props) {
     );
   }
 
-  // حالت پایان آزمون 1
+  if (error) {
+    return (
+      <View style={[styles.root, { backgroundColor: palette.bg, paddingHorizontal: 18 }]}>
+        <Text style={{ color: palette.red, fontWeight: "900", marginBottom: 8 }}>خطا در دریافت داده‌ها</Text>
+        <Text style={{ color: palette.sub, fontSize: 12, lineHeight: 18 }}>{error}</Text>
+
+        <View style={{ height: 14 }} />
+
+        <Pressable style={[styles.btn, { borderColor: palette.border }]} onPress={manualReload}>
+          <Text style={[styles.btnText, { color: palette.text }]}>تلاش مجدد</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  // پایان آزمون 1
   if (session && currentTest === 1 && isEndOfTest) {
     return (
       <View style={[styles.container, { backgroundColor: palette.bg }]}>
         <View style={[styles.card, { backgroundColor: palette.glass, borderColor: palette.border }]}>
           <Text style={[styles.title, { color: palette.text }]}>پایان آزمون بازسنجی</Text>
+
           <Text style={{ color: palette.sub, marginTop: 8, lineHeight: 22 }}>
-            آماده‌ای بریم آزمون دوم («آیا برمی‌گرده؟») یا می‌خوای ازش رد بشی؟
+            آماده‌ای بریم آزمون دوم («آیا برمی‌گرده؟»)؟
           </Text>
 
           <View style={{ height: 14 }} />
 
-          <Pressable style={[styles.btn, { borderColor: palette.border }]} onPress={completeTest1}>
-            <Text style={[styles.btnText, { color: palette.text }]}>ادامه → رفتن به آزمون دوم</Text>
+          <Pressable style={[styles.btn, { borderColor: palette.border }]} onPress={goToTest2FromEndOfTest1} disabled={loading}>
+            <Text style={[styles.btnText, { color: palette.text }]}>
+              {loading ? "..." : "ادامه → رفتن به آزمون دوم"}
+            </Text>
           </Pressable>
 
           <View style={{ height: 10 }} />
 
-          {/* اسکیپ آزمون 2 فقط بعد از complete-test(1) مجازه؛ پس اول completeTest1 لازمه.
-              اینجا همون "ادامه" رو می‌زنن، بعد در تست2 دکمه اسکیپ داریم. */}
+          <Pressable
+            style={[styles.btnGhost, { borderColor: "rgba(239,68,68,.45)" }]}
+            disabled={loading}
+            onPress={() =>
+              openConfirm(
+                "عبور از آزمون دوم",
+                "قبل از عبور، می‌تونی تحلیل آزمون بازسنجی رو ببینی. تحلیل فقط برای کاربران پرو فعاله.\n\nمی‌خوای تحلیل رو ببینی یا فعلاً وارد پلکان بشی؟",
+                "دیدن تحلیل آزمون اول (پرو)",
+                async () => {
+                  const r = await ensureCompleteTest1();
+                  if (r?.ok) goToAnalysis("test1");
+                },
+                "فعلاً نه، ورود به پلکان",
+                passTest2AndEnterPelekanFromEndTest1
+              )
+            }
+          >
+            <Text style={[styles.btnText, { color: palette.red }]}>
+              {loading ? "..." : "عبور از آزمون دوم"}
+            </Text>
+          </Pressable>
+
           <Text style={{ color: "rgba(231,238,247,.55)", marginTop: 10, fontSize: 12 }}>
-            نکته: اسکیپ آزمون دوم از داخل صفحه آزمون دوم فعال می‌شود.
+            نکته: با «ادامه»، وارد آزمون دوم می‌شوی.
           </Text>
         </View>
+
+        {ConfirmGlass}
       </View>
     );
   }
 
-  // حالت پایان آزمون 2
+  // پایان آزمون 2
   if (session && currentTest === 2 && isEndOfTest) {
     return (
       <View style={[styles.container, { backgroundColor: palette.bg }]}>
         <View style={[styles.card, { backgroundColor: palette.glass, borderColor: palette.border }]}>
           <Text style={[styles.title, { color: palette.text }]}>پایان آزمون «آیا برمی‌گرده؟»</Text>
+
           <Text style={{ color: palette.sub, marginTop: 8, lineHeight: 22 }}>
-            با زدن دکمه زیر، نتیجه قفل/باز می‌شود (بسته به PRO).
+            حالا می‌تونی تحلیل نهایی (ترکیب دو آزمون) رو ببینی. تحلیل فقط برای کاربران پرو فعاله.
           </Text>
 
           <View style={{ height: 14 }} />
 
-          <Pressable style={[styles.btn, { borderColor: palette.border }]} onPress={finishAfterTest2}>
-            <Text style={[styles.btnText, { color: palette.text }]}>ثبت نهایی و دیدن وضعیت نتیجه</Text>
-          </Pressable>
-
-          <View style={{ height: 10 }} />
-
-          <Pressable style={[styles.btnGhost, { borderColor: "rgba(239,68,68,.45)" }]} onPress={skipTest2}>
-            <Text style={[styles.btnText, { color: palette.red }]}>اسکیپ آزمون دوم و ورود به پلکان</Text>
+          <Pressable
+            style={[styles.btn, { borderColor: palette.border }]}
+            disabled={loading}
+            onPress={() =>
+              openConfirm(
+                "تحلیل نهایی دو آزمون",
+                "می‌خوای تحلیل نهایی رو ببینی یا فعلاً وارد پلکان بشی؟",
+                "دیدن تحلیل دو آزمون (پرو)",
+                async () => {
+                  const r = await finalizeAfterTest2();
+                  if (r?.ok) goToAnalysis("final");
+                },
+                "فعلاً نه، ورود به پلکان",
+                async () => {
+                  const r = await finalizeAfterTest2();
+                  if (r?.ok) goToPelekanStart();
+                }
+              )
+            }
+          >
+            <Text style={[styles.btnText, { color: palette.text }]}>{loading ? "..." : "ادامه"}</Text>
           </Pressable>
         </View>
+
+        {ConfirmGlass}
       </View>
     );
   }
 
-  // اگر سوال فعلی نداریم ولی end هم نیست: یعنی state هنوز sync نشده
+  // اگر session یا سوال فعلی نداریم: sync نشده یا mismatch
   if (!session || !currentQuestion) {
     return (
       <View style={[styles.root, { backgroundColor: palette.bg }]}>
         <ActivityIndicator color={palette.gold} />
         <Text style={{ color: palette.sub, marginTop: 10, fontSize: 12 }}>در حال همگام‌سازی…</Text>
+
+        <View style={{ height: 12 }} />
+
+        <Pressable style={[styles.btn, { borderColor: palette.border }]} onPress={manualReload}>
+          <Text style={[styles.btnText, { color: palette.text }]}>رفرش</Text>
+        </Pressable>
       </View>
     );
   }
@@ -365,6 +752,7 @@ export default function Review({ me, onRefresh }: Props) {
           <View style={styles.hr} />
 
           <Text style={[styles.qText, { color: palette.text }]}>{currentQuestion.textFa}</Text>
+
           {!!currentQuestion.helpFa && (
             <Text style={{ color: "rgba(231,238,247,.55)", marginTop: 8, lineHeight: 20 }}>
               {currentQuestion.helpFa}
@@ -378,41 +766,42 @@ export default function Review({ me, onRefresh }: Props) {
               key={`${currentQuestion.index}-${op.value}`}
               onPress={() => submitAnswer(op.value)}
               disabled={loading}
+              // @ts-ignore
+              pointerEvents={loading ? "none" : "auto"}
               style={({ pressed }) => [
                 styles.option,
-                {
-                  borderColor: palette.border,
-                  opacity: pressed ? 0.85 : 1,
-                },
+                { borderColor: palette.border, opacity: pressed ? 0.85 : 1 },
               ]}
             >
               <Text style={{ color: palette.text, fontSize: 14 }}>{op.labelFa}</Text>
             </Pressable>
           ))}
 
-          {/* اسکیپ فقط وقتی آزمون 2 هست */}
           {currentTest === 2 && (
             <>
               <View style={{ height: 14 }} />
               <Pressable
-                onPress={() => {
-                  Alert.alert(
-                    "اسکیپ آزمون دوم",
-                    "اگر اسکیپ کنی، نتیجه‌ی کامل قفل می‌ماند ولی می‌توانی وارد پلکان شوی. ادامه؟",
-                    [
-                      { text: "نه", style: "cancel" },
-                      { text: "بله، اسکیپ", style: "destructive", onPress: skipTest2 },
-                    ]
-                  );
-                }}
+                disabled={loading}
+                onPress={() =>
+                  openConfirm(
+                    "عبور از آزمون دوم",
+                    "اگر عبور کنی، آزمون دوم ثبت نمی‌شود ولی می‌توانی وارد پلکان شوی. ادامه؟",
+                    "بله، عبور و ورود به پلکان",
+                    passTest2FromInsideTest2,
+                    "نه",
+                    null
+                  )
+                }
                 style={[styles.btnGhost, { borderColor: "rgba(239,68,68,.45)" }]}
               >
-                <Text style={[styles.btnText, { color: palette.red }]}>اسکیپ آزمون دوم</Text>
+                <Text style={[styles.btnText, { color: palette.red }]}>{loading ? "..." : "عبور از آزمون دوم"}</Text>
               </Pressable>
             </>
           )}
         </View>
       </ScrollView>
+
+      {ConfirmGlass}
     </View>
   );
 }
@@ -453,4 +842,22 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(239,68,68,.06)",
   },
   btnText: { fontSize: 14, fontWeight: "900" },
+
+  confirmOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 18,
+  },
+  confirmCard: {
+    width: "100%",
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+  },
 });

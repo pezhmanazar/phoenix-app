@@ -74,6 +74,11 @@ function computePaywallRequired(user, session) {
  * - order: 0-based (کاملاً هم‌راستا با index اپ)
  */
 
+const OPT_YES_NO = [
+  { value: 0, labelFa: "خیر" },
+  { value: 1, labelFa: "بله" },
+];
+
 const OPT_0_4_REDLINE = [
   { value: 0, labelFa: "هرگز" },
   { value: 1, labelFa: "به‌ندرت" },
@@ -105,11 +110,11 @@ function buildDefaultQuestions() {
     test1_q.push({ textFa, helpFa: helpFa || null, options });
   };
 
-  pushT1("در این رابطه خشونت روانی، کلامی یا جسمی وجود داشته است.", null, OPT_0_4_REDLINE);
-  pushT1("خیانت (عاطفی یا جنسی) رخ داده و بدون پذیرش مسئولیت رها شده است.", null, OPT_0_4_REDLINE);
-  pushT1("تحقیر، تمسخر یا بی‌ارزش‌سازی مداوم وجود داشته است.", null, OPT_0_4_REDLINE);
-  pushT1("اعتیاد فعال بدون درمان جدی (مواد، الکل، قمار، پورن) وجود داشته است.", null, OPT_0_4_REDLINE);
-  pushT1("طرف مقابل تمایلی به تغییر یا کار روی رابطه نشان نداده است.", null, OPT_0_4_REDLINE);
+  pushT1("در این رابطه خشونت روانی، کلامی یا جسمی وجود داشته است.", null, OPT_YES_NO);
+  pushT1("خیانت (عاطفی یا جنسی) رخ داده و بدون پذیرش مسئولیت رها شده است.", null, OPT_YES_NO);
+  pushT1("تحقیر، تمسخر یا بی‌ارزش‌سازی مداوم وجود داشته است.", null, OPT_YES_NO);
+  pushT1("اعتیاد فعال بدون درمان جدی (مواد، الکل، قمار، پورن) وجود داشته است.", null, OPT_YES_NO);
+  pushT1("طرف مقابل تمایلی به تغییر یا کار روی رابطه نشان نداده است.", null, OPT_YES_NO);
 
   // بخش 2: رضایت و فرسودگی (8)
   pushT1("از رابطه‌ام رضایت کلی داشتم.", null, OPT_0_4_AGREE);

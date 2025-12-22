@@ -4,11 +4,6 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-
-import PlanStatusBadge from "../../components/PlanStatusBadge";
-import TopBanner from "../../components/TopBanner";
-import { useUser } from "../../hooks/useUser";
-
 import Baseline from "../../components/pelekan/Baseline";
 import ChoosePath from "../../components/pelekan/ChoosePath";
 import IdlePlaceholder from "../../components/pelekan/IdlePlaceholder";
@@ -19,23 +14,22 @@ import TreatmentView, {
   PelekanStage,
   PelekanState as TreatmentViewState,
 } from "../../components/pelekan/TreatmentView";
-
+import PlanStatusBadge from "../../components/PlanStatusBadge";
+import TopBanner from "../../components/TopBanner";
+import { useUser } from "../../hooks/useUser";
 
 /* ----------------------------- Types ----------------------------- */
 type PlanStatus = "free" | "pro" | "expired" | "expiring";
 type TabState = "idle" | "baseline_assessment" | "choose_path" | "review" | "treating";
-
 type Paywall = {
   needed: boolean;
   reason: "start_treatment" | "continue_treatment" | null;
 };
-
 type PelekanFlags = {
   suppressPaywall?: boolean;
   isBaselineInProgress?: boolean;
   isBaselineCompleted?: boolean;
 };
-
 type PelekanState = {
   tabState: TabState;
   user: { planStatus: PlanStatus; daysLeft: number };
@@ -83,59 +77,12 @@ export default function PelekanTab() {
   const insets = useSafeAreaInsets();
   const { me } = useUser();
 
-  const [loading, setLoading] = useState(true);
+  // ✅ جدا کردن لود اولیه از رفرش‌ها (برای جلوگیری از unmount شدن Review)
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
   const [state, setState] = useState<PelekanState>(initialState);
   const [headerHeight, setHeaderHeight] = useState(0);
-
-  const fetchState = useCallback(async () => {
-    try {
-      setLoading(true);
-
-      const phone = me?.phone;
-      if (!phone) {
-        setState(initialState);
-        return;
-      }
-
-      const res = await fetch(`https://qoqnoos.app/api/pelekan/state?phone=${encodeURIComponent(phone)}`, {
-        headers: { "Cache-Control": "no-store" },
-      });
-
-      const json = await res.json().catch(() => null);
-      if (!json?.ok) {
-        setState(initialState);
-        return;
-      }
-
-      const data = json.data || {};
-      const merged: PelekanState = {
-        ...initialState,
-        ...data,
-        ui: {
-          paywall: data?.ui?.paywall ?? initialState.ui.paywall,
-          flags: data?.ui?.flags ?? {},
-        },
-        treatment: data?.treatment ?? null,
-        stages: Array.isArray(data?.stages) ? data.stages : [],
-      };
-
-      setState(merged);
-    } catch {
-      setState(initialState);
-    } finally {
-      setLoading(false);
-    }
-  }, [me?.phone]);
-
-  useEffect(() => {
-    fetchState();
-  }, [fetchState]);
-
-  useFocusEffect(
-    useCallback(() => {
-      fetchState();
-    }, [fetchState])
-  );
 
   const palette = useMemo(
     () => ({
@@ -149,47 +96,99 @@ export default function PelekanTab() {
     []
   );
 
+  const fetchState = useCallback(
+    async (opts?: { initial?: boolean }) => {
+      const isInitial = !!opts?.initial;
+
+      try {
+        if (isInitial) setInitialLoading(true);
+        else setRefreshing(true);
+
+        const phone = me?.phone;
+        if (!phone) {
+          setState(initialState);
+          return;
+        }
+
+        const res = await fetch(
+          `https://qoqnoos.app/api/pelekan/state?phone=${encodeURIComponent(phone)}`,
+          { headers: { "Cache-Control": "no-store" } }
+        );
+
+        const json = await res.json().catch(() => null);
+        if (!json?.ok) {
+          setState(initialState);
+          return;
+        }
+
+        const data = json.data || {};
+        const merged: PelekanState = {
+          ...initialState,
+          ...data,
+          ui: {
+            paywall: data?.ui?.paywall ?? initialState.ui.paywall,
+            flags: data?.ui?.flags ?? {},
+          },
+          treatment: data?.treatment ?? null,
+          stages: Array.isArray(data?.stages) ? data.stages : [],
+        };
+
+        setState(merged);
+      } catch {
+        setState(initialState);
+      } finally {
+        if (isInitial) setInitialLoading(false);
+        else setRefreshing(false);
+      }
+    },
+    [me?.phone]
+  );
+
+  useEffect(() => {
+    fetchState({ initial: true });
+  }, [fetchState]);
+
+  useFocusEffect(
+    useCallback(() => {
+      // ✅ وقتی تب فوکوس می‌گیرد فقط رفرش کن، بدون اینکه کل UI برود روی لودینگ
+      fetchState({ initial: false });
+    }, [fetchState])
+  );
+
   // ✅ لیست پلکان فقط وقتی treating هست
   const pathItems: ListItem[] = useMemo(() => {
     if (state.tabState !== "treating") return [];
-
     const stages = state.stages || [];
     const list: ListItem[] = [];
     let zigCounter = 0;
 
     for (const st of stages) {
       list.push({ kind: "header", id: `h-${st.id}`, stage: st });
-
       for (const d of st.days || []) {
         const zig: "L" | "R" = zigCounter++ % 2 === 0 ? "L" : "R";
         list.push({ kind: "day", id: `d-${d.id}`, day: d as PelekanDay, stage: st, zig });
       }
-
       list.push({ kind: "spacer", id: `sp-${st.id}` });
     }
-
     return list;
   }, [state.tabState, state.stages]);
 
-  // ✅ کلیک روی روز فعال:
-  // - اگر paywall لازم بود یا دسترسی کامل نبود => کاربر بره به intro/paywall
-  // - اگر کامل بود => بره صفحه روز/تسک‌ها
+  // ✅ کلیک روی روز فعال
   const onTapActiveDay = useCallback(
-  (day: PelekanDay) => {
-    const paywallNeeded = !!state?.ui?.paywall?.needed;
-    const noFullAccess = state?.treatmentAccess !== "full";
+    (day: PelekanDay) => {
+      const paywallNeeded = !!state?.ui?.paywall?.needed;
+      const noFullAccess = state?.treatmentAccess !== "full";
+      if (paywallNeeded || noFullAccess) {
+        router.push("/(tabs)/Subscription");
+        return;
+      }
+      router.push({ pathname: "/pelekan/day/[id]", params: { id: day.id } });
+    },
+    [router, state?.ui?.paywall?.needed, state?.treatmentAccess]
+  );
 
-    if (paywallNeeded || noFullAccess) {
-      router.push("/(tabs)/Subscription");
-      return;
-    }
-
-    router.push({ pathname: "/pelekan/day/[id]", params: { id: day.id } });
-  },
-  [router, state?.ui?.paywall?.needed, state?.treatmentAccess]
-);
-
-  if (loading) {
+  // ✅ فقط برای بار اول صفحه لودینگ کامل
+  if (initialLoading) {
     return (
       <SafeAreaView edges={["top"]} style={[styles.root, { backgroundColor: palette.bg }]}>
         <View pointerEvents="none" style={[styles.bgGlowTop, { backgroundColor: palette.glowTop }]} />
@@ -203,10 +202,7 @@ export default function PelekanTab() {
   }
 
   return (
-    <SafeAreaView
-      style={[styles.root, { backgroundColor: palette.bg }]}
-      edges={["top", "left", "right", "bottom"]}
-    >
+    <SafeAreaView style={[styles.root, { backgroundColor: palette.bg }]} edges={["top", "left", "right", "bottom"]}>
       <View pointerEvents="none" style={[styles.bgGlowTop, { backgroundColor: palette.glowTop }]} />
       <View pointerEvents="none" style={[styles.bgGlowBottom, { backgroundColor: palette.glowBottom }]} />
 
@@ -221,11 +217,9 @@ export default function PelekanTab() {
         <View style={[styles.topCol, styles.colLeft]}>
           <PlanStatusBadge me={me} showExpiringText />
         </View>
-
         <View style={[styles.topCol, styles.colCenter]}>
           <Text style={{ color: palette.text, fontWeight: "900" }}>پلکان</Text>
         </View>
-
         <View style={[styles.topCol, styles.colRight]}>
           <Text style={{ color: "rgba(231,238,247,.7)", fontWeight: "900" }}> </Text>
         </View>
@@ -233,14 +227,21 @@ export default function PelekanTab() {
 
       <TopBanner enabled headerHeight={headerHeight} />
 
+      {/* ✅ رفرش سبک، بدون unmount */}
+      {refreshing && (
+        <View style={{ paddingVertical: 8, alignItems: "center" }}>
+          <ActivityIndicator color="#D4AF37" />
+        </View>
+      )}
+
       {/* Content */}
       <View style={{ flex: 1, paddingBottom: 12 + insets.bottom }}>
         {state.tabState === "baseline_assessment" ? (
-          <Baseline me={me} state={state} onRefresh={fetchState} />
+          <Baseline me={me} state={state} onRefresh={() => fetchState({ initial: false })} />
         ) : state.tabState === "choose_path" ? (
-          <ChoosePath me={me} state={state} onRefresh={fetchState} />
+          <ChoosePath me={me} state={state} onRefresh={() => fetchState({ initial: false })} />
         ) : state.tabState === "review" ? (
-          <Review me={me} state={state} onRefresh={fetchState} />
+          <Review me={me} state={state} onRefresh={() => fetchState({ initial: false })} />
         ) : state.tabState === "treating" ? (
           <FlatList
             data={pathItems}
@@ -261,7 +262,7 @@ export default function PelekanTab() {
             showsVerticalScrollIndicator={false}
           />
         ) : (
-          <IdlePlaceholder me={me} state={state} onRefresh={fetchState} />
+          <IdlePlaceholder me={me} state={state} onRefresh={() => fetchState({ initial: false })} />
         )}
       </View>
     </SafeAreaView>
@@ -272,7 +273,6 @@ export default function PelekanTab() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-
   bgGlowTop: {
     position: "absolute",
     top: -260,
@@ -289,7 +289,6 @@ const styles = StyleSheet.create({
     height: 560,
     borderRadius: 999,
   },
-
   topBar: {
     borderBottomWidth: 1,
     paddingHorizontal: 16,
