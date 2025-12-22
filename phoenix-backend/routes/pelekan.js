@@ -363,7 +363,13 @@ router.get("/state", authUser, async (req, res) => {
       select: { id: true, plan: true, planExpiresAt: true },
     });
 
-    // ✅ review session (بازسنجی رابطه / آیا برمی‌گرده؟)
+    const review = reviewSession
+      ? { hasSession: true, session: reviewSession }
+      : { hasSession: false, session: null };
+
+    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+
+    // ✅ review session (PelekanReviewSession)
     const reviewSession = await prisma.pelekanReviewSession.findUnique({
       where: { userId: user.id },
       select: {
@@ -381,8 +387,6 @@ router.get("/state", authUser, async (req, res) => {
         updatedAt: true,
       },
     });
-
-    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
 
     const basePlan = getPlanStatus(user.plan, user.planExpiresAt);
     const { planStatusFinal, daysLeftFinal } = applyDebugPlan(req, basePlan.planStatus, basePlan.daysLeft);
@@ -425,7 +429,13 @@ router.get("/state", authUser, async (req, res) => {
 
       let tabState = "idle";
       if (isBaselineInProgress) tabState = "baseline_assessment";
-      if (isBaselineCompleted) tabState = "choose_path";
+
+      // ✅ اگر کاربر مسیر بازسنجی را انتخاب کرده، از choose_path عبور کن
+      if (!isBaselineInProgress && reviewSession?.chosenPath === "review") {
+        tabState = "review";
+      } else if (isBaselineCompleted) {
+        tabState = "choose_path";
+      }
 
       const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasAnyProgressFinal);
 
@@ -497,8 +507,10 @@ router.get("/state", authUser, async (req, res) => {
     const hasAnyProgressFinal = applyDebugProgress(req, hasAnyProgress);
 
     let tabState = "idle";
+
     if (hasAnyProgressFinal) tabState = "treating";
     else if (isBaselineInProgress) tabState = "baseline_assessment";
+    else if (reviewSession?.chosenPath === "review") tabState = "review";
     else if (isBaselineCompleted) tabState = "choose_path";
 
     const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasAnyProgressFinal);
