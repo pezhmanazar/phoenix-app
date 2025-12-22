@@ -611,6 +611,16 @@ enum ReviewTestNo {
   TEST2
 }
 
+enum PelekanReviewPath {
+  skip_review
+  review
+}
+
+enum ReviewActiveTest {
+  test1
+  test2
+}
+
 model ReviewQuestionSet {
   id          String  @id @default(uuid())
   code        String // e.g. "review"
@@ -690,11 +700,11 @@ model PelekanReviewSession {
 
   status PelekanReviewStatus @default(in_progress)
 
-  // ✅ مسیر انتخابی بعد از آزمون heartbreak: skip_review یا do_review
-  chosenPath String? // "skip_review" | "review"
+  // ✅ مسیر انتخابی بعد از آزمون heartbreak: skip_review یا review
+  chosenPath PelekanReviewPath?
 
   // ✅ پیشرفت قدم‌به‌قدم داخل دو آزمون (برای resume بعد از خروج)
-  currentTest  Int @default(1) // 1 یا 2
+  currentTest  ReviewActiveTest @default(test1)
   currentIndex Int @default(0) // شماره سوال/آیتم جاری
 
   // ✅ زمان‌ها
