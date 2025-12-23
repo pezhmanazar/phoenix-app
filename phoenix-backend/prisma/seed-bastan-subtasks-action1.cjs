@@ -62,9 +62,17 @@ async function main() {
 
   for (const s of subtasks) {
     await prisma.bastanSubtaskDefinition.upsert({
-      where: { key: s.key },
+      where: { actionId_key: { actionId: action.id, key: s.key } },
       create: { ...s, actionId: action.id },
-      update: { ...s },
+      update: {
+  kind: s.kind,
+  titleFa: s.titleFa,
+  helpFa: s.helpFa,
+  isRequired: s.isRequired,
+  isFree: s.isFree,
+  sortOrder: s.sortOrder,
+  xpReward: s.xpReward,
+},
     });
   }
 
