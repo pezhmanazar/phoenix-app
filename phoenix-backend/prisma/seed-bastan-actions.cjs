@@ -52,7 +52,7 @@ const actions = [
   },
   {
     sortOrder: 5,
-    code: "frl_protocol",
+    code: "limited_contact",
     titleFa: "Limited Contact (FRL) – رابطه رسمی محدود",
     totalSubtasks: 5,
     minRequiredSubtasks: 4,
