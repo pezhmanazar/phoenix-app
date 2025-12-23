@@ -685,10 +685,11 @@ export default function Review({ me, state, onRefresh }: Props) {
 
               <Pressable
                 style={[styles.btn, { borderColor: palette.border }]}
-                onPress={() => {
-                  setResultOpen(false);
-                  router.replace("/(tabs)/Pelekan");
-                }}
+                onPress={async () => {
+                setResultOpen(false);
+                router.replace("/(tabs)/Pelekan");
+                setTimeout(() => onRefresh?.(), 50);
+               }}
               >
                 <Text style={[styles.btnText, { color: palette.text }]}>رفتن به پلکان درمان</Text>
               </Pressable>

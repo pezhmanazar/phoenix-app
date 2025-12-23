@@ -4,10 +4,8 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-
 import Baseline from "../../components/pelekan/Baseline";
 import ChoosePath from "../../components/pelekan/ChoosePath";
-import CircleRow from "../../components/pelekan/CircleRow";
 import IdlePlaceholder from "../../components/pelekan/IdlePlaceholder";
 import Review from "../../components/pelekan/Review";
 import TreatmentView, {
@@ -100,7 +98,6 @@ export default function PelekanTab() {
   const fetchState = useCallback(
     async (opts?: { initial?: boolean }) => {
       const isInitial = !!opts?.initial;
-
       try {
         if (isInitial) setInitialLoading(true);
         else setRefreshing(true);
@@ -160,14 +157,9 @@ export default function PelekanTab() {
     }, [fetchState])
   );
 
-  // ✅ CircleRow فقط اینجاها بیاد (نه در baseline_assessment و نه در review)
-  const showCircleRow =
-    state.tabState === "idle" || state.tabState === "choose_path" || state.tabState === "treating";
-
   // ✅ لیست پلکان فقط وقتی treating هست
   const pathItems: ListItem[] = useMemo(() => {
     if (state.tabState !== "treating") return [];
-
     const stages = state.stages || [];
     const list: ListItem[] = [];
     let zigCounter = 0;
@@ -191,12 +183,10 @@ export default function PelekanTab() {
     (day: PelekanDay) => {
       const paywallNeeded = !!state?.ui?.paywall?.needed;
       const noFullAccess = state?.treatmentAccess !== "full";
-
       if (paywallNeeded || noFullAccess) {
         router.push("/(tabs)/Subscription");
         return;
       }
-
       router.push({ pathname: "/pelekan/day/[id]", params: { id: day.id } });
     },
     [router, state?.ui?.paywall?.needed, state?.treatmentAccess]
@@ -217,7 +207,10 @@ export default function PelekanTab() {
   }
 
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: palette.bg }]} edges={["top", "left", "right", "bottom"]}>
+    <SafeAreaView
+      style={[styles.root, { backgroundColor: palette.bg }]}
+      edges={["top", "left", "right", "bottom"]}
+    >
       <View pointerEvents="none" style={[styles.bgGlowTop, { backgroundColor: palette.glowTop }]} />
       <View pointerEvents="none" style={[styles.bgGlowBottom, { backgroundColor: palette.glowBottom }]} />
 
@@ -241,27 +234,6 @@ export default function PelekanTab() {
       </View>
 
       <TopBanner enabled headerHeight={headerHeight} />
-
-      {/* ✅ CircleRow: فقط وقتی showCircleRow */}
-      {showCircleRow && (
-        <CircleRow
-          tabState={state.tabState}
-          baselineStatus={state?.baseline?.session?.status ?? null}
-          reviewChosenPath={state?.review?.session?.chosenPath ?? null}
-          onGoResults={() => {
-            // TODO: وقتی صفحه نتایج ساختی، اینجا رو به route واقعی وصل می‌کنیم
-            router.push("/(tabs)/Pelekan");
-          }}
-          onGoBaseline={() => {
-            // TODO: اگر صفحه جدا برای baseline ساختی، اینجا وصل میشه
-            router.push("/(tabs)/Pelekan");
-          }}
-          onGoReview={() => {
-            // TODO: اگر صفحه جدا برای review/result ساختی، اینجا وصل میشه
-            router.push("/(tabs)/Pelekan");
-          }}
-        />
-      )}
 
       {/* ✅ رفرش سبک، بدون unmount */}
       {refreshing && (
