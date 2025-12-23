@@ -65,6 +65,204 @@ function computePaywallRequired(user, session) {
   return computeCanEnterPelekan(session);
 }
 
+/* ------------------------- Result building (NEW) ------------------------- */
+function clamp(n, min, max) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return min;
+  return Math.max(min, Math.min(max, x));
+}
+
+function avg(nums) {
+  const arr = (nums || []).filter((x) => Number.isFinite(Number(x)));
+  if (!arr.length) return null;
+  const s = arr.reduce((a, b) => a + Number(b), 0);
+  return s / arr.length;
+}
+
+function toPercentFromLikert(avgValue, maxValue) {
+  if (avgValue == null) return null;
+  const p = (Number(avgValue) / Number(maxValue)) * 100;
+  return clamp(Math.round(p), 0, 100);
+}
+
+function percentLabel(p) {
+  if (p == null) return "نامشخص";
+  if (p >= 80) return "بسیار زیاد";
+  if (p >= 60) return "زیاد";
+  if (p >= 40) return "متوسط";
+  if (p >= 20) return "کم";
+  return "خیلی کم";
+}
+
+/**
+ * تولید نمودارها و خلاصه تصمیم‌ساز
+ * - TEST1 => 4 نمودار
+ * - TEST2 => 4 نمودار (اگر اسکیپ نشده باشد)
+ */
+function buildDiagramsAndSummary(answersJson, didSkipTest2) {
+  const a = ensureAnswersShape(answersJson);
+  const t1 = a.test1.answers || [];
+  const t2 = a.test2.answers || [];
+
+  // ---------- TEST1 INDEX MAP ----------
+  // 0..4   : red flags (yes/no -> 0/1)
+  // 5..12  : satisfaction (0..4)
+  // 13..17 : attachment anxiety (0..4)
+  // 18..22 : attachment avoidance (0..4)
+  // 23..28 : conflict (0..3)
+
+  const redFlags = t1.slice(0, 5);
+  const satisf = t1.slice(5, 13);
+  const anx = t1.slice(13, 18);
+  const avd = t1.slice(18, 23);
+  const conflict = t1.slice(23, 29);
+
+  const redCount = redFlags.reduce((s, x) => s + (Number(x) === 1 ? 1 : 0), 0); // 0..5
+  const redPercent = Math.round((redCount / 5) * 100); // 0..100
+  const satisfPercent = toPercentFromLikert(avg(satisf), 4);
+  const anxPercent = toPercentFromLikert(avg(anx), 4);
+  const avdPercent = toPercentFromLikert(avg(avd), 4);
+  const conflictPercent = toPercentFromLikert(avg(conflict), 3);
+
+  const attachMix = avg([anxPercent, avdPercent].filter((x) => x != null));
+  const attachPercent = attachMix == null ? null : clamp(Math.round(attachMix), 0, 100);
+
+  const t1Diagrams = [
+    { key: "t1_redflags", title: "ریسک خط قرمزها", percent: redPercent, label: percentLabel(redPercent) },
+    {
+      key: "t1_satisfaction",
+      title: "رضایت و کیفیت رابطه",
+      percent: satisfPercent ?? 0,
+      label: percentLabel(satisfPercent ?? 0),
+    },
+    {
+      key: "t1_attachment",
+      title: "تنش دلبستگی (اضطراب/اجتناب)",
+      percent: attachPercent ?? 0,
+      label: percentLabel(attachPercent ?? 0),
+    },
+    {
+      key: "t1_conflict",
+      title: "مسمومیت تعارض و دعوا",
+      percent: conflictPercent ?? 0,
+      label: percentLabel(conflictPercent ?? 0),
+    },
+  ];
+
+  // ---------- TEST2 INDEX MAP ----------
+  // 0..4   : evidence (0..4)  (high = good)
+  // 5..9   : ambiguous (0..4) (high = risk)
+  // 10..14 : waiting cost (0..4) (high = bad)
+  // 15..19 : maturity (0..4) (high = good)
+
+  const evidence = t2.slice(0, 5);
+  const ambiguous = t2.slice(5, 10);
+  const cost = t2.slice(10, 15);
+  const maturity = t2.slice(15, 20);
+
+  const evidenceP = toPercentFromLikert(avg(evidence), 4);
+  const ambiguousP = toPercentFromLikert(avg(ambiguous), 4);
+  const costP = toPercentFromLikert(avg(cost), 4);
+  const maturityP = toPercentFromLikert(avg(maturity), 4);
+
+  const t2Diagrams = didSkipTest2
+    ? []
+    : [
+        {
+          key: "t2_evidence",
+          title: "شواهد واقعیِ بازگشت",
+          percent: evidenceP ?? 0,
+          label: percentLabel(evidenceP ?? 0),
+        },
+        {
+          key: "t2_ambiguity",
+          title: "سیگنال‌های مبهم/تعلیق",
+          percent: ambiguousP ?? 0,
+          label: percentLabel(ambiguousP ?? 0),
+        },
+        {
+          key: "t2_cost",
+          title: "هزینه روانیِ انتظار",
+          percent: costP ?? 0,
+          label: percentLabel(costP ?? 0),
+        },
+        {
+          key: "t2_maturity",
+          title: "بلوغ رابطه‌ای طرف مقابل",
+          percent: maturityP ?? 0,
+          label: percentLabel(maturityP ?? 0),
+        },
+      ];
+
+  // ---------- One-look Summary ----------
+  const riskHard = redPercent >= 60 || (conflictPercent != null && conflictPercent >= 70);
+
+  let oneLook = "";
+  let nextStep = "";
+
+  if (riskHard) {
+    oneLook =
+      "پرریسک: احتمالاً این رابطه «قابل برگشتِ سالم» نیست؛ حتی اگر برگردد، احتمال تکرار الگو بالاست.";
+    nextStep =
+      "تمرکز اصلی را بگذار روی «بستن» و بازسازی خودت؛ اگر قرار شد ارتباطی باشد، فقط با مرزهای سخت + تغییر قابل مشاهده.";
+  } else if (!didSkipTest2 && evidenceP != null && maturityP != null && ambiguousP != null) {
+    const goodReturn = evidenceP >= 60 && maturityP >= 60 && ambiguousP <= 40;
+    if (goodReturn) {
+      oneLook =
+        "مشروطاً امیدوارکننده: نشانه‌هایی از بازگشت واقعی هست، ولی فقط اگر «تعهد + برنامه + ثبات» داشته باشد.";
+      nextStep =
+        "قبل از هر تصمیم: سه شرط بگذار (تعهد روشن، اقدام پایدار، مرزها) و وارد مذاکره‌ی بدون ابهام شو.";
+    } else {
+      oneLook =
+        "تعلیق‌محور: احتمالاً چیزی که داری تجربه می‌کنی بیشتر «ابهام» است تا بازگشت واقعی.";
+      nextStep =
+        "قانون طلایی: «بدون اقدام مشخص، هیچ معنایی ندارد.» تمرکز را از علامت‌های مبهم بردار و مسیر درمان را جلو ببر.";
+    }
+  } else {
+    oneLook =
+      "نتیجه بر اساس آزمون بازسنجی: وضعیت کلی رابطه باید با واقعیت‌های سخت سنجیده شود، نه امید.";
+    nextStep =
+      "اگر وسوسه‌ی برگشت داری، اول خط‌قرمزها و الگوی تعارض را اصلاح‌پذیر کن؛ بعد تصمیم.";
+  }
+
+  return {
+    diagrams: {
+      test1: t1Diagrams,
+      test2: t2Diagrams,
+    },
+    summary: {
+      oneLook,
+      nextStep,
+      meta: {
+        test1: { redPercent, satisfPercent, attachPercent, conflictPercent },
+        test2: didSkipTest2 ? null : { evidenceP, ambiguousP, costP, maturityP },
+      },
+    },
+  };
+}
+
+function buildResultSkeleton({ user, session }) {
+  const locked = !isUserPro(user);
+  const didSkipTest2 = !!session.test2SkippedAt;
+
+  const { diagrams, summary } = buildDiagramsAndSummary(session.answersJson, didSkipTest2);
+
+  return {
+    locked,
+    meta: {
+      didSkipTest2,
+      note: didSkipTest2
+        ? "کاربر آزمون دوم را اسکیپ کرده است. نتیجه بر اساس آزمون ۱ ارائه می‌شود."
+        : "کاربر هر دو آزمون را داده است.",
+    },
+    diagrams,
+    summary,
+    message: locked
+      ? "برای دیدن نتیجه‌ی کامل (نمودارها + جمع‌بندی درمان‌محور) باید اشتراک پرو رو فعال کنی."
+      : "نتیجه آماده است.",
+  };
+}
+
 /* ----------------------- Question bank defaults ---------------------- */
 /**
  * ما سوال‌ها را داخل DB ذخیره می‌کنیم (ReviewQuestionSet / ReviewQuestion / ReviewOption)
@@ -161,7 +359,7 @@ function buildDefaultQuestions() {
   pushT2("درخواست بازگشت او همراه با برنامه، تعهد یا پیشنهاد مشخص بوده است.", null, OPT_0_4_AGREE);
   pushT2("او برای ترمیم رابطه هزینه‌ی واقعی (زمان، درمان، تلاش مستمر) پرداخت کرده است.", null, OPT_0_4_AGREE);
 
-  // 2) سیگنال‌های مبهم و تعلیق‌آور (5) - امتیاز بالا خطر است ولی فعلاً فقط ذخیره
+  // 2) سیگنال‌های مبهم و تعلیق‌آور (5)
   pushT2("او پس از جدایی پیام‌هایی ابراز دلتنگی یا احساس می‌فرستد بدون اینکه تصمیم یا تعهد روشنی ارائه دهد.", null, OPT_0_4_AGREE);
   pushT2("الگوی ارتباط ما قطع و وصل می‌شود؛ مدتی نزدیک است و ناگهان فاصله می‌گیرد.", null, OPT_0_4_AGREE);
   pushT2("او با رفتارش کاری می‌کند که من در دسترس بمانم، بدون اینکه تکلیف رابطه را مشخص کند.", null, OPT_0_4_AGREE);
@@ -253,29 +451,6 @@ async function findQuestionInSet(questionSetId, testNoInt, index) {
     where: { questionSetId, testNo, order: index },
     include: { options: { orderBy: [{ order: "asc" }] } },
   });
-}
-
-function buildResultSkeleton({ user, session }) {
-  const locked = !isUserPro(user);
-
-  // فعلاً تحلیل نهایی واقعی رو بعداً می‌سازیم.
-  // همین اسکلت برای paywall / UX کافیه.
-  const didSkipTest2 = !!session.test2SkippedAt;
-
-  return {
-    locked,
-    meta: {
-      didSkipTest2,
-      note: didSkipTest2
-        ? "کاربر آزمون دوم را اسکیپ کرده است. نتیجه فعلاً بر اساس آزمون ۱ نمایش/قفل می‌شود."
-        : "کاربر هر دو آزمون را داده است.",
-    },
-    diagrams: null,
-    summary: null,
-    message: locked
-      ? "برای دیدن نتیجه‌ی کامل (۴ نمودار + جمع‌بندی درمان‌محور) باید اشتراک پرو رو فعال کنی."
-      : "نتیجه آماده است.",
-  };
 }
 
 /* ------------------------------ routes ------------------------------ */
@@ -726,8 +901,10 @@ router.get("/result", async (req, res) => {
 
     const pro = isUserPro(user);
 
-    // اگر session قفل است ولی کاربر پرو شده، بازش کن
+    // ✅ اگر session قفل است ولی کاربر پرو شده: بازش کن + نتیجه کامل بساز (self-heal)
     if (session.status === "completed_locked" && pro) {
+      const fresh = buildResultSkeleton({ user, session: { ...session, status: "unlocked" } });
+
       const updated = await prisma.pelekanReviewSession.update({
         where: { userId: user.id },
         data: {
@@ -735,13 +912,10 @@ router.get("/result", async (req, res) => {
           unlockedAt: now(),
           paywallShownAt: session.paywallShownAt ?? now(),
           updatedAt: now(),
-          resultJson: {
-            ...(session.resultJson || {}),
-            locked: false,
-            message: "نتیجه آماده است.",
-          },
+          resultJson: { ...fresh, locked: false, message: "نتیجه آماده است." },
         },
       });
+
       return res.json({
         ok: true,
         data: {
@@ -752,7 +926,7 @@ router.get("/result", async (req, res) => {
       });
     }
 
-    // حالت قفل
+    // ✅ حالت قفل (FREE) -> فقط پیام paywall برگردان (ولی ورود به پلکان آزاد)
     if (session.status === "completed_locked" && !pro) {
       // ثبت اینکه paywall دیده شد
       if (!session.paywallShownAt) {
@@ -761,6 +935,7 @@ router.get("/result", async (req, res) => {
           data: { paywallShownAt: now(), updatedAt: now() },
         });
       }
+
       return res.json({
         ok: true,
         data: {
@@ -768,10 +943,36 @@ router.get("/result", async (req, res) => {
           canEnterPelekan: computeCanEnterPelekan(session), // ✅ مهم: قفل ≠ بن‌بست
           result: {
             locked: true,
-            message: "برای دیدن نتیجه‌ی کامل (۴ نمودار + جمع‌بندی درمان‌محور) باید PRO را فعال کنی.",
+            message: "برای دیدن نتیجه‌ی کامل و کارهایی که در ادامه باید انجام بدی، اشتراک پرو رو فعال کن.",
           },
         },
       });
+    }
+
+    // ✅ اگر unlocked است و pro است ولی نتیجه ناقص/خالی است => self-heal
+    if (pro && session.status === "unlocked") {
+      const rj = session.resultJson || null;
+      const lacks = !rj || !rj.summary || !rj.diagrams;
+      if (lacks) {
+        const fresh = buildResultSkeleton({ user, session });
+
+        const updated = await prisma.pelekanReviewSession.update({
+          where: { userId: user.id },
+          data: {
+            resultJson: { ...fresh, locked: false, message: "نتیجه آماده است." },
+            updatedAt: now(),
+          },
+        });
+
+        return res.json({
+          ok: true,
+          data: {
+            status: updated.status,
+            canEnterPelekan: computeCanEnterPelekan(updated),
+            result: updated.resultJson || null,
+          },
+        });
+      }
     }
 
     // unlocked یا in_progress
