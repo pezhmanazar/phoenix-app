@@ -122,8 +122,8 @@ function canUnlockGosastanGate({
 }) {
   if (gosastanUnlockedAt) return true;
 
-  const allActionsOk = (actionsProgress || []).every((a) => a.completed >= a.minRequired);
-  if (!allActionsOk) return false;
+  const arr = Array.isArray(actionsProgress) ? actionsProgress : [];
+  if (arr.length !== 8) return false;
 
   if (!contractSignedAt) return false;
 
