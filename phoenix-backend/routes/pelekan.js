@@ -120,20 +120,27 @@ function canUnlockGosastanGate({
   lastSafetyCheckResult, // none | role_based | emotional
   gosastanUnlockedAt,
 }) {
+  // already unlocked
   if (gosastanUnlockedAt) return true;
 
+  // must have exactly 8 actions
   const arr = Array.isArray(actionsProgress) ? actionsProgress : [];
   if (arr.length !== 8) return false;
 
+  // all 8 actions must meet minimum required subtasks
+  const allActionsOk = arr.every((a) => (a?.completed || 0) >= (a?.minRequired || 0));
+  if (!allActionsOk) return false;
+
+  // contract must be signed
   if (!contractSignedAt) return false;
 
-  // must be within 24h
+  // safety check must be within last 24 hours
   if (!isWithinMs(lastSafetyCheckAt, 24 * 60 * 60 * 1000)) return false;
 
-  // emotional => fail
+  // emotional contact/checking fails
   if (lastSafetyCheckResult === "emotional") return false;
 
-  // none or role_based => pass
+  // none or role_based passes
   return lastSafetyCheckResult === "none" || lastSafetyCheckResult === "role_based";
 }
 
