@@ -892,6 +892,8 @@ router.post("/finish", async (req, res) => {
 // GET result (اگر قفل بود فقط پیام paywall بده)
 router.get("/result", async (req, res) => {
   try {
+    console.log("[pelekanReview/result] BUILD = 2025-12-23-REV2");
+    
     const phone = String(req.query.phone || "").trim();
     const user = await getUserByPhone(phone);
     if (!user) return res.json({ ok: false, error: "USER_NOT_FOUND" });
