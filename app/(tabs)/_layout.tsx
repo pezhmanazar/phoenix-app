@@ -327,6 +327,13 @@ export default function TabsLayout() {
           href: null,
         }}
       />
+<Tabs.Screen
+  name="ReviewResult"
+  options={{
+    href: null, // ✅ مخفی در تب‌بار
+    title: "نتیجه آزمون",
+  }}
+/>
     </Tabs>
   );
 }

@@ -217,10 +217,15 @@ export default function Review({ me, state, onRefresh }: Props) {
     }
   }, [phone]);
 
+  // ✅ صفحه نتیجه جداست + phone لازم است
+  const goToResultPage = useCallback(() => {
+    router.replace(`/(tabs)/ReviewResult?phone=${encodeURIComponent(phone)}` as any);
+  }, [router, phone]);
+
   const openResultScreen = useCallback(async () => {
-    setResultOpen(true);
-    await fetchResult();
-  }, [fetchResult]);
+    // ✅ صفحه نتیجه جداست
+    goToResultPage();
+  }, [goToResultPage]);
 
   // ✅ فقط وقتی session.questionSetId خالیه start بزن، با lock
   const ensureStarted = useCallback(
@@ -388,6 +393,12 @@ export default function Review({ me, state, onRefresh }: Props) {
   const goToTest2 = useCallback(async () => {
     if (!phone) return;
 
+    // ✅ اگر سشن دیگه in_progress نیست، POST نزن
+    if (session?.status !== "in_progress") {
+      await openResultScreen();
+      return;
+    }
+
     if (submitLockRef.current) return;
     submitLockRef.current = true;
 
@@ -411,11 +422,17 @@ export default function Review({ me, state, onRefresh }: Props) {
       setLoading(false);
       submitLockRef.current = false;
     }
-  }, [phone, fetchReviewState, onRefresh]);
+  }, [phone, session?.status, fetchReviewState, onRefresh, openResultScreen]);
 
-  // ✅ عبور از آزمون دوم از پایان آزمون ۱ => finish => نتیجه (قفل/باز) => امکان رفتن پلکان
+  // ✅ عبور از آزمون دوم از پایان آزمون ۱ => finish => نتیجه
   const passTest2FromEndOfTest1 = useCallback(async () => {
     if (!phone) return;
+
+    // ✅ اگر سشن دیگه in_progress نیست، POST نزن
+    if (session?.status !== "in_progress") {
+      await openResultScreen();
+      return;
+    }
 
     if (submitLockRef.current) return;
     submitLockRef.current = true;
@@ -462,11 +479,17 @@ export default function Review({ me, state, onRefresh }: Props) {
       setLoading(false);
       submitLockRef.current = false;
     }
-  }, [phone, fetchReviewState, onRefresh, openResultScreen]);
+  }, [phone, session?.status, fetchReviewState, onRefresh, openResultScreen]);
 
   // ✅ پایان آزمون 2 => finish => نتیجه
   const finishAfterTest2 = useCallback(async () => {
     if (!phone) return;
+
+    // ✅ اگر سشن دیگه in_progress نیست، POST نزن
+    if (session?.status !== "in_progress") {
+      await openResultScreen();
+      return;
+    }
 
     if (submitLockRef.current) return;
     submitLockRef.current = true;
@@ -502,11 +525,17 @@ export default function Review({ me, state, onRefresh }: Props) {
       setLoading(false);
       submitLockRef.current = false;
     }
-  }, [phone, fetchReviewState, onRefresh, openResultScreen]);
+  }, [phone, session?.status, fetchReviewState, onRefresh, openResultScreen]);
 
   // ✅ عبور از آزمون دوم (داخل تست۲) => finish => نتیجه
   const passTest2 = useCallback(async () => {
     if (!phone) return;
+
+    // ✅ اگر سشن دیگه in_progress نیست، POST نزن
+    if (session?.status !== "in_progress") {
+      await openResultScreen();
+      return;
+    }
 
     if (submitLockRef.current) return;
     submitLockRef.current = true;
@@ -542,7 +571,7 @@ export default function Review({ me, state, onRefresh }: Props) {
       setLoading(false);
       submitLockRef.current = false;
     }
-  }, [phone, fetchReviewState, onRefresh, openResultScreen]);
+  }, [phone, session?.status, fetchReviewState, onRefresh, openResultScreen]);
 
   const manualReload = useCallback(() => {
     bootRef.current.done = false;
@@ -778,7 +807,18 @@ export default function Review({ me, state, onRefresh }: Props) {
 
           <View style={{ height: 14 }} />
 
-          <Pressable style={[styles.btnPrimary, { borderColor: palette.border }]} onPress={finishAfterTest2} disabled={loading}>
+          <Pressable
+            style={[styles.btnPrimary, { borderColor: palette.border }]}
+            onPress={() => {
+              // ✅ اگر قبلاً finish شده، دوباره POST نزن
+              if (session?.status !== "in_progress") {
+                goToResultPage();
+                return;
+              }
+              finishAfterTest2();
+            }}
+            disabled={loading}
+          >
             <Text style={[styles.btnText, { color: palette.text }]}>{loading ? "..." : "ثبت نهایی و رفتن به نتیجه"}</Text>
           </Pressable>
 
