@@ -21,7 +21,7 @@ enum TicketStatus {
 
 // ⬅️ نوع تیکت
 enum TicketType {
-  tech   // پشتیبانی فنی
+  tech // پشتیبانی فنی
   therapy // ارتباط با درمانگر
 }
 
@@ -161,8 +161,8 @@ model User {
   pelekanReviewSession PelekanReviewSession? // ✅ NEW
 
   // ✅ NEW: Bastan (اقدام‌محور)
-  bastanState          BastanState?
-  bastanActionProgress BastanActionProgress[]
+  bastanState           BastanState?
+  bastanActionProgress  BastanActionProgress[]
   bastanSubtaskProgress BastanSubtaskProgress[]
 }
 
@@ -407,7 +407,7 @@ model PelekanTask {
 
   titleFa     String
   description String?
-  sortOrder   Int @default(0)
+  sortOrder   Int     @default(0)
 
   weightPercent Int @default(10)
 
@@ -448,7 +448,7 @@ model PelekanDayProgress {
 
   unlockedNextAt DateTime?
 
-  resetCount  Int @default(0)
+  resetCount  Int       @default(0)
   lastResetAt DateTime?
 
   xpEarned Int @default(0)
@@ -512,7 +512,7 @@ model UserMedal {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   medalId String
-  medal   Medal @relation(fields: [medalId], references: [id], onDelete: Cascade)
+  medal   Medal  @relation(fields: [medalId], references: [id], onDelete: Cascade)
 
   earnedAt DateTime @default(now())
 
@@ -565,9 +565,9 @@ model PelekanStreak {
  */
 
 enum NoContactEventType {
-  none            // هیچ تماس/چک‌کردن
-  role_based      // تماس نقش‌محور (کار/فرزند) => تخلف حساب نمی‌شود
-  emotional       // تماس هیجانی/چک‌کردن/پیام غیرضروری => تخلف
+  none // هیچ تماس/چک‌کردن
+  role_based // تماس نقش‌محور (کار/فرزند) => تخلف حساب نمی‌شود
+  emotional // تماس هیجانی/چک‌کردن/پیام غیرضروری => تخلف
 }
 
 model NoContactLog {
@@ -600,21 +600,21 @@ model NoContactLog {
  * - ویس اول رایگان است.
  * - ورود به اقدامات (و زیر اقدام‌ها) pro-locked است.
  * - باز شدن «گسستن» فقط بعد از:
- *   1) تکمیل هر ۸ اقدام
- *   2) رعایت حداقل زیر اقدام‌ها در هر اقدام
- *   3) امضای تعهدنامه
- *   4) پاس شدن چک امنیتی ۲۴ ساعته
+ * 1) تکمیل هر ۸ اقدام
+ * 2) رعایت حداقل زیر اقدام‌ها در هر اقدام
+ * 3) امضای تعهدنامه
+ * 4) پاس شدن چک امنیتی ۲۴ ساعته
  */
 
 enum BastanActionCode {
-  reality_check        // 1️⃣ Reality Check
+  reality_check // 1️⃣ Reality Check
   adult_responsibility // 2️⃣ Adult Responsibility
-  unsent_letter        // 3️⃣ Unsent Letter (72h lock)
-  trigger_detox        // 4️⃣ Trigger Detox
-  limited_contact      // 5️⃣ FRL Protocol
-  meaning_learning     // 6️⃣ Meaning & Learning
-  closure_ritual       // 7️⃣ Closure Ritual
-  commitment_contract  // 8️⃣ Commitment Contract
+  unsent_letter // 3️⃣ Unsent Letter (72h lock)
+  trigger_detox // 4️⃣ Trigger Detox
+  limited_contact // 5️⃣ FRL Protocol
+  meaning_learning // 6️⃣ Meaning & Learning
+  closure_ritual // 7️⃣ Closure Ritual
+  commitment_contract // 8️⃣ Commitment Contract
 }
 
 enum BastanProgressStatus {
@@ -634,7 +634,7 @@ enum BastanSubtaskKind {
 }
 
 model BastanActionDefinition {
-  id        String          @id @default(uuid())
+  id        String           @id @default(uuid())
   code      BastanActionCode @unique
   titleFa   String
   sortOrder Int
@@ -644,8 +644,8 @@ model BastanActionDefinition {
   totalSubtasks       Int @default(0)
 
   // امتیازدهی پایه (اختیاری)
-  xpPerSubtask  Int @default(0)
-  xpOnComplete  Int @default(0)
+  xpPerSubtask Int @default(0)
+  xpOnComplete Int @default(0)
 
   // اگر این اقدام مدال/بج دارد، از codeها استفاده می‌کنیم (seed جدا)
   medalCode String?
@@ -657,23 +657,23 @@ model BastanActionDefinition {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  subtasks BastanSubtaskDefinition[]
-  progress BastanActionProgress[]
+  subtasks          BastanSubtaskDefinition[]
+  progress          BastanActionProgress[]
   subtaskProgresses BastanSubtaskProgress[]
 
   @@index([sortOrder])
 }
 
 model BastanSubtaskDefinition {
-  id       String @id @default(uuid())
+  id String @id @default(uuid())
 
   actionId String
   action   BastanActionDefinition @relation(fields: [actionId], references: [id], onDelete: Cascade)
 
-  key       String
-  titleFa   String
-  helpFa    String?
-  kind      BastanSubtaskKind @default(form)
+  key     String
+  titleFa String
+  helpFa  String?
+  kind    BastanSubtaskKind @default(form)
 
   // برخی زیر اقدام‌ها اجباری‌اند (مثل نامه/سوگند/قفل)
   isRequired Boolean @default(false)
@@ -707,9 +707,9 @@ model BastanActionProgress {
   status BastanProgressStatus @default(locked)
 
   // شمارنده‌ها برای محاسبه سریع UI
-  doneSubtasksCount Int @default(0)
+  doneSubtasksCount   Int @default(0)
   minRequiredSubtasks Int @default(0)
-  totalSubtasks Int @default(0)
+  totalSubtasks       Int @default(0)
 
   startedAt   DateTime?
   completedAt DateTime?
@@ -767,14 +767,14 @@ model BastanState {
   introAudioCompletedAt DateTime?
 
   // قرارداد (اقدام ۸)
-  contractNameTyped String?
-  contractSignedAt  DateTime?
+  contractNameTyped     String?
+  contractSignedAt      DateTime?
   contractSignatureJson Json? // signature pad یا هر فرم امضا
 
   // چک امنیتی ۲۴ ساعته (Gate نهایی)
-  lastSafetyCheckAt DateTime?
+  lastSafetyCheckAt     DateTime?
   lastSafetyCheckResult NoContactEventType?
-  safetyWindowStartsAt DateTime? // اگر emotional شد، از نو شروع می‌شود
+  safetyWindowStartsAt  DateTime? // اگر emotional شد، از نو شروع می‌شود
 
   // باز شدن مرحله گسستن
   gosastanUnlockedAt DateTime?
