@@ -18,7 +18,7 @@ const actions = [
     sortOrder: 2,
     code: "adult_responsibility",
     titleFa: "Adult Responsibility – پذیرش سهم بدون خودسرزنشی",
-    totalSubtasks: 4,
+    totalSubtasks: 5,
     minRequiredSubtasks: 3,
     isProLocked: false,
     medalCode: "bronze",
