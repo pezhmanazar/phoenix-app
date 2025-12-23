@@ -659,6 +659,7 @@ model BastanActionDefinition {
 
   subtasks BastanSubtaskDefinition[]
   progress BastanActionProgress[]
+  subtaskProgresses BastanSubtaskProgress[]
 
   @@index([sortOrder])
 }
