@@ -104,6 +104,39 @@ function applyDebugProgress(req, hasAnyProgress) {
   return hasAnyProgressFinal;
 }
 
+// -------------------- Bastan helpers (action-based) --------------------
+
+function isWithinMs(dt, ms) {
+  if (!dt) return false;
+  const t = new Date(dt).getTime();
+  if (!Number.isFinite(t)) return false;
+  return Date.now() - t <= ms;
+}
+
+function canUnlockGosastanGate({
+  actionsProgress, // [{ completed, minRequired }]
+  contractSignedAt,
+  lastSafetyCheckAt,
+  lastSafetyCheckResult, // none | role_based | emotional
+  gosastanUnlockedAt,
+}) {
+  if (gosastanUnlockedAt) return true;
+
+  const allActionsOk = (actionsProgress || []).every((a) => a.completed >= a.minRequired);
+  if (!allActionsOk) return false;
+
+  if (!contractSignedAt) return false;
+
+  // must be within 24h
+  if (!isWithinMs(lastSafetyCheckAt, 24 * 60 * 60 * 1000)) return false;
+
+  // emotional => fail
+  if (lastSafetyCheckResult === "emotional") return false;
+
+  // none or role_based => pass
+  return lastSafetyCheckResult === "none" || lastSafetyCheckResult === "role_based";
+}
+
 // -------------------- Baseline Assessment (hb_baseline) --------------------
 
 const HB_BASELINE = {
@@ -567,6 +600,178 @@ router.get("/state", authUser, async (req, res) => {
     });
   } catch (e) {
     console.error("[pelekan.state] error:", e);
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
+/* ---------- GET /api/pelekan/bastan/state ---------- */
+router.get("/bastan/state", authUser, async (req, res) => {
+  try {
+    noStore(res);
+
+    const phone = req.userPhone;
+
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true, plan: true, planExpiresAt: true },
+    });
+    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+
+    const basePlan = getPlanStatus(user.plan, user.planExpiresAt);
+    const { planStatusFinal, daysLeftFinal } = applyDebugPlan(
+      req,
+      basePlan.planStatus,
+      basePlan.daysLeft
+    );
+
+    const isProLike = planStatusFinal === "pro" || planStatusFinal === "expiring";
+
+    const [state, actions] = await Promise.all([
+      prisma.bastanState.upsert({
+        where: { userId: user.id },
+        create: { userId: user.id },
+        update: {},
+        select: {
+          introAudioCompletedAt: true,
+          contractNameTyped: true,
+          contractSignatureJson: true,
+          contractSignedAt: true,
+          lastSafetyCheckAt: true,
+          lastSafetyCheckResult: true,
+          safetyWindowStartsAt: true,
+          gosastanUnlockedAt: true,
+        },
+      }),
+      prisma.bastanActionDefinition.findMany({
+        orderBy: { sortOrder: "asc" },
+        include: {
+          subtasks: { orderBy: { sortOrder: "asc" } },
+        },
+      }),
+    ]);
+
+    // progress: count done subtasks grouped by actionId
+    const doneAgg = await prisma.bastanSubtaskProgress.groupBy({
+      by: ["actionId"],
+      where: { userId: user.id, isDone: true },
+      _count: { _all: true },
+    });
+
+    const doneByActionId = {};
+    for (const r of doneAgg) doneByActionId[r.actionId] = r._count._all || 0;
+
+    // Build actions UI with sequential unlock + pro locks
+    const actionsUi = [];
+    let prevUnlockedByProgress = true; // first action available
+    for (const a of actions) {
+      const completed = doneByActionId[a.id] || 0;
+      const minReq = a.minRequiredSubtasks;
+      const total = a.totalSubtasks;
+
+      const isComplete = completed >= minReq;
+
+      let locked = false;
+      let lockReason = null;
+
+      if (!prevUnlockedByProgress) {
+        locked = true;
+        lockReason = "previous_action_incomplete";
+      }
+
+      if (!locked && a.isProLocked && !isProLike) {
+        locked = true;
+        lockReason = "pro_required";
+      }
+
+      // if intro audio not completed, we still allow showing list, but can gate interaction in UI
+      // (UI rule: intro audio free -> then paywall; backend returns intro status)
+      const status = locked ? "locked" : isComplete ? "completed" : "active";
+
+      actionsUi.push({
+        code: a.code,
+        titleFa: a.titleFa,
+        sortOrder: a.sortOrder,
+        medalCode: a.medalCode,
+        badgeCode: a.badgeCode,
+        isProLocked: a.isProLocked,
+        totalSubtasks: total,
+        minRequiredSubtasks: minReq,
+        progress: { done: completed, required: minReq, total },
+        status,
+        locked,
+        lockReason,
+        subtasks: (a.subtasks || []).map((s) => ({
+          key: s.key,
+          kind: s.kind,
+          titleFa: s.titleFa,
+          helpFa: s.helpFa,
+          isRequired: s.isRequired,
+          isFree: s.isFree,
+          sortOrder: s.sortOrder,
+          xpReward: s.xpReward,
+        })),
+      });
+
+      // next action can unlock only if current action has met requirement
+      prevUnlockedByProgress = prevUnlockedByProgress && isComplete;
+    }
+
+    // Gate logic for gosastan
+    const actionsProgressForGate = actionsUi.map((a) => ({
+      completed: a.progress.done,
+      minRequired: a.minRequiredSubtasks,
+    }));
+
+    const canUnlock = canUnlockGosastanGate({
+      actionsProgress: actionsProgressForGate,
+      contractSignedAt: state.contractSignedAt,
+      lastSafetyCheckAt: state.lastSafetyCheckAt,
+      lastSafetyCheckResult: state.lastSafetyCheckResult,
+      gosastanUnlockedAt: state.gosastanUnlockedAt,
+    });
+
+    let gosastanUnlockedAtFinal = state.gosastanUnlockedAt;
+
+    if (canUnlock && !gosastanUnlockedAtFinal) {
+      const updated = await prisma.bastanState.update({
+        where: { userId: user.id },
+        data: { gosastanUnlockedAt: new Date() },
+        select: { gosastanUnlockedAt: true },
+      });
+      gosastanUnlockedAtFinal = updated.gosastanUnlockedAt;
+    }
+
+    // UI paywall hint: after intro audio, user should hit paywall if not pro-like
+    const introDone = !!state.introAudioCompletedAt;
+    const paywallNeededAfterIntro = introDone && !isProLike;
+
+    return res.json({
+      ok: true,
+      data: {
+        user: { planStatus: planStatusFinal, daysLeft: daysLeftFinal },
+        intro: {
+          completedAt: state.introAudioCompletedAt,
+          paywallNeededAfterIntro,
+        },
+        contract: {
+          nameTyped: state.contractNameTyped,
+          signatureJson: state.contractSignatureJson,
+          signedAt: state.contractSignedAt,
+        },
+        safety: {
+          lastAt: state.lastSafetyCheckAt,
+          lastResult: state.lastSafetyCheckResult,
+          windowStartsAt: state.safetyWindowStartsAt,
+        },
+        gosastan: {
+          canUnlockNow: canUnlock,
+          unlockedAt: gosastanUnlockedAtFinal,
+        },
+        actions: actionsUi,
+      },
+    });
+  } catch (e) {
+    console.error("[pelekan.bastan.state] error:", e);
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
