@@ -4,8 +4,10 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+
 import Baseline from "../../components/pelekan/Baseline";
 import ChoosePath from "../../components/pelekan/ChoosePath";
+import CircleRow from "../../components/pelekan/CircleRow";
 import IdlePlaceholder from "../../components/pelekan/IdlePlaceholder";
 import Review from "../../components/pelekan/Review";
 import TreatmentView, {
@@ -80,7 +82,6 @@ export default function PelekanTab() {
   // ✅ جدا کردن لود اولیه از رفرش‌ها (برای جلوگیری از unmount شدن Review)
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
   const [state, setState] = useState<PelekanState>(initialState);
   const [headerHeight, setHeaderHeight] = useState(0);
 
@@ -111,7 +112,7 @@ export default function PelekanTab() {
         }
 
         const res = await fetch(
-          `https://qoqnoos.app/api/pelekan/state?phone=${encodeURIComponent(phone)}`,
+          `https://api.qoqnoos.app/api/pelekan/state?phone=${encodeURIComponent(phone)}`,
           { headers: { "Cache-Control": "no-store" } }
         );
 
@@ -132,6 +133,10 @@ export default function PelekanTab() {
           treatment: data?.treatment ?? null,
           stages: Array.isArray(data?.stages) ? data.stages : [],
         };
+
+        console.log("[pelekan] tabState =", data?.tabState);
+        console.log("[pelekan] baseline.session =", data?.baseline?.session);
+        console.log("[pelekan] review.session =", data?.review?.session);
 
         setState(merged);
       } catch {
@@ -155,21 +160,29 @@ export default function PelekanTab() {
     }, [fetchState])
   );
 
+  // ✅ CircleRow فقط اینجاها بیاد (نه در baseline_assessment و نه در review)
+  const showCircleRow =
+    state.tabState === "idle" || state.tabState === "choose_path" || state.tabState === "treating";
+
   // ✅ لیست پلکان فقط وقتی treating هست
   const pathItems: ListItem[] = useMemo(() => {
     if (state.tabState !== "treating") return [];
+
     const stages = state.stages || [];
     const list: ListItem[] = [];
     let zigCounter = 0;
 
     for (const st of stages) {
       list.push({ kind: "header", id: `h-${st.id}`, stage: st });
+
       for (const d of st.days || []) {
         const zig: "L" | "R" = zigCounter++ % 2 === 0 ? "L" : "R";
         list.push({ kind: "day", id: `d-${d.id}`, day: d as PelekanDay, stage: st, zig });
       }
+
       list.push({ kind: "spacer", id: `sp-${st.id}` });
     }
+
     return list;
   }, [state.tabState, state.stages]);
 
@@ -178,10 +191,12 @@ export default function PelekanTab() {
     (day: PelekanDay) => {
       const paywallNeeded = !!state?.ui?.paywall?.needed;
       const noFullAccess = state?.treatmentAccess !== "full";
+
       if (paywallNeeded || noFullAccess) {
         router.push("/(tabs)/Subscription");
         return;
       }
+
       router.push({ pathname: "/pelekan/day/[id]", params: { id: day.id } });
     },
     [router, state?.ui?.paywall?.needed, state?.treatmentAccess]
@@ -226,6 +241,27 @@ export default function PelekanTab() {
       </View>
 
       <TopBanner enabled headerHeight={headerHeight} />
+
+      {/* ✅ CircleRow: فقط وقتی showCircleRow */}
+      {showCircleRow && (
+        <CircleRow
+          tabState={state.tabState}
+          baselineStatus={state?.baseline?.session?.status ?? null}
+          reviewChosenPath={state?.review?.session?.chosenPath ?? null}
+          onGoResults={() => {
+            // TODO: وقتی صفحه نتایج ساختی، اینجا رو به route واقعی وصل می‌کنیم
+            router.push("/(tabs)/Pelekan");
+          }}
+          onGoBaseline={() => {
+            // TODO: اگر صفحه جدا برای baseline ساختی، اینجا وصل میشه
+            router.push("/(tabs)/Pelekan");
+          }}
+          onGoReview={() => {
+            // TODO: اگر صفحه جدا برای review/result ساختی، اینجا وصل میشه
+            router.push("/(tabs)/Pelekan");
+          }}
+        />
+      )}
 
       {/* ✅ رفرش سبک، بدون unmount */}
       {refreshing && (

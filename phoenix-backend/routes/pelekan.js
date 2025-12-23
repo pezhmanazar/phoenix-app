@@ -536,23 +536,30 @@ router.get("/state", authUser, async (req, res) => {
     const activeDayId = computeActiveDayId({ stages, dayProgress });
 
     const hasAnyProgress = Array.isArray(dayProgress) && dayProgress.length > 0;
-    const hasAnyProgressFinal = applyDebugProgress(req, hasAnyProgress);
+const hasAnyProgressFinal = applyDebugProgress(req, hasAnyProgress);
 
-    let tabState = "idle";
+// ✅ اگر بازسنجی کامل یا اسکیپ شده باشد، باید بتواند وارد پلکان شود حتی بدون dayProgress
+const reviewDoneOrSkipped = !!reviewSession?.completedAt || !!reviewSession?.test2SkippedAt;
 
-    if (hasAnyProgressFinal) tabState = "treating";
-    else if (isBaselineInProgress) tabState = "baseline_assessment";
-    else if (reviewSession?.chosenPath === "review") tabState = "review";
-    else if (isBaselineCompleted) tabState = "choose_path";
+// ✅ معیار واقعی "شروع درمان" برای تب پلکان
+const hasStartedTreatment = hasAnyProgressFinal || reviewDoneOrSkipped;
 
-    const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasAnyProgressFinal);
+let tabState = "idle";
 
-    // ✅ IMPORTANT: do NOT show paywall while baseline is in progress
-    const suppressPaywall = tabState === "baseline_assessment";
-    const paywall = suppressPaywall
-      ? { needed: false, reason: null }
-      : computePaywall(planStatusFinal, hasAnyProgressFinal);
+if (hasStartedTreatment) tabState = "treating";
+else if (isBaselineInProgress) tabState = "baseline_assessment";
+else if (reviewSession?.chosenPath === "review") tabState = "review";
+else if (isBaselineCompleted) tabState = "choose_path";
 
+// ⬅️ این دو تا هم باید از hasStartedTreatment استفاده کنند وگرنه باز paywall/archive_only خراب می‌شود
+const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasStartedTreatment);
+
+// ✅ IMPORTANT: do NOT show paywall while baseline is in progress
+const suppressPaywall = tabState === "baseline_assessment";
+const paywall = suppressPaywall
+  ? { needed: false, reason: null }
+  : computePaywall(planStatusFinal, hasStartedTreatment);
+  
     let treatment = null;
     if (tabState === "treating") {
       const allDays = stages.flatMap((s) => s.days);
