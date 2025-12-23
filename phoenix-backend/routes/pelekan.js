@@ -783,6 +783,239 @@ router.get("/bastan/state", authUser, async (req, res) => {
   }
 });
 
+/* ---------- POST /api/pelekan/bastan/subtask/complete ---------- */
+router.post("/bastan/subtask/complete", authUser, async (req, res) => {
+  try {
+    noStore(res);
+
+    const phone = req.userPhone;
+    const { subtaskKey, payload } = req.body || {};
+
+    if (!subtaskKey || typeof subtaskKey !== "string") {
+      return res.status(400).json({ ok: false, error: "SUBTASK_KEY_REQUIRED" });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true, plan: true, planExpiresAt: true },
+    });
+    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+
+    const basePlan = getPlanStatus(user.plan, user.planExpiresAt);
+    const { planStatusFinal } = applyDebugPlan(req, basePlan.planStatus, basePlan.daysLeft);
+    const isProLike = planStatusFinal === "pro" || planStatusFinal === "expiring";
+
+    // find subtask by key (we assume keys are globally unique by convention)
+    const subtask = await prisma.bastanSubtaskDefinition.findFirst({
+      where: { key: subtaskKey },
+      select: {
+        id: true,
+        key: true,
+        kind: true,
+        isFree: true,
+        isRequired: true,
+        xpReward: true,
+        actionId: true,
+        action: {
+          select: {
+            id: true,
+            code: true,
+            sortOrder: true,
+            isProLocked: true,
+            minRequiredSubtasks: true,
+            totalSubtasks: true,
+            xpOnComplete: true,
+          },
+        },
+      },
+    });
+
+    if (!subtask) return res.status(404).json({ ok: false, error: "SUBTASK_NOT_FOUND" });
+
+    // gate: pro requirement (either action-level or subtask-level)
+    if ((subtask.action?.isProLocked || subtask.isFree === false) && !isProLike) {
+      return res.status(403).json({ ok: false, error: "PRO_REQUIRED" });
+    }
+
+    // gate: sequential unlock (must not be blocked by previous action)
+    const actions = await prisma.bastanActionDefinition.findMany({
+      orderBy: { sortOrder: "asc" },
+      select: { id: true, sortOrder: true, minRequiredSubtasks: true },
+    });
+
+    // done subtasks count per action
+    const doneAgg = await prisma.bastanSubtaskProgress.groupBy({
+      by: ["actionId"],
+      where: { userId: user.id, isDone: true },
+      _count: { _all: true },
+    });
+
+    const doneByActionId = {};
+    for (const r of doneAgg) doneByActionId[r.actionId] = r._count._all || 0;
+
+    // find if target action is locked by previous action
+    let prevOk = true;
+    let targetLockedByPrev = false;
+
+    for (const a of actions) {
+      const completed = doneByActionId[a.id] || 0;
+      const isComplete = completed >= a.minRequiredSubtasks;
+
+      if (a.id === subtask.actionId) {
+        targetLockedByPrev = !prevOk;
+        break;
+      }
+      prevOk = prevOk && isComplete;
+    }
+
+    if (targetLockedByPrev) {
+      return res.status(403).json({ ok: false, error: "ACTION_LOCKED", reason: "previous_action_incomplete" });
+    }
+
+    // already done? (one-way)
+    const existing = await prisma.bastanSubtaskProgress.findFirst({
+      where: { userId: user.id, subtaskId: subtask.id },
+      select: { id: true, isDone: true },
+    });
+
+    if (existing?.isDone) {
+      return res.status(409).json({ ok: false, error: "ALREADY_DONE" });
+    }
+
+    // compute before/after for action completion bonus
+    const beforeDone = doneByActionId[subtask.actionId] || 0;
+
+    // upsert progress (one-way)
+    await prisma.bastanSubtaskProgress.upsert({
+      where: existing?.id
+        ? { id: existing.id }
+        : { id: "__nope__" }, // will force create below when no existing
+      create: {
+        userId: user.id,
+        actionId: subtask.actionId,
+        subtaskId: subtask.id,
+        isDone: true,
+        doneAt: new Date(),
+        payloadJson: payload ?? null,
+      },
+      update: {
+        isDone: true,
+        doneAt: new Date(),
+        payloadJson: payload ?? null,
+      },
+    }).catch(async (e) => {
+      // if the fake where id caused error, do a straight create
+      if (!existing?.id) {
+        await prisma.bastanSubtaskProgress.create({
+          data: {
+            userId: user.id,
+            actionId: subtask.actionId,
+            subtaskId: subtask.id,
+            isDone: true,
+            doneAt: new Date(),
+            payloadJson: payload ?? null,
+          },
+        });
+        return;
+      }
+      throw e;
+    });
+
+    // after count
+    const afterDone = beforeDone + 1;
+    const minReq = subtask.action?.minRequiredSubtasks || 0;
+
+    const crossedToDone = beforeDone < minReq && afterDone >= minReq;
+
+    // XP for subtask (always)
+    const subtaskXp = Number.isFinite(subtask.xpReward) ? subtask.xpReward : 0;
+    if (subtaskXp > 0) {
+      await prisma.xpLedger.create({
+        data: {
+          userId: user.id,
+          amount: subtaskXp,
+          reason: "bastan_subtask_done",
+          refType: "bastan_subtask",
+          refId: subtask.id,
+        },
+      });
+    }
+
+    // XP bonus for action completion (only once, when crossing threshold)
+    let actionBonusXp = 0;
+    if (crossedToDone) {
+      actionBonusXp = Number.isFinite(subtask.action?.xpOnComplete) ? subtask.action.xpOnComplete : 0;
+      if (actionBonusXp > 0) {
+        await prisma.xpLedger.create({
+          data: {
+            userId: user.id,
+            amount: actionBonusXp,
+            reason: "bastan_action_done",
+            refType: "bastan_action",
+            refId: subtask.actionId,
+          },
+        });
+      }
+
+      // optional: record action progress row (future use)
+      await prisma.bastanActionProgress.upsert({
+        where: { userId_actionId: { userId: user.id, actionId: subtask.actionId } },
+        create: {
+          userId: user.id,
+          actionId: subtask.actionId,
+          status: "done",
+          startedAt: new Date(),
+          completedAt: new Date(),
+          doneSubtasksCount: afterDone,
+          minRequiredSubtasks: minReq,
+          totalSubtasks: subtask.action?.totalSubtasks || 0,
+          xpEarned: actionBonusXp,
+        },
+        update: {
+          status: "done",
+          completedAt: new Date(),
+          doneSubtasksCount: afterDone,
+          xpEarned: actionBonusXp,
+        },
+      });
+    } else {
+      // keep/update action progress basic row (optional)
+      await prisma.bastanActionProgress.upsert({
+        where: { userId_actionId: { userId: user.id, actionId: subtask.actionId } },
+        create: {
+          userId: user.id,
+          actionId: subtask.actionId,
+          status: "active",
+          startedAt: new Date(),
+          doneSubtasksCount: afterDone,
+          minRequiredSubtasks: minReq,
+          totalSubtasks: subtask.action?.totalSubtasks || 0,
+          xpEarned: 0,
+        },
+        update: {
+          status: "active",
+          doneSubtasksCount: afterDone,
+        },
+      });
+    }
+
+    return res.json({
+      ok: true,
+      data: {
+        subtaskKey: subtask.key,
+        actionCode: subtask.action?.code || null,
+        done: true,
+        xpAwarded: { subtask: subtaskXp, actionBonus: actionBonusXp },
+        actionReachedMinRequired: crossedToDone,
+        actionProgress: { before: beforeDone, after: afterDone, minRequired: minReq },
+      },
+    });
+  } catch (e) {
+    console.error("[pelekan.bastan.subtask.complete] error:", e);
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
 // POST /api/pelekan/baseline/start
 router.post("/baseline/start", authUser, async (req, res) => {
   try {
