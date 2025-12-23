@@ -692,7 +692,7 @@ router.get("/bastan/state", authUser, async (req, res) => {
 
       // if intro audio not completed, we still allow showing list, but can gate interaction in UI
       // (UI rule: intro audio free -> then paywall; backend returns intro status)
-      const status = locked ? "locked" : isComplete ? "completed" : "active";
+      const status = locked ? "locked" : isComplete ? "done" : "active";
 
       actionsUi.push({
         code: a.code,
