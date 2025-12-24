@@ -422,8 +422,10 @@ router.get("/state", authUser, async (req, res) => {
 
     const isBaselineInProgress = baselineSession?.status === "in_progress";
     const isBaselineCompleted = baselineSession?.status === "completed";
+    const seenAt = baselineSession?.scalesJson?.baselineResultSeenAt || null;
+
     const baselineNeedsResultScreen =
-     isBaselineCompleted && !!baselineSession?.totalScore; // (فعلاً بدون seenAt)
+   isBaselineCompleted && !!baselineSession?.totalScore && !seenAt;
     // content
     const stages = await prisma.pelekanStage.findMany({
       orderBy: { sortOrder: "asc" },
@@ -1433,6 +1435,38 @@ router.post("/baseline/reset", authUser, async (req, res) => {
     return res.json({ ok: true, data: { reset: true, forced: force } });
   } catch (e) {
     console.error("[pelekan.baseline.reset] error:", e);
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
+// POST /api/pelekan/baseline/seen
+router.post("/baseline/seen", authUser, async (req, res) => {
+  try {
+    noStore(res);
+
+    const phone = req.userPhone;
+    const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
+    if (!user) return baselineError(res, "USER_NOT_FOUND");
+
+    const session = await prisma.assessmentSession.findUnique({
+      where: { userId_kind: { userId: user.id, kind: HB_BASELINE.kind } },
+      select: { id: true, status: true, scalesJson: true },
+    });
+    if (!session) return baselineError(res, "SESSION_NOT_FOUND");
+    if (session.status !== "completed") return baselineError(res, "SESSION_NOT_COMPLETED");
+
+    const nextScales = { ...(session.scalesJson || {}) };
+    if (!nextScales.baselineResultSeenAt) nextScales.baselineResultSeenAt = new Date().toISOString();
+
+    await prisma.assessmentSession.update({
+      where: { id: session.id },
+      data: { scalesJson: nextScales },
+      select: { id: true },
+    });
+
+    return res.json({ ok: true, data: { seenAt: nextScales.baselineResultSeenAt } });
+  } catch (e) {
+    console.error("[pelekan.baseline.seen] error:", e);
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });

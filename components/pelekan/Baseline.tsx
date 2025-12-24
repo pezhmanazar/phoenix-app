@@ -419,7 +419,20 @@ const interpretationText =
 
               <Pressable
                 disabled={busy}
-                onPress={() => onRefresh?.()}
+                onPress={async () => {
+  if (!phone) return;
+  try {
+    setBusy(true);
+    await fetch(`https://qoqnoos.app/api/pelekan/baseline/seen`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone }),
+    }).then(r => r.json()).catch(() => null);
+  } finally {
+    setBusy(false);
+  }
+  await onRefresh?.();
+}}
                 style={[
                   styles.btnPrimary,
                   { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)", opacity: busy ? 0.7 : 1 },
