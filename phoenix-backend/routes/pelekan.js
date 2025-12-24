@@ -613,6 +613,75 @@ const paywall = suppressPaywall
   }
 });
 
+// -------------------- Review Choose Path --------------------
+// POST /api/pelekan/review/choose  body: { phone, choice: "skip_review" | "review" }
+router.post("/review/choose", authUser, async (req, res) => {
+  try {
+    noStore(res);
+
+    const phone = req.userPhone;
+    const choice = String(req.body?.choice || "").trim();
+
+    if (choice !== "skip_review" && choice !== "review") {
+      return res.status(400).json({ ok: false, error: "CHOICE_REQUIRED" });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true },
+    });
+    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+
+    // اگر کاربر "فراموشش کنم" را انتخاب کرد:
+    // برای اینکه فوراً وارد پلکان (treating) شود، باید reviewDoneOrSkipped true شود.
+    // در state logic شما، reviewDoneOrSkipped با completedAt یا test2SkippedAt true می‌شود.
+    const now = new Date();
+
+    const data =
+      choice === "skip_review"
+        ? {
+            chosenPath: "skip_review",
+            // این دو خط باعث می‌شود hasStartedTreatment=true شود حتی بدون dayProgress
+            test2SkippedAt: now,
+            completedAt: now,
+            status: "completed_locked", // وضعیت مهم نیست، ولی منسجم باشد
+          }
+        : {
+            chosenPath: "review",
+            status: "in_progress",
+            // اگر قبلاً skip_review زده بود و برگشت، این‌ها را پاک می‌کنیم
+            test2SkippedAt: null,
+            completedAt: null,
+          };
+
+    const session = await prisma.pelekanReviewSession.upsert({
+      where: { userId: user.id },
+      create: {
+        userId: user.id,
+        ...data,
+        startedAt: now,
+      },
+      update: {
+        ...data,
+        updatedAt: now,
+      },
+      select: {
+        id: true,
+        status: true,
+        chosenPath: true,
+        completedAt: true,
+        test2SkippedAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return res.json({ ok: true, data: { session } });
+  } catch (e) {
+    console.error("[pelekan.review.choose] error:", e);
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
 /* ---------- GET /api/pelekan/bastan/state ---------- */
 router.get("/bastan/state", authUser, async (req, res) => {
   try {
