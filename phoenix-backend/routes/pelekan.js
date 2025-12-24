@@ -302,7 +302,7 @@ function computeHbBaselineScore(answersByQid) {
     maxScore,
     percent,
     level: band?.level || null,
-    text: band?.text || null,
+    safeText: band?.text || null,
   };
 }
 
@@ -422,7 +422,8 @@ router.get("/state", authUser, async (req, res) => {
 
     const isBaselineInProgress = baselineSession?.status === "in_progress";
     const isBaselineCompleted = baselineSession?.status === "completed";
-
+    const baselineNeedsResultScreen =
+     isBaselineCompleted && !!baselineSession?.totalScore; // (فعلاً بدون seenAt)
     // content
     const stages = await prisma.pelekanStage.findMany({
       orderBy: { sortOrder: "asc" },
@@ -526,6 +527,7 @@ let tabState = "idle";
 
 if (hasStartedTreatment) tabState = "treating";
 else if (isBaselineInProgress) tabState = "baseline_assessment";
+else if (baselineNeedsResultScreen) tabState = "baseline_result"; // ✅ جدید
 else if (reviewSession?.chosenPath === "review") tabState = "review";
 else if (isBaselineCompleted) tabState = "choose_path";
 
@@ -1271,7 +1273,7 @@ router.get("/baseline/state", authUser, async (req, res) => {
           result: {
             totalScore: session.totalScore,
             level: session.scalesJson?.level || null,
-            interpretationText: session.scalesJson?.interpretationText || null,
+            interpretationText: session.scalesJson?.interpretationTextSafe || null,
             completedAt: session.completedAt,
           },
         },

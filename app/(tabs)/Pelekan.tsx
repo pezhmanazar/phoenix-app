@@ -22,13 +22,22 @@ import { useUser } from "../../hooks/useUser";
 
 /* ----------------------------- Types ----------------------------- */
 type PlanStatus = "free" | "pro" | "expired" | "expiring";
-type TabState = "idle" | "baseline_assessment" | "choose_path" | "review" | "treating";
+type TabState =
+  | "idle"
+  | "baseline_assessment"
+  | "baseline_result"
+  | "choose_path"
+  | "review"
+  | "treating";
+
 type Paywall = { needed: boolean; reason: "start_treatment" | "continue_treatment" | null };
+
 type PelekanFlags = {
   suppressPaywall?: boolean;
   isBaselineInProgress?: boolean;
   isBaselineCompleted?: boolean;
 };
+
 type PelekanState = {
   tabState: TabState;
   user: { planStatus: PlanStatus; daysLeft: number };
@@ -74,11 +83,12 @@ export default function PelekanTab() {
   const tabBarH = useBottomTabBarHeight();
   const { me } = useUser();
 
-  // ✅ جدا کردن لود اولیه از رفرش‌ها
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [state, setState] = useState<PelekanState>(initialState);
   const [headerHeight, setHeaderHeight] = useState(0);
+
+  const [baselineResultSeen, setBaselineResultSeen] = useState(false);
 
   const palette = useMemo(
     () => ({
@@ -92,9 +102,25 @@ export default function PelekanTab() {
     []
   );
 
+  const shouldShowBaselineResult = useCallback(
+    (data: any) => {
+      const tabStateFromServer = String(data?.tabState || "idle");
+      const baselineCompleted = data?.baseline?.session?.status === "completed";
+      const hasReviewSession = !!data?.review?.hasSession;
+      return (
+        tabStateFromServer === "choose_path" &&
+        baselineCompleted &&
+        !hasReviewSession &&
+        !baselineResultSeen
+      );
+    },
+    [baselineResultSeen]
+  );
+
   const fetchState = useCallback(
     async (opts?: { initial?: boolean }) => {
       const isInitial = !!opts?.initial;
+
       try {
         if (isInitial) setInitialLoading(true);
         else setRefreshing(true);
@@ -117,9 +143,15 @@ export default function PelekanTab() {
         }
 
         const data = json.data || {};
+
+        const finalTabState: TabState = shouldShowBaselineResult(data)
+          ? "baseline_result"
+          : (data?.tabState as TabState) || "idle";
+
         const merged: PelekanState = {
           ...initialState,
           ...data,
+          tabState: finalTabState,
           ui: {
             paywall: data?.ui?.paywall ?? initialState.ui.paywall,
             flags: data?.ui?.flags ?? {},
@@ -127,10 +159,6 @@ export default function PelekanTab() {
           treatment: data?.treatment ?? null,
           stages: Array.isArray(data?.stages) ? data.stages : [],
         };
-
-        console.log("[pelekan] tabState =", data?.tabState);
-        console.log("[pelekan] baseline.session =", data?.baseline?.session);
-        console.log("[pelekan] review.session =", data?.review?.session);
 
         setState(merged);
       } catch {
@@ -140,8 +168,14 @@ export default function PelekanTab() {
         else setRefreshing(false);
       }
     },
-    [me?.phone]
+    [me?.phone, shouldShowBaselineResult]
   );
+
+  // ✅ این hook باید قبل از هر return باشد
+  const onBaselineResultContinue = useCallback(async () => {
+    setBaselineResultSeen(true);
+    await fetchState({ initial: false });
+  }, [fetchState]);
 
   useEffect(() => {
     fetchState({ initial: true });
@@ -153,15 +187,12 @@ export default function PelekanTab() {
     }, [fetchState])
   );
 
-  // ✅ لیست پلکان فقط وقتی treating هست
   const pathItems: ListItem[] = useMemo(() => {
     if (state.tabState !== "treating") return [];
-
     const stages = state.stages || [];
     const list: ListItem[] = [];
     let zigCounter = 0;
 
-    // ✅ results در اول آرایه (برای پایین دیده شدن در inverted)
     const baselineDone = state?.baseline?.session?.status === "completed";
     const reviewChosen = !!state?.review?.session?.chosenPath;
     const reviewDone =
@@ -211,14 +242,9 @@ export default function PelekanTab() {
     router.push(`/(tabs)/ReviewResult?phone=${encodeURIComponent(phone)}` as any);
   }, [router, me?.phone]);
 
-  // ✅ padding درست: SafeArea + TabBar
   const bottomSafe = insets.bottom + tabBarH;
-
-  // ✅ برای FlatList inverted:
-  // - paddingTop => فضای پایین صفحه (جلوگیری از رفتن زیر تب‌بار)
-  // - paddingBottom => فضای بالای صفحه (جلوگیری از رفتن زیر هدر/بنر هنگام اسکرول)
-  const listPaddingBottom = Math.max(24, 12); // فضای بالای لیست
-  const listPaddingTop = Math.max(16, bottomSafe + 16); // فضای پایین لیست (تب‌بار)
+  const listPaddingBottom = Math.max(24, 12);
+  const listPaddingTop = Math.max(16, bottomSafe + 16);
 
   if (initialLoading) {
     return (
@@ -271,6 +297,10 @@ export default function PelekanTab() {
           <View style={{ flex: 1, paddingBottom: bottomSafe }}>
             <Baseline me={me} state={state} onRefresh={() => fetchState({ initial: false })} />
           </View>
+        ) : state.tabState === "baseline_result" ? (
+          <View style={{ flex: 1, paddingBottom: bottomSafe }}>
+            <Baseline me={me} state={state} onRefresh={onBaselineResultContinue} />
+          </View>
         ) : state.tabState === "choose_path" ? (
           <View style={{ flex: 1, paddingBottom: bottomSafe }}>
             <ChoosePath me={me} state={state} onRefresh={() => fetchState({ initial: false })} />
@@ -294,14 +324,10 @@ export default function PelekanTab() {
               />
             )}
             inverted
-            // ✅ جلوگیری از رفتن محتوا زیر تب‌بار و هدر + حذف overscroll که “زیر بکگراند” دیده می‌شه
             bounces={false}
             overScrollMode="never"
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{
-              paddingTop: listPaddingTop,
-              paddingBottom: listPaddingBottom,
-            }}
+            contentContainerStyle={{ paddingTop: listPaddingTop, paddingBottom: listPaddingBottom }}
           />
         ) : (
           <View style={{ flex: 1, paddingBottom: bottomSafe }}>

@@ -2,9 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Pressable,
+  ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
 import Svg, { Circle } from "react-native-svg";
@@ -41,24 +42,23 @@ export default function Baseline({ me, state, onRefresh }: Props) {
   const palette = useMemo(
     () => ({
       bg: "#0b0f14",
+      glass: "rgba(3,7,18,.92)",
+      glass2: "rgba(255,255,255,.02)",
+      border: "rgba(255,255,255,.10)",
+      border2: "rgba(255,255,255,.14)",
       text: "#F9FAFB",
-      sub: "rgba(231,238,247,.74)",
-      faint: "rgba(231,238,247,.55)",
+      sub: "rgba(231,238,247,.75)",
+      sub2: "rgba(231,238,247,.55)",
       gold: "#D4AF37",
-      glass: "rgba(3,7,18,.62)",
-      border: "rgba(255,255,255,.09)",
-      btnBg: "rgba(255,255,255,.06)",
-      btnBorder: "rgba(255,255,255,.14)",
-      mint: "rgba(74,222,128,.95)",
-      mintBorder: "rgba(74,222,128,.40)",
-      mintBg: "rgba(74,222,128,.10)",
-      optionBg: "rgba(255,255,255,.045)",
-      danger: "#EF4444",
+      orange: "#E98A15",
+      red: "#ef4444",
+      lime: "#86efac",
+      track: "rgba(231,238,247,.14)",
     }),
     []
   );
 
-  // ✅ meta از state (از /api/pelekan/state می‌آید)
+  // meta از state
   const baselineMeta = state?.baseline?.content?.meta || {};
   const baselineTitle = String(baselineMeta?.titleFa || "سنجش وضعیت");
   const baselineMaxScore = Number(baselineMeta?.maxScore || 31);
@@ -76,7 +76,6 @@ export default function Baseline({ me, state, onRefresh }: Props) {
 
   const [status, setStatus] = useState<string>("in_progress");
 
-  // ✅ نتیجه‌ی baseline وقتی completed شد
   const [completedResult, setCompletedResult] = useState<{
     totalScore: number;
     level: string | null;
@@ -91,7 +90,8 @@ export default function Baseline({ me, state, onRefresh }: Props) {
     return Array.isArray(arr) ? arr.length : 0;
   }, [state?.baseline?.content?.consentSteps]);
 
-  const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
+  const clamp = (n: number, min: number, max: number) =>
+    Math.max(min, Math.min(max, n));
 
   const percent = useMemo(() => {
     const score = Number(completedResult?.totalScore ?? 0);
@@ -99,13 +99,12 @@ export default function Baseline({ me, state, onRefresh }: Props) {
     return clamp(Math.round((score / max) * 100), 0, 100);
   }, [completedResult?.totalScore, baselineMaxScore]);
 
-  // ✅ رنگ نمودار بر اساس سطح
   const levelColor = useMemo(() => {
     const lvl = String(completedResult?.level || "");
-    if (lvl === "severe") return palette.danger;
+    if (lvl === "severe") return palette.red;
     if (lvl === "moderate") return palette.gold;
-    return palette.mint;
-  }, [completedResult?.level, palette.danger, palette.gold, palette.mint]);
+    return palette.lime;
+  }, [completedResult?.level, palette.red, palette.gold, palette.lime]);
 
   const fetchBaselineState = useCallback(async () => {
     if (!phone) {
@@ -119,7 +118,9 @@ export default function Baseline({ me, state, onRefresh }: Props) {
       setLoading(true);
 
       const res = await fetch(
-        `https://qoqnoos.app/api/pelekan/baseline/state?phone=${encodeURIComponent(phone)}`,
+        `https://qoqnoos.app/api/pelekan/baseline/state?phone=${encodeURIComponent(
+          phone
+        )}`,
         { headers: { "Cache-Control": "no-store" } }
       );
 
@@ -137,7 +138,6 @@ export default function Baseline({ me, state, onRefresh }: Props) {
       const st = String(data.status || "in_progress");
       setStatus(st);
 
-      // ✅ اگر completed است: نتیجه را ست کن و step را null کن تا UI نتیجه نشان دهد
       if (st === "completed" && data?.result) {
         setCompletedResult({
           totalScore: Number(data.result.totalScore ?? 0),
@@ -151,16 +151,19 @@ export default function Baseline({ me, state, onRefresh }: Props) {
         return;
       }
 
-      // ✅ در حالت in_progress: نتیجه را پاک کن
       setCompletedResult(null);
 
-      setNav(data.nav || { index: 0, total: 0, canNext: false, canSubmit: false });
+      setNav(
+        data.nav || { index: 0, total: 0, canNext: false, canSubmit: false }
+      );
 
       const s: UiStep = data.step || null;
       setStep(s);
 
       if (s?.type === "question") {
-        setLocalSelected(typeof s.selectedIndex === "number" ? s.selectedIndex : null);
+        setLocalSelected(
+          typeof s.selectedIndex === "number" ? s.selectedIndex : null
+        );
       } else {
         setLocalSelected(null);
       }
@@ -217,8 +220,8 @@ export default function Baseline({ me, state, onRefresh }: Props) {
         Alert.alert("خطا", "ثبت نهایی سنجش ناموفق بود.");
         return;
       }
-      await onRefresh?.(); // refresh pelekan/state
-      await fetchBaselineState(); // now baseline/state should return completed
+      await onRefresh?.();
+      await fetchBaselineState();
     } catch {
       Alert.alert("خطا", "ارتباط با سرور برقرار نشد.");
     } finally {
@@ -248,7 +251,11 @@ export default function Baseline({ me, state, onRefresh }: Props) {
     if (!step) return;
 
     if (step.type === "consent") {
-      const ok = await postAnswer({ stepType: "consent", stepId: step.id, acknowledged: true });
+      const ok = await postAnswer({
+        stepType: "consent",
+        stepId: step.id,
+        acknowledged: true,
+      });
       if (ok) await fetchBaselineState();
       return;
     }
@@ -282,20 +289,20 @@ export default function Baseline({ me, state, onRefresh }: Props) {
 
   // ----------- Donut -----------
   const Donut = ({ valuePercent }: { valuePercent: number }) => {
-    const size = 140;
+    const size = 132;
     const stroke = 12;
     const r = (size - stroke) / 2;
     const c = 2 * Math.PI * r;
     const dash = (valuePercent / 100) * c;
 
     return (
-      <View style={{ alignItems: "center", justifyContent: "center", marginTop: 10 }}>
+      <View style={{ alignItems: "center", justifyContent: "center", marginTop: 6 }}>
         <Svg width={size} height={size}>
           <Circle
             cx={size / 2}
             cy={size / 2}
             r={r}
-            stroke={"rgba(255,255,255,.10)"}
+            stroke={palette.track}
             strokeWidth={stroke}
             fill="none"
           />
@@ -315,10 +322,10 @@ export default function Baseline({ me, state, onRefresh }: Props) {
         </Svg>
 
         <View style={{ position: "absolute", alignItems: "center" }}>
-          <Text style={{ color: palette.text, fontWeight: "900", fontSize: 28 }}>
+          <Text style={{ color: palette.text, fontWeight: "900", fontSize: 26 }}>
             {String(completedResult?.totalScore ?? 0)}
           </Text>
-          <Text style={{ color: palette.faint, fontWeight: "900", marginTop: 2 }}>
+          <Text style={{ color: palette.sub2, fontWeight: "900", marginTop: 2, fontSize: 12 }}>
             از {baselineMaxScore}
           </Text>
         </View>
@@ -329,239 +336,241 @@ export default function Baseline({ me, state, onRefresh }: Props) {
   // ---------------- UI ----------------
   if (loading) {
     return (
-      <View style={[styles.full, { backgroundColor: palette.bg }]}>
-        <View style={styles.centerWrap}>
-          <ActivityIndicator color={palette.gold} />
-          <Text style={{ color: palette.faint, marginTop: 10, fontWeight: "800" }}>در حال بارگذاری…</Text>
-        </View>
+      <View style={[styles.root, { backgroundColor: palette.bg }]}>
+        <ActivityIndicator color={palette.gold} />
+        <Text style={{ color: palette.sub, marginTop: 10, fontSize: 12 }}>
+          در حال بارگذاری…
+        </Text>
       </View>
     );
   }
 
+  // Accent برای هماهنگی با Review
+const accent =
+  status === "completed" && completedResult ? levelColor : palette.gold;
+
+  const header = baselineTitle;
+
   return (
-    <View style={[styles.full, { backgroundColor: palette.bg }]}>
-      <View style={styles.centerWrap}>
+    <View style={[styles.container, { backgroundColor: palette.bg }]}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <View
           style={[
             styles.card,
-            {
-              backgroundColor: palette.glass,
-              borderColor: palette.border,
-            },
+            styles.cardFancy,
+            { backgroundColor: palette.glass, borderColor: palette.border },
           ]}
         >
-          {/* ✅ اگر completed شد: نتیجه را نشان بده */}
+          <View style={[styles.accentBarTop, { backgroundColor: accent }]} />
+
+          {/* عنوان */}
+          <Text style={[styles.title, { color: accent, textAlign: "center" }]}>{header}</Text>
+
+          {/* حالت completed */}
           {status === "completed" && completedResult ? (
             <>
-              <Text style={[styles.h1, { color: palette.text }]}>{baselineTitle}</Text>
-
+              <View style={{ height: 6 }} />
               <Donut valuePercent={percent} />
-
-              <Text style={[styles.centerSub, { color: palette.faint }]}>
+              <Text style={[styles.centerText, { color: palette.sub2, marginTop: 8, fontSize: 12 }]}>
                 {percent}% از بیشترین میزان
               </Text>
 
               {!!completedResult?.interpretationText && (
-                <Text style={[styles.stepText, { color: palette.sub, marginTop: 12 }]}>
+                <Text style={[styles.rtlText, { color: palette.sub, marginTop: 12, lineHeight: 20, textAlign: "right" }]}>
                   {completedResult.interpretationText}
                 </Text>
               )}
 
-              <TouchableOpacity
-                activeOpacity={0.9}
+              <View style={{ height: 14 }} />
+
+              <Pressable
+                disabled={busy}
                 onPress={() => onRefresh?.()}
                 style={[
-                  styles.primaryBtnGlass,
-                  {
-                    marginTop: 16,
-                    backgroundColor: palette.btnBg,
-                    borderColor: palette.btnBorder,
-                  },
+                  styles.btnPrimary,
+                  { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)", opacity: busy ? 0.7 : 1 },
                 ]}
               >
-                <Text style={[styles.primaryBtnText, { color: palette.text }]}>رفتن به ادامه مسیر</Text>
-              </TouchableOpacity>
+                <Text style={[styles.btnText, { color: palette.text }]}>رفتن به ادامه مسیر</Text>
+              </Pressable>
             </>
           ) : step?.type === "consent" ? (
             <>
-              <Text style={[styles.stepText, { color: palette.text }]}>{step.text}</Text>
+              <Text style={[styles.rtlText, { color: palette.text, marginTop: 10, lineHeight: 22, textAlign: "right" }]}>
+                {step.text}
+              </Text>
 
-              <TouchableOpacity
-                activeOpacity={0.9}
-                onPress={goNext}
+              <View style={{ height: 14 }} />
+
+              <Pressable
                 disabled={busy}
+                onPress={goNext}
                 style={[
-                  styles.primaryBtnGlass,
-                  {
-                    marginTop: 24,
-                    backgroundColor: palette.btnBg,
-                    borderColor: palette.btnBorder,
-                    opacity: busy ? 0.6 : 1,
-                  },
+                  styles.btnPrimary,
+                  { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)", opacity: busy ? 0.7 : 1 },
                 ]}
               >
                 {busy ? (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                     <ActivityIndicator color={palette.gold} />
-                    <Text style={[styles.primaryBtnText, { color: palette.text }]}>در حال ثبت…</Text>
+                    <Text style={[styles.btnText, { color: palette.text }]}>در حال ثبت…</Text>
                   </View>
                 ) : (
-                  <Text style={[styles.primaryBtnText, { color: palette.text }]}>
-                    {step.optionText || "متوجه شدم"}
-                  </Text>
+                  <Text style={[styles.btnText, { color: palette.text }]}>{step.optionText || "متوجه شدم"}</Text>
                 )}
-              </TouchableOpacity>
+              </Pressable>
             </>
           ) : step?.type === "question" ? (
             <>
-              <Text style={[styles.counter, { color: palette.faint }]}>
-                سوال {(questionIndex ?? 0) + 1} از {questionTotal ?? 0}
+              <Text style={[styles.centerText, { color: palette.sub, marginTop: 6, fontSize: 12 }]}>
+  سوال {(questionIndex ?? 0) + 1} از {questionTotal ?? 0}
+</Text>
+
+<Text style={[styles.centerText, { color: palette.sub2, marginTop: 4, fontSize: 11 }]}>
+  برای دیدن همه گزینه‌ها صفحه رو به بالا بکش
+</Text>
+
+<View style={styles.hr} />
+
+              <View style={styles.hr} />
+
+              <Text style={[styles.qText, styles.rtlText, { color: palette.text }]}>
+                {step.text}
               </Text>
 
-              <Text style={[styles.question, { color: palette.text }]}>{step.text}</Text>
+              <View style={{ height: 16 }} />
 
-              <View style={{ marginTop: 14, gap: 12 }}>
-                {step.options.map((opt) => {
-                  const selected = localSelected === opt.index;
-                  return (
-                    <TouchableOpacity
-                      key={String(opt.index)}
-                      activeOpacity={0.9}
-                      onPress={() => setLocalSelected(opt.index)}
-                      disabled={busy}
-                      style={[
-                        styles.option,
-                        {
-                          borderColor: selected ? palette.mintBorder : palette.border,
-                          backgroundColor: selected ? palette.mintBg : palette.optionBg,
-                        },
-                      ]}
-                    >
-                      <Text style={[styles.optionText, { color: selected ? palette.text : palette.sub }]}>
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+              {step.options.map((opt) => {
+                const selected = localSelected === opt.index;
+                return (
+                  <Pressable
+                    key={String(opt.index)}
+                    disabled={busy}
+                    onPress={() => setLocalSelected(opt.index)}
+                    style={({ pressed }) => [
+                      styles.option,
+                      {
+                        borderColor: selected ? palette.gold : palette.border,
+                        backgroundColor: selected ? "rgba(255,255,255,.06)" : "transparent",
+                        opacity: pressed ? 0.92 : 1,
+                        transform: [{ scale: pressed ? 0.995 : 1 }],
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.centerText, styles.rtlText, { color: palette.text, fontSize: 14 }]}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
 
-              <TouchableOpacity
-                activeOpacity={0.9}
-                onPress={goNext}
+              <View style={{ height: 6 }} />
+
+              <Pressable
                 disabled={busy || typeof localSelected !== "number"}
+                onPress={goNext}
                 style={[
-                  styles.primaryBtnGlass,
+                  styles.btnPrimary,
                   {
-                    marginTop: 16,
-                    backgroundColor: palette.btnBg,
-                    borderColor: palette.btnBorder,
-                    opacity: busy || typeof localSelected !== "number" ? 0.55 : 1,
+                    borderColor: typeof localSelected !== "number" ? palette.border : "rgba(212,175,55,.35)",
+                    backgroundColor: typeof localSelected !== "number" ? "rgba(255,255,255,.04)" : "rgba(212,175,55,.10)",
+                    opacity: busy ? 0.85 : 1,
                   },
                 ]}
               >
                 {busy ? (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                     <ActivityIndicator color={palette.gold} />
-                    <Text style={[styles.primaryBtnText, { color: palette.text }]}>در حال ثبت…</Text>
+                    <Text style={[styles.btnText, { color: palette.text }]}>در حال ثبت…</Text>
                   </View>
                 ) : (
-                  <Text style={[styles.primaryBtnText, { color: palette.text }]}>
+                  <Text style={[styles.btnText, { color: typeof localSelected !== "number" ? palette.sub : palette.text }]}>
                     {isLastQuestion ? "ثبت نهایی" : "ادامه"}
                   </Text>
                 )}
-              </TouchableOpacity>
+              </Pressable>
             </>
           ) : step?.type === "review_missing" ? (
-            <Text style={[styles.stepText, { color: palette.danger }]}>
+            <Text style={[styles.rtlText, { color: palette.red, marginTop: 10, lineHeight: 22, textAlign: "right" }]}>
               {step.message || "چند پاسخ ثبت نشده. لطفاً سنجش را ریست کن."}
             </Text>
           ) : (
-            <Text style={[styles.stepText, { color: palette.faint }]}>
-              قدم بعدی آماده نیست. یک‌بار رفرش کن.
+            <Text style={[styles.centerText, { color: palette.sub2, marginTop: 10, lineHeight: 20 }]}>
+              وضعیت مشخص نیست. یک بار دوباره وارد شو.
             </Text>
           )}
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  full: { flex: 1 },
-  centerWrap: {
-    flex: 1,
-    alignItems: "center",
+  rtlText: { writingDirection: "rtl" as any },
+  centerText: { textAlign: "center" as any, writingDirection: "rtl" as any },
+
+  container: { flex: 1 },
+  root: { flex: 1, alignItems: "center", justifyContent: "center" },
+
+  scrollContent: {
+    flexGrow: 1,
+    padding: 16,
+    paddingBottom: 28,
     justifyContent: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 18,
   },
+
   card: {
-    width: "100%",
-    maxWidth: 520,
     borderWidth: 1,
-    borderRadius: 18,
-    paddingVertical: 18,
-    paddingHorizontal: 16,
+    borderRadius: 20,
+    padding: 16,
     overflow: "hidden",
   },
-  h1: {
-    fontSize: 14,
-    fontWeight: "900",
-    textAlign: "center",
-    writingDirection: "rtl" as any,
+
+  cardFancy: {
+    shadowColor: "#000",
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
   },
-  centerSub: {
-    marginTop: 6,
-    fontSize: 12,
-    fontWeight: "900",
-    textAlign: "center",
-    writingDirection: "rtl" as any,
+
+  accentBarTop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    opacity: 0.95,
   },
-  counter: {
-    fontSize: 12,
-    fontWeight: "900",
-    textAlign: "center",
-    marginBottom: 8,
-    writingDirection: "rtl" as any,
+
+  title: { fontSize: 18, fontWeight: "900" },
+
+  hr: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,.08)",
+    marginVertical: 14,
   },
-  question: {
-    marginTop: 2,
-    fontSize: 14,
-    lineHeight: 22,
-    textAlign: "center",
-    fontWeight: "900",
-    writingDirection: "rtl" as any,
-  },
-  stepText: {
-    fontSize: 14,
-    lineHeight: 22,
-    textAlign: "center",
-    fontWeight: "900",
-    writingDirection: "rtl" as any,
-  },
+
+  qText: { fontSize: 16, fontWeight: "800", lineHeight: 26, textAlign: "right" as any },
+
   option: {
     borderWidth: 1,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    marginBottom: 10,
   },
-  optionText: {
-    fontSize: 13,
-    lineHeight: 18,
-    textAlign: "center",
-    fontWeight: "800",
-    writingDirection: "rtl" as any,
-  },
-  primaryBtnGlass: {
-    paddingVertical: 14,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
+
+  btnPrimary: {
     borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: "center",
   },
-  primaryBtnText: {
-    fontSize: 14,
-    fontWeight: "900",
-    writingDirection: "rtl" as any,
-  },
+
+  btnText: { fontSize: 14, fontWeight: "900" },
 });
