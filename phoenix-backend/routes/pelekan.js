@@ -377,19 +377,20 @@ router.get("/state", authUser, async (req, res) => {
     const reviewSession = await prisma.pelekanReviewSession.findUnique({
       where: { userId: user.id },
       select: {
-        id: true,
-        status: true,
-        chosenPath: true,
-        currentTest: true,
-        currentIndex: true,
-        test1CompletedAt: true,
-        test2CompletedAt: true,
-        paywallShownAt: true,
-        unlockedAt: true,
-        startedAt: true,
-        completedAt: true,
-        updatedAt: true,
-      },
+  id: true,
+  status: true,
+  chosenPath: true,
+  currentTest: true,
+  currentIndex: true,
+  test1CompletedAt: true,
+  test2CompletedAt: true,
+  test2SkippedAt: true, 
+  paywallShownAt: true,
+  unlockedAt: true,
+  startedAt: true,
+  completedAt: true,
+  updatedAt: true,
+},
     });
 
     // ✅ 3) review object safely
