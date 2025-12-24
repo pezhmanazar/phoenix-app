@@ -950,13 +950,13 @@ if (layout === "grid2x2" && opts.length === 4) {
           <Text style={[styles.rtlText, { color: palette.sub, marginTop: 10, lineHeight: 22, textAlign: "right" }]}>
             آزمون بازسنجی به پایان رسید و پاسخ‌های تو ثبت شد.
             {"\n"}
-            اگر «ادامه» را بزنی، وارد آزمون دوم («آیا برمی‌گرده؟») می‌شوی و در پایان، نتیجه‌ی کامل نمایش داده می‌شود.
+           یعنی اگر «ادامه» رو بزنی، وارد آزمون دوم یعنی آزمون («آیا برمی‌گرده؟») میشی و در پایان، نتیجه‌ی کامل هر دو نمایش داده میشه.
           </Text>
 
           <View style={{ height: 14 }} />
 
           <Pressable style={[styles.btnPrimary, { borderColor: palette.border }]} onPress={goToTest2} disabled={loading}>
-            <Text style={[styles.btnText, { color: palette.text }]}>{loading ? "..." : "ادامه → رفتن به آزمون دوم"}</Text>
+            <Text style={[styles.btnText, { color: palette.text }]}>{loading ? "..." : "ادامه: رفتن به آزمون دوم"}</Text>
           </Pressable>
 
           <View style={{ height: 10 }} />
