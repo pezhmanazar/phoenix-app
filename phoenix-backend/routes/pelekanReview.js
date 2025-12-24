@@ -110,13 +110,15 @@ function uiHintForOptions(options) {
   if (n === 2) {
     return { layout: "row2", columns: 2, rows: 1 };
   }
+ if (n === 4) {
+  return { layout: "grid2x2", columns: 2, rows: 2 };
+}
   if (n === 5) {
     return { layout: "grid3x2_last2", columns: 3, rows: 2 };
   }
   if (n === 6) {
     return { layout: "grid3x2", columns: 3, rows: 2 };
   }
-  // پیش‌فرض: عمودی
   return { layout: "stack", columns: 1, rows: n ? n : 0 };
 }
 
@@ -365,7 +367,7 @@ function buildDefaultQuestions() {
 
   // بخش 4: الگوی تعارض (6) - 0..3
   pushT1("در دعواها تحقیر یا تمسخر بود.", null, OPT_0_3_CONFLICT);
-  pushT1("به جای مشکل، به شخصیت هم گیر می‌دادیم.", OPT_0_3_CONFLICT);
+  pushT1("به جای مشکل، به شخصیت هم گیر می‌دادیم.", null, OPT_0_3_CONFLICT);
   pushT1("قهر یا قطع ارتباط زیاد اتفاق می‌افتاد.", null, OPT_0_3_CONFLICT);
   pushT1("بیشتر دفاع می‌کردیم تا حل کنیم.", null, OPT_0_3_CONFLICT);
   pushT1("تعارض‌ها معمولاً حل نمی‌شد.", null, OPT_0_3_CONFLICT);
@@ -419,9 +421,9 @@ async function ensureQuestionSetSeeded() {
   const existing = await getActiveQuestionSet();
 
   // ✅ اگر نسخه فعال، قدیمی بود => نسخه جدید بساز
-  if (existing && Number(existing.version) >= 2) return existing;
+  if (existing && Number(existing.version) >= 3) return existing;
 
-  const version = 2;
+  const version = 3;
   const { test1_q, test2_q } = buildDefaultQuestions();
 
   // ✅ نسخه قبلی را غیرفعال کن (اگر بود)
