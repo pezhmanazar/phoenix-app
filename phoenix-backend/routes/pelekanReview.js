@@ -417,23 +417,30 @@ async function getActiveQuestionSet() {
 
 async function ensureQuestionSetSeeded() {
   const existing = await getActiveQuestionSet();
-  if (existing) return existing;
 
-  // ✅ مهم: چون قبلاً v1 ساخته شده، برای اعمال متن‌های جدید باید version را بالا ببریم
+  // ✅ اگر نسخه فعال، قدیمی بود => نسخه جدید بساز
+  if (existing && Number(existing.version) >= 2) return existing;
+
   const version = 2;
-
   const { test1_q, test2_q } = buildDefaultQuestions();
+
+  // ✅ نسخه قبلی را غیرفعال کن (اگر بود)
+  if (existing) {
+    await prisma.reviewQuestionSet.update({
+      where: { id: existing.id },
+      data: { isActive: false, updatedAt: now() },
+    });
+  }
 
   const created = await prisma.reviewQuestionSet.create({
     data: {
       code: "review",
       version,
       titleFa: "بازسنجی رابطه + منطقی بودن انتظار",
-      description: "Question bank v2 (simplified texts + UI hints)",
+      description: "Question bank v2 (TEST1/TEST2)",
       isActive: true,
       questions: {
         create: [
-          // TEST1
           ...test1_q.map((q, idx) => ({
             testNo: "TEST1",
             order: idx,
@@ -442,7 +449,6 @@ async function ensureQuestionSetSeeded() {
             helpFa: q.helpFa,
             options: { create: q.options.map((op, j) => ({ order: j, labelFa: op.labelFa, value: op.value })) },
           })),
-          // TEST2
           ...test2_q.map((q, idx) => ({
             testNo: "TEST2",
             order: idx,
@@ -458,7 +464,6 @@ async function ensureQuestionSetSeeded() {
 
   return created;
 }
-
 async function loadQuestionsForSet(questionSetId) {
   const set = await prisma.reviewQuestionSet.findUnique({
     where: { id: questionSetId },
