@@ -734,7 +734,10 @@ export default function Review({ me, state, onRefresh }: Props) {
     if (!currentQuestion) return null;
 
     const opts = currentQuestion.options || [];
-    const layout = String(currentQuestion.ui?.layout || "").trim() || "stack";
+    const rawLayout = String(currentQuestion.ui?.layout || "").trim();
+const layout =
+  rawLayout ||
+  (opts.length === 4 ? "grid2x2" : opts.length === 5 ? "grid3x2_last2" : "stack");
 
     const renderBtn = (op: ReviewOption) => {
       const isSelected = selectedValue === op.value;
@@ -786,22 +789,22 @@ if (layout === "grid2x2" && opts.length === 4) {
 
     // ✅ 5 گزینه: 3 بالا + 2 پایین
     if (layout === "grid3x2_last2" && opts.length === 5) {
-      return (
-        <View>
-          <View style={styles.gridRow}>
-            <View style={styles.gridCol}>{renderBtn(opts[0])}</View>
-            <View style={styles.gridCol}>{renderBtn(opts[1])}</View>
-            <View style={styles.gridCol}>{renderBtn(opts[2])}</View>
-          </View>
+  return (
+    <View>
+      <View style={styles.gridRow}>
+        <View style={styles.gridCol}>{renderBtn(opts[0])}</View>
+        <View style={styles.gridCol}>{renderBtn(opts[1])}</View>
+        <View style={styles.gridCol}>{renderBtn(opts[2])}</View>
+      </View>
 
-          <View style={styles.gridRow}>
-            <View style={styles.gridCol}>{renderBtn(opts[3])}</View>
-            <View style={styles.gridCol}>{renderBtn(opts[4])}</View>
-            <View style={styles.gridCol} />
-        </View>
-        </View>
-      );
-    }
+      {/* ✅ ردیف دوم: دو آیتم وسط‌چین با عرض 1.5 ستون */}
+      <View style={[styles.gridRow, styles.centerRow]}>
+        <View style={styles.gridColWide}>{renderBtn(opts[3])}</View>
+        <View style={styles.gridColWide}>{renderBtn(opts[4])}</View>
+      </View>
+    </View>
+  );
+}
 
     // ✅ 6 گزینه: 3 بالا + 3 پایین
     if (layout === "grid3x2" && opts.length === 6) {
@@ -1185,6 +1188,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: "center",
   },
+
+  centerRow: {
+  justifyContent: "center",
+},
+
+gridColWide: {
+  flexGrow: 0,
+  flexBasis: "47%", // دو تا کنار هم، وسط‌چین (با gap)
+},
 
   btnPrimary: {
     borderWidth: 1,
