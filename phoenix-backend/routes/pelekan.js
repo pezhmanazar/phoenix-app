@@ -636,64 +636,70 @@ router.post("/review/choose", authUser, async (req, res) => {
 
     const now = new Date();
 
-    // 1) upsert review session (بدون جعل completed برای skip_review)
-    const session = await prisma.pelekanReviewSession.upsert({
-      where: { userId: user.id },
+    // 1) upsert review session
+const session = await prisma.pelekanReviewSession.upsert({
+  where: { userId: user.id },
+  create: {
+    userId: user.id,
+    chosenPath: choice,
+    status: choice === "review" ? "in_progress" : "completed_locked",
+    startedAt: now,
+    completedAt: null,
+    test2SkippedAt: null,
+    updatedAt: now,
+  },
+  update: {
+    chosenPath: choice,
+    status: choice === "review" ? "in_progress" : "completed_locked",
+    completedAt: null,
+    test2SkippedAt: null,
+    updatedAt: now,
+  },
+  select: {
+    id: true,
+    status: true,
+    chosenPath: true,
+    completedAt: true,
+    test2SkippedAt: true,
+    updatedAt: true,
+  },
+});
+
+// 2) اگر کاربر skip_review زد -> روز 1 bastan را active کن + نتایج دو آزمون آخر را ریست کن
+if (choice === "skip_review") {
+  // ✅ A) ورود به treating با ساختن progress واقعی
+  const firstDay = await prisma.pelekanDay.findFirst({
+    where: { stage: { code: "bastan" }, dayNumberInStage: 1 },
+    select: { id: true },
+  });
+
+  if (firstDay?.id) {
+    await prisma.pelekanDayProgress.upsert({
+      where: { userId_dayId: { userId: user.id, dayId: firstDay.id } },
       create: {
         userId: user.id,
-        chosenPath: choice,
-        status: choice === "review" ? "in_progress" : "completed_locked",
+        dayId: firstDay.id,
+        status: "active",
+        completionPercent: 0,
         startedAt: now,
-        // مهم: برای skip_review این‌ها نباید ست شوند چون UI نتایجِ آزمون‌های ۱/۲ را “صفر” می‌بیند
-        completedAt: null,
-        test2SkippedAt: null,
-        updatedAt: now,
+        lastActivityAt: now,
       },
-      update: {
-        chosenPath: choice,
-        status: choice === "review" ? "in_progress" : "completed_locked",
-        // اگر قبلاً review رفته بود و برگشت، وضعیت completion رو پاک کن
-        completedAt: null,
-        test2SkippedAt: null,
-        updatedAt: now,
-      },
-      select: {
-        id: true,
-        status: true,
-        chosenPath: true,
-        completedAt: true,
-        test2SkippedAt: true,
-        updatedAt: true,
-      },
+      update: { lastActivityAt: now },
     });
+  }
 
-    // 2) اگر کاربر skip_review زد -> برای ورود فوری به treating باید progress واقعی بسازیم
-    // این کار باعث می‌شود hasAnyProgressFinal=true شود و tabState در /state برود روی treating
-    if (choice === "skip_review") {
-      // پیدا کردن روز 1 مرحله bastan
-      const firstDay = await prisma.pelekanDay.findFirst({
-        where: { stage: { code: "bastan" }, dayNumberInStage: 1 },
-        select: { id: true },
-      });
+  // ✅ B) ریست دو آزمون آخر (تا UI نتیجه صفر نشان ندهد و اجازه انجام بدهد)
+  // اگر اسم دو آزمون شما همین‌هاست:
+  const RESET_KINDS = ["relationship_rescan", "ex_returns"];
 
-      if (firstDay?.id) {
-        await prisma.pelekanDayProgress.upsert({
-          where: { userId_dayId: { userId: user.id, dayId: firstDay.id } },
-          create: {
-            userId: user.id,
-            dayId: firstDay.id,
-            status: "active",
-            completionPercent: 0,
-            startedAt: now,
-            lastActivityAt: now,
-          },
-          update: {
-            // اگر قبلاً وجود داشت، دست نزن به completedAt و… فقط lastActivity رو تازه کن
-            lastActivityAt: now,
-          },
-        });
-      }
-    }
+  await prisma.assessmentResult.deleteMany({
+    where: { userId: user.id, kind: { in: RESET_KINDS } },
+  });
+
+  await prisma.assessmentSession.deleteMany({
+    where: { userId: user.id, kind: { in: RESET_KINDS } },
+  });
+}
 
     return res.json({ ok: true, data: { session } });
   } catch (e) {
