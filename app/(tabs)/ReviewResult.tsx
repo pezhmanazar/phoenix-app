@@ -55,6 +55,26 @@ async function fetchJsonWithFallback(urlPrimary: string, urlFallback: string) {
   return j2;
 }
 
+// ✅ NEW: POST with primary/fallback
+async function postJsonWithFallback(urlPrimary: string, urlFallback: string, body: any) {
+  try {
+    const res1 = await fetch(urlPrimary, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      body: JSON.stringify(body),
+    });
+    const j1 = await res1.json().catch(() => null);
+    if (j1 && j1.ok) return j1;
+  } catch {}
+  const res2 = await fetch(urlFallback, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    body: JSON.stringify(body),
+  });
+  const j2 = await res2.json().catch(() => null);
+  return j2;
+}
+
 /** ✅ Ring (بدون کتابخانه اضافی) */
 function ScoreRing({
   value,
@@ -173,6 +193,47 @@ export default function ReviewResult() {
       params: { focus: "review_tests" },
     } as any);
   }, [router]);
+
+  // ✅ NEW: اگر کاربر مسیر skip_review دارد، اول choice را به review تغییر بده سپس بفرست به آزمون‌ها
+  const goReviewTestsForceReviewPath = useCallback(async () => {
+    if (!phone) return;
+
+    if (mountedRef.current) {
+      setLoading(true);
+      setErr(null);
+    }
+
+    try {
+      // اگر انتخاب مسیر skip_review بود، باید قبل از رفتن به تست‌ها، مسیر را به review برگردانیم
+      const chosen = String(reviewSession?.chosenPath || "");
+      if (chosen === "skip_review") {
+        console.log("🧪 [ReviewResult] force choosePath -> review (was skip_review)", { phone });
+
+        const cj = await postJsonWithFallback(
+          `${API_REVIEW_PRIMARY}/choose`,
+          `${API_REVIEW_FALLBACK}/choose`,
+          { phone, choice: "review" }
+        );
+
+        if (!cj?.ok) throw new Error(cj?.error || "CHOOSE_FAILED");
+
+        // چون state محلی هنوز قبلی است، یک refresh سریع بزنیم تا UI همگام شود
+        // (اختیاری ولی کمک می‌کند)
+        try {
+          await fetchAll();
+        } catch {}
+      }
+
+      router.replace({
+        pathname: "/(tabs)/Pelekan",
+        params: { focus: "review_tests" },
+      } as any);
+    } catch (e: any) {
+      if (mountedRef.current) setErr(String(e?.message || "FAILED"));
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
+  }, [phone, reviewSession?.chosenPath, router]);
 
   const fetchAll = useCallback(async () => {
     if (!phone) {
@@ -555,7 +616,7 @@ export default function ReviewResult() {
                         styles.btnPrimary,
                         { borderColor: "rgba(233,138,21,.35)", backgroundColor: "rgba(233,138,21,.10)" },
                       ]}
-                      onPress={goPelekanReviewTests}
+                      onPress={goReviewTestsForceReviewPath}
                     >
                       <Text style={[styles.btnText, { color: palette.text }]}>انجام آزمون‌ها</Text>
                     </Pressable>

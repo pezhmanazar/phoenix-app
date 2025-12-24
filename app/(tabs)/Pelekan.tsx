@@ -200,6 +200,9 @@ export default function PelekanTab() {
     }, [fetchState])
   );
 
+  // ✅ NEW: chosenPath برای گیت‌کردن focus=review_tests
+  const reviewChosenPath = String(state?.review?.session?.chosenPath || "");
+
   // ✅ focus handler (فقط وقتی واقعاً عوض شده)
   useEffect(() => {
     if (lastFocusRef.current === focus) return;
@@ -209,8 +212,13 @@ export default function PelekanTab() {
 
     if (focus !== "review_tests") return;
 
-    console.log("🚨 [PelekanTab] focus=review_tests -> forceView=review");
-    setForceView("review");
+    // ✅ فقط وقتی کاربر مسیر review را انتخاب کرده باشد forceView را review کن
+    if (reviewChosenPath === "review") {
+      console.log("🚨 [PelekanTab] focus=review_tests -> forceView=review (allowed)");
+      setForceView("review");
+    } else {
+      console.log("🚫 [PelekanTab] focus=review_tests ignored (chosenPath != review)", { reviewChosenPath });
+    }
 
     // پاک کردن پارامتر: بدون اینکه دوباره focus=review_tests بماند
     const t = setTimeout(() => {
@@ -219,16 +227,16 @@ export default function PelekanTab() {
     }, 0);
 
     return () => clearTimeout(t);
-  }, [focus, router]);
+  }, [focus, router, reviewChosenPath]);
 
   // ✅ اگر Review در حال انجامه، حتی اگر tabState از سرور "treating" باشه، توی Review بمون
-const reviewSessStatus = String(state?.review?.session?.status || "");
-const keepReview =
-  forceView === "review" ||
-  state.tabState === "review" ||
-  reviewSessStatus === "in_progress";
+  const reviewSessStatus = String(state?.review?.session?.status || "");
+  const keepReview =
+    forceView === "review" ||
+    state.tabState === "review" ||
+    reviewSessStatus === "in_progress";
 
-const view: TabState = (keepReview ? "review" : state.tabState) as TabState;
+  const view: TabState = (keepReview ? "review" : state.tabState) as TabState;
 
   useEffect(() => {
     console.log("🟩 [PelekanTab] VIEW RESOLVE", {

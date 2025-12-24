@@ -123,14 +123,7 @@ export default function ChoosePath({ me, state, onRefresh }: Props) {
           return;
         }
 
-        // 2) if skip_review -> actually start treating (create first progress)
-        if (choice === "skip_review") {
-          const st = await startTreatment();
-          if (!st.ok) {
-            setErr(`شروع درمان ناموفق بود: ${st.error}`);
-            return;
-          }
-        }
+        
 
         // 3) refresh parent (should move tabState to treating or review)
         await onRefresh?.();
