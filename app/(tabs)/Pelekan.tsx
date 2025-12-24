@@ -257,11 +257,14 @@ export default function PelekanTab() {
 
     const baselineDone = state?.baseline?.session?.status === "completed";
     const reviewChosen = !!state?.review?.session?.chosenPath;
-    const reviewDone =
-      !!state?.review?.session?.completedAt ||
-      !!state?.review?.session?.test2CompletedAt ||
-      !!state?.review?.session?.test1CompletedAt ||
-      !!state?.review?.session?.test2SkippedAt;
+    const rs = String(state?.review?.session?.status || "");
+const reviewDone =
+  rs === "completed_locked" ||
+  rs === "unlocked" ||
+  !!state?.review?.session?.completedAt ||
+  !!state?.review?.session?.test2CompletedAt ||
+  !!state?.review?.session?.test1CompletedAt ||
+  !!state?.review?.session?.test2SkippedAt;
 
     const resultsDone = !!(baselineDone && reviewChosen && reviewDone);
 

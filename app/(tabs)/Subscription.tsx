@@ -1,24 +1,24 @@
 // app/(tabs)/Subscription.tsx
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect, useTheme } from "@react-navigation/native";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
   ActivityIndicator,
+  Alert,
+  ScrollView,
   StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme, useFocusEffect } from "@react-navigation/native";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../hooks/useAuth";
 import { useUser } from "../../hooks/useUser";
 
-import { startPay } from "../../api/pay"; // ✅ فقط startPay
 import * as WebBrowser from "expo-web-browser";
 import { toJalaali } from "jalaali-js";
+import { startPay } from "../../api/pay"; // ✅ فقط startPay
 import { getPlanStatus } from "../../lib/plan";
 
 type PlanKey = "trial15" | "p30" | "p90" | "p180";
@@ -295,7 +295,7 @@ export default function SubscriptionScreen() {
         {/* هدر بالا: ضربدر چپ + عنوان راست با آیکن */}
         <View style={styles.topBar}>
           <TouchableOpacity
-            onPress={() => router.replace("/(tabs)/Phoenix")}
+            onPress={() => router.replace("/(tabs)/Pelekan")}
             activeOpacity={0.85}
             style={styles.closeBtn}
           >

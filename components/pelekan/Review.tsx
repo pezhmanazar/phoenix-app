@@ -66,7 +66,7 @@ type ResultResponse = {
   data?: {
     status: "in_progress" | "completed_locked" | "unlocked";
     canEnterPelekan?: boolean;
-    result: any | null; // {locked:boolean,message:string,meta?:{didSkipTest2:boolean}}
+    result: any | null;
   };
 };
 
@@ -85,34 +85,23 @@ export default function Review({ me, state, onRefresh }: Props) {
   const [test1, setTest1] = useState<ReviewQuestion[]>([]);
   const [test2, setTest2] = useState<ReviewQuestion[]>([]);
 
-  // ✅ ضد-لوپ برای bootstrap: برای هر phone فقط یکبار خودکار
   const bootRef = useRef<{ phone: string | null; done: boolean }>({ phone: null, done: false });
-
-  // ✅ ضد-تکرار برای start (اگر سرور کند بود یا رندرها زیاد شدند)
   const startLockRef = useRef(false);
-
-  // ✅ جلوگیری از setState بعد از unmount
   const mountedRef = useRef(true);
-
-  // ✅ ضد دابل‌کلیک / چند submit پشت هم
   const submitLockRef = useRef(false);
 
-  // ✅ Confirm شیشه‌ای (جایگزین Alert)
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState("");
   const [confirmMsg, setConfirmMsg] = useState("");
   const confirmActionRef = useRef<null | (() => Promise<void> | void)>(null);
 
-  // ✅ نمایش نتیجه (بعد از finish)
   const [resultOpen, setResultOpen] = useState(false);
   const [resultLoading, setResultLoading] = useState(false);
   const [resultError, setResultError] = useState<string | null>(null);
   const [resultData, setResultData] = useState<any | null>(null);
 
-  // ✅ انتخاب گزینه + دکمه ادامه (برای جلوگیری از لمس اشتباهی)
   const [selectedValue, setSelectedValue] = useState<number | null>(null);
 
-  // ✅ ترنزیشن نرم بین سوال‌ها
   const fade = useRef(new Animated.Value(0)).current;
   const slideY = useRef(new Animated.Value(10)).current;
 
@@ -139,16 +128,10 @@ export default function Review({ me, state, onRefresh }: Props) {
       gold: "#D4AF37",
       orange: "#E98A15",
       red: "#ef4444",
-      lime: "#86efac", // سبز فسفری ملایم (برای تاکید)
+      lime: "#86efac",
     }),
     []
   );
-
-  const accentColor = useMemo(() => {
-    // تست ۱ طلایی، تست ۲ نارنجی
-    const t = reviewState?.session?.currentTest ?? 1;
-    return t === 1 ? palette.gold : palette.orange;
-  }, [reviewState?.session?.currentTest, palette.gold, palette.orange]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -217,7 +200,6 @@ export default function Review({ me, state, onRefresh }: Props) {
     }
   }, [phone]);
 
-  // ✅ صفحه نتیجه جداست + phone لازم است
   const goToResultPage = useCallback(() => {
     router.replace(`/(tabs)/ReviewResult?phone=${encodeURIComponent(phone)}` as any);
   }, [router, phone]);
@@ -227,7 +209,22 @@ export default function Review({ me, state, onRefresh }: Props) {
     goToResultPage();
   }, [goToResultPage]);
 
-  // ✅ فقط وقتی session.questionSetId خالیه start بزن، با lock
+  // ✅ NEW: اگر وضعیت از in_progress خارج شد، حق نداری کاربر را داخل سوال‌ها نگه داری.
+  const syncAndMaybeGoResult = useCallback(
+    async () => {
+      const st = await fetchReviewState();
+      onRefresh?.();
+
+      const sessStatus = String(st?.session?.status || "");
+      if (sessStatus && sessStatus !== "in_progress") {
+        await openResultScreen();
+        return true;
+      }
+      return false;
+    },
+    [fetchReviewState, onRefresh, openResultScreen]
+  );
+
   const ensureStarted = useCallback(
     async (stData: ReviewStateResponse["data"] | null) => {
       if (!phone) return;
@@ -283,7 +280,6 @@ export default function Review({ me, state, onRefresh }: Props) {
     }
   }, [phone, fetchReviewState, fetchQuestionSet, ensureStarted]);
 
-  // ✅ bootstrap خودکار فقط یکبار برای هر phone
   useEffect(() => {
     if (bootRef.current.phone !== phone) {
       bootRef.current.phone = phone;
@@ -316,7 +312,20 @@ export default function Review({ me, state, onRefresh }: Props) {
   const questions = currentTest === 1 ? test1 : test2;
   const currentQuestion = questions[currentIndex] || null;
 
-  // ✅ وقتی سوال عوض شد: انتخاب ریست + انیمیشن
+  const isPro = !!reviewState?.user?.isPro;
+  const sessStatus = String(session?.status || "");
+  const showLockedPaywall = sessStatus === "completed_locked" && !isPro;
+  const showUnlocked = sessStatus === "unlocked";
+
+  // ✅ وقتی وضعیت قفل/آنلاک است، اصلاً وارد سوالات نشو
+  useEffect(() => {
+    if (!session) return;
+    if (sessStatus === "completed_locked" || sessStatus === "unlocked") {
+      // اینجا اگر خواستی می‌تونی فقط ریدایرکت کنی
+      // ولی مهم اینه که UI دیگه سوال نده
+    }
+  }, [session, sessStatus]);
+
   useEffect(() => {
     setSelectedValue(null);
     fade.setValue(0);
@@ -348,6 +357,11 @@ export default function Review({ me, state, onRefresh }: Props) {
     return currentTest === 1 ? palette.gold : palette.orange;
   }, [currentTest, palette.gold, palette.orange]);
 
+  const accentColor = useMemo(() => {
+    const t = reviewState?.session?.currentTest ?? 1;
+    return t === 1 ? palette.gold : palette.orange;
+  }, [reviewState?.session?.currentTest, palette.gold, palette.orange]);
+
   const isEndOfTest = useMemo(() => {
     if (!session) return false;
     if (!questions?.length) return false;
@@ -357,6 +371,12 @@ export default function Review({ me, state, onRefresh }: Props) {
   const submitAnswer = useCallback(
     async (value: number) => {
       if (!phone || !session) return;
+
+      // ✅ اگر از in_progress خارج شده، اجازه نده
+      if (session?.status !== "in_progress") {
+        await openResultScreen();
+        return;
+      }
 
       if (submitLockRef.current) return;
       submitLockRef.current = true;
@@ -377,8 +397,9 @@ export default function Review({ me, state, onRefresh }: Props) {
           return;
         }
 
-        await fetchReviewState();
-        onRefresh?.();
+        // ✅ بعد از هر جواب: اگر وضعیت قفل/آنلاک شد، مستقیم برو نتیجه
+        const finished = await syncAndMaybeGoResult();
+        if (finished) return;
       } catch (e: any) {
         setError(e?.message || "SERVER_ERROR");
       } finally {
@@ -386,14 +407,12 @@ export default function Review({ me, state, onRefresh }: Props) {
         submitLockRef.current = false;
       }
     },
-    [phone, session, currentTest, fetchReviewState, onRefresh]
+    [phone, session, currentTest, syncAndMaybeGoResult, openResultScreen]
   );
 
-  // ✅ ادامه بعد از پایان آزمون 1: برو آزمون 2
   const goToTest2 = useCallback(async () => {
     if (!phone) return;
 
-    // ✅ اگر سشن دیگه in_progress نیست، POST نزن
     if (session?.status !== "in_progress") {
       await openResultScreen();
       return;
@@ -424,11 +443,9 @@ export default function Review({ me, state, onRefresh }: Props) {
     }
   }, [phone, session?.status, fetchReviewState, onRefresh, openResultScreen]);
 
-  // ✅ عبور از آزمون دوم از پایان آزمون ۱ => finish => نتیجه
   const passTest2FromEndOfTest1 = useCallback(async () => {
     if (!phone) return;
 
-    // ✅ اگر سشن دیگه in_progress نیست، POST نزن
     if (session?.status !== "in_progress") {
       await openResultScreen();
       return;
@@ -472,20 +489,18 @@ export default function Review({ me, state, onRefresh }: Props) {
         return;
       }
 
-      await fetchReviewState();
-      onRefresh?.();
+      // ✅ بعد از finish: حتما برو نتیجه (قفل یا آنلاک)
+      await syncAndMaybeGoResult();
       await openResultScreen();
     } finally {
       setLoading(false);
       submitLockRef.current = false;
     }
-  }, [phone, session?.status, fetchReviewState, onRefresh, openResultScreen]);
+  }, [phone, session?.status, syncAndMaybeGoResult, openResultScreen]);
 
-  // ✅ پایان آزمون 2 => finish => نتیجه
   const finishAfterTest2 = useCallback(async () => {
     if (!phone) return;
 
-    // ✅ اگر سشن دیگه in_progress نیست، POST نزن
     if (session?.status !== "in_progress") {
       await openResultScreen();
       return;
@@ -518,20 +533,17 @@ export default function Review({ me, state, onRefresh }: Props) {
         return;
       }
 
-      await fetchReviewState();
-      onRefresh?.();
+      await syncAndMaybeGoResult();
       await openResultScreen();
     } finally {
       setLoading(false);
       submitLockRef.current = false;
     }
-  }, [phone, session?.status, fetchReviewState, onRefresh, openResultScreen]);
+  }, [phone, session?.status, syncAndMaybeGoResult, openResultScreen]);
 
-  // ✅ عبور از آزمون دوم (داخل تست۲) => finish => نتیجه
   const passTest2 = useCallback(async () => {
     if (!phone) return;
 
-    // ✅ اگر سشن دیگه in_progress نیست، POST نزن
     if (session?.status !== "in_progress") {
       await openResultScreen();
       return;
@@ -564,14 +576,13 @@ export default function Review({ me, state, onRefresh }: Props) {
         return;
       }
 
-      await fetchReviewState();
-      onRefresh?.();
+      await syncAndMaybeGoResult();
       await openResultScreen();
     } finally {
       setLoading(false);
       submitLockRef.current = false;
     }
-  }, [phone, session?.status, fetchReviewState, onRefresh, openResultScreen]);
+  }, [phone, session?.status, syncAndMaybeGoResult, openResultScreen]);
 
   const manualReload = useCallback(() => {
     bootRef.current.done = false;
@@ -686,10 +697,10 @@ export default function Review({ me, state, onRefresh }: Props) {
               <Pressable
                 style={[styles.btn, { borderColor: palette.border }]}
                 onPress={async () => {
-                setResultOpen(false);
-                router.replace("/(tabs)/Pelekan");
-                setTimeout(() => onRefresh?.(), 50);
-               }}
+                  setResultOpen(false);
+                  router.replace("/(tabs)/Pelekan");
+                  setTimeout(() => onRefresh?.(), 50);
+                }}
               >
                 <Text style={[styles.btnText, { color: palette.text }]}>رفتن به پلکان درمان</Text>
               </Pressable>
@@ -707,7 +718,7 @@ export default function Review({ me, state, onRefresh }: Props) {
         </View>
       </View>
     );
-  }, [resultOpen, resultData, resultLoading, resultError, palette, router]);
+  }, [resultOpen, resultData, resultLoading, resultError, palette, router, onRefresh]);
 
   if (!phone) {
     return (
@@ -746,6 +757,77 @@ export default function Review({ me, state, onRefresh }: Props) {
   // ✅ اگر نتیجه باز است
   if (resultOpen) {
     return <View style={{ flex: 1, backgroundColor: palette.bg }}>{ResultScreen}</View>;
+  }
+
+  // ✅ NEW: اگر completed_locked و Pro نیست → CTA پرو + نتیجه + برگشت به پلکان
+if (session && showLockedPaywall) {
+  return (
+    <View style={[styles.container, { backgroundColor: palette.bg, justifyContent: "center" }]}>
+      <View style={[styles.card, styles.cardFancy, { backgroundColor: palette.glass, borderColor: palette.border }]}>
+        <View style={[styles.accentBarTop, { backgroundColor: palette.red }]} />
+
+        <Text style={[styles.title, { color: palette.red, textAlign: "center" }]}>آزمون‌ها کامل شد</Text>
+
+        <Text style={[styles.rtlText, { color: palette.sub, marginTop: 10, lineHeight: 22, textAlign: "right" }]}>
+          پاسخ‌ها ثبت شده‌اند. برای دیدن تحلیل نهایی باید اشتراک پرو رو فعال کنی.
+        </Text>
+
+        <View style={{ height: 14 }} />
+
+        <Pressable
+          style={[
+            styles.btnPrimary,
+            { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)" },
+          ]}
+          onPress={() => router.push("/(tabs)/Subscription")}
+        >
+          <Text style={[styles.btnText, { color: palette.text }]}>فعال‌سازی اشتراک پرو</Text>
+        </Pressable>
+
+        <View style={{ height: 10 }} />
+
+        <Pressable style={[styles.btn, { borderColor: palette.border }]} onPress={goToResultPage}>
+          <Text style={[styles.btnText, { color: palette.text }]}>دیدن صفحه نتیجه</Text>
+        </Pressable>
+
+        {/* ✅ دکمه جدید: برگشتن به پلکان */}
+        <View style={{ height: 10 }} />
+
+        <Pressable
+          style={[styles.btnGhost, { borderColor: palette.border, backgroundColor: "rgba(255,255,255,.04)" }]}
+          onPress={() => {
+            router.replace("/(tabs)/Pelekan");
+            setTimeout(() => onRefresh?.(), 50);
+          }}
+        >
+          <Text style={[styles.btnText, { color: palette.sub }]}>برگشتن به پلکان</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+  // ✅ اگر unlocked است هم بهتره مستقیم نتیجه رو نشان بدی
+  if (session && showUnlocked) {
+    return (
+      <View style={[styles.container, { backgroundColor: palette.bg, justifyContent: "center" }]}>
+        <View style={[styles.card, styles.cardFancy, { backgroundColor: palette.glass, borderColor: palette.border }]}>
+          <View style={[styles.accentBarTop, { backgroundColor: palette.lime }]} />
+
+          <Text style={[styles.title, { color: palette.lime, textAlign: "center" }]}>نتیجه آماده است</Text>
+
+          <Text style={[styles.rtlText, { color: palette.sub, marginTop: 10, lineHeight: 22, textAlign: "right" }]}>
+            آزمون‌ها کامل شده‌اند و نتیجه قابل مشاهده است.
+          </Text>
+
+          <View style={{ height: 14 }} />
+
+          <Pressable style={[styles.btnPrimary, { borderColor: palette.border }]} onPress={goToResultPage}>
+            <Text style={[styles.btnText, { color: palette.text }]}>رفتن به نتیجه</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
   }
 
   // پایان آزمون 1
@@ -811,7 +893,6 @@ export default function Review({ me, state, onRefresh }: Props) {
           <Pressable
             style={[styles.btnPrimary, { borderColor: palette.border }]}
             onPress={() => {
-              // ✅ اگر قبلاً finish شده، دوباره POST نزن
               if (session?.status !== "in_progress") {
                 goToResultPage();
                 return;
@@ -831,7 +912,6 @@ export default function Review({ me, state, onRefresh }: Props) {
     );
   }
 
-  // اگر session یا سوال فعلی نداریم: sync نشده یا mismatch
   if (!session || !currentQuestion) {
     return (
       <View style={[styles.root, { backgroundColor: palette.bg }]}>
@@ -868,20 +948,15 @@ export default function Review({ me, state, onRefresh }: Props) {
         >
           <View style={[styles.accentBarTop, { backgroundColor: accentColor }]} />
 
-          {/* عنوان */}
           <Text style={[styles.title, { color: titleColor, textAlign: "center" }]}>{title}</Text>
 
-          {/* پیشرفت */}
           <Text style={[styles.centerText, { color: palette.sub, marginTop: 6, fontSize: 12 }]}>
             سوال {currentIndex + 1} از {questions.length}
           </Text>
 
           <View style={styles.hr} />
 
-          {/* متن سوال */}
-          <Text style={[styles.qText, styles.rtlText, { color: palette.text }]}>
-            {currentQuestion.textFa}
-          </Text>
+          <Text style={[styles.qText, styles.rtlText, { color: palette.text }]}>{currentQuestion.textFa}</Text>
 
           {!!currentQuestion.helpFa && (
             <Text style={[styles.rtlText, { color: palette.sub2, marginTop: 10, lineHeight: 20, textAlign: "right" }]}>
@@ -891,7 +966,6 @@ export default function Review({ me, state, onRefresh }: Props) {
 
           <View style={{ height: 16 }} />
 
-          {/* گزینه‌ها */}
           {currentQuestion.options.map((op) => {
             const isSelected = selectedValue === op.value;
             return (
@@ -909,14 +983,11 @@ export default function Review({ me, state, onRefresh }: Props) {
                   },
                 ]}
               >
-                <Text style={[styles.centerText, styles.rtlText, { color: palette.text, fontSize: 14 }]}>
-                  {op.labelFa}
-                </Text>
+                <Text style={[styles.centerText, styles.rtlText, { color: palette.text, fontSize: 14 }]}>{op.labelFa}</Text>
               </Pressable>
             );
           })}
 
-          {/* CTA ادامه */}
           <View style={{ height: 6 }} />
 
           <Pressable
@@ -967,7 +1038,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
 
-  // کمی رنگ و لعاب (بدون شلوغی)
   cardFancy: {
     backgroundColor: "rgba(3,7,18,.92)",
     shadowColor: "#000",
