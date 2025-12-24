@@ -164,15 +164,15 @@ export default function ReviewResult() {
   }, []);
 
   const goPelekan = useCallback(() => {
-  router.replace("/(tabs)/Pelekan");
-}, [router]);
+    router.replace("/(tabs)/Pelekan");
+  }, [router]);
 
-const goPelekanReviewTests = useCallback(() => {
-  router.replace({
-    pathname: "/(tabs)/Pelekan",
-    params: { focus: "review_tests" },
-  } as any);
-}, [router]);
+  const goPelekanReviewTests = useCallback(() => {
+    router.replace({
+      pathname: "/(tabs)/Pelekan",
+      params: { focus: "review_tests" },
+    } as any);
+  }, [router]);
 
   const fetchAll = useCallback(async () => {
     if (!phone) {
@@ -198,19 +198,44 @@ const goPelekanReviewTests = useCallback(() => {
       const b = stJson?.data?.baseline?.session ?? null;
       const r = stJson?.data?.review?.session ?? null;
 
+      // ✅ LOG 1: state snapshot
+      console.log("🧪 [ReviewResult] state snapshot", {
+        phone,
+        baselineStatus: String(b?.status || ""),
+        review: r
+          ? {
+              id: r?.id,
+              chosenPath: r?.chosenPath,
+              status: r?.status,
+              currentTest: r?.currentTest,
+              currentIndex: r?.currentIndex,
+              test1CompletedAt: r?.test1CompletedAt,
+              test2CompletedAt: r?.test2CompletedAt,
+              test2SkippedAt: r?.test2SkippedAt,
+            }
+          : null,
+      });
+
       if (mountedRef.current) {
         setBaselineSession(b);
         setReviewSession(r);
       }
 
-      // 2) review/result only if done AND chosenPath === "review"
+      // 2) review/result only if done
       const rStatus = String(r?.status || "");
       const chosen = String(r?.chosenPath || "");
 
-      // فقط وقتی مسیر review انتخاب شده، نتیجه می‌گیریم
-      const shouldFetchReviewResult = chosen === "review" && (rStatus === "completed_locked" || rStatus === "unlocked");
+      // ✅ فقط وقتی done باشد نتیجه می‌گیریم (طبق کد خودت)
+      const shouldFetchReviewResult = rStatus === "completed_locked" || rStatus === "unlocked";
 
-      // ✅ اگر skip_review بود یا هنوز done نبود: نتیجه را پاک می‌کنیم و فقط status را نگه می‌داریم
+      // ✅ LOG 2: decision
+      console.log("🧪 [ReviewResult] decide fetch result", {
+        chosen,
+        rStatus,
+        shouldFetchReviewResult,
+      });
+
+      // ✅ اگر هنوز done نبود: نتیجه را پاک می‌کنیم و فقط status را نگه می‌داریم
       if (!shouldFetchReviewResult) {
         if (mountedRef.current) {
           setReviewStatus((rStatus as any) || null);
@@ -225,6 +250,16 @@ const goPelekanReviewTests = useCallback(() => {
       );
 
       if (!rrJson?.ok) throw new Error(rrJson?.error || "RESULT_FAILED");
+
+      // ✅ LOG 3: result payload
+      console.log("🧪 [ReviewResult] /review/result payload", {
+        ok: rrJson?.ok,
+        status: rrJson?.data?.status,
+        locked: rrJson?.data?.result?.locked,
+        didSkipTest2: rrJson?.data?.result?.meta?.didSkipTest2,
+        t1: Array.isArray(rrJson?.data?.result?.diagrams?.test1) ? rrJson.data!.result!.diagrams.test1.length : null,
+        t2: Array.isArray(rrJson?.data?.result?.diagrams?.test2) ? rrJson.data!.result!.diagrams.test2.length : null,
+      });
 
       if (mountedRef.current) {
         setReviewStatus(rrJson?.data?.status ?? null);
@@ -270,7 +305,7 @@ const goPelekanReviewTests = useCallback(() => {
     return palette.lime;
   }, [baselineScore, palette.red, palette.orange, palette.lime, palette.gold]);
 
-  // ✅ baseline explanation (بدون «اختلال» و بدون «/»)
+  // ✅ baseline explanation
   const baselineExplain = useMemo(() => {
     const safeText =
       baselineSession?.scalesJson?.interpretationTextSafe ??
@@ -306,7 +341,6 @@ const goPelekanReviewTests = useCallback(() => {
   const summary = result?.summary || null;
 
   const statusColor = useMemo(() => {
-    // اگر مسیر skip_review انتخاب شده، این صفحه نباید با رنگ «نتیجه» نمایش داده شود
     if (isSkipPath) return palette.gold;
     if (reviewDone) return locked ? palette.red : palette.lime;
     return palette.gold;
@@ -378,7 +412,6 @@ const goPelekanReviewTests = useCallback(() => {
   const headerSub = useMemo(() => {
     if (loading) return "در حال دریافت نتیجه…";
     if (err) return "خطا در دریافت نتیجه";
-    // فقط اگر مسیر review است و نتیجه قفل است
     if (reviewDone && locked) return "برای دیدن تحلیل کامل باید اشتراک پرو را فعال کنی.";
     return null;
   }, [loading, err, reviewDone, locked]);
@@ -435,7 +468,7 @@ const goPelekanReviewTests = useCallback(() => {
 
           {!loading && !err && (
             <>
-              {/* ---------------- Baseline (rename + chart + max=31 + safe text) ---------------- */}
+              {/* ---------------- Baseline ---------------- */}
               <View style={[styles.block, { borderColor: palette.border }]}>
                 <Text style={[styles.h2, { color: palette.text }]}>سنجش آسیب شکست عاطفی یا جدایی</Text>
 
@@ -491,74 +524,138 @@ const goPelekanReviewTests = useCallback(() => {
               <View style={{ height: 12 }} />
 
               {/* ---------------- Review / Tests ---------------- */}
-<View style={[styles.block, { borderColor: palette.border }]}>
-  <Text style={[styles.h2, { color: palette.text }]}>بازسنجی + «آیا برمی‌گرده؟»</Text>
+              <View style={[styles.block, { borderColor: palette.border }]}>
+                <Text style={[styles.h2, { color: palette.text }]}>بازسنجی + «آیا برمی‌گرده؟»</Text>
 
-  {!hasReviewSession || !chosenPath ? (
-    <>
-      <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
-        هنوز آزمون‌های بازسنجی شروع نشده‌اند.
-      </Text>
-      <View style={{ height: 12 }} />
-      <Pressable
-        style={[
-          styles.btnPrimary,
-          { borderColor: "rgba(233,138,21,.35)", backgroundColor: "rgba(233,138,21,.10)" },
-        ]}
-        onPress={goPelekanReviewTests}
-      >
-        <Text style={[styles.btnText, { color: palette.text }]}>انجام بازسنجی</Text>
-      </Pressable>
-    </>
-  ) : isSkipPath ? (
-    <>
-      <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
-        چون مسیر «فراموش کردن» را انتخاب کردی، اینجا نتیجهٔ بازسنجی را به‌صورت پیش‌فرض نشان نمی‌دهیم.
-        {"\n"}اگر دوست داری می‌توانی آزمون‌های ۱ و ۲ را انجام بدهی.
-      </Text>
-      <View style={{ height: 12 }} />
-      <Pressable
-        style={[
-          styles.btnPrimary,
-          { borderColor: "rgba(233,138,21,.35)", backgroundColor: "rgba(233,138,21,.10)" },
-        ]}
-        onPress={goPelekanReviewTests}
-      >
-        <Text style={[styles.btnText, { color: palette.text }]}>انجام آزمون‌ها</Text>
-      </Pressable>
-    </>
-  ) : reviewInProgress ? (
-    <>
-      <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
-        آزمون‌ها کامل نشده‌اند. برای ادامه، وارد پلکان شو.
-      </Text>
-      <View style={{ height: 12 }} />
-      <Pressable
-        style={[
-          styles.btnPrimary,
-          { borderColor: "rgba(233,138,21,.35)", backgroundColor: "rgba(233,138,21,.10)" },
-        ]}
-        onPress={goPelekanReviewTests}
-      >
-        <Text style={[styles.btnText, { color: palette.text }]}>ادامه آزمون‌ها</Text>
-      </Pressable>
-    </>
-  ) : reviewDone ? (
-    <>
-      {/* ... همین بخش نتیجه بدون تغییر ... */}
-    </>
-  ) : (
-    <>
-      <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
-        وضعیت آزمون‌ها نامشخص است. برای همگام‌سازی وارد پلکان شو.
-      </Text>
-      <View style={{ height: 12 }} />
-      <Pressable style={[styles.btnPrimary, { borderColor: palette.border }]} onPress={goPelekan}>
-        <Text style={[styles.btnText, { color: palette.text }]}>رفتن به پلکان</Text>
-      </Pressable>
-    </>
-  )}
-</View>
+                {!hasReviewSession || !chosenPath ? (
+                  <>
+                    <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
+                      هنوز آزمون‌های بازسنجی شروع نشده‌اند.
+                    </Text>
+                    <View style={{ height: 12 }} />
+                    <Pressable
+                      style={[
+                        styles.btnPrimary,
+                        { borderColor: "rgba(233,138,21,.35)", backgroundColor: "rgba(233,138,21,.10)" },
+                      ]}
+                      onPress={goPelekanReviewTests}
+                    >
+                      <Text style={[styles.btnText, { color: palette.text }]}>انجام بازسنجی</Text>
+                    </Pressable>
+                  </>
+                ) : isSkipPath ? (
+                  <>
+                    <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
+                      چون مسیر «فراموش کردن» را انتخاب کردی، اینجا نتیجهٔ بازسنجی را به‌صورت پیش‌فرض نشان نمی‌دهیم.
+                      {"\n"}اگر دوست داری می‌توانی آزمون‌های ۱ و ۲ را انجام بدهی.
+                    </Text>
+                    <View style={{ height: 12 }} />
+                    <Pressable
+                      style={[
+                        styles.btnPrimary,
+                        { borderColor: "rgba(233,138,21,.35)", backgroundColor: "rgba(233,138,21,.10)" },
+                      ]}
+                      onPress={goPelekanReviewTests}
+                    >
+                      <Text style={[styles.btnText, { color: palette.text }]}>انجام آزمون‌ها</Text>
+                    </Pressable>
+                  </>
+                ) : reviewInProgress ? (
+                  <>
+                    <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
+                      آزمون‌ها کامل نشده‌اند. برای ادامه، وارد پلکان شو.
+                    </Text>
+                    <View style={{ height: 12 }} />
+                    <Pressable
+                      style={[
+                        styles.btnPrimary,
+                        { borderColor: "rgba(233,138,21,.35)", backgroundColor: "rgba(233,138,21,.10)" },
+                      ]}
+                      onPress={goPelekanReviewTests}
+                    >
+                      <Text style={[styles.btnText, { color: palette.text }]}>ادامه آزمون‌ها</Text>
+                    </Pressable>
+                  </>
+                ) : reviewDone ? (
+                  <>
+                    {/* وضعیت کلی (در یک نگاه) */}
+                    <View style={{ height: 10 }} />
+                    <View style={[styles.oneLook, { borderColor: palette.border2 }]}>
+                      <Text style={[styles.h2, { color: palette.text, textAlign: "center" as any }]}>وضعیت کلی تو (در یک نگاه)</Text>
+
+                      <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
+                        {summary?.oneLook || result?.message || "—"}
+                      </Text>
+
+                      {!!summary?.nextStep && (
+                        <View style={[styles.nextStep, { borderColor: "rgba(212,175,55,.25)" }]}>
+                          <Text style={[styles.h3, { color: palette.gold }]}>گام پیشنهادی بعدی</Text>
+                          <Text style={[styles.rtl, { color: palette.sub, marginTop: 6, lineHeight: 20 }]}>{summary.nextStep}</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {(test1Diagrams.length > 0 || test2Diagrams.length > 0) && (
+                      <View style={{ marginTop: 14 }}>
+                        <Text style={[styles.h2, { color: palette.text }]}>جزئیات تحلیلی</Text>
+
+                        {test1Diagrams.length > 0 && (
+                          <View style={{ marginTop: 10 }}>
+                            <Text style={[styles.sectionTitle, { color: palette.sub }]}>آزمون ۱: بازسنجی رابطه</Text>
+                            {test1Diagrams.map((d, idx) => (
+                              <DiagramCard key={`${d.key}-${idx}`} item={d} />
+                            ))}
+                          </View>
+                        )}
+
+                        {!didSkipTest2 && test2Diagrams.length > 0 && (
+                          <View style={{ marginTop: 14 }}>
+                            <Text style={[styles.sectionTitle, { color: palette.sub }]}>آزمون ۲: آیا برمی‌گرده؟</Text>
+                            {test2Diagrams.map((d, idx) => (
+                              <DiagramCard key={`${d.key}-${idx}`} item={d} />
+                            ))}
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    <View style={{ height: 14 }} />
+
+                    {locked && (
+                      <>
+                        <Pressable
+                          style={[
+                            styles.btnPrimary,
+                            { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)" },
+                          ]}
+                          onPress={() => router.push("/(tabs)/Subscription")}
+                        >
+                          <Text style={[styles.btnText, { color: palette.text }]}>فعال‌سازی PRO برای دیدن تحلیل کامل</Text>
+                        </Pressable>
+                        <View style={{ height: 10 }} />
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
+                      وضعیت آزمون‌ها نامشخص است. برای همگام‌سازی وارد پلکان شو.
+                    </Text>
+                    <View style={{ height: 12 }} />
+                    <Pressable style={[styles.btnPrimary, { borderColor: palette.border }]} onPress={goPelekan}>
+                      <Text style={[styles.btnText, { color: palette.text }]}>رفتن به پلکان</Text>
+                    </Pressable>
+                  </>
+                )}
+              </View>
+
+              <View style={{ height: 14 }} />
+
+              <Pressable style={[styles.btn, { borderColor: palette.border }]} onPress={goPelekan}>
+                <Text style={[styles.btnText, { color: palette.text }]}>رفتن به پلکان</Text>
+              </Pressable>
+
+              <View style={{ height: 10 }} />
 
               {/* ✅ دکمه: تازه‌سازی نتایج */}
               <Pressable

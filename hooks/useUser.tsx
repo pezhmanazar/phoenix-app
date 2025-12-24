@@ -7,8 +7,8 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { useAuth } from "./useAuth";
 import { getMeByPhone, type Me } from "../api/user";
+import { useAuth } from "./useAuth";
 
 type RefreshOptions = {
   force?: boolean;
@@ -100,10 +100,26 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.setItem("force_profile_wizard_v1", "1");
   } catch {}
 
-  // ✅ خروج اجباری، اما شماره را نگه دار
-  await signOut({ keepPhone: true });
+  // ✅ USER_NOT_FOUND در onboarding طبیعی است → نباید signOut کند
+if (resp.error === "USER_NOT_FOUND") {
+  if (__DEV__) {
+    console.warn("[useUser.refresh] USER_NOT_FOUND → set force_profile_wizard_v1 (NO signOut)");
+  }
 
+  lastLoadedPhoneRef.current = null;
+  lastFetchAtRef.current = 0;
+  if (mountedRef.current) setMe(null);
+
+  // ✅ فلگ: روت‌لی‌آوت/نویگیشن بفهمد باید ویزارد باز شود
+  try {
+    const AsyncStorage = require("@react-native-async-storage/async-storage").default;
+    await AsyncStorage.setItem("force_profile_wizard_v1", "1");
+    await AsyncStorage.setItem("force_profile_phone_v1", phone); // اختیاری ولی کمک‌کننده
+  } catch {}
+
+  // ❌ مهم: اینجا signOut نکن
   return;
+}
 }
 
           // ✅ فقط خطاهای احراز هویت → signOut

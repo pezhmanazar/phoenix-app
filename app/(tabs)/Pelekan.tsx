@@ -221,8 +221,14 @@ export default function PelekanTab() {
     return () => clearTimeout(t);
   }, [focus, router]);
 
-  // ✅ view نهایی با اولویت forceView
-  const view: TabState = (forceView === "review" ? "review" : state.tabState) as TabState;
+  // ✅ اگر Review در حال انجامه، حتی اگر tabState از سرور "treating" باشه، توی Review بمون
+const reviewSessStatus = String(state?.review?.session?.status || "");
+const keepReview =
+  forceView === "review" ||
+  state.tabState === "review" ||
+  reviewSessStatus === "in_progress";
+
+const view: TabState = (keepReview ? "review" : state.tabState) as TabState;
 
   useEffect(() => {
     console.log("🟩 [PelekanTab] VIEW RESOLVE", {
