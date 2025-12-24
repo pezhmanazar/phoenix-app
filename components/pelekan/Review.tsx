@@ -22,7 +22,7 @@ type ReviewOption = { value: number; labelFa: string };
 
 // ✅ NEW: UI hint coming from backend
 type ReviewQuestionUI = {
-  layout?: "row2" | "grid3x2_last2" | "grid3x2" | "stack" | string;
+  layout?: "row2" | "grid2x2" | "grid3x2_last2" | "grid3x2" | "stack" | string;
   columns?: number;
   rows?: number;
 };
@@ -768,6 +768,22 @@ export default function Review({ me, state, onRefresh }: Props) {
       );
     }
 
+    // ✅ 4 گزینه: 2 بالا + 2 پایین
+if (layout === "grid2x2" && opts.length === 4) {
+  return (
+    <View>
+      <View style={styles.gridRow}>
+        <View style={styles.gridCol}>{renderBtn(opts[0])}</View>
+        <View style={styles.gridCol}>{renderBtn(opts[1])}</View>
+      </View>
+      <View style={styles.gridRow}>
+        <View style={styles.gridCol}>{renderBtn(opts[2])}</View>
+        <View style={styles.gridCol}>{renderBtn(opts[3])}</View>
+      </View>
+    </View>
+  );
+}
+
     // ✅ 5 گزینه: 3 بالا + 2 پایین
     if (layout === "grid3x2_last2" && opts.length === 5) {
       return (
@@ -779,10 +795,10 @@ export default function Review({ me, state, onRefresh }: Props) {
           </View>
 
           <View style={styles.gridRow}>
-            <View style={styles.gridCol} />
             <View style={styles.gridCol}>{renderBtn(opts[3])}</View>
             <View style={styles.gridCol}>{renderBtn(opts[4])}</View>
-          </View>
+            <View style={styles.gridCol} />
+        </View>
         </View>
       );
     }
