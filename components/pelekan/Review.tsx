@@ -19,12 +19,21 @@ type Props = {
 };
 
 type ReviewOption = { value: number; labelFa: string };
+
+// ✅ NEW: UI hint coming from backend
+type ReviewQuestionUI = {
+  layout?: "row2" | "grid3x2_last2" | "grid3x2" | "stack" | string;
+  columns?: number;
+  rows?: number;
+};
+
 type ReviewQuestion = {
   index: number;
   key?: string | null;
   textFa: string;
   helpFa?: string | null;
   options: ReviewOption[];
+  ui?: ReviewQuestionUI; // ✅ NEW
 };
 
 type QuestionSetResponse = {
@@ -720,6 +729,86 @@ export default function Review({ me, state, onRefresh }: Props) {
     );
   }, [resultOpen, resultData, resultLoading, resultError, palette, router, onRefresh]);
 
+  // ✅ NEW: option renderer with layouts
+  const OptionsBlock = useMemo(() => {
+    if (!currentQuestion) return null;
+
+    const opts = currentQuestion.options || [];
+    const layout = String(currentQuestion.ui?.layout || "").trim() || "stack";
+
+    const renderBtn = (op: ReviewOption) => {
+      const isSelected = selectedValue === op.value;
+      return (
+        <Pressable
+          key={`${currentQuestion.index}-${op.value}`}
+          disabled={loading}
+          onPress={() => setSelectedValue(op.value)}
+          style={({ pressed }) => [
+            styles.option,
+            {
+              borderColor: isSelected ? accentColor : palette.border,
+              backgroundColor: isSelected ? "rgba(255,255,255,.06)" : "transparent",
+              opacity: pressed ? 0.9 : 1,
+              transform: [{ scale: pressed ? 0.995 : 1 }],
+            },
+          ]}
+        >
+          <Text style={[styles.centerText, styles.rtlText, { color: palette.text, fontSize: 14 }]}>{op.labelFa}</Text>
+        </Pressable>
+      );
+    };
+
+    // ✅ 2 گزینه کنار هم
+    if (layout === "row2" && opts.length === 2) {
+      return (
+        <View style={styles.row2}>
+          <View style={styles.rowItem}>{renderBtn(opts[0])}</View>
+          <View style={styles.rowItem}>{renderBtn(opts[1])}</View>
+        </View>
+      );
+    }
+
+    // ✅ 5 گزینه: 3 بالا + 2 پایین
+    if (layout === "grid3x2_last2" && opts.length === 5) {
+      return (
+        <View>
+          <View style={styles.gridRow}>
+            <View style={styles.gridCol}>{renderBtn(opts[0])}</View>
+            <View style={styles.gridCol}>{renderBtn(opts[1])}</View>
+            <View style={styles.gridCol}>{renderBtn(opts[2])}</View>
+          </View>
+
+          <View style={styles.gridRow}>
+            <View style={styles.gridCol} />
+            <View style={styles.gridCol}>{renderBtn(opts[3])}</View>
+            <View style={styles.gridCol}>{renderBtn(opts[4])}</View>
+          </View>
+        </View>
+      );
+    }
+
+    // ✅ 6 گزینه: 3 بالا + 3 پایین
+    if (layout === "grid3x2" && opts.length === 6) {
+      return (
+        <View>
+          <View style={styles.gridRow}>
+            <View style={styles.gridCol}>{renderBtn(opts[0])}</View>
+            <View style={styles.gridCol}>{renderBtn(opts[1])}</View>
+            <View style={styles.gridCol}>{renderBtn(opts[2])}</View>
+          </View>
+          <View style={styles.gridRow}>
+            <View style={styles.gridCol}>{renderBtn(opts[3])}</View>
+            <View style={styles.gridCol}>{renderBtn(opts[4])}</View>
+            <View style={styles.gridCol}>{renderBtn(opts[5])}</View>
+          </View>
+        </View>
+      );
+    }
+
+    // ✅ fallback: همان عمودی قبلی
+    return <View>{opts.map(renderBtn)}</View>;
+  }, [currentQuestion, selectedValue, loading, accentColor, palette.border, palette.text]);
+
   if (!phone) {
     return (
       <View style={[styles.root, { backgroundColor: palette.bg }]}>
@@ -760,52 +849,52 @@ export default function Review({ me, state, onRefresh }: Props) {
   }
 
   // ✅ NEW: اگر completed_locked و Pro نیست → CTA پرو + نتیجه + برگشت به پلکان
-if (session && showLockedPaywall) {
-  return (
-    <View style={[styles.container, { backgroundColor: palette.bg, justifyContent: "center" }]}>
-      <View style={[styles.card, styles.cardFancy, { backgroundColor: palette.glass, borderColor: palette.border }]}>
-        <View style={[styles.accentBarTop, { backgroundColor: palette.red }]} />
+  if (session && showLockedPaywall) {
+    return (
+      <View style={[styles.container, { backgroundColor: palette.bg, justifyContent: "center" }]}>
+        <View style={[styles.card, styles.cardFancy, { backgroundColor: palette.glass, borderColor: palette.border }]}>
+          <View style={[styles.accentBarTop, { backgroundColor: palette.red }]} />
 
-        <Text style={[styles.title, { color: palette.red, textAlign: "center" }]}>آزمون‌ها کامل شد</Text>
+          <Text style={[styles.title, { color: palette.red, textAlign: "center" }]}>آزمون‌ها کامل شد</Text>
 
-        <Text style={[styles.rtlText, { color: palette.sub, marginTop: 10, lineHeight: 22, textAlign: "right" }]}>
-          پاسخ‌ها ثبت شده‌اند. برای دیدن تحلیل نهایی باید اشتراک پرو رو فعال کنی.
-        </Text>
+          <Text style={[styles.rtlText, { color: palette.sub, marginTop: 10, lineHeight: 22, textAlign: "right" }]}>
+            پاسخ‌ها ثبت شده‌اند. برای دیدن تحلیل نهایی باید اشتراک پرو رو فعال کنی.
+          </Text>
 
-        <View style={{ height: 14 }} />
+          <View style={{ height: 14 }} />
 
-        <Pressable
-          style={[
-            styles.btnPrimary,
-            { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)" },
-          ]}
-          onPress={() => router.push("/(tabs)/Subscription")}
-        >
-          <Text style={[styles.btnText, { color: palette.text }]}>فعال‌سازی اشتراک پرو</Text>
-        </Pressable>
+          <Pressable
+            style={[
+              styles.btnPrimary,
+              { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)" },
+            ]}
+            onPress={() => router.push("/(tabs)/Subscription")}
+          >
+            <Text style={[styles.btnText, { color: palette.text }]}>فعال‌سازی اشتراک پرو</Text>
+          </Pressable>
 
-        <View style={{ height: 10 }} />
+          <View style={{ height: 10 }} />
 
-        <Pressable style={[styles.btn, { borderColor: palette.border }]} onPress={goToResultPage}>
-          <Text style={[styles.btnText, { color: palette.text }]}>دیدن صفحه نتیجه</Text>
-        </Pressable>
+          <Pressable style={[styles.btn, { borderColor: palette.border }]} onPress={goToResultPage}>
+            <Text style={[styles.btnText, { color: palette.text }]}>دیدن صفحه نتیجه</Text>
+          </Pressable>
 
-        {/* ✅ دکمه جدید: برگشتن به پلکان */}
-        <View style={{ height: 10 }} />
+          {/* ✅ دکمه جدید: برگشتن به پلکان */}
+          <View style={{ height: 10 }} />
 
-        <Pressable
-          style={[styles.btnGhost, { borderColor: palette.border, backgroundColor: "rgba(255,255,255,.04)" }]}
-          onPress={() => {
-            router.replace("/(tabs)/Pelekan");
-            setTimeout(() => onRefresh?.(), 50);
-          }}
-        >
-          <Text style={[styles.btnText, { color: palette.sub }]}>برگشتن به پلکان</Text>
-        </Pressable>
+          <Pressable
+            style={[styles.btnGhost, { borderColor: palette.border, backgroundColor: "rgba(255,255,255,.04)" }]}
+            onPress={() => {
+              router.replace("/(tabs)/Pelekan");
+              setTimeout(() => onRefresh?.(), 50);
+            }}
+          >
+            <Text style={[styles.btnText, { color: palette.sub }]}>برگشتن به پلکان</Text>
+          </Pressable>
+        </View>
       </View>
-    </View>
-  );
-}
+    );
+  }
 
   // ✅ اگر unlocked است هم بهتره مستقیم نتیجه رو نشان بدی
   if (session && showUnlocked) {
@@ -966,27 +1055,8 @@ if (session && showLockedPaywall) {
 
           <View style={{ height: 16 }} />
 
-          {currentQuestion.options.map((op) => {
-            const isSelected = selectedValue === op.value;
-            return (
-              <Pressable
-                key={`${currentQuestion.index}-${op.value}`}
-                disabled={loading}
-                onPress={() => setSelectedValue(op.value)}
-                style={({ pressed }) => [
-                  styles.option,
-                  {
-                    borderColor: isSelected ? accentColor : palette.border,
-                    backgroundColor: isSelected ? "rgba(255,255,255,.06)" : "transparent",
-                    opacity: pressed ? 0.9 : 1,
-                    transform: [{ scale: pressed ? 0.995 : 1 }],
-                  },
-                ]}
-              >
-                <Text style={[styles.centerText, styles.rtlText, { color: palette.text, fontSize: 14 }]}>{op.labelFa}</Text>
-              </Pressable>
-            );
-          })}
+          {/* ✅ UPDATED: options rendering based on ui.layout */}
+          {OptionsBlock}
 
           <View style={{ height: 6 }} />
 
@@ -1072,6 +1142,25 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     marginBottom: 10,
+  },
+
+  // ✅ NEW layouts
+  row2: {
+    flexDirection: "row-reverse",
+    gap: 10 as any,
+    marginBottom: 10,
+  },
+  rowItem: {
+    flex: 1,
+  },
+
+  gridRow: {
+    flexDirection: "row-reverse",
+    gap: 10 as any,
+    marginBottom: 10,
+  },
+  gridCol: {
+    flex: 1,
   },
 
   btn: {

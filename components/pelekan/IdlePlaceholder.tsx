@@ -36,13 +36,23 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
       sub: "rgba(231,238,247,.72)",
       faint: "rgba(231,238,247,.55)",
       gold: "#D4AF37",
+      orange: "#E98A15",
+      red: "#ef4444",
+      lime: "#86efac",
 
       glass: "rgba(3,7,18,.78)",
+      glass2: "rgba(255,255,255,.02)",
       border: "rgba(255,255,255,.10)",
+      border2: "rgba(255,255,255,.14)",
 
       // شیشه برای دکمه‌ها
       btnBg: "rgba(255,255,255,.06)",
       btnBorder: "rgba(255,255,255,.14)",
+
+      // ✅ سبز متناسب با تم (نه جیغ)
+      startGreen: "#86efac",
+      startGreenBg: "rgba(134,239,172,.14)",
+      startGreenBorder: "rgba(134,239,172,.42)",
     }),
     []
   );
@@ -50,9 +60,7 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
   const consentSteps =
     state?.baseline?.content?.consentSteps && Array.isArray(state.baseline.content.consentSteps)
       ? state.baseline.content.consentSteps
-      : [
-        
-        ];
+      : [];
 
   const introText =
     "برای اینکه یک برنامه‌ی دقیق، اثرگذار و کاملاً متناسب با وضعیت تو ارائه بشه، اول یک آزمون کوتاه می‌گیریم تا نقطه‌ی شروع مشخص بشه.";
@@ -67,7 +75,6 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
   };
 
   const goIntro = () => {
-    // اول mode رو intro کن تا صفحه دوم mount بشه، بعد انیمیت کن
     setMode("intro");
     requestAnimationFrame(() => animateTo(1));
   };
@@ -109,8 +116,7 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
   }, []);
 
   // ------------------------- UI -------------------------
-
-  // ✅ حالت ۱: فقط دکمه بزرگ "شروع" وسط صفحه
+  // ✅ حالت ۱: دکمه دایره بزرگ سبز وسط صفحه
   if (mode === "start") {
     const startOpacity = anim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
     const startTranslate = anim.interpolate({ inputRange: [0, 1], outputRange: [0, -12] });
@@ -127,14 +133,28 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
           ]}
         >
           <TouchableOpacity
-            activeOpacity={0.9}
+            activeOpacity={0.92}
             onPress={goIntro}
             style={[
-              styles.bigStartBtn,
-              { backgroundColor: palette.btnBg, borderColor: palette.btnBorder },
+              styles.startCircle,
+              {
+                backgroundColor: palette.startGreenBg,
+                borderColor: palette.startGreenBorder,
+              },
             ]}
           >
-            <Text style={[styles.bigStartText, { color: palette.text }]}>شروع</Text>
+            <View
+              style={[
+                styles.startCircleInner,
+                {
+                  backgroundColor: "rgba(3,7,18,.60)",
+                  borderColor: "rgba(134,239,172,.25)",
+                },
+              ]}
+            >
+              <Text style={[styles.startCircleText, { color: palette.startGreen }]}>شروع</Text>
+            
+            </View>
           </TouchableOpacity>
         </Animated.View>
       </View>
@@ -157,22 +177,35 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
         ]}
       >
         <View style={[styles.card, { backgroundColor: palette.glass, borderColor: palette.border }]}>
+          {/* ✅ accent شبیه کارت‌های آزمون */}
+          <View style={[styles.accentBarTop, { backgroundColor: palette.gold }]} />
 
-          <Text style={[styles.introBody, { color: palette.sub }]}>{introText}</Text>
+          <Text style={[styles.introBody, { color: palette.sub, textAlign: "center" }]}>{introText}</Text>
 
-          <View style={{ marginTop: 12, gap: 10 }}>
+          <View style={{ marginTop: 14, gap: 10 }}>
             {consentSteps.map((s: any, idx: number) => (
-              <View key={String(s?.id || idx)} style={styles.bulletRow}>
-                <View
-                  style={[
-                    styles.bulletDot,
-                    {
-                      backgroundColor: "rgba(212,175,55,.20)",
-                      borderColor: "rgba(212,175,55,.35)",
-                    },
-                  ]}
-                />
-                <Text style={[styles.bulletText, { color: palette.sub }]}>{s?.text}</Text>
+              <View
+                key={String(s?.id || idx)}
+                style={[
+                  styles.stepCard,
+                  {
+                    borderColor: palette.border2,
+                    backgroundColor: palette.glass2,
+                  },
+                ]}
+              >
+                <View style={styles.stepHeaderRow}>
+                  <View
+                    style={[
+                      styles.bulletDot,
+                      {
+                        backgroundColor: "rgba(212,175,55,.20)",
+                        borderColor: "rgba(212,175,55,.35)",
+                      },
+                    ]}
+                  />
+                  <Text style={[styles.bulletText, { color: palette.sub, textAlign: "center" }]}>{s?.text}</Text>
+                </View>
               </View>
             ))}
           </View>
@@ -184,8 +217,8 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
             style={[
               styles.primaryBtnGlass,
               {
-                backgroundColor: palette.btnBg,
-                borderColor: palette.btnBorder,
+                backgroundColor: "rgba(212,175,55,.10)",
+                borderColor: "rgba(212,175,55,.35)",
                 opacity: busy ? 0.6 : 1,
               },
             ]}
@@ -200,13 +233,21 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
             )}
           </TouchableOpacity>
 
+          {/* ✅ بازگشت زیر کارت، وسط، با فلش */}
           <TouchableOpacity
-            activeOpacity={0.8}
+            activeOpacity={0.85}
             onPress={goStart}
             disabled={busy}
-            style={{ marginTop: 12, alignSelf: "flex-start" }}
+            style={[
+              styles.backBtn,
+              {
+                borderColor: palette.border,
+                backgroundColor: "rgba(255,255,255,.04)",
+                opacity: busy ? 0.55 : 1,
+              },
+            ]}
           >
-            <Text style={{ color: palette.faint, fontWeight: "800" }}>بازگشت</Text>
+            <Text style={[styles.backBtnText, { color: palette.faint }]}>→ بازگشت</Text>
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -224,52 +265,96 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 18,
   },
-  bigStartBtn: {
-    width: "86%",
-    maxWidth: 420,
-    paddingVertical: 18,
-    borderRadius: 20,
+
+  // ✅ دایره شروع
+  startCircle: {
+    width: 220,
+    height: 220,
+    borderRadius: 999,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
+    // کمی عمق
+    shadowColor: "#000",
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 12,
   },
-  bigStartText: {
-    fontSize: 18,
+  startCircleInner: {
+    width: 192,
+    height: 192,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  startCircleText: {
+    fontSize: 22,
     fontWeight: "900",
-    letterSpacing: 0.2,
+    writingDirection: "rtl" as any,
+  },
+  startCircleSub: {
+    marginTop: 10,
+    fontSize: 12,
+    fontWeight: "800",
+    writingDirection: "rtl" as any,
+    textAlign: "center" as any,
+    opacity: 0.9,
   },
 
   // ----- intro mode (center card) -----
   introCenterWrap: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "center", // ✅ کارت وسط صفحه
+    justifyContent: "center",
     paddingHorizontal: 16,
     paddingBottom: 10,
   },
+
   card: {
     width: "100%",
     maxWidth: 520,
     borderWidth: 1,
     borderRadius: 18,
-    paddingVertical: 16,
+    paddingVertical: 18,
     paddingHorizontal: 16,
+    overflow: "hidden",
+    // عمق شیشه‌ای مثل کارت‌های آزمون
+    shadowColor: "#000",
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
   },
-  title: {
-    fontSize: 16,
-    fontWeight: "900",
-    textAlign: "right",
+
+  accentBarTop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    opacity: 0.95,
   },
 
   introBody: {
-    marginTop: 10,
+    marginTop: 6,
     fontSize: 13,
     lineHeight: 20,
     textAlign: "right",
     fontWeight: "700",
+    writingDirection: "rtl" as any,
   },
 
-  bulletRow: {
+  // ✅ کارت‌های آیتم‌ها شبیه سوالات آزمون
+  stepCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  stepHeaderRow: {
     flexDirection: "row-reverse",
     alignItems: "flex-start",
     gap: 10,
@@ -287,6 +372,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: "right",
     fontWeight: "700",
+    writingDirection: "rtl" as any,
   },
 
   primaryBtnGlass: {
@@ -300,5 +386,23 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     fontSize: 14,
     fontWeight: "900",
+    writingDirection: "rtl" as any,
+  },
+
+  // ✅ back button centered under card content
+  backBtn: {
+    marginTop: 12,
+    alignSelf: "center",
+    minWidth: 160,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  backBtnText: {
+    fontSize: 13,
+    fontWeight: "900",
+    writingDirection: "rtl" as any,
   },
 });
