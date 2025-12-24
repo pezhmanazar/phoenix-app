@@ -106,9 +106,7 @@ function ScoreRing({
 
         <View style={[StyleSheet.absoluteFillObject, { alignItems: "center", justifyContent: "center" }]}>
           <Text style={{ color: textColor, fontWeight: "900", fontSize: 20 }}>{clamped}</Text>
-          <Text style={{ color: subColor, fontSize: 11, marginTop: 2, fontWeight: "900" }}>
-            از {safeMax}
-          </Text>
+          <Text style={{ color: subColor, fontSize: 11, marginTop: 2, fontWeight: "900" }}>از {safeMax}</Text>
         </View>
       </View>
 
@@ -166,8 +164,15 @@ export default function ReviewResult() {
   }, []);
 
   const goPelekan = useCallback(() => {
-    router.replace("/(tabs)/Pelekan");
-  }, [router]);
+  router.replace("/(tabs)/Pelekan");
+}, [router]);
+
+const goPelekanReviewTests = useCallback(() => {
+  router.replace({
+    pathname: "/(tabs)/Pelekan",
+    params: { focus: "review_tests" },
+  } as any);
+}, [router]);
 
   const fetchAll = useCallback(async () => {
     if (!phone) {
@@ -198,10 +203,14 @@ export default function ReviewResult() {
         setReviewSession(r);
       }
 
-      // 2) review/result only if done
+      // 2) review/result only if done AND chosenPath === "review"
       const rStatus = String(r?.status || "");
-      const shouldFetchReviewResult = rStatus === "completed_locked" || rStatus === "unlocked";
+      const chosen = String(r?.chosenPath || "");
 
+      // فقط وقتی مسیر review انتخاب شده، نتیجه می‌گیریم
+      const shouldFetchReviewResult = chosen === "review" && (rStatus === "completed_locked" || rStatus === "unlocked");
+
+      // ✅ اگر skip_review بود یا هنوز done نبود: نتیجه را پاک می‌کنیم و فقط status را نگه می‌داریم
       if (!shouldFetchReviewResult) {
         if (mountedRef.current) {
           setReviewStatus((rStatus as any) || null);
@@ -280,7 +289,13 @@ export default function ReviewResult() {
   const chosenPath = reviewSession?.chosenPath ?? null;
   const reviewSessStatus = String(reviewSession?.status || "");
   const reviewInProgress = reviewSessStatus === "in_progress";
-  const reviewDone = reviewSessStatus === "completed_locked" || reviewSessStatus === "unlocked";
+
+  // ✅ تفکیک مسیرها
+  const isSkipPath = chosenPath === "skip_review";
+  const isReviewPath = chosenPath === "review";
+
+  // ✅ reviewDone فقط وقتی review انتخاب شده
+  const reviewDone = isReviewPath && (reviewSessStatus === "completed_locked" || reviewSessStatus === "unlocked");
 
   const locked = !!result?.locked;
   const didSkipTest2 = !!result?.meta?.didSkipTest2;
@@ -291,9 +306,11 @@ export default function ReviewResult() {
   const summary = result?.summary || null;
 
   const statusColor = useMemo(() => {
+    // اگر مسیر skip_review انتخاب شده، این صفحه نباید با رنگ «نتیجه» نمایش داده شود
+    if (isSkipPath) return palette.gold;
     if (reviewDone) return locked ? palette.red : palette.lime;
     return palette.gold;
-  }, [reviewDone, locked, palette.red, palette.lime, palette.gold]);
+  }, [isSkipPath, reviewDone, locked, palette.red, palette.lime, palette.gold]);
 
   const isHigherWorse = (key: string) => {
     const k = String(key || "");
@@ -361,6 +378,7 @@ export default function ReviewResult() {
   const headerSub = useMemo(() => {
     if (loading) return "در حال دریافت نتیجه…";
     if (err) return "خطا در دریافت نتیجه";
+    // فقط اگر مسیر review است و نتیجه قفل است
     if (reviewDone && locked) return "برای دیدن تحلیل کامل باید اشتراک پرو را فعال کنی.";
     return null;
   }, [loading, err, reviewDone, locked]);
@@ -430,7 +448,7 @@ export default function ReviewResult() {
                         styles.btnPrimary,
                         { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)" },
                       ]}
-                      onPress={goPelekan}
+                      onPress={goPelekanReviewTests}
                     >
                       <Text style={[styles.btnText, { color: palette.text }]}>شروع سنجش</Text>
                     </Pressable>
@@ -455,9 +473,7 @@ export default function ReviewResult() {
                   </>
                 ) : baselineInProgress ? (
                   <>
-                    <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
-                      سنجش شروع شده ولی کامل نشده.
-                    </Text>
+                    <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>سنجش شروع شده ولی کامل نشده.</Text>
                     <View style={{ height: 12 }} />
                     <Pressable
                       style={[
@@ -494,6 +510,23 @@ export default function ReviewResult() {
                       <Text style={[styles.btnText, { color: palette.text }]}>انجام بازسنجی</Text>
                     </Pressable>
                   </>
+                ) : isSkipPath ? (
+                  <>
+                    <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
+                      چون مسیر «فراموش کردن» را انتخاب کردی، اینجا نتیجهٔ بازسنجی را به‌صورت پیش‌فرض نشان نمی‌دهیم.
+                      {"\n"}اگر دوست داری می‌توانی آزمون‌های ۱ و ۲ را انجام بدهی.
+                    </Text>
+                    <View style={{ height: 12 }} />
+                    <Pressable
+                      style={[
+                        styles.btnPrimary,
+                        { borderColor: "rgba(233,138,21,.35)", backgroundColor: "rgba(233,138,21,.10)" },
+                      ]}
+                      onPress={goPelekan}
+                    >
+                      <Text style={[styles.btnText, { color: palette.text }]}>انجام آزمون‌ها</Text>
+                    </Pressable>
+                  </>
                 ) : reviewInProgress ? (
                   <>
                     <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
@@ -512,14 +545,10 @@ export default function ReviewResult() {
                   </>
                 ) : reviewDone ? (
                   <>
-                    {/* ✅ جمله‌ی «نتیجه آزمون‌ها آماده است» حذف شد */}
-
                     {/* وضعیت کلی (در یک نگاه) */}
                     <View style={{ height: 10 }} />
                     <View style={[styles.oneLook, { borderColor: palette.border2 }]}>
-                      <Text style={[styles.h2, { color: palette.text, textAlign: "center" as any }]}>
-                        وضعیت کلی تو (در یک نگاه)
-                      </Text>
+                      <Text style={[styles.h2, { color: palette.text, textAlign: "center" as any }]}>وضعیت کلی تو (در یک نگاه)</Text>
 
                       <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
                         {summary?.oneLook || result?.message || "—"}
