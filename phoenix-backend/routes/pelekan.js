@@ -468,7 +468,20 @@ router.get("/state", authUser, async (req, res) => {
             paywall,
             flags: { suppressPaywall, isBaselineInProgress, isBaselineCompleted },
           },
-          baseline: baselineSession ? { session: baselineSession, content: toBaselineUiContent() } : null,
+          baseline: baselineSession
+  ? {
+      session: {
+        id: baselineSession.id,
+        status: baselineSession.status,
+        totalScore: baselineSession.totalScore,
+        level: baselineSession.scalesJson?.level || null,
+        interpretationText:
+          baselineSession.scalesJson?.interpretationTextSafe || null,
+        completedAt: baselineSession.completedAt,
+      },
+      content: toBaselineUiContent(),
+    }
+  : null,
           path: null,
           review,
           bastanIntro: null,

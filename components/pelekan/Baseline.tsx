@@ -349,7 +349,13 @@ export default function Baseline({ me, state, onRefresh }: Props) {
 const accent =
   status === "completed" && completedResult ? levelColor : palette.gold;
 
-  const header = baselineTitle;
+const header = baselineTitle;
+
+// ✅ ADD THIS — منبع ضدگلوله تفسیر
+const interpretationText =
+  completedResult?.interpretationText ||
+  state?.baseline?.session?.scalesJson?.interpretationTextSafe ||
+  null;
 
   return (
     <View style={[styles.container, { backgroundColor: palette.bg }]}>
@@ -379,11 +385,35 @@ const accent =
                 {percent}% از بیشترین میزان
               </Text>
 
-              {!!completedResult?.interpretationText && (
-                <Text style={[styles.rtlText, { color: palette.sub, marginTop: 12, lineHeight: 20, textAlign: "right" }]}>
-                  {completedResult.interpretationText}
-                </Text>
-              )}
+              {interpretationText ? (
+  <Text
+    style={[
+      styles.rtlText,
+      {
+        color: palette.sub,
+        marginTop: 12,
+        lineHeight: 20,
+        textAlign: "right",
+      },
+    ]}
+  >
+    {interpretationText}
+  </Text>
+) : (
+  <Text
+    style={[
+      styles.rtlText,
+      {
+        color: palette.sub2,
+        marginTop: 12,
+        fontSize: 12,
+        textAlign: "right",
+      },
+    ]}
+  >
+    تفسیر در حال آماده‌سازی است…
+  </Text>
+)}
 
               <View style={{ height: 14 }} />
 
