@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Svg, { Circle } from "react-native-svg";
 
 type Props = {
   me: any;
@@ -43,26 +44,24 @@ export default function Baseline({ me, state, onRefresh }: Props) {
       text: "#F9FAFB",
       sub: "rgba(231,238,247,.74)",
       faint: "rgba(231,238,247,.55)",
-
       gold: "#D4AF37",
-
-      // ✅ شیشه‌ای‌تر تا بک‌گراند دیده بشه
       glass: "rgba(3,7,18,.62)",
       border: "rgba(255,255,255,.09)",
-
       btnBg: "rgba(255,255,255,.06)",
       btnBorder: "rgba(255,255,255,.14)",
-
-      // ✅ رنگ پاستلی برای حس “امید”
-      mint: "rgba(74,222,128,.95)", // سبز پاستلی
+      mint: "rgba(74,222,128,.95)",
       mintBorder: "rgba(74,222,128,.40)",
       mintBg: "rgba(74,222,128,.10)",
-
       optionBg: "rgba(255,255,255,.045)",
       danger: "#EF4444",
     }),
     []
   );
+
+  // ✅ meta از state (از /api/pelekan/state می‌آید)
+  const baselineMeta = state?.baseline?.content?.meta || {};
+  const baselineTitle = String(baselineMeta?.titleFa || "سنجش وضعیت");
+  const baselineMaxScore = Number(baselineMeta?.maxScore || 31);
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -74,7 +73,16 @@ export default function Baseline({ me, state, onRefresh }: Props) {
     canNext: false,
     canSubmit: false,
   });
+
   const [status, setStatus] = useState<string>("in_progress");
+
+  // ✅ نتیجه‌ی baseline وقتی completed شد
+  const [completedResult, setCompletedResult] = useState<{
+    totalScore: number;
+    level: string | null;
+    interpretationText: string | null;
+    completedAt?: any;
+  } | null>(null);
 
   const [localSelected, setLocalSelected] = useState<number | null>(null);
 
@@ -83,48 +91,83 @@ export default function Baseline({ me, state, onRefresh }: Props) {
     return Array.isArray(arr) ? arr.length : 0;
   }, [state?.baseline?.content?.consentSteps]);
 
+  const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
+
+  const percent = useMemo(() => {
+    const score = Number(completedResult?.totalScore ?? 0);
+    const max = baselineMaxScore > 0 ? baselineMaxScore : 31;
+    return clamp(Math.round((score / max) * 100), 0, 100);
+  }, [completedResult?.totalScore, baselineMaxScore]);
+
+  // ✅ رنگ نمودار بر اساس سطح
+  const levelColor = useMemo(() => {
+    const lvl = String(completedResult?.level || "");
+    if (lvl === "severe") return palette.danger;
+    if (lvl === "moderate") return palette.gold;
+    return palette.mint;
+  }, [completedResult?.level, palette.danger, palette.gold, palette.mint]);
+
   const fetchBaselineState = useCallback(async () => {
     if (!phone) {
       setLoading(false);
       setStep(null);
+      setCompletedResult(null);
       return;
     }
+
     try {
       setLoading(true);
+
       const res = await fetch(
-        `https://qoqnoos.app/api/pelekan/baseline/state?phone=${encodeURIComponent(
-          phone
-        )}`,
+        `https://qoqnoos.app/api/pelekan/baseline/state?phone=${encodeURIComponent(phone)}`,
         { headers: { "Cache-Control": "no-store" } }
       );
+
       const json = await res.json();
 
       if (!json?.ok) {
         setStep(null);
+        setCompletedResult(null);
         setNav({ index: 0, total: 0, canNext: false, canSubmit: false });
         setStatus("error");
         return;
       }
 
       const data = json.data || {};
-      setStatus(String(data.status || "in_progress"));
-      setNav(
-        data.nav || { index: 0, total: 0, canNext: false, canSubmit: false }
-      );
+      const st = String(data.status || "in_progress");
+      setStatus(st);
+
+      // ✅ اگر completed است: نتیجه را ست کن و step را null کن تا UI نتیجه نشان دهد
+      if (st === "completed" && data?.result) {
+        setCompletedResult({
+          totalScore: Number(data.result.totalScore ?? 0),
+          level: data.result.level ?? null,
+          interpretationText: data.result.interpretationText ?? null,
+          completedAt: data.result.completedAt ?? null,
+        });
+        setStep(null);
+        setNav({ index: 0, total: 0, canNext: false, canSubmit: false });
+        setLocalSelected(null);
+        return;
+      }
+
+      // ✅ در حالت in_progress: نتیجه را پاک کن
+      setCompletedResult(null);
+
+      setNav(data.nav || { index: 0, total: 0, canNext: false, canSubmit: false });
 
       const s: UiStep = data.step || null;
       setStep(s);
 
       if (s?.type === "question") {
-        setLocalSelected(
-          typeof s.selectedIndex === "number" ? s.selectedIndex : null
-        );
+        setLocalSelected(typeof s.selectedIndex === "number" ? s.selectedIndex : null);
       } else {
         setLocalSelected(null);
       }
     } catch {
       setStatus("error");
       setStep(null);
+      setCompletedResult(null);
     } finally {
       setLoading(false);
     }
@@ -139,14 +182,11 @@ export default function Baseline({ me, state, onRefresh }: Props) {
       if (!phone) return false;
       try {
         setBusy(true);
-        const res = await fetch(
-          `https://qoqnoos.app/api/pelekan/baseline/answer`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ phone, ...payload }),
-          }
-        );
+        const res = await fetch(`https://qoqnoos.app/api/pelekan/baseline/answer`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone, ...payload }),
+        });
         const json = await res.json();
         if (!json?.ok) {
           Alert.alert("خطا", "ثبت پاسخ ناموفق بود.");
@@ -167,21 +207,18 @@ export default function Baseline({ me, state, onRefresh }: Props) {
     if (!phone) return;
     try {
       setBusy(true);
-      const res = await fetch(
-        `https://qoqnoos.app/api/pelekan/baseline/submit`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phone }),
-        }
-      );
+      const res = await fetch(`https://qoqnoos.app/api/pelekan/baseline/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      });
       const json = await res.json();
       if (!json?.ok) {
-        Alert.alert("خطا", "ثبت نهایی آزمون ناموفق بود.");
+        Alert.alert("خطا", "ثبت نهایی سنجش ناموفق بود.");
         return;
       }
-      await onRefresh?.();
-      await fetchBaselineState();
+      await onRefresh?.(); // refresh pelekan/state
+      await fetchBaselineState(); // now baseline/state should return completed
     } catch {
       Alert.alert("خطا", "ارتباط با سرور برقرار نشد.");
     } finally {
@@ -189,7 +226,6 @@ export default function Baseline({ me, state, onRefresh }: Props) {
     }
   }, [phone, onRefresh, fetchBaselineState]);
 
-  // ✅ شمارنده‌ی سوال‌ها (نه کل استپ‌ها)
   const questionIndex = useMemo(() => {
     if (step?.type !== "question") return null;
     const q = nav.index - consentCount;
@@ -212,11 +248,7 @@ export default function Baseline({ me, state, onRefresh }: Props) {
     if (!step) return;
 
     if (step.type === "consent") {
-      const ok = await postAnswer({
-        stepType: "consent",
-        stepId: step.id,
-        acknowledged: true,
-      });
+      const ok = await postAnswer({ stepType: "consent", stepId: step.id, acknowledged: true });
       if (ok) await fetchBaselineState();
       return;
     }
@@ -227,7 +259,6 @@ export default function Baseline({ me, state, onRefresh }: Props) {
         return;
       }
 
-      // ✅ اول جواب سوال آخر رو ثبت کن
       const ok = await postAnswer({
         stepType: "question",
         stepId: step.id,
@@ -235,7 +266,6 @@ export default function Baseline({ me, state, onRefresh }: Props) {
       });
       if (!ok) return;
 
-      // ✅ اگر سوال آخره، مستقیم submit (نه اینکه دوباره همین سوال بیاد)
       if (isLastQuestion) {
         await submit();
         return;
@@ -246,12 +276,55 @@ export default function Baseline({ me, state, onRefresh }: Props) {
     }
 
     if (step.type === "review_missing") {
-      Alert.alert(
-        "نیاز به ریست",
-        step.message || "چند پاسخ ثبت نشده. لطفاً آزمون را ریست کن."
-      );
+      Alert.alert("نیاز به ریست", step.message || "چند پاسخ ثبت نشده. لطفاً سنجش را ریست کن.");
     }
   }, [step, localSelected, postAnswer, fetchBaselineState, isLastQuestion, submit]);
+
+  // ----------- Donut -----------
+  const Donut = ({ valuePercent }: { valuePercent: number }) => {
+    const size = 140;
+    const stroke = 12;
+    const r = (size - stroke) / 2;
+    const c = 2 * Math.PI * r;
+    const dash = (valuePercent / 100) * c;
+
+    return (
+      <View style={{ alignItems: "center", justifyContent: "center", marginTop: 10 }}>
+        <Svg width={size} height={size}>
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            stroke={"rgba(255,255,255,.10)"}
+            strokeWidth={stroke}
+            fill="none"
+          />
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            stroke={levelColor}
+            strokeWidth={stroke}
+            fill="none"
+            strokeLinecap="round"
+            strokeDasharray={`${dash} ${c - dash}`}
+            rotation={-90}
+            originX={size / 2}
+            originY={size / 2}
+          />
+        </Svg>
+
+        <View style={{ position: "absolute", alignItems: "center" }}>
+          <Text style={{ color: palette.text, fontWeight: "900", fontSize: 28 }}>
+            {String(completedResult?.totalScore ?? 0)}
+          </Text>
+          <Text style={{ color: palette.faint, fontWeight: "900", marginTop: 2 }}>
+            از {baselineMaxScore}
+          </Text>
+        </View>
+      </View>
+    );
+  };
 
   // ---------------- UI ----------------
   if (loading) {
@@ -259,9 +332,7 @@ export default function Baseline({ me, state, onRefresh }: Props) {
       <View style={[styles.full, { backgroundColor: palette.bg }]}>
         <View style={styles.centerWrap}>
           <ActivityIndicator color={palette.gold} />
-          <Text style={{ color: palette.faint, marginTop: 10, fontWeight: "800" }}>
-            در حال بارگذاری…
-          </Text>
+          <Text style={{ color: palette.faint, marginTop: 10, fontWeight: "800" }}>در حال بارگذاری…</Text>
         </View>
       </View>
     );
@@ -279,11 +350,41 @@ export default function Baseline({ me, state, onRefresh }: Props) {
             },
           ]}
         >
-          {step?.type === "consent" ? (
+          {/* ✅ اگر completed شد: نتیجه را نشان بده */}
+          {status === "completed" && completedResult ? (
             <>
-              <Text style={[styles.stepText, { color: palette.text }]}>
-                {step.text}
+              <Text style={[styles.h1, { color: palette.text }]}>{baselineTitle}</Text>
+
+              <Donut valuePercent={percent} />
+
+              <Text style={[styles.centerSub, { color: palette.faint }]}>
+                {percent}% از بیشترین میزان
               </Text>
+
+              {!!completedResult?.interpretationText && (
+                <Text style={[styles.stepText, { color: palette.sub, marginTop: 12 }]}>
+                  {completedResult.interpretationText}
+                </Text>
+              )}
+
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => onRefresh?.()}
+                style={[
+                  styles.primaryBtnGlass,
+                  {
+                    marginTop: 16,
+                    backgroundColor: palette.btnBg,
+                    borderColor: palette.btnBorder,
+                  },
+                ]}
+              >
+                <Text style={[styles.primaryBtnText, { color: palette.text }]}>رفتن به ادامه مسیر</Text>
+              </TouchableOpacity>
+            </>
+          ) : step?.type === "consent" ? (
+            <>
+              <Text style={[styles.stepText, { color: palette.text }]}>{step.text}</Text>
 
               <TouchableOpacity
                 activeOpacity={0.9}
@@ -302,9 +403,7 @@ export default function Baseline({ me, state, onRefresh }: Props) {
                 {busy ? (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                     <ActivityIndicator color={palette.gold} />
-                    <Text style={[styles.primaryBtnText, { color: palette.text }]}>
-                      در حال ثبت…
-                    </Text>
+                    <Text style={[styles.primaryBtnText, { color: palette.text }]}>در حال ثبت…</Text>
                   </View>
                 ) : (
                   <Text style={[styles.primaryBtnText, { color: palette.text }]}>
@@ -315,15 +414,11 @@ export default function Baseline({ me, state, onRefresh }: Props) {
             </>
           ) : step?.type === "question" ? (
             <>
-              {/* ✅ هدر شمارنده کاملاً وسط */}
               <Text style={[styles.counter, { color: palette.faint }]}>
                 سوال {(questionIndex ?? 0) + 1} از {questionTotal ?? 0}
               </Text>
 
-              {/* ✅ فونت سوال کوچیک‌تر + فاصله کنترل شده تا به هدر نچسبه */}
-              <Text style={[styles.question, { color: palette.text }]}>
-                {step.text}
-              </Text>
+              <Text style={[styles.question, { color: palette.text }]}>{step.text}</Text>
 
               <View style={{ marginTop: 14, gap: 12 }}>
                 {step.options.map((opt) => {
@@ -342,12 +437,7 @@ export default function Baseline({ me, state, onRefresh }: Props) {
                         },
                       ]}
                     >
-                      <Text
-                        style={[
-                          styles.optionText,
-                          { color: selected ? palette.text : palette.sub },
-                        ]}
-                      >
+                      <Text style={[styles.optionText, { color: selected ? palette.text : palette.sub }]}>
                         {opt.label}
                       </Text>
                     </TouchableOpacity>
@@ -355,7 +445,6 @@ export default function Baseline({ me, state, onRefresh }: Props) {
                 })}
               </View>
 
-              {/* ✅ دکمه پایین: اگر سوال آخره از همینجا "ثبت نهایی" */}
               <TouchableOpacity
                 activeOpacity={0.9}
                 onPress={goNext}
@@ -373,9 +462,7 @@ export default function Baseline({ me, state, onRefresh }: Props) {
                 {busy ? (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                     <ActivityIndicator color={palette.gold} />
-                    <Text style={[styles.primaryBtnText, { color: palette.text }]}>
-                      در حال ثبت…
-                    </Text>
+                    <Text style={[styles.primaryBtnText, { color: palette.text }]}>در حال ثبت…</Text>
                   </View>
                 ) : (
                   <Text style={[styles.primaryBtnText, { color: palette.text }]}>
@@ -386,7 +473,7 @@ export default function Baseline({ me, state, onRefresh }: Props) {
             </>
           ) : step?.type === "review_missing" ? (
             <Text style={[styles.stepText, { color: palette.danger }]}>
-              {step.message || "چند پاسخ ثبت نشده. لطفاً آزمون را ریست کن."}
+              {step.message || "چند پاسخ ثبت نشده. لطفاً سنجش را ریست کن."}
             </Text>
           ) : (
             <Text style={[styles.stepText, { color: palette.faint }]}>
@@ -401,8 +488,6 @@ export default function Baseline({ me, state, onRefresh }: Props) {
 
 const styles = StyleSheet.create({
   full: { flex: 1 },
-
-  // ✅ همیشه وسط، ولی با فاصله امن از بالا/پایین
   centerWrap: {
     flex: 1,
     alignItems: "center",
@@ -410,8 +495,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 18,
   },
-
-  // ✅ card شیشه‌ای، جمع‌وجور، بک‌گراند رو کمتر می‌پوشونه
   card: {
     width: "100%",
     maxWidth: 520,
@@ -421,44 +504,54 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     overflow: "hidden",
   },
-
+  h1: {
+    fontSize: 14,
+    fontWeight: "900",
+    textAlign: "center",
+    writingDirection: "rtl" as any,
+  },
+  centerSub: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: "900",
+    textAlign: "center",
+    writingDirection: "rtl" as any,
+  },
   counter: {
     fontSize: 12,
     fontWeight: "900",
     textAlign: "center",
     marginBottom: 8,
+    writingDirection: "rtl" as any,
   },
-
-  // ✅ کوچیک‌تر تا بالا نره و به هدر نچسبه
   question: {
     marginTop: 2,
     fontSize: 14,
     lineHeight: 22,
     textAlign: "center",
     fontWeight: "900",
+    writingDirection: "rtl" as any,
   },
-
   stepText: {
     fontSize: 14,
     lineHeight: 22,
     textAlign: "center",
     fontWeight: "900",
+    writingDirection: "rtl" as any,
   },
-
   option: {
     borderWidth: 1,
     borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 12,
   },
-
   optionText: {
     fontSize: 13,
     lineHeight: 18,
     textAlign: "center",
     fontWeight: "800",
+    writingDirection: "rtl" as any,
   },
-
   primaryBtnGlass: {
     paddingVertical: 14,
     borderRadius: 16,
@@ -466,9 +559,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
   },
-
   primaryBtnText: {
     fontSize: 14,
     fontWeight: "900",
+    writingDirection: "rtl" as any,
   },
 });

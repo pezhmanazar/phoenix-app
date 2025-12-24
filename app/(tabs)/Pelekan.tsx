@@ -1,9 +1,11 @@
 // app/(tabs)/Pelekan.tsx
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+
 import Baseline from "../../components/pelekan/Baseline";
 import ChoosePath from "../../components/pelekan/ChoosePath";
 import IdlePlaceholder from "../../components/pelekan/IdlePlaceholder";
@@ -21,10 +23,7 @@ import { useUser } from "../../hooks/useUser";
 /* ----------------------------- Types ----------------------------- */
 type PlanStatus = "free" | "pro" | "expired" | "expiring";
 type TabState = "idle" | "baseline_assessment" | "choose_path" | "review" | "treating";
-type Paywall = {
-  needed: boolean;
-  reason: "start_treatment" | "continue_treatment" | null;
-};
+type Paywall = { needed: boolean; reason: "start_treatment" | "continue_treatment" | null };
 type PelekanFlags = {
   suppressPaywall?: boolean;
   isBaselineInProgress?: boolean;
@@ -34,10 +33,7 @@ type PelekanState = {
   tabState: TabState;
   user: { planStatus: PlanStatus; daysLeft: number };
   treatmentAccess: "full" | "frozen_current" | "archive_only";
-  ui: {
-    paywall: Paywall;
-    flags?: PelekanFlags;
-  };
+  ui: { paywall: Paywall; flags?: PelekanFlags };
   baseline: any | null;
   path: any | null;
   review: any | null;
@@ -75,9 +71,10 @@ const initialState: PelekanState = {
 export default function PelekanTab() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const tabBarH = useBottomTabBarHeight();
   const { me } = useUser();
 
-  // ✅ جدا کردن لود اولیه از رفرش‌ها (برای جلوگیری از unmount شدن Review)
+  // ✅ جدا کردن لود اولیه از رفرش‌ها
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [state, setState] = useState<PelekanState>(initialState);
@@ -152,7 +149,6 @@ export default function PelekanTab() {
 
   useFocusEffect(
     useCallback(() => {
-      // ✅ وقتی تب فوکوس می‌گیرد فقط رفرش کن، بدون اینکه کل UI برود روی لودینگ
       fetchState({ initial: false });
     }, [fetchState])
   );
@@ -160,25 +156,42 @@ export default function PelekanTab() {
   // ✅ لیست پلکان فقط وقتی treating هست
   const pathItems: ListItem[] = useMemo(() => {
     if (state.tabState !== "treating") return [];
+
     const stages = state.stages || [];
     const list: ListItem[] = [];
     let zigCounter = 0;
 
+    // ✅ results در اول آرایه (برای پایین دیده شدن در inverted)
+    const baselineDone = state?.baseline?.session?.status === "completed";
+    const reviewChosen = !!state?.review?.session?.chosenPath;
+    const reviewDone =
+      !!state?.review?.session?.completedAt ||
+      !!state?.review?.session?.test2CompletedAt ||
+      !!state?.review?.session?.test1CompletedAt ||
+      !!state?.review?.session?.test2SkippedAt;
+
+    const resultsDone = !!(baselineDone && reviewChosen && reviewDone);
+
+    list.push({
+      kind: "results",
+      id: "results-0",
+      zig: "L",
+      titleFa: "سنجش وضعیت",
+      done: resultsDone,
+    } as any);
+
     for (const st of stages) {
       list.push({ kind: "header", id: `h-${st.id}`, stage: st });
-
       for (const d of st.days || []) {
         const zig: "L" | "R" = zigCounter++ % 2 === 0 ? "L" : "R";
         list.push({ kind: "day", id: `d-${d.id}`, day: d as PelekanDay, stage: st, zig });
       }
-
       list.push({ kind: "spacer", id: `sp-${st.id}` });
     }
 
     return list;
-  }, [state.tabState, state.stages]);
+  }, [state.tabState, state.stages, state?.baseline?.session, state?.review?.session]);
 
-  // ✅ کلیک روی روز فعال
   const onTapActiveDay = useCallback(
     (day: PelekanDay) => {
       const paywallNeeded = !!state?.ui?.paywall?.needed;
@@ -192,7 +205,21 @@ export default function PelekanTab() {
     [router, state?.ui?.paywall?.needed, state?.treatmentAccess]
   );
 
-  // ✅ فقط برای بار اول صفحه لودینگ کامل
+  const onTapResults = useCallback(() => {
+    const phone = String(me?.phone || "").trim();
+    if (!phone) return;
+    router.push(`/(tabs)/ReviewResult?phone=${encodeURIComponent(phone)}` as any);
+  }, [router, me?.phone]);
+
+  // ✅ padding درست: SafeArea + TabBar
+  const bottomSafe = insets.bottom + tabBarH;
+
+  // ✅ برای FlatList inverted:
+  // - paddingTop => فضای پایین صفحه (جلوگیری از رفتن زیر تب‌بار)
+  // - paddingBottom => فضای بالای صفحه (جلوگیری از رفتن زیر هدر/بنر هنگام اسکرول)
+  const listPaddingBottom = Math.max(24, 12); // فضای بالای لیست
+  const listPaddingTop = Math.max(16, bottomSafe + 16); // فضای پایین لیست (تب‌بار)
+
   if (initialLoading) {
     return (
       <SafeAreaView edges={["top"]} style={[styles.root, { backgroundColor: palette.bg }]}>
@@ -207,10 +234,7 @@ export default function PelekanTab() {
   }
 
   return (
-    <SafeAreaView
-      style={[styles.root, { backgroundColor: palette.bg }]}
-      edges={["top", "left", "right", "bottom"]}
-    >
+    <SafeAreaView style={[styles.root, { backgroundColor: palette.bg }]} edges={["top", "left", "right", "bottom"]}>
       <View pointerEvents="none" style={[styles.bgGlowTop, { backgroundColor: palette.glowTop }]} />
       <View pointerEvents="none" style={[styles.bgGlowBottom, { backgroundColor: palette.glowBottom }]} />
 
@@ -235,7 +259,6 @@ export default function PelekanTab() {
 
       <TopBanner enabled headerHeight={headerHeight} />
 
-      {/* ✅ رفرش سبک، بدون unmount */}
       {refreshing && (
         <View style={{ paddingVertical: 8, alignItems: "center" }}>
           <ActivityIndicator color="#D4AF37" />
@@ -243,15 +266,22 @@ export default function PelekanTab() {
       )}
 
       {/* Content */}
-      <View style={{ flex: 1, paddingBottom: 12 + insets.bottom }}>
+      <View style={{ flex: 1 }}>
         {state.tabState === "baseline_assessment" ? (
-          <Baseline me={me} state={state} onRefresh={() => fetchState({ initial: false })} />
+          <View style={{ flex: 1, paddingBottom: bottomSafe }}>
+            <Baseline me={me} state={state} onRefresh={() => fetchState({ initial: false })} />
+          </View>
         ) : state.tabState === "choose_path" ? (
-          <ChoosePath me={me} state={state} onRefresh={() => fetchState({ initial: false })} />
+          <View style={{ flex: 1, paddingBottom: bottomSafe }}>
+            <ChoosePath me={me} state={state} onRefresh={() => fetchState({ initial: false })} />
+          </View>
         ) : state.tabState === "review" ? (
-          <Review me={me} state={state} onRefresh={() => fetchState({ initial: false })} />
+          <View style={{ flex: 1, paddingBottom: bottomSafe }}>
+            <Review me={me} state={state} onRefresh={() => fetchState({ initial: false })} />
+          </View>
         ) : state.tabState === "treating" ? (
           <FlatList
+            style={{ flex: 1 }}
             data={pathItems}
             keyExtractor={(it) => it.id}
             renderItem={({ item, index }) => (
@@ -260,17 +290,23 @@ export default function PelekanTab() {
                 index={index}
                 state={state as unknown as TreatmentViewState}
                 onTapActiveDay={onTapActiveDay}
+                onTapResults={onTapResults}
               />
             )}
             inverted
-            contentContainerStyle={{
-              paddingTop: 8,
-              paddingBottom: 16 + insets.bottom,
-            }}
+            // ✅ جلوگیری از رفتن محتوا زیر تب‌بار و هدر + حذف overscroll که “زیر بکگراند” دیده می‌شه
+            bounces={false}
+            overScrollMode="never"
             showsVerticalScrollIndicator={false}
+            contentContainerStyle={{
+              paddingTop: listPaddingTop,
+              paddingBottom: listPaddingBottom,
+            }}
           />
         ) : (
-          <IdlePlaceholder me={me} state={state} onRefresh={() => fetchState({ initial: false })} />
+          <View style={{ flex: 1, paddingBottom: bottomSafe }}>
+            <IdlePlaceholder me={me} state={state} onRefresh={() => fetchState({ initial: false })} />
+          </View>
         )}
       </View>
     </SafeAreaView>

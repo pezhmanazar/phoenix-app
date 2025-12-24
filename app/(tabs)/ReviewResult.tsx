@@ -1,10 +1,21 @@
 // phoenix-app/app/(tabs)/ReviewResult.tsx
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Svg, { Circle } from "react-native-svg";
 
-const API_BASE = "https://qoqnoos.app/api/pelekan/review";
+/**
+ * ✅ دو دامنه برای جلوگیری از گیرهای محیطی/کش
+ */
+const API_REVIEW_PRIMARY = "https://api.qoqnoos.app/api/pelekan/review";
+const API_REVIEW_FALLBACK = "https://qoqnoos.app/api/pelekan/review";
+
+const API_STATE_PRIMARY = "https://api.qoqnoos.app/api/pelekan/state";
+const API_STATE_FALLBACK = "https://qoqnoos.app/api/pelekan/state";
+
+// ✅ Baseline max score
+const BASELINE_MAX_SCORE = 31;
 
 type ResultResponse = {
   ok: boolean;
@@ -16,6 +27,16 @@ type ResultResponse = {
   };
 };
 
+type StateResponse = {
+  ok: boolean;
+  error?: string;
+  data?: {
+    baseline?: { session?: any | null } | null;
+    review?: { session?: any | null } | null;
+    user?: any | null;
+  };
+};
+
 type DiagramItem = {
   key: string;
   title: string;
@@ -23,14 +44,100 @@ type DiagramItem = {
   label?: string;
 };
 
+async function fetchJsonWithFallback(urlPrimary: string, urlFallback: string) {
+  try {
+    const res1 = await fetch(urlPrimary, { headers: { "Cache-Control": "no-store" } });
+    const j1 = await res1.json().catch(() => null);
+    if (j1 && j1.ok) return j1;
+  } catch {}
+  const res2 = await fetch(urlFallback, { headers: { "Cache-Control": "no-store" } });
+  const j2 = await res2.json().catch(() => null);
+  return j2;
+}
+
+/** ✅ Ring (بدون کتابخانه اضافی) */
+function ScoreRing({
+  value,
+  max = 100,
+  size = 108,
+  stroke = 10,
+  trackColor,
+  progressColor,
+  textColor,
+  subColor,
+  label,
+}: {
+  value: number;
+  max?: number;
+  size?: number;
+  stroke?: number;
+  trackColor: string;
+  progressColor: string;
+  textColor: string;
+  subColor: string;
+  label?: string;
+}) {
+  const clamped = Math.max(0, Math.min(Number(value || 0), Number(max || 100)));
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+
+  const safeMax = Number(max || 100);
+  const dash = safeMax > 0 ? (clamped / safeMax) * c : 0;
+
+  return (
+    <View style={{ alignItems: "center" }}>
+      <View style={{ width: size, height: size }}>
+        <Svg width={size} height={size}>
+          <Circle cx={size / 2} cy={size / 2} r={r} stroke={trackColor} strokeWidth={stroke} fill="none" />
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            stroke={progressColor}
+            strokeWidth={stroke}
+            fill="none"
+            strokeLinecap="round"
+            strokeDasharray={`${dash} ${c - dash}`}
+            rotation={-90}
+            originX={size / 2}
+            originY={size / 2}
+          />
+        </Svg>
+
+        <View style={[StyleSheet.absoluteFillObject, { alignItems: "center", justifyContent: "center" }]}>
+          <Text style={{ color: textColor, fontWeight: "900", fontSize: 20 }}>{clamped}</Text>
+          <Text style={{ color: subColor, fontSize: 11, marginTop: 2, fontWeight: "900" }}>
+            از {safeMax}
+          </Text>
+        </View>
+      </View>
+
+      {!!label && (
+        <Text style={{ marginTop: 10, color: subColor, fontSize: 12, fontWeight: "900", writingDirection: "rtl" as any }}>
+          {label}
+        </Text>
+      )}
+    </View>
+  );
+}
+
 export default function ReviewResult() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const phone = String(params?.phone || "").trim();
+  const phone = String((params as any)?.phone || "").trim();
+
+  const mountedRef = useRef(true);
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+
+  // ✅ state from /pelekan/state
+  const [baselineSession, setBaselineSession] = useState<any | null>(null);
+  const [reviewSession, setReviewSession] = useState<any | null>(null);
+
+  // ✅ review result from /pelekan/review/result
   const [result, setResult] = useState<any | null>(null);
+  const [reviewStatus, setReviewStatus] = useState<"in_progress" | "completed_locked" | "unlocked" | null>(null);
 
   const palette = useMemo(
     () => ({
@@ -46,36 +153,134 @@ export default function ReviewResult() {
       orange: "#E98A15",
       red: "#ef4444",
       lime: "#86efac",
+      track: "rgba(231,238,247,.14)",
     }),
     []
   );
 
-  const fetchResult = useCallback(async () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const goPelekan = useCallback(() => {
+    router.replace("/(tabs)/Pelekan");
+  }, [router]);
+
+  const fetchAll = useCallback(async () => {
     if (!phone) {
       setErr("PHONE_MISSING");
       setLoading(false);
       return;
     }
-    setLoading(true);
-    setErr(null);
+
+    if (mountedRef.current) {
+      setLoading(true);
+      setErr(null);
+    }
 
     try {
-      const res = await fetch(`${API_BASE}/result?phone=${encodeURIComponent(phone)}`, {
-        headers: { "Cache-Control": "no-store" },
-      });
-      const json: ResultResponse = await res.json().catch(() => ({ ok: false } as any));
-      if (!json?.ok) throw new Error(json?.error || "RESULT_FAILED");
-      setResult(json?.data?.result ?? null);
+      // 1) pelekan/state -> baseline + review session
+      const stJson: StateResponse = await fetchJsonWithFallback(
+        `${API_STATE_PRIMARY}?phone=${encodeURIComponent(phone)}`,
+        `${API_STATE_FALLBACK}?phone=${encodeURIComponent(phone)}`
+      );
+
+      if (!stJson?.ok) throw new Error(stJson?.error || "STATE_FAILED");
+
+      const b = stJson?.data?.baseline?.session ?? null;
+      const r = stJson?.data?.review?.session ?? null;
+
+      if (mountedRef.current) {
+        setBaselineSession(b);
+        setReviewSession(r);
+      }
+
+      // 2) review/result only if done
+      const rStatus = String(r?.status || "");
+      const shouldFetchReviewResult = rStatus === "completed_locked" || rStatus === "unlocked";
+
+      if (!shouldFetchReviewResult) {
+        if (mountedRef.current) {
+          setReviewStatus((rStatus as any) || null);
+          setResult(null);
+        }
+        return;
+      }
+
+      const rrJson: ResultResponse = await fetchJsonWithFallback(
+        `${API_REVIEW_PRIMARY}/result?phone=${encodeURIComponent(phone)}`,
+        `${API_REVIEW_FALLBACK}/result?phone=${encodeURIComponent(phone)}`
+      );
+
+      if (!rrJson?.ok) throw new Error(rrJson?.error || "RESULT_FAILED");
+
+      if (mountedRef.current) {
+        setReviewStatus(rrJson?.data?.status ?? null);
+        setResult(rrJson?.data?.result ?? null);
+      }
     } catch (e: any) {
-      setErr(String(e?.message || "RESULT_FAILED"));
+      if (mountedRef.current) setErr(String(e?.message || "FAILED"));
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [phone]);
 
   useEffect(() => {
-    fetchResult();
-  }, [fetchResult]);
+    fetchAll();
+  }, [fetchAll]);
+
+  // ---------------- baseline status ----------------
+  const baselineStatus = String(baselineSession?.status || "");
+  const baselineDone = baselineStatus === "completed";
+  const baselineInProgress = !!baselineSession && !baselineDone;
+
+  const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
+
+  // ✅ baseline score extraction (۰ تا ۳۱)
+  const baselineScore = useMemo(() => {
+    const n = baselineSession?.totalScore ?? null;
+    const v = Number(n);
+    if (!Number.isFinite(v)) return null;
+    return clamp(v, 0, BASELINE_MAX_SCORE);
+  }, [baselineSession]);
+
+  // ✅ درصد baseline (برای رنگ/نمایش کمکی)
+  const baselinePercent = useMemo(() => {
+    if (baselineScore == null) return null;
+    return clamp(Math.round((baselineScore / BASELINE_MAX_SCORE) * 100), 0, 100);
+  }, [baselineScore]);
+
+  // ✅ رنگ baseline بر اساس باندهای واقعی (۰-۹، ۱۰-۱۹، ۲۰-۳۱)
+  const baselineColor = useMemo(() => {
+    if (baselineScore == null) return palette.gold;
+    if (baselineScore >= 20) return palette.red;
+    if (baselineScore >= 10) return palette.orange;
+    return palette.lime;
+  }, [baselineScore, palette.red, palette.orange, palette.lime, palette.gold]);
+
+  // ✅ baseline explanation (بدون «اختلال» و بدون «/»)
+  const baselineExplain = useMemo(() => {
+    const safeText =
+      baselineSession?.scalesJson?.interpretationTextSafe ??
+      baselineSession?.scalesJson?.interpretationSafe ??
+      baselineSession?.interpretationTextSafe ??
+      baselineSession?.scalesJson?.interpretationText ??
+      null;
+
+    if (safeText) return String(safeText);
+
+    return "این نمره شدت «فشار و آسیب روانیِ ناشی از شکست عاطفی یا جدایی» را نشان می‌دهد. نمره بالاتر یعنی ذهن و بدن تو هنوز تحت فشار بیشتری هستند و بهتر است از یک مسیر حمایتی و درمانی ساختارمند استفاده کنی.";
+  }, [baselineSession]);
+
+  // ---------------- review / tests ----------------
+  const hasReviewSession = !!reviewSession?.id;
+  const chosenPath = reviewSession?.chosenPath ?? null;
+  const reviewSessStatus = String(reviewSession?.status || "");
+  const reviewInProgress = reviewSessStatus === "in_progress";
+  const reviewDone = reviewSessStatus === "completed_locked" || reviewSessStatus === "unlocked";
 
   const locked = !!result?.locked;
   const didSkipTest2 = !!result?.meta?.didSkipTest2;
@@ -85,9 +290,10 @@ export default function ReviewResult() {
   const test2Diagrams: DiagramItem[] = Array.isArray(diagramsObj?.test2) ? diagramsObj.test2 : [];
   const summary = result?.summary || null;
 
-  const statusColor = locked ? palette.red : palette.lime;
-
-  const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
+  const statusColor = useMemo(() => {
+    if (reviewDone) return locked ? palette.red : palette.lime;
+    return palette.gold;
+  }, [reviewDone, locked, palette.red, palette.lime, palette.gold]);
 
   const isHigherWorse = (key: string) => {
     const k = String(key || "");
@@ -134,13 +340,13 @@ export default function ReviewResult() {
       case "t1_satisfaction":
         return "این شاخص کیفیت تجربه تو از رابطه را نشان می‌دهد (رضایت، دیده‌شدن، صمیمیت). هرچه بالاتر باشد یعنی رابطه از نظر تجربه ذهنی تو مثبت‌تر بوده است.";
       case "t1_attachment":
-        return "این شاخص «تنش دلبستگی» را نشان می‌دهد (اضطرابِ رهاشدگی/اجتناب از صمیمیت). هرچه بالاتر باشد یعنی رابطه بیشتر روی زخم‌های دلبستگی فشار آورده و تصمیم‌گیری شفاف سخت‌تر می‌شود.";
+        return "این شاخص «تنش دلبستگی» را نشان می‌دهد (اضطرابِ رهاشدگی یا اجتناب از صمیمیت). هرچه بالاتر باشد یعنی رابطه بیشتر روی زخم‌های دلبستگی فشار آورده و تصمیم‌گیری شفاف سخت‌تر می‌شود.";
       case "t1_conflict":
         return "این شاخص میزان «مسمومیت تعارض» را نشان می‌دهد (تحقیر، قهر، دفاعی‌بودن، حل‌نشدن دعواها). هرچه بالاتر باشد یعنی الگوی دعوا فرساینده‌تر و خطرناک‌تر است.";
       case "t2_evidence":
         return "این شاخص میزان «شواهد واقعیِ بازگشت» را نشان می‌دهد (اقدام شفاف، پذیرش مسئولیت، تغییر پایدار). هرچه بالاتر باشد احتمال بازگشت واقعی (نه احساسی) بیشتر است.";
       case "t2_ambiguity":
-        return "این شاخص میزان «سیگنال‌های مبهم و تعلیق‌آور» را نشان می‌دهد (گرم‌وسرد، نگه‌داشتن تو در دسترس، وعده‌های نامعلوم). هرچه بالاتر باشد احتمال بازی/ابهام بیشتر است.";
+        return "این شاخص میزان «سیگنال‌های مبهم و تعلیق‌آور» را نشان می‌دهد (گرم‌وسرد، نگه‌داشتن تو در دسترس، وعده‌های نامعلوم). هرچه بالاتر باشد احتمال بازی یا ابهام بیشتر است.";
       case "t2_cost":
         return "این شاخص «هزینه روانی انتظار» را نشان می‌دهد (درگیر ذهنی، تعلیق زندگی، ترس از شروع جدید). هرچه بالاتر باشد یعنی انتظار دارد به سلامت روان و مسیر زندگی تو ضربه می‌زند.";
       case "t2_maturity":
@@ -150,21 +356,14 @@ export default function ReviewResult() {
     }
   };
 
-  const headerTitle = didSkipTest2 ? "نتیجه آزمون" : "نتیجه دو آزمون";
+  const headerTitle = "سنجش وضعیت";
 
-  // ✅ طبق خواسته تو:
-  // - پرو/unlocked => هیچی زیر هدر نمایش نده
-  // - locked یا loading یا error => نمایش بده
   const headerSub = useMemo(() => {
     if (loading) return "در حال دریافت نتیجه…";
     if (err) return "خطا در دریافت نتیجه";
-    if (locked) return "برای دیدن تحلیل کامل باید اشتراک پرو را فعال کنی.";
-    return null; // ✅ unlocked: هیچ
-  }, [loading, err, locked]);
-
-  const goPelekan = useCallback(() => {
-    router.replace("/(tabs)/Pelekan");
-  }, [router]);
+    if (reviewDone && locked) return "برای دیدن تحلیل کامل باید اشتراک پرو را فعال کنی.";
+    return null;
+  }, [loading, err, reviewDone, locked]);
 
   const DiagramCard = ({ item }: { item: DiagramItem }) => {
     const p = clamp(Number(item?.percent ?? 0), 0, 100);
@@ -191,114 +390,221 @@ export default function ReviewResult() {
         </Text>
 
         {!!explain && (
-          <Text style={[styles.rtl, { color: palette.sub, marginTop: 8, fontSize: 12, lineHeight: 18 }]}>
-            {explain}
-          </Text>
+          <Text style={[styles.rtl, { color: palette.sub, marginTop: 8, fontSize: 12, lineHeight: 18 }]}>{explain}</Text>
         )}
       </View>
     );
   };
 
   return (
-    // ✅ SafeArea بالا برای استاتوس‌بار
     <SafeAreaView style={[styles.root, { backgroundColor: palette.bg }]} edges={["top"]}>
-      {/* هدر ثابت */}
       <View style={[styles.header, { backgroundColor: palette.bg, borderBottomColor: palette.border }]}>
         <View style={[styles.headerAccent, { backgroundColor: statusColor }]} />
-
         <Text style={[styles.headerTitle, { color: statusColor }]}>{headerTitle}</Text>
-
         {!!headerSub && <Text style={[styles.rtl, styles.headerSub, { color: palette.sub }]}>{headerSub}</Text>}
       </View>
 
-      {/* اسکرول زیر هدر */}
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={[styles.card, { backgroundColor: palette.glass, borderColor: palette.border }]}>
           {loading && (
             <View style={{ paddingVertical: 18, alignItems: "center" }}>
               <ActivityIndicator color={palette.gold} />
-              <Text style={{ color: palette.sub2, marginTop: 10, fontSize: 12 }}>در حال دریافت نتیجه…</Text>
+              <Text style={{ color: palette.sub2, marginTop: 10, fontSize: 12 }}>در حال دریافت…</Text>
             </View>
           )}
 
           {!!err && !loading && <Text style={[styles.rtl, { color: palette.red }]}>{err}</Text>}
 
           {!loading && !err && (
-            <View style={[styles.oneLook, { borderColor: palette.border }]}>
-              <Text style={[styles.h2, { color: palette.text }]}>وضعیت کلی تو (یک‌نگاه)</Text>
-
-              <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>{summary?.oneLook || "—"}</Text>
-
-              {!!summary?.nextStep && (
-                <View style={[styles.nextStep, { borderColor: "rgba(212,175,55,.25)" }]}>
-                  <Text style={[styles.h3, { color: palette.gold }]}>گام پیشنهادی بعدی</Text>
-                  <Text style={[styles.rtl, { color: palette.sub, marginTop: 6, lineHeight: 20 }]}>{summary.nextStep}</Text>
-
-                  {/* دکمه پلکان زیر گام پیشنهادی */}
-                  <View style={{ height: 12 }} />
-                  <Pressable style={[styles.btn, { borderColor: palette.border }]} onPress={goPelekan}>
-                    <Text style={[styles.btnText, { color: palette.text }]}>رفتن به پلکان</Text>
-                  </Pressable>
-                </View>
-              )}
-            </View>
-          )}
-
-          {!loading && !err && (test1Diagrams.length > 0 || test2Diagrams.length > 0) && (
-            <View style={{ marginTop: 14 }}>
-              <Text style={[styles.h2, { color: palette.text }]}>جزئیات تحلیلی</Text>
-
-              {test1Diagrams.length > 0 && (
-                <View style={{ marginTop: 10 }}>
-                  <Text style={[styles.sectionTitle, { color: palette.sub }]}>آزمون ۱: بازسنجی رابطه</Text>
-                  {test1Diagrams.map((d, idx) => (
-                    <DiagramCard key={`${d.key}-${idx}`} item={d} />
-                  ))}
-                </View>
-              )}
-
-              {!didSkipTest2 && test2Diagrams.length > 0 && (
-                <View style={{ marginTop: 14 }}>
-                  <Text style={[styles.sectionTitle, { color: palette.sub }]}>آزمون ۲: آیا برمی‌گرده؟</Text>
-                  {test2Diagrams.map((d, idx) => (
-                    <DiagramCard key={`${d.key}-${idx}`} item={d} />
-                  ))}
-                </View>
-              )}
-            </View>
-          )}
-
-          <View style={{ height: 14 }} />
-
-          {locked && (
             <>
-              <Pressable
-                style={[
-                  styles.btnPrimary,
-                  { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)" },
-                ]}
-                onPress={() => router.push("/(tabs)/Subscription")}
-              >
-                <Text style={[styles.btnText, { color: palette.text }]}>فعال‌سازی PRO برای دیدن تحلیل کامل</Text>
+              {/* ---------------- Baseline (rename + chart + max=31 + safe text) ---------------- */}
+              <View style={[styles.block, { borderColor: palette.border }]}>
+                <Text style={[styles.h2, { color: palette.text }]}>سنجش آسیب شکست عاطفی یا جدایی</Text>
+
+                {!baselineSession ? (
+                  <>
+                    <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>هنوز این سنجش انجام نشده.</Text>
+                    <View style={{ height: 12 }} />
+                    <Pressable
+                      style={[
+                        styles.btnPrimary,
+                        { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)" },
+                      ]}
+                      onPress={goPelekan}
+                    >
+                      <Text style={[styles.btnText, { color: palette.text }]}>شروع سنجش</Text>
+                    </Pressable>
+                  </>
+                ) : baselineDone ? (
+                  <>
+                    <View style={{ marginTop: 12, alignItems: "center" }}>
+                      <ScoreRing
+                        value={baselineScore ?? 0}
+                        max={BASELINE_MAX_SCORE}
+                        trackColor={palette.track}
+                        progressColor={baselineColor}
+                        textColor={palette.text}
+                        subColor={palette.sub2}
+                        label={baselinePercent != null ? `${baselinePercent}% از بیشترین میزان` : "نمره کلی"}
+                      />
+                    </View>
+
+                    <Text style={[styles.rtl, { color: palette.sub, marginTop: 14, fontSize: 12, lineHeight: 18 }]}>
+                      {baselineExplain}
+                    </Text>
+                  </>
+                ) : baselineInProgress ? (
+                  <>
+                    <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
+                      سنجش شروع شده ولی کامل نشده.
+                    </Text>
+                    <View style={{ height: 12 }} />
+                    <Pressable
+                      style={[
+                        styles.btnPrimary,
+                        { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)" },
+                      ]}
+                      onPress={goPelekan}
+                    >
+                      <Text style={[styles.btnText, { color: palette.text }]}>ادامه سنجش</Text>
+                    </Pressable>
+                  </>
+                ) : null}
+              </View>
+
+              <View style={{ height: 12 }} />
+
+              {/* ---------------- Review / Tests ---------------- */}
+              <View style={[styles.block, { borderColor: palette.border }]}>
+                <Text style={[styles.h2, { color: palette.text }]}>بازسنجی + «آیا برمی‌گرده؟»</Text>
+
+                {!hasReviewSession || !chosenPath ? (
+                  <>
+                    <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
+                      هنوز آزمون‌های بازسنجی شروع نشده‌اند.
+                    </Text>
+                    <View style={{ height: 12 }} />
+                    <Pressable
+                      style={[
+                        styles.btnPrimary,
+                        { borderColor: "rgba(233,138,21,.35)", backgroundColor: "rgba(233,138,21,.10)" },
+                      ]}
+                      onPress={goPelekan}
+                    >
+                      <Text style={[styles.btnText, { color: palette.text }]}>انجام بازسنجی</Text>
+                    </Pressable>
+                  </>
+                ) : reviewInProgress ? (
+                  <>
+                    <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
+                      آزمون‌ها کامل نشده‌اند. برای ادامه، وارد پلکان شو.
+                    </Text>
+                    <View style={{ height: 12 }} />
+                    <Pressable
+                      style={[
+                        styles.btnPrimary,
+                        { borderColor: "rgba(233,138,21,.35)", backgroundColor: "rgba(233,138,21,.10)" },
+                      ]}
+                      onPress={goPelekan}
+                    >
+                      <Text style={[styles.btnText, { color: palette.text }]}>ادامه آزمون‌ها</Text>
+                    </Pressable>
+                  </>
+                ) : reviewDone ? (
+                  <>
+                    {/* ✅ جمله‌ی «نتیجه آزمون‌ها آماده است» حذف شد */}
+
+                    {/* وضعیت کلی (در یک نگاه) */}
+                    <View style={{ height: 10 }} />
+                    <View style={[styles.oneLook, { borderColor: palette.border2 }]}>
+                      <Text style={[styles.h2, { color: palette.text, textAlign: "center" as any }]}>
+                        وضعیت کلی تو (در یک نگاه)
+                      </Text>
+
+                      <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
+                        {summary?.oneLook || result?.message || "—"}
+                      </Text>
+
+                      {!!summary?.nextStep && (
+                        <View style={[styles.nextStep, { borderColor: "rgba(212,175,55,.25)" }]}>
+                          <Text style={[styles.h3, { color: palette.gold }]}>گام پیشنهادی بعدی</Text>
+                          <Text style={[styles.rtl, { color: palette.sub, marginTop: 6, lineHeight: 20 }]}>{summary.nextStep}</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {(test1Diagrams.length > 0 || test2Diagrams.length > 0) && (
+                      <View style={{ marginTop: 14 }}>
+                        <Text style={[styles.h2, { color: palette.text }]}>جزئیات تحلیلی</Text>
+
+                        {test1Diagrams.length > 0 && (
+                          <View style={{ marginTop: 10 }}>
+                            <Text style={[styles.sectionTitle, { color: palette.sub }]}>آزمون ۱: بازسنجی رابطه</Text>
+                            {test1Diagrams.map((d, idx) => (
+                              <DiagramCard key={`${d.key}-${idx}`} item={d} />
+                            ))}
+                          </View>
+                        )}
+
+                        {!didSkipTest2 && test2Diagrams.length > 0 && (
+                          <View style={{ marginTop: 14 }}>
+                            <Text style={[styles.sectionTitle, { color: palette.sub }]}>آزمون ۲: آیا برمی‌گرده؟</Text>
+                            {test2Diagrams.map((d, idx) => (
+                              <DiagramCard key={`${d.key}-${idx}`} item={d} />
+                            ))}
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    <View style={{ height: 14 }} />
+
+                    {locked && (
+                      <>
+                        <Pressable
+                          style={[
+                            styles.btnPrimary,
+                            { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)" },
+                          ]}
+                          onPress={() => router.push("/(tabs)/Subscription")}
+                        >
+                          <Text style={[styles.btnText, { color: palette.text }]}>فعال‌سازی PRO برای دیدن تحلیل کامل</Text>
+                        </Pressable>
+                        <View style={{ height: 10 }} />
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
+                      وضعیت آزمون‌ها نامشخص است. برای همگام‌سازی وارد پلکان شو.
+                    </Text>
+                    <View style={{ height: 12 }} />
+                    <Pressable style={[styles.btnPrimary, { borderColor: palette.border }]} onPress={goPelekan}>
+                      <Text style={[styles.btnText, { color: palette.text }]}>رفتن به پلکان</Text>
+                    </Pressable>
+                  </>
+                )}
+              </View>
+
+              <View style={{ height: 14 }} />
+
+              <Pressable style={[styles.btn, { borderColor: palette.border }]} onPress={goPelekan}>
+                <Text style={[styles.btnText, { color: palette.text }]}>رفتن به پلکان</Text>
               </Pressable>
+
               <View style={{ height: 10 }} />
+
+              {/* ✅ دکمه: تازه‌سازی نتایج */}
+              <Pressable
+                style={[styles.btnGhost, { borderColor: palette.border, backgroundColor: "rgba(255,255,255,.04)" }]}
+                onPress={fetchAll}
+                disabled={loading}
+              >
+                <Text style={[styles.btnText, { color: palette.sub }]}>{loading ? "..." : "تازه‌سازی نتایج"}</Text>
+              </Pressable>
             </>
           )}
-
-          {/* دکمه پلکان پایین صفحه */}
-          <Pressable style={[styles.btn, { borderColor: palette.border }]} onPress={goPelekan}>
-            <Text style={[styles.btnText, { color: palette.text }]}>رفتن به پلکان</Text>
-          </Pressable>
-
-          <View style={{ height: 10 }} />
-
-          <Pressable
-            style={[styles.btnGhost, { borderColor: palette.border, backgroundColor: "rgba(255,255,255,.04)" }]}
-            onPress={fetchResult}
-            disabled={loading}
-          >
-            <Text style={[styles.btnText, { color: palette.sub }]}>{loading ? "..." : "رفرش نتیجه"}</Text>
-          </Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -345,10 +651,16 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
 
+  block: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 12,
+  },
+
   h2: { fontSize: 14, fontWeight: "900", textAlign: "center" as any, writingDirection: "rtl" as any },
   h3: { fontSize: 12, fontWeight: "900", textAlign: "right" as any, writingDirection: "rtl" as any },
 
-  oneLook: { borderWidth: 1, borderRadius: 16, padding: 12 },
+  oneLook: { borderWidth: 1, borderRadius: 16, padding: 12, backgroundColor: "rgba(255,255,255,.02)" },
   nextStep: {
     marginTop: 12,
     borderWidth: 1,

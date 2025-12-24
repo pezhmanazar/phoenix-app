@@ -104,60 +104,28 @@ function applyDebugProgress(req, hasAnyProgress) {
   return hasAnyProgressFinal;
 }
 
-// -------------------- Bastan helpers (action-based) --------------------
-
-function isWithinMs(dt, ms) {
-  if (!dt) return false;
-  const t = new Date(dt).getTime();
-  if (!Number.isFinite(t)) return false;
-  return Date.now() - t <= ms;
-}
-
-function canUnlockGosastanGate({
-  actionsProgress, // [{ completed, minRequired }]
-  contractSignedAt,
-  lastSafetyCheckAt,
-  lastSafetyCheckResult, // none | role_based | emotional
-  gosastanUnlockedAt,
-}) {
-  // already unlocked
-  if (gosastanUnlockedAt) return true;
-
-  // must have exactly 8 actions
-  const arr = Array.isArray(actionsProgress) ? actionsProgress : [];
-  if (arr.length !== 8) return false;
-
-  // all 8 actions must meet minimum required subtasks
-  const allActionsOk = arr.every((a) => (a?.completed || 0) >= (a?.minRequired || 0));
-  if (!allActionsOk) return false;
-
-  // contract must be signed
-  if (!contractSignedAt) return false;
-
-  // safety check must be within last 24 hours
-  if (!isWithinMs(lastSafetyCheckAt, 24 * 60 * 60 * 1000)) return false;
-
-  // emotional contact/checking fails
-  if (lastSafetyCheckResult === "emotional") return false;
-
-  // none or role_based passes
-  return lastSafetyCheckResult === "none" || lastSafetyCheckResult === "role_based";
-}
-
 // -------------------- Baseline Assessment (hb_baseline) --------------------
+
+const HB_BASELINE_MAX_SCORE = 31;
 
 const HB_BASELINE = {
   kind: "hb_baseline",
+  meta: {
+    titleFa: "سنجش آسیب شکست عاطفی یا جدایی",
+    maxScore: HB_BASELINE_MAX_SCORE,
+    scoreHintFa: `نمره از ${HB_BASELINE_MAX_SCORE}`,
+    descriptionFa:
+      "این سنجش کمک می‌کند شدت فشار روانی و جسمیِ مرتبط با شکست عاطفی یا جدایی را بهتر بشناسی. این یک ابزار خودآگاهی است و جایگزین ارزیابی تخصصی نیست.",
+  },
   consentSteps: [
     {
       id: "quiet_place",
-      text: "اين آزمون را بايد در يك مكان ساكت و بدون مزاحمت انجام دهيد",
+      text: "این سنجش را در یک جای آرام و بدون مزاحمت انجام بده.",
       optionText: "متوجه شدم",
     },
     {
       id: "read_calmly",
-      text:
-        "هر سوال رو با دقت و آرامش بخون و بعد از فهم دقيق اون، روي اولين جوابی كه به ذهنت اومد كليك کن",
+      text: "هر سؤال را با دقت بخوان و بعد از فهم دقیق، روی اولین پاسخی که به ذهنت می‌آید کلیک کن.",
       optionText: "متوجه شدم",
     },
   ],
@@ -165,126 +133,125 @@ const HB_BASELINE = {
     {
       id: "q1_thoughts",
       text:
-        "موقعی كه بيداری، چقدر به شكست عشقی که تجربه کردی فكر می‌کنی؟\n( اين فكر كردن شامل تصاوير، افكار، احساسات، خيال پردازی‌ها، يادآوری خاطرات و حسرت‌های مربوط به شكست عشقي ميشه.)",
+        "وقتی بیدار هستی، چقدر به شکست عاطفی یا جدایی‌ای که تجربه کردی فکر می‌کنی؟\n(این فکر کردن شامل تصاویر، افکار، احساسات، خیال‌پردازی‌ها، یادآوری خاطرات و حسرت‌های مربوط می‌شود.)",
       options: [
-        { label: "اصلا فكر نمی‌كنم", score: 0 },
-        { label: "گاهی فكر می‌كنم (كمتر از 25 درصد زمان بيداری)", score: 1 },
-        { label: "بعضی وقت‌ها فكر می‌كنم (در حدود 50 درصد از زمان بيداری)", score: 2 },
-        { label: "بيشتر وقت‌ها فكر می‌كنم (حداقل 75 درصد از زمان بيداری)", score: 3 },
+        { label: "اصلاً فکر نمی‌کنم", score: 0 },
+        { label: "گاهی فکر می‌کنم (کمتر از ۲۵٪ زمان بیداری)", score: 1 },
+        { label: "بعضی وقت‌ها فکر می‌کنم (حدود ۵۰٪ زمان بیداری)", score: 2 },
+        { label: "بیشتر وقت‌ها فکر می‌کنم (حداقل ۷۵٪ زمان بیداری)", score: 3 },
       ],
     },
     {
       id: "q2_body_sick",
       text:
-        "زمانی كه به شكست عشقی خودت فكر می‌كنی تا چه اندازه به لحاظ جسمی، احساس مريض بودن می‌كنی‌؟\nمثل خستگی، عصبانيت، بی‌حالی، حالت تهوع سردرد و غيره",
+        "وقتی به شکست عاطفی یا جدایی فکر می‌کنی، تا چه اندازه از نظر جسمی احساس ناخوشی می‌کنی؟\nمثل خستگی، عصبانیت، بی‌حالی، حالت تهوع، سردرد و غیره",
       options: [
-        { label: "اصلا. هيچ احساس جسمی ناخوشايندی مربوط به شكست عشقی در من وجود نداره", score: 0 },
+        { label: "اصلاً؛ هیچ احساس جسمی ناخوشایندی در من نیست", score: 0 },
         {
           label:
-            "يكم ناخوشم. تا اندازه‌ای احساس جسمی ناخوشايندی درون من وجود داره و معمولا احساس آشفتگی جسمی، عصبانيت و برانگيختگی ناخوشايند به صورت گذرا دارم",
+            "کمی ناخوشم؛ گاهی آشفتگی جسمی یا تحریک‌پذیری گذرا دارم",
           score: 1,
         },
         {
           label:
-            "تا اندازه‌ای ناخوشم. احساس واضح آشفتگی جسمی، عصبانيت و برانگيختگی ناخوشايندی دارم كه در كمتر از ده دقيقه از بين ميره",
+            "تا حدی ناخوشم؛ آشفتگی جسمی واضحی دارم که معمولاً در کمتر از ده دقیقه کم می‌شود",
           score: 2,
         },
         {
           label:
-            "خيلی ناخوشم. احساس عميق آشفتگی جسمی، عصبانيت و برانگيختی ناخوشايند دارم كه بين چند دقيقه تا چند ساعت طول ميكشه",
+            "خیلی ناخوشم؛ آشفتگی جسمی عمیق دارم که می‌تواند از چند دقیقه تا چند ساعت طول بکشد",
           score: 3,
         },
       ],
     },
     {
       id: "q3_acceptance",
-      text: "تا چه اندازه پذيرش واقعيت و درد شكست عشقی برات راحته؟",
+      text: "پذیرش واقعیت و دردِ شکست عاطفی یا جدایی برایت چقدر آسان است؟",
       options: [
         {
-          label:
-            "پذيرش و قبول كردن شكست عشقی برام خيلی سخته... نمی‌تونم باور كنم كه اين اتفاق افتاده",
+          label: "خیلی سخت است؛ نمی‌توانم باور کنم این اتفاق افتاده",
           score: 3,
         },
-        { label: "تا اندازه‌ای پذيرش شكست عشقی برام سخته... ولی معمولا می‌تونم اون رو تحمل كنم", score: 2 },
-        { label: "يكم پذيرش شكست عشقی برام سخته... و می‌تونم اون رو تحمل كنم", score: 1 },
-        { label: "پذيرش شكست عشقی اصلا برام سخت نيست... و هميشه می‌تونم ناراحتيش رو تحمل كنم", score: 0 },
+        { label: "تا حدی سخت است؛ اما معمولاً می‌توانم تحملش کنم", score: 2 },
+        { label: "کمی سخت است؛ و می‌توانم تحملش کنم", score: 1 },
+        { label: "اصلاً سخت نیست؛ و می‌توانم ناراحتی‌اش را مدیریت کنم", score: 0 },
       ],
     },
     {
       id: "q4_duration",
-      text: "چند وقته درگير شكست عشقی هستی؟",
+      text: "چند وقت است درگیر این شکست عاطفی یا جدایی هستی؟",
       options: [
-        { label: "كمتر از يك‌ماه", score: 1 },
-        { label: "بيشتر از يك‌ماه و كمتر از شش‌ماه", score: 1 },
-        { label: "بيشتر از شش‌ماه و كمتر از يك‌سال", score: 2 },
-        { label: "بيشتر از يك‌سال و كمتر از سه‌سال", score: 3 },
-        { label: "بيشتر از سه‌سال", score: 4 },
+        { label: "کمتر از یک ماه", score: 1 },
+        { label: "بیشتر از یک ماه و کمتر از شش ماه", score: 1 },
+        { label: "بیشتر از شش ماه و کمتر از یک سال", score: 2 },
+        { label: "بیشتر از یک سال و کمتر از سه سال", score: 3 },
+        { label: "بیشتر از سه سال", score: 4 },
       ],
     },
     {
       id: "q5_dreams",
       text:
-        "معمولا چقدر خواب مرتبط با اين شكست عشقی رو می‌بينی؟\nاين خواب‌ها بايد مرتبط به شكست عشقی، رابطه قبلی و پارتنر سابقت باشه",
+        "معمولاً چقدر خوابِ مرتبط با این شکست عاطفی یا جدایی را می‌بینی؟\nاین خواب‌ها باید مرتبط با رابطه قبلی یا فردِ سابق باشد.",
       options: [
-        { label: "حداقل هفته‌ای يك‌بار و حداکثر هر شب", score: 3 },
-        { label: "حداقل دو هفته يك‌بار", score: 2 },
+        { label: "حداقل هفته‌ای یک‌بار تا هر شب", score: 3 },
+        { label: "حداقل دو هفته یک‌بار", score: 2 },
         { label: "حداقل ماهی یک‌بار", score: 1 },
-        { label: "هيچ خوابی مرتبط با شكست عشقی خودم ندارم", score: 0 },
+        { label: "هیچ خواب مرتبطی ندارم", score: 0 },
       ],
     },
     {
       id: "q6_resistance",
       text:
-        "مقاومت و ايستادگيت در برابر افكار، احساسات و خاطرات مرتبط به رابطه قبلی و شكست عشقيت تا چه اندازه برات آسونه؟\nمنظور از ايستادگي... مثلا ميتونی به طور موفقيت‌آميزی حواس خودت رو با يه كار ديگه يا فكر كردن در مورد يه چيز ديگه پرت كنی؟",
+        "مقاومت و ایستادگی‌ات در برابر افکار، احساسات و خاطرات مرتبط با رابطه قبلی چقدر برایت آسان است؟\nمثلاً آیا می‌توانی با یک کار دیگر یا فکر کردن به چیز دیگری حواس خودت را پرت کنی؟",
       options: [
-        { label: "معمولا نمی‌تونم... و اون‌ها برای چند دقيقه تا چند ساعت ذهنم رو اذيت می‌كنند", score: 3 },
-        { label: "بيشتر اوقات نمی‌تونم... و بين 10 تا 20 دقيقه ذهنم رو اذيت می‌كنند", score: 2 },
-        { label: "بيشتر اوقات می‌تونم... و فقط چند دقيقه كوتاه من رو اذيت می‌كنند", score: 1 },
-        { label: "هميشه می‌تونم... و بيشترين زمانی كه اين افكار تو ذهنم می‌مونند يك دقيقه است", score: 0 },
+        { label: "معمولاً نمی‌توانم؛ و چند دقیقه تا چند ساعت درگیرم", score: 3 },
+        { label: "بیشتر اوقات نمی‌توانم؛ و حدود ۱۰ تا ۲۰ دقیقه درگیرم", score: 2 },
+        { label: "بیشتر اوقات می‌توانم؛ و فقط چند دقیقه کوتاه درگیرم", score: 1 },
+        { label: "همیشه می‌توانم؛ و معمولاً کمتر از یک دقیقه درگیر می‌مانم", score: 0 },
       ],
     },
     {
       id: "q7_hope",
       text:
-        "فكر می‌کنی كه بتونی يه روز بر اين احساس مريضی مرتبط با شكست عشقيت غلبه كنی و برای هميشه فراموشش كني؟\n( آيا اميد به بهبودی كامل داری؟)",
+        "فکر می‌کنی یک روز بتوانی از این فشار مرتبط با شکست عاطفی یا جدایی عبور کنی و سبک‌تر شوی؟\n(آیا امید به بهتر شدنِ پایدار داری؟)",
       options: [
-        { label: "فكر نمی‌کنم به طور كامل حالم خوب شه", score: 3 },
-        { label: "در مورد بهتر شدن حالم، بدبينم", score: 2 },
-        { label: "تا حد زيادی در مورد بهتر شدن حالم خوش بينم", score: 1 },
-        { label: "در مورد بهتر شدن حالم به طور كامل خوش بينم", score: 0 },
+        { label: "فکر نمی‌کنم حالِ من واقعاً بهتر شود", score: 3 },
+        { label: "نسبت به بهتر شدن بدبینم", score: 2 },
+        { label: "تا حد زیادی امیدوارم بهتر شوم", score: 1 },
+        { label: "کاملاً امیدوارم بهتر شوم", score: 0 },
       ],
     },
     {
       id: "q8_avoidance",
       text:
-        "تا چه اندازه به منظور دوری از چيزهايی كه شكست عشقيت رو برات يادآوری می‌كنند،مسير خودت رو تغيير ميدی؟\nمثلا تا چه اندازه از جاهايی... يا تا چه اندازه ديدن يادگاری‌ها... برات آزاردهندست",
+        "چقدر برای دوری از چیزهایی که شکست عاطفی یا جدایی را یادآوری می‌کنند مسیرت را تغییر می‌دهی؟\nمثلاً دوری از مکان‌ها، دیدن یادگاری‌ها، یا محرک‌های مشابه.",
       options: [
-        { label: "من هميشه از چيزها يا نشانه‌هايی كه مرتبط با شكست عشقی هستند دوری می‌كنم", score: 3 },
-        { label: "فقط بعضی مواقع از محرك‌ها و نشونه‌های مرتبط با شكست عشقی دوری می‌كنم", score: 2 },
-        { label: "خيلی كم از محرك‌ها و نشونه‌های مرتبط با شكست عشقی، دوری می‌کنم", score: 1 },
-        { label: "هيچ وقت از محرك‌ها و نشونه‌های مرتبط با شكست عشقی دوری نمی‌كنم", score: 0 },
+        { label: "تقریباً همیشه دوری می‌کنم", score: 3 },
+        { label: "گاهی دوری می‌کنم", score: 2 },
+        { label: "خیلی کم دوری می‌کنم", score: 1 },
+        { label: "اصلاً دوری نمی‌کنم", score: 0 },
       ],
     },
     {
       id: "q9_sleep",
       text:
-        "آيا به دليل اين شكست عشقی و احساس بيماری و اضطراب ناشی از اون در خوابيدن و بيدار شدن دچار مشكل شدي؟\nمشكلاتی مثل: دير به خواب رفتن... احساس خستگی زياد موقع بيدار شدن و غيره",
+        "آیا به خاطر این شکست عاطفی یا جدایی، در خوابیدن یا بیدار شدن مشکل پیدا کرده‌ای؟\nمثل دیر خواب رفتن، بیدار شدن‌های مکرر، یا خستگی زیاد هنگام بیدار شدن.",
       options: [
-        { label: "تقريبا هر شب... مشكلات خواب و بيداری دارم", score: 3 },
-        { label: "گهگاهی... مشكلات خواب و بيداری دارم", score: 2 },
-        { label: "به ندرت... مشكلات خواب و بيداری دارم", score: 1 },
-        { label: "اصلا... مشكلات خواب و بيداری ندارم", score: 0 },
+        { label: "تقریباً هر شب مشکل دارم", score: 3 },
+        { label: "گاهی مشکل دارم", score: 2 },
+        { label: "به ندرت مشکل دارم", score: 1 },
+        { label: "اصلاً مشکل ندارم", score: 0 },
       ],
     },
     {
       id: "q10_emotions",
       text:
-        "چند وقت یک‌بار احساساتی مثل زير گريه‌زدن، عصبانی شدن يا بی‌قراری بخاطر شکست عشقی که تجربه کردی، بهت دست ميده؟",
+        "چند وقت یک‌بار احساساتی مثل زیر گریه زدن، عصبانی شدن یا بی‌قراری به خاطر شکست عاطفی یا جدایی به سراغت می‌آید؟",
       options: [
-        { label: "حداقل روزی يك‌بار", score: 3 },
-        { label: "حداقل هفته‌ای يك‌بار", score: 2 },
-        { label: "حداقل ماهی يك‌بار", score: 1 },
-        { label: "هيچ‌وقت چنين احساساتی ندارم", score: 0 },
+        { label: "حداقل روزی یک‌بار", score: 3 },
+        { label: "حداقل هفته‌ای یک‌بار", score: 2 },
+        { label: "حداقل ماهی یک‌بار", score: 1 },
+        { label: "هیچ‌وقت چنین احساساتی ندارم", score: 0 },
       ],
     },
   ],
@@ -294,21 +261,21 @@ const HB_BASELINE = {
       max: 31,
       level: "severe",
       text:
-        "نمره شما نشان‌دهنده تجربه جدی و شديد اختلال شكست عشقی است و بهتر است به‌صورت اورژانسی تحت درمان قرار بگيريد. اين اختلال می‌تواند کیفیت زندگی و عملکرد اجتماعی/تحصیلی/حرفه‌ای شما را به شدت تحت تأثير قرار دهد و خطر افسردگی، اضطراب و وسواس را بالا ببرد.",
+        "نمره تو نشان می‌دهد فشارِ ناشی از شکست عاطفی یا جدایی در سطح بالایی قرار دارد. بهتر است با یک متخصص صحبت کنی و یک برنامه حمایتی منظم داشته باشی تا این فشار روی خواب، تمرکز، کارکرد روزانه و تصمیم‌گیری‌ات اثر فرساینده نگذارد.",
     },
     {
       min: 10,
       max: 19,
       level: "moderate",
       text:
-        "نمره شما نشان می‌دهد مبتلا به اختلال شكست عشقی هستيد اما شدت آن از حالت شديد کمتر است. بهتر است برای درمان اقدام کنيد تا شدت علائم بیشتر نشود.",
+        "نمره تو نشان می‌دهد فشارِ ناشی از شکست عاطفی یا جدایی در سطح متوسط است. اگر همین‌طور رها شود ممکن است شدت بگیرد، اما با یک مسیر منظمِ مراقبت و تمرین، قابل مدیریت و رو به بهبود است.",
     },
     {
       min: 0,
       max: 9,
       level: "manageable",
       text:
-        "نمره شما نشان می‌دهد علائم اختلال شكست عشقی در سطح قابل تحمل و قابل کنترل است و به‌طور جدی زندگی شما را تخریب نمی‌کند.",
+        "نمره تو نشان می‌دهد فشارِ ناشی از شکست عاطفی یا جدایی در سطح قابل مدیریت است. با چند اقدام ساده و استمرار، می‌توانی این روند را بهتر هم بکنی.",
     },
   ],
 };
@@ -326,9 +293,14 @@ function computeHbBaselineScore(answersByQid) {
 
   const band = HB_BASELINE.interpretation.find((b) => total >= b.min && total <= b.max) || null;
 
+  const maxScore = HB_BASELINE_MAX_SCORE;
+  const percent = Math.max(0, Math.min(100, Math.round((total / maxScore) * 100)));
+
   return {
     ok: true,
     totalScore: total,
+    maxScore,
+    percent,
     level: band?.level || null,
     text: band?.text || null,
   };
@@ -337,6 +309,12 @@ function computeHbBaselineScore(answersByQid) {
 function toBaselineUiContent() {
   return {
     kind: HB_BASELINE.kind,
+    meta: {
+      titleFa: HB_BASELINE.meta.titleFa,
+      maxScore: HB_BASELINE.meta.maxScore,
+      scoreHintFa: HB_BASELINE.meta.scoreHintFa,
+      descriptionFa: HB_BASELINE.meta.descriptionFa,
+    },
     consentSteps: HB_BASELINE.consentSteps.map((s) => ({
       id: s.id,
       text: s.text,
@@ -1190,7 +1168,12 @@ router.post("/baseline/submit", authUser, async (req, res) => {
         status: "completed",
         completedAt: new Date(),
         totalScore: calc.totalScore,
-        scalesJson: { level: calc.level, interpretationText: calc.text },
+        // ✅ فقط متن امن ذخیره می‌شود
+        scalesJson: {
+          level: calc.level,
+          interpretationTextSafe: calc.safeText,
+          maxScore: calc.maxScore,
+        },
       },
       select: { id: true, status: true, totalScore: true, scalesJson: true, completedAt: true },
     });
@@ -1201,13 +1184,21 @@ router.post("/baseline/submit", authUser, async (req, res) => {
         userId: user.id,
         kind: HB_BASELINE.kind,
         totalScore: calc.totalScore,
-        scales: { level: calc.level, interpretationText: calc.text },
+        scales: {
+          level: calc.level,
+          interpretationTextSafe: calc.safeText,
+          maxScore: calc.maxScore,
+        },
         wave: 1,
         proLocked: false,
       },
       update: {
         totalScore: calc.totalScore,
-        scales: { level: calc.level, interpretationText: calc.text },
+        scales: {
+          level: calc.level,
+          interpretationTextSafe: calc.safeText,
+          maxScore: calc.maxScore,
+        },
         takenAt: new Date(),
         proLocked: false,
       },
@@ -1217,7 +1208,12 @@ router.post("/baseline/submit", authUser, async (req, res) => {
       ok: true,
       data: {
         session: updated,
-        interpretation: { level: calc.level, text: calc.text, score: calc.totalScore },
+        interpretation: {
+          level: calc.level,
+          textSafe: calc.safeText,
+          score: calc.totalScore,
+          maxScore: calc.maxScore,
+        },
       },
     });
   } catch (e) {

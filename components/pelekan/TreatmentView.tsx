@@ -7,7 +7,6 @@ import Svg, { Path } from "react-native-svg";
 /* ----------------------------- Types ----------------------------- */
 export type PlanStatus = "free" | "pro" | "expired" | "expiring";
 export type TreatmentAccess = "full" | "frozen_current" | "archive_only";
-
 // ✅ اینجا review رو اضافه کردیم
 export type TabState = "idle" | "baseline_assessment" | "choose_path" | "treating" | "review";
 
@@ -69,13 +68,24 @@ export type PelekanState = {
 export type HeaderItem = { kind: "header"; id: string; stage: PelekanStage };
 export type DayItem = { kind: "day"; id: string; day: PelekanDay; stage: PelekanStage; zig: "L" | "R" };
 export type SpacerItem = { kind: "spacer"; id: string };
-export type ListItem = HeaderItem | DayItem | SpacerItem;
+
+// ✅ آیتم جدید: دایره «نتایج + بازسنجی» داخل زیگزاگ
+export type ResultsItem = {
+  kind: "results";
+  id: string;
+  zig: "L" | "R";
+  titleFa: string;
+  done: boolean;
+};
+
+export type ListItem = HeaderItem | DayItem | SpacerItem | ResultsItem;
 
 type Props = {
   item: ListItem;
   index: number;
   state: PelekanState;
   onTapActiveDay?: (day: PelekanDay) => void;
+  onTapResults?: () => void;
 };
 
 /* ----------------------------- UI Consts ----------------------------- */
@@ -97,10 +107,12 @@ const palette = {
     availableBorder: "rgba(212,175,55,.55)",
     availableIcon: "#D4AF37",
     availableLabel: "#F9FAFB",
+
     lockedBg: "#0B0F14",
     lockedBorder: "rgba(231,238,247,.22)",
     lockedIcon: "rgba(231,238,247,.55)",
     lockedLabel: "rgba(231,238,247,.55)",
+
     doneBg: "#22C55E",
     doneBorder: "#16A34A",
     doneIcon: "#FFFFFF",
@@ -145,6 +157,7 @@ function Pulsing({ children, playing }: { children: React.ReactNode; playing: bo
       scale.setValue(1);
       return;
     }
+
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(scale, {
@@ -161,6 +174,7 @@ function Pulsing({ children, playing }: { children: React.ReactNode; playing: bo
         }),
       ])
     );
+
     loop.start();
     return () => loop.stop();
   }, [playing, scale]);
@@ -169,7 +183,7 @@ function Pulsing({ children, playing }: { children: React.ReactNode; playing: bo
 }
 
 /* ----------------------------- Component (ONE ITEM) ----------------------------- */
-export default function TreatmentView({ item, state, onTapActiveDay }: Props) {
+export default function TreatmentView({ item, state, onTapActiveDay, onTapResults }: Props) {
   const activeDayId = state.progress?.activeDayId || null;
 
   const dayProgressMap = useMemo(() => {
@@ -195,6 +209,7 @@ export default function TreatmentView({ item, state, onTapActiveDay }: Props) {
   if (item.kind === "header") {
     const { stage } = item;
     const icon = stageIcon(stage.code);
+
     return (
       <View style={{ alignItems: "center", alignSelf: "center", width: PATH_W }}>
         <View
@@ -223,6 +238,55 @@ export default function TreatmentView({ item, state, onTapActiveDay }: Props) {
       </View>
     );
   }
+
+  // ✅ results (دایره نتایج داخل مسیر زیگزاگی)
+  if (item.kind === "results") {
+  const done = !!item.done;
+
+  const nodeX = MID_X; // ✅ وسط
+  const lineColor = done ? palette.pathDone : palette.pathIdle;
+
+  const node = (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={() => onTapResults?.()}
+      style={[
+        styles.node,
+        {
+          left: nodeX - NODE_R,
+          top: CELL_H / 2 - NODE_R,
+          backgroundColor: done ? palette.node.doneBg : palette.node.availableBg,
+          borderColor: done ? palette.node.doneBorder : palette.node.availableBorder,
+        },
+      ]}
+    >
+      <Ionicons
+        name={done ? "checkmark-circle" : "star"}
+        size={22}
+        color={done ? palette.node.doneIcon : palette.node.availableIcon}
+      />
+      <Text style={[styles.nodeText, { color: done ? palette.node.doneLabel : palette.node.availableLabel }]}>
+        سنجش
+      </Text>
+    </TouchableOpacity>
+  );
+
+  return (
+    <View style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}>
+      {/* ✅ فقط خط صاف رو به بالا - بدون خط زیر */}
+      <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
+        <Path
+          d={`M ${MID_X} ${CELL_H / 2} L ${MID_X} 0`}
+          stroke={lineColor}
+          strokeWidth={6}
+          fill="none"
+          strokeLinecap="round"
+        />
+      </Svg>
+      {node}
+    </View>
+  );
+}
 
   // day
   const { day, zig } = item;
@@ -266,11 +330,7 @@ export default function TreatmentView({ item, state, onTapActiveDay }: Props) {
         },
       ]}
     >
-      <Ionicons
-        name={done ? "checkmark-circle" : locked ? "lock-closed-outline" : "star"}
-        size={22}
-        color={iconCol}
-      />
+      <Ionicons name={done ? "checkmark-circle" : locked ? "lock-closed-outline" : "star"} size={22} color={iconCol} />
       <Text style={[styles.nodeText, { color: labelCol }]}>روز {day.dayNumberInStage}</Text>
     </TouchableOpacity>
   );
@@ -286,7 +346,6 @@ export default function TreatmentView({ item, state, onTapActiveDay }: Props) {
           strokeLinecap="round"
         />
       </Svg>
-
       {available ? <Pulsing playing={true}>{node}</Pulsing> : node}
     </View>
   );
@@ -326,7 +385,7 @@ const styles = StyleSheet.create({
   },
   nodeText: {
     position: "absolute",
-    bottom: -22,
+    bottom: -30,
     fontSize: 12,
     fontWeight: "900",
   },
