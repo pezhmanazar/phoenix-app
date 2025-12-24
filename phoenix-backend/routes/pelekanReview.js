@@ -745,9 +745,37 @@ router.post("/answer", async (req, res) => {
     if (!Number.isFinite(i) || i < 0) return res.json({ ok: false, error: "INVALID_INDEX" });
     if (!Number.isFinite(v) || v < 0) return res.json({ ok: false, error: "INVALID_VALUE" });
 
-    const session = await prisma.pelekanReviewSession.findUnique({ where: { userId: user.id } });
-    if (!session) return res.json({ ok: false, error: "NO_SESSION" });
-    if (session.status !== "in_progress") return res.json({ ok: false, error: "NOT_IN_PROGRESS" });
+    let session = await prisma.pelekanReviewSession.findUnique({ where: { userId: user.id } });
+if (!session) return res.json({ ok: false, error: "NO_SESSION" });
+
+// ✅ self-heal: اگر کاربر وارد پاسخ‌دهی شد ولی سشن in_progress نبود، سشن را شروع کن
+if (session.status !== "in_progress") {
+  // فقط این حالت‌ها را اجازه بده خودکار وارد in_progress شوند
+  const canAutoResume = session.status === "unlocked" || session.status === "completed_locked";
+
+  if (!canAutoResume) {
+    return res.json({ ok: false, error: "NOT_IN_PROGRESS" });
+  }
+
+  // اگر questionSetId نداشت، بساز
+  const qSetIdFallback = (await ensureQuestionSetSeeded()).id;
+  const qSetId = session.questionSetId || qSetIdFallback;
+
+  session = await prisma.pelekanReviewSession.update({
+    where: { userId: user.id },
+    data: {
+      status: "in_progress",
+      startedAt: session.startedAt ?? now(),
+      completedAt: null,
+      // اگر قبلاً مسیر skip بوده ولی الان کاربر عملاً تست می‌دهد
+      chosenPath: session.chosenPath === "skip_review" ? "review" : session.chosenPath,
+      currentTest: Number.isFinite(Number(session.currentTest)) ? session.currentTest : 1,
+      currentIndex: Number.isFinite(Number(session.currentIndex)) ? session.currentIndex : 0,
+      questionSetId: session.questionSetId ?? qSetId,
+      updatedAt: now(),
+    },
+  });
+}
 
     const qSetId = session.questionSetId || (await ensureQuestionSetSeeded()).id;
 

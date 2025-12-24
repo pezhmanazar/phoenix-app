@@ -1,10 +1,9 @@
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-
 import Baseline from "../../components/pelekan/Baseline";
 import ChoosePath from "../../components/pelekan/ChoosePath";
 import IdlePlaceholder from "../../components/pelekan/IdlePlaceholder";
@@ -22,18 +21,15 @@ import { useUser } from "../../hooks/useUser";
 /* ----------------------------- Types ----------------------------- */
 type PlanStatus = "free" | "pro" | "expired" | "expiring";
 type TabState = "idle" | "baseline_assessment" | "baseline_result" | "choose_path" | "review" | "treating";
-
 type Paywall = {
   needed: boolean;
   reason: "start_treatment" | "continue_treatment" | null;
 };
-
 type PelekanFlags = {
   suppressPaywall?: boolean;
   isBaselineInProgress?: boolean;
   isBaselineCompleted?: boolean;
 };
-
 type PelekanState = {
   tabState: TabState;
   user: { planStatus: PlanStatus; daysLeft: number };
@@ -72,7 +68,6 @@ const initialState: PelekanState = {
   progress: null,
 };
 
-/* ----------------------------- Screen ----------------------------- */
 export default function PelekanTab() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -90,6 +85,10 @@ export default function PelekanTab() {
   // ✅ override view (برای وقتی از ReviewResult می‌خوایم مستقیم بیایم روی Review)
   const [forceView, setForceView] = useState<null | "review">(null);
 
+  // ✅ refs برای لاگ امن (بدون dependency-loop)
+  const mountedRef = useRef(false);
+  const lastFocusRef = useRef<string>("__init__");
+
   const palette = useMemo(
     () => ({
       bg: "#0b0f14",
@@ -104,30 +103,53 @@ export default function PelekanTab() {
 
   /* ----------------------------- Fetch State ----------------------------- */
   const fetchState = useCallback(
-    async (opts?: { initial?: boolean }) => {
+    async (opts?: { initial?: boolean; reason?: string }) => {
       const isInitial = !!opts?.initial;
+      const reason = opts?.reason || (isInitial ? "initial" : "refresh");
+
+      const phone = me?.phone;
+
+      console.log("🧭 [PelekanTab] fetchState:start", {
+        reason,
+        isInitial,
+        phone: phone || null,
+        focus,
+        forceView,
+      });
+
       try {
         if (isInitial) setInitialLoading(true);
         else setRefreshing(true);
 
-        const phone = me?.phone;
         if (!phone) {
+          console.log("⚠️ [PelekanTab] no phone -> initialState");
           setState(initialState);
           return;
         }
 
-        const res = await fetch(
-          `https://api.qoqnoos.app/api/pelekan/state?phone=${encodeURIComponent(phone)}`,
-          { headers: { "Cache-Control": "no-store" } }
-        );
+        const url = `https://api.qoqnoos.app/api/pelekan/state?phone=${encodeURIComponent(phone)}`;
+        console.log("🌐 [PelekanTab] GET", url);
 
+        const res = await fetch(url, { headers: { "Cache-Control": "no-store" } });
         const json = await res.json().catch(() => null);
+
         if (!json?.ok) {
+          console.log("❌ [PelekanTab] state not ok", json);
           setState(initialState);
           return;
         }
 
         const data = json.data || {};
+
+        console.log("✅ [PelekanTab] state ok", {
+          tabState: data?.tabState,
+          treatmentAccess: data?.treatmentAccess,
+          paywall: data?.ui?.paywall,
+          baselineStatus: data?.baseline?.session?.status,
+          reviewStatus: data?.review?.session?.status,
+          reviewChosenPath: data?.review?.session?.chosenPath,
+        });
+
         const merged: PelekanState = {
           ...initialState,
           ...data,
@@ -141,35 +163,58 @@ export default function PelekanTab() {
         };
 
         setState(merged);
-      } catch {
+      } catch (e: any) {
+        console.log("💥 [PelekanTab] fetchState:error", String(e?.message || e));
         setState(initialState);
       } finally {
         if (isInitial) setInitialLoading(false);
         else setRefreshing(false);
+
+        console.log("🧭 [PelekanTab] fetchState:end", { reason, isInitial });
       }
     },
-    [me?.phone]
+    [me?.phone, focus, forceView]
   );
 
+  // ✅ Initial fetch فقط وقتی phone عوض شد (نه هر رندر)
   useEffect(() => {
-    fetchState({ initial: true });
-  }, [fetchState]);
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      console.log("🔁 [PelekanTab] mount");
+    }
+    fetchState({ initial: true, reason: "mount_or_phone_change" });
+    // فقط phone trigger باشد
+  }, [me?.phone, fetchState]);
 
+  // ✅ Refresh وقتی تب فوکوس می‌گیرد (بدون params در deps)
   useFocusEffect(
     useCallback(() => {
-      fetchState({ initial: false });
+      console.log("🎯 [PelekanTab] focus -> refresh", {
+        phone: me?.phone || null,
+        focus,
+        forceView,
+        tabState: state.tabState,
+      });
+      fetchState({ initial: false, reason: "focus" });
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fetchState])
   );
 
-  // ✅ اگر از ReviewResult با focus=review_tests برگشتیم، Review رو فورس کن
+  // ✅ focus handler (فقط وقتی واقعاً عوض شده)
   useEffect(() => {
+    if (lastFocusRef.current === focus) return;
+    lastFocusRef.current = focus;
+
+    console.log("🧩 [PelekanTab] focus param changed", { focus });
+
     if (focus !== "review_tests") return;
 
-    // 1) فورس view
+    console.log("🚨 [PelekanTab] focus=review_tests -> forceView=review");
     setForceView("review");
 
-    // 2) پاک کردن پارامتر (ولی بعد از یک tick تا رندر انجام بشه و فورس اعمال بشه)
+    // پاک کردن پارامتر: بدون اینکه دوباره focus=review_tests بماند
     const t = setTimeout(() => {
+      console.log("🧹 [PelekanTab] cleaning focus param -> router.replace(/(tabs)/Pelekan)");
       router.replace("/(tabs)/Pelekan");
     }, 0);
 
@@ -178,6 +223,16 @@ export default function PelekanTab() {
 
   // ✅ view نهایی با اولویت forceView
   const view: TabState = (forceView === "review" ? "review" : state.tabState) as TabState;
+
+  useEffect(() => {
+    console.log("🟩 [PelekanTab] VIEW RESOLVE", {
+      tabState: state.tabState,
+      forceView,
+      view,
+      reviewChosenPath: state?.review?.session?.chosenPath,
+      reviewStatus: state?.review?.session?.status,
+    });
+  }, [state.tabState, forceView, view, state?.review?.session?.chosenPath, state?.review?.session?.status]);
 
   /* ----------------------------- Treating List ----------------------------- */
   const pathItems: ListItem[] = useMemo(() => {
@@ -188,7 +243,6 @@ export default function PelekanTab() {
 
     const baselineDone = state?.baseline?.session?.status === "completed";
     const reviewChosen = !!state?.review?.session?.chosenPath;
-
     const reviewDone =
       !!state?.review?.session?.completedAt ||
       !!state?.review?.session?.test2CompletedAt ||
@@ -207,7 +261,6 @@ export default function PelekanTab() {
 
     for (const st of stages) {
       list.push({ kind: "header", id: `h-${st.id}`, stage: st });
-
       for (const d of st.days || []) {
         const zig: "L" | "R" = zigCounter++ % 2 === 0 ? "L" : "R";
         list.push({
@@ -218,16 +271,20 @@ export default function PelekanTab() {
           zig,
         });
       }
-
       list.push({ kind: "spacer", id: `sp-${st.id}` });
     }
-
     return list;
   }, [state.tabState, state.stages, state?.baseline?.session, state?.review?.session]);
 
   /* ----------------------------- Handlers ----------------------------- */
   const onTapActiveDay = useCallback(
     (day: PelekanDay) => {
+      console.log("👆 [PelekanTab] onTapActiveDay", {
+        dayId: day?.id,
+        paywallNeeded: state?.ui?.paywall?.needed,
+        treatmentAccess: state?.treatmentAccess,
+      });
+
       if (state?.ui?.paywall?.needed || state?.treatmentAccess !== "full") {
         router.push("/(tabs)/Subscription");
         return;
@@ -239,6 +296,7 @@ export default function PelekanTab() {
 
   const onTapResults = useCallback(() => {
     const phone = String(me?.phone || "").trim();
+    console.log("👆 [PelekanTab] onTapResults", { phone });
     if (!phone) return;
     router.push(`/(tabs)/ReviewResult?phone=${encodeURIComponent(phone)}` as any);
   }, [router, me?.phone]);
@@ -272,11 +330,9 @@ export default function PelekanTab() {
         <View style={[styles.topCol, styles.colLeft]}>
           <PlanStatusBadge me={me} showExpiringText />
         </View>
-
         <View style={[styles.topCol, styles.colCenter]}>
           <Text style={{ color: palette.text, fontWeight: "900" }}>پلکان</Text>
         </View>
-
         <View style={[styles.topCol, styles.colRight]} />
       </View>
 
@@ -292,11 +348,11 @@ export default function PelekanTab() {
       <View style={{ flex: 1 }}>
         {view === "baseline_assessment" || view === "baseline_result" ? (
           <View style={{ flex: 1, paddingBottom: bottomSafe }}>
-            <Baseline me={me} state={state} onRefresh={() => fetchState({ initial: false })} />
+            <Baseline me={me} state={state} onRefresh={() => fetchState({ initial: false, reason: "baseline_refresh" })} />
           </View>
         ) : view === "choose_path" ? (
           <View style={{ flex: 1, paddingBottom: bottomSafe }}>
-            <ChoosePath me={me} state={state} onRefresh={() => fetchState({ initial: false })} />
+            <ChoosePath me={me} state={state} onRefresh={() => fetchState({ initial: false, reason: "choose_path_refresh" })} />
           </View>
         ) : view === "review" ? (
           <View style={{ flex: 1, paddingBottom: bottomSafe }}>
@@ -304,8 +360,9 @@ export default function PelekanTab() {
               me={me}
               state={state}
               onRefresh={async () => {
-                await fetchState({ initial: false });
-                // ✅ بعد از رفرش، فورس رو آزاد کن تا state.tabState دوباره کنترل رو بگیره
+                console.log("🔄 [PelekanTab] Review.onRefresh()");
+                await fetchState({ initial: false, reason: "review_refresh" });
+                console.log("🧯 [PelekanTab] releasing forceView");
                 setForceView(null);
               }}
             />
@@ -335,7 +392,7 @@ export default function PelekanTab() {
           />
         ) : (
           <View style={{ flex: 1, paddingBottom: bottomSafe }}>
-            <IdlePlaceholder me={me} state={state} onRefresh={() => fetchState({ initial: false })} />
+            <IdlePlaceholder me={me} state={state} onRefresh={() => fetchState({ initial: false, reason: "idle_refresh" })} />
           </View>
         )}
       </View>
