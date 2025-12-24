@@ -825,6 +825,8 @@ model ReviewQuestion {
   textFa String
   helpFa String?
 
+  ui Json? 
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
