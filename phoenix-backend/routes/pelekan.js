@@ -616,6 +616,7 @@ const paywall = suppressPaywall
 
 // -------------------- Review Choose Path --------------------
 // POST /api/pelekan/review/choose  body: { phone, choice: "skip_review" | "review" }
+
 router.post("/review/choose", authUser, async (req, res) => {
   try {
     noStore(res);
@@ -633,37 +634,27 @@ router.post("/review/choose", authUser, async (req, res) => {
     });
     if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
 
-    // اگر کاربر "فراموشش کنم" را انتخاب کرد:
-    // برای اینکه فوراً وارد پلکان (treating) شود، باید reviewDoneOrSkipped true شود.
-    // در state logic شما، reviewDoneOrSkipped با completedAt یا test2SkippedAt true می‌شود.
     const now = new Date();
 
-    const data =
-      choice === "skip_review"
-        ? {
-            chosenPath: "skip_review",
-            // این دو خط باعث می‌شود hasStartedTreatment=true شود حتی بدون dayProgress
-            test2SkippedAt: now,
-            completedAt: now,
-            status: "completed_locked", // وضعیت مهم نیست، ولی منسجم باشد
-          }
-        : {
-            chosenPath: "review",
-            status: "in_progress",
-            // اگر قبلاً skip_review زده بود و برگشت، این‌ها را پاک می‌کنیم
-            test2SkippedAt: null,
-            completedAt: null,
-          };
-
+    // 1) upsert review session (بدون جعل completed برای skip_review)
     const session = await prisma.pelekanReviewSession.upsert({
       where: { userId: user.id },
       create: {
         userId: user.id,
-        ...data,
+        chosenPath: choice,
+        status: choice === "review" ? "in_progress" : "completed_locked",
         startedAt: now,
+        // مهم: برای skip_review این‌ها نباید ست شوند چون UI نتایجِ آزمون‌های ۱/۲ را “صفر” می‌بیند
+        completedAt: null,
+        test2SkippedAt: null,
+        updatedAt: now,
       },
       update: {
-        ...data,
+        chosenPath: choice,
+        status: choice === "review" ? "in_progress" : "completed_locked",
+        // اگر قبلاً review رفته بود و برگشت، وضعیت completion رو پاک کن
+        completedAt: null,
+        test2SkippedAt: null,
         updatedAt: now,
       },
       select: {
@@ -675,6 +666,34 @@ router.post("/review/choose", authUser, async (req, res) => {
         updatedAt: true,
       },
     });
+
+    // 2) اگر کاربر skip_review زد -> برای ورود فوری به treating باید progress واقعی بسازیم
+    // این کار باعث می‌شود hasAnyProgressFinal=true شود و tabState در /state برود روی treating
+    if (choice === "skip_review") {
+      // پیدا کردن روز 1 مرحله bastan
+      const firstDay = await prisma.pelekanDay.findFirst({
+        where: { stage: { code: "bastan" }, dayNumberInStage: 1 },
+        select: { id: true },
+      });
+
+      if (firstDay?.id) {
+        await prisma.pelekanDayProgress.upsert({
+          where: { userId_dayId: { userId: user.id, dayId: firstDay.id } },
+          create: {
+            userId: user.id,
+            dayId: firstDay.id,
+            status: "active",
+            completionPercent: 0,
+            startedAt: now,
+            lastActivityAt: now,
+          },
+          update: {
+            // اگر قبلاً وجود داشت، دست نزن به completedAt و… فقط lastActivity رو تازه کن
+            lastActivityAt: now,
+          },
+        });
+      }
+    }
 
     return res.json({ ok: true, data: { session } });
   } catch (e) {
