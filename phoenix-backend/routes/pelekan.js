@@ -1004,7 +1004,6 @@ router.post("/bastan/intro/complete", authUser, async (req, res) => {
 router.post("/bastan/subtask/complete", authUser, async (req, res) => {
   try {
     noStore(res);
-
     const phone = req.userPhone;
     const { subtaskKey, payload } = req.body || {};
 
@@ -1046,7 +1045,6 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         },
       },
     });
-
     if (!subtask) return res.status(404).json({ ok: false, error: "SUBTASK_NOT_FOUND" });
 
     // gate: pro requirement (either action-level or subtask-level)
@@ -1066,14 +1064,12 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       where: { userId: user.id, isDone: true },
       _count: { _all: true },
     });
-
     const doneByActionId = {};
     for (const r of doneAgg) doneByActionId[r.actionId] = r._count._all || 0;
 
     // find if target action is locked by previous action
     let prevOk = true;
     let targetLockedByPrev = false;
-
     for (const a of actions) {
       const completed = doneByActionId[a.id] || 0;
       const isComplete = completed >= a.minRequiredSubtasks;
@@ -1096,7 +1092,6 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       where: { userId: user.id, subtaskId: subtask.id },
       select: { id: true, isDone: true },
     });
-
     if (existing?.isDone) {
       return res.status(409).json({ ok: false, error: "ALREADY_DONE" });
     }
@@ -1164,33 +1159,35 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     }
 
     // CC_3_24h_safety_check
-if (subtaskKey === "CC_3_24h_safety_check") {
-  // payload.choice: "خیر" | "تماس نقش‌محور" | "بله (هیجانی)"
-  const choiceRaw = String(payload?.choice || "").trim();
+    if (subtaskKey === "CC_3_24h_safety_check") {
+      // payload.choice: "خیر" | "تماس نقش‌محور" | "بله (هیجانی)"
+      const choiceRaw = String(payload?.choice || "").trim();
 
-  let result = "none"; // default امن
-  if (choiceRaw.includes("نقش")) result = "role_based";
-  if (choiceRaw.includes("هیجانی")) result = "emotional";
+      let result = "none"; // default امن
+      if (choiceRaw.includes("نقش")) result = "role_based";
+      if (choiceRaw.includes("هیجانی")) result = "emotional";
 
-  await prisma.bastanState.upsert({
-    where: { userId: user.id },
-    create: {
-      userId: user.id,
-      lastSafetyCheckAt: new Date(),
-      lastSafetyCheckResult: result,
-      safetyWindowStartsAt: new Date(),
-    },
-    update: {
-      lastSafetyCheckAt: new Date(),
-      lastSafetyCheckResult: result,
-      ...(result !== "none" ? { safetyWindowStartsAt: new Date() } : {}),
-    },
-  });
-}
+      await prisma.bastanState.upsert({
+        where: { userId: user.id },
+        create: {
+          userId: user.id,
+          lastSafetyCheckAt: new Date(),
+          lastSafetyCheckResult: result,
+          safetyWindowStartsAt: new Date(),
+        },
+        update: {
+          lastSafetyCheckAt: new Date(),
+          lastSafetyCheckResult: result,
+          ...(result !== "none" ? { safetyWindowStartsAt: new Date() } : {}),
+        },
+      });
+    }
 
     // after count
     const afterDone = beforeDone + 1;
     const minReq = subtask.action?.minRequiredSubtasks || 0;
+
+    // عبور از آستانه (برای XP اکشن فقط یکبار)
     const crossedToDone = beforeDone < minReq && afterDone >= minReq;
 
     // XP for subtask (always)
@@ -1207,8 +1204,9 @@ if (subtaskKey === "CC_3_24h_safety_check") {
       });
     }
 
-    // XP bonus for action completion (only once, when crossing threshold)
+    // ✅ XP bonus for action completion (only once, when crossing threshold)
     let actionBonusXp = 0;
+    const shouldBeDone = afterDone >= minReq;
 
     if (crossedToDone) {
       actionBonusXp = Number.isFinite(subtask.action?.xpOnComplete) ? subtask.action.xpOnComplete : 0;
@@ -1224,48 +1222,31 @@ if (subtaskKey === "CC_3_24h_safety_check") {
           },
         });
       }
-
-      // optional: record action progress row (future use)
-      await prisma.bastanActionProgress.upsert({
-        where: { userId_actionId: { userId: user.id, actionId: subtask.actionId } },
-        create: {
-          userId: user.id,
-          actionId: subtask.actionId,
-          status: "done",
-          startedAt: new Date(),
-          completedAt: new Date(),
-          doneSubtasksCount: afterDone,
-          minRequiredSubtasks: minReq,
-          totalSubtasks: subtask.action?.totalSubtasks || 0,
-          xpEarned: actionBonusXp,
-        },
-        update: {
-          status: "done",
-          completedAt: new Date(),
-          doneSubtasksCount: afterDone,
-          xpEarned: actionBonusXp,
-        },
-      });
-    } else {
-      // keep/update action progress basic row (optional)
-      await prisma.bastanActionProgress.upsert({
-        where: { userId_actionId: { userId: user.id, actionId: subtask.actionId } },
-        create: {
-          userId: user.id,
-          actionId: subtask.actionId,
-          status: "active",
-          startedAt: new Date(),
-          doneSubtasksCount: afterDone,
-          minRequiredSubtasks: minReq,
-          totalSubtasks: subtask.action?.totalSubtasks || 0,
-          xpEarned: 0,
-        },
-        update: {
-          status: "active",
-          doneSubtasksCount: afterDone,
-        },
-      });
     }
+
+    // ✅ همیشه status را همسان کن (دیگه گیر نمی‌کنه)
+    await prisma.bastanActionProgress.upsert({
+      where: { userId_actionId: { userId: user.id, actionId: subtask.actionId } },
+      create: {
+        userId: user.id,
+        actionId: subtask.actionId,
+        status: shouldBeDone ? "done" : "active",
+        startedAt: new Date(),
+        completedAt: shouldBeDone ? new Date() : null,
+        doneSubtasksCount: afterDone,
+        minRequiredSubtasks: minReq,
+        totalSubtasks: subtask.action?.totalSubtasks || 0,
+        xpEarned: actionBonusXp,
+      },
+      update: {
+        status: shouldBeDone ? "done" : "active",
+        ...(shouldBeDone ? { completedAt: new Date() } : {}),
+        doneSubtasksCount: afterDone,
+        ...(crossedToDone ? { xpEarned: actionBonusXp } : {}),
+      },
+    });
+
+    // ✅ بعد از نوشتن، موتور activeDay را تعمیر کند
     await ensureActivePelekanDay(user.id);
 
     return res.json({
