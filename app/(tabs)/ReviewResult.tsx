@@ -1,4 +1,5 @@
 // phoenix-app/app/(tabs)/ReviewResult.tsx
+import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -513,7 +514,21 @@ export default function ReviewResult() {
       <View style={[styles.header, { backgroundColor: palette.bg, borderBottomColor: palette.border }]}>
         <View style={[styles.headerAccent, { backgroundColor: statusColor }]} />
         <Text style={[styles.headerTitle, { color: statusColor }]}>{headerTitle}</Text>
-        {!!headerSub && <Text style={[styles.rtl, styles.headerSub, { color: palette.sub }]}>{headerSub}</Text>}
+        {!!headerSub && (
+  <Text
+    style={[
+      styles.headerSub,
+      {
+        color: palette.sub,
+        writingDirection: "rtl" as any,
+        textAlign: "center" as any,
+        alignSelf: "center",
+      },
+    ]}
+  >
+    {headerSub}
+  </Text>
+)}
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -557,7 +572,7 @@ export default function ReviewResult() {
                         progressColor={baselineColor}
                         textColor={palette.text}
                         subColor={palette.sub2}
-                        label={baselinePercent != null ? `${baselinePercent}% از بیشترین میزان` : "نمره کلی"}
+                        label={baselinePercent != null ? `${baselinePercent}% آسیب` : "نمره کلی"}
                       />
                     </View>
 
@@ -638,85 +653,126 @@ export default function ReviewResult() {
                     </Pressable>
                   </>
                 ) : reviewDone ? (
-                  <>
-                    {/* وضعیت کلی (در یک نگاه) */}
-                    <View style={{ height: 10 }} />
-                    <View style={[styles.oneLook, { borderColor: palette.border2 }]}>
-                      <Text style={[styles.h2, { color: palette.text, textAlign: "center" as any }]}>وضعیت کلی تو (در یک نگاه)</Text>
+                 <>
+  {/* وضعیت کلی (در یک نگاه) */}
+  <View style={{ height: 10 }} />
+  <View style={[styles.oneLook, { borderColor: palette.border2 }]}>
+    <Text style={[styles.h2, { color: palette.text, textAlign: "center" as any }]}>
+      وضعیت کلی تو (در یک نگاه)
+    </Text>
 
-                      <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
-                        {summary?.oneLook || result?.message || "—"}
-                      </Text>
+    <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
+      {summary?.oneLook || result?.message || "—"}
+    </Text>
 
-                      {!!summary?.nextStep && (
-                        <View style={[styles.nextStep, { borderColor: "rgba(212,175,55,.25)" }]}>
-                          <Text style={[styles.h3, { color: palette.gold }]}>گام پیشنهادی بعدی</Text>
-                          <Text style={[styles.rtl, { color: palette.sub, marginTop: 6, lineHeight: 20 }]}>{summary.nextStep}</Text>
-                        </View>
-                      )}
-                    </View>
+    {!!summary?.nextStep && (
+      <View style={[styles.nextStep, { borderColor: "rgba(212,175,55,.25)" }]}>
+        <Text style={[styles.h3, { color: palette.gold }]}>گام پیشنهادی بعدی</Text>
+        <Text style={[styles.rtl, { color: palette.sub, marginTop: 6, lineHeight: 20 }]}>
+          {summary.nextStep}
+        </Text>
+      </View>
+    )}
+  </View>
 
-                    {(test1Diagrams.length > 0 || test2Diagrams.length > 0) && (
-                      <View style={{ marginTop: 14 }}>
-                        <Text style={[styles.h2, { color: palette.text }]}>جزئیات تحلیلی</Text>
+  {(test1Diagrams.length > 0 || test2Diagrams.length > 0) && (
+    <View style={{ marginTop: 14 }}>
+      <Text style={[styles.h2, { color: palette.text }]}>جزئیات تحلیلی</Text>
 
-                        {test1Diagrams.length > 0 && (
-                          <View style={{ marginTop: 10 }}>
-                            <Text style={[styles.sectionTitle, { color: palette.sub }]}>آزمون ۱: بازسنجی رابطه</Text>
-                            {test1Diagrams.map((d, idx) => (
-                              <DiagramCard key={`${d.key}-${idx}`} item={d} />
-                            ))}
-                          </View>
-                        )}
+      {test1Diagrams.length > 0 && (
+        <View style={{ marginTop: 10 }}>
+          <Text style={[styles.sectionTitle, { color: palette.sub }]}>آزمون ۱: بازسنجی رابطه</Text>
+          {test1Diagrams.map((d, idx) => (
+            <DiagramCard key={`${d.key}-${idx}`} item={d} />
+          ))}
+        </View>
+      )}
 
-                        {!didSkipTest2 && test2Diagrams.length > 0 && (
-                          <View style={{ marginTop: 14 }}>
-                            <Text style={[styles.sectionTitle, { color: palette.sub }]}>آزمون ۲: آیا برمی‌گرده؟</Text>
-                            {test2Diagrams.map((d, idx) => (
-                              <DiagramCard key={`${d.key}-${idx}`} item={d} />
-                            ))}
-                          </View>
-                        )}
-                      </View>
-                    )}
+      {!didSkipTest2 && test2Diagrams.length > 0 && (
+        <View style={{ marginTop: 14 }}>
+          <Text style={[styles.sectionTitle, { color: palette.sub }]}>آزمون ۲: آیا برمی‌گرده؟</Text>
+          {test2Diagrams.map((d, idx) => (
+            <DiagramCard key={`${d.key}-${idx}`} item={d} />
+          ))}
+        </View>
+      )}
+    </View>
+  )}
 
-                    <View style={{ height: 14 }} />
+  <View style={{ height: 14 }} />
 
-                    {locked && (
-                      <>
-                        <Pressable
-                          style={[
-                            styles.btnPrimary,
-                            { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)" },
-                          ]}
-                          onPress={() => router.push("/(tabs)/Subscription")}
-                        >
-                          <Text style={[styles.btnText, { color: palette.text }]}>فعال‌سازی PRO برای دیدن تحلیل کامل</Text>
-                        </Pressable>
-                        <View style={{ height: 10 }} />
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
-                      وضعیت آزمون‌ها نامشخص است. برای همگام‌سازی وارد پلکان شو.
-                    </Text>
-                    <View style={{ height: 12 }} />
-                    <Pressable style={[styles.btnPrimary, { borderColor: palette.border }]} onPress={goPelekan}>
-                      <Text style={[styles.btnText, { color: palette.text }]}>رفتن به پلکان</Text>
-                    </Pressable>
-                  </>
-                )}
-              </View>
+  {locked && (
+    <>
+      <Pressable
+        style={[
+          styles.btnPrimary,
+          { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)" },
+        ]}
+        onPress={() => router.push("/(tabs)/Subscription")}
+      >
+        <Text style={[styles.btnText, { color: palette.text }]}>
+          فعال‌سازی اشتراک پرو برای دیدن تحلیل کامل
+        </Text>
+      </Pressable>
 
-              <View style={{ height: 14 }} />
+      {/* ✅ هشدار زیر دکمه (آیکن‌دار + رنگ متفاوت) */}
+      <View
+        style={{
+          marginTop: 10,
+          borderWidth: 1,
+          borderColor: "rgba(232,138,21,.35)", // نارنجی ملایم
+          backgroundColor: "rgba(232,138,21,.10)",
+          borderRadius: 14,
+          paddingVertical: 10,
+          paddingHorizontal: 12,
+          flexDirection: "row-reverse",
+          alignItems: "center",
+          gap: 8 as any,
+        }}
+      >
+        <Ionicons name="information-circle-outline" size={18} color={palette.orange} />
+        <Text
+          style={[
+            styles.rtl,
+            {
+              color: palette.orange,
+              fontSize: 12,
+              lineHeight: 18,
+              flex: 1,
+              textAlign: "center",
+            },
+          ]}
+        >
+          بعد از فعال‌سازی پرو، برای دیدن نتیجه کامل به بخش «سنجش» در ابتدای پلکان (دایره‌ی تیک‌خورده) برو.
+        </Text>
+      </View>
 
-              <Pressable style={[styles.btn, { borderColor: palette.border }]} onPress={goPelekan}>
-                <Text style={[styles.btnText, { color: palette.text }]}>رفتن به پلکان</Text>
-              </Pressable>
+      <View style={{ height: 10 }} />
+    </>
+  )}
+</>
+) : (
+<>
+  <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
+    وضعیت آزمون‌ها نامشخص است. برای همگام‌سازی وارد پلکان شو.
+  </Text>
 
-              <View style={{ height: 10 }} />
+  <View style={{ height: 12 }} />
+
+  <Pressable style={[styles.btnPrimary, { borderColor: palette.border }]} onPress={goPelekan}>
+    <Text style={[styles.btnText, { color: palette.text }]}>رفتن به پلکان</Text>
+  </Pressable>
+</>
+)}
+</View>
+
+<View style={{ height: 14 }} />
+
+<Pressable style={[styles.btn, { borderColor: palette.border }]} onPress={goPelekan}>
+  <Text style={[styles.btnText, { color: palette.text }]}>رفتن به پلکان</Text>
+</Pressable>
+
+<View style={{ height: 10 }} />
 
               {/* ✅ دکمه: تازه‌سازی نتایج */}
               <Pressable
@@ -760,10 +816,12 @@ const styles = StyleSheet.create({
     writingDirection: "rtl" as any,
   },
   headerSub: {
-    marginTop: 8,
-    fontSize: 12,
-    lineHeight: 18,
-  },
+  marginTop: 8,
+  fontSize: 12,
+  lineHeight: 18,
+  textAlign: "center" as any,
+  writingDirection: "rtl" as any,
+},
 
   content: { flexGrow: 1, padding: 16, paddingTop: 12 },
 
