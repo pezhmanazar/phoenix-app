@@ -1662,6 +1662,96 @@ router.get("/_debug/400", (req, res) => {
   res.status(400).json({ ok: false, error: "DEBUG_400", ts: new Date().toISOString() });
 });
 
+/* ---------- POST /api/pelekan/_debug/force-active-day ---------- */
+/*
+  body:
+  {
+    "phone": "09xxxxxxxxx",
+    "stageCode": "bastan" | "gosastan" | ...,
+    "dayNumber": 1
+  }
+*/
+router.post("/_debug/force-active-day", async (req, res) => {
+  try {
+    noStore(res);
+
+    const { phone, stageCode, dayNumber } = req.body || {};
+
+    if (!phone || !stageCode || !dayNumber) {
+      return res.status(400).json({
+        ok: false,
+        error: "REQUIRED_FIELDS",
+        required: ["phone", "stageCode", "dayNumber"],
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true },
+    });
+    if (!user) {
+      return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+    }
+
+    const day = await prisma.pelekanDay.findFirst({
+      where: {
+        dayNumberInStage: Number(dayNumber),
+        stage: { code: stageCode },
+      },
+      select: { id: true },
+    });
+    if (!day) {
+      return res.status(404).json({ ok: false, error: "DAY_NOT_FOUND" });
+    }
+
+    // 1) Fail any currently active day
+    await prisma.pelekanDayProgress.updateMany({
+      where: {
+        userId: user.id,
+        status: "active",
+      },
+      data: {
+        status: "failed",
+        lastActivityAt: new Date(),
+      },
+    });
+
+    // 2) Activate target day
+    await prisma.pelekanDayProgress.upsert({
+      where: {
+        userId_dayId: {
+          userId: user.id,
+          dayId: day.id,
+        },
+      },
+      create: {
+        userId: user.id,
+        dayId: day.id,
+        status: "active",
+        completionPercent: 0,
+        startedAt: new Date(),
+        lastActivityAt: new Date(),
+      },
+      update: {
+        status: "active",
+        lastActivityAt: new Date(),
+      },
+    });
+
+    return res.json({
+      ok: true,
+      data: {
+        forced: true,
+        stageCode,
+        dayNumber,
+      },
+    });
+  } catch (e) {
+    console.error("[pelekan._debug.force-active-day] error:", e);
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
 // POST /api/pelekan/baseline/reset
 router.post("/baseline/reset", authUser, async (req, res) => {
   try {
