@@ -1,10 +1,8 @@
 // routes/pelekan.js
 import express from "express";
-import pelekanEngine from "../services/pelekan/engine.cjs";
-import pelekanSvc from "../services/pelekan/index.cjs";
+import engineModule from "../services/pelekan/engine.cjs";
 import prisma from "../utils/prisma.js";
-
-const { ensureActivePelekanDay } = pelekanSvc;
+const pelekanEngine = engineModule.default ?? engineModule;
 
 const router = express.Router();
 router.use(express.json());
