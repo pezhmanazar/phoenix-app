@@ -1,8 +1,7 @@
 // routes/pelekan.js
 import express from "express";
 import pelekanSvc from "../services/pelekan/index.cjs";
-import prisma from "../utils/prisma.js";
-const { computePelekanState } = pelekanSvc;
+
 const { ensureActivePelekanDay } = pelekanSvc;
 
 const router = express.Router();
@@ -1826,26 +1825,6 @@ router.post("/baseline/seen", authUser, async (req, res) => {
   } catch (e) {
     console.error("[pelekan.baseline.seen] error:", e);
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
-  }
-});
-
-router.get('/_debug/state', async (req, res) => {
-  try {
-    const userId = req.query.userId;
-    const out = await computePelekanState(userId);
-    res.json({ ok: true, out });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message, code: e.code });
-  }
-});
-
-router.post('/_debug/ensure-active', async (req, res) => {
-  try {
-    const userId = req.query.userId;
-    const out = await ensureActivePelekanDay(userId);
-    res.json({ ok: true, out });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message, code: e.code });
   }
 });
 
