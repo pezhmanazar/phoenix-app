@@ -1,7 +1,9 @@
+// services/pelekan/computePelekanState.cjs
 const prisma = require('../../utils/prisma.cjs');
 const { StateError, StateErrorCodes } = require('./stateErrors.cjs');
 
 function allDaysTerminal(daysInStage, progressByDayId) {
+  // terminal = completed یا failed
   for (const d of daysInStage) {
     const p = progressByDayId.get(d.id);
     if (!p) return false;
@@ -10,6 +12,11 @@ function allDaysTerminal(daysInStage, progressByDayId) {
   return true;
 }
 
+/**
+ * computePelekanState
+ * - فقط می‌خواند و تصمیم می‌گیرد
+ * - هیچ INSERT/UPDATE انجام نمی‌دهد
+ */
 async function computePelekanState(userId) {
   if (!userId) throw new Error('userId is required');
 
@@ -24,19 +31,20 @@ async function computePelekanState(userId) {
   }
 
   // 2) days
+  const stageIds = stages.map((s) => s.id);
   const days = await prisma.pelekanDay.findMany({
-    where: { stageId: { in: stages.map((s) => s.id) } },
+    where: { stageId: { in: stageIds } },
     orderBy: [{ stageId: 'asc' }, { dayNumberInStage: 'asc' }],
     select: { id: true, stageId: true, dayNumberInStage: true },
   });
 
-  // 3) day progress
+  // 3) day progress (برای user)
   const dayProgressRows = await prisma.pelekanDayProgress.findMany({
     where: { userId },
     select: { dayId: true, status: true },
   });
 
-  // 4) BastanState (برای امضا و safety)
+  // 4) BastanState (برای امضا و safety + تاریخ unlock قبلی اگر وجود داشته)
   const bastanState = await prisma.bastanState.findUnique({
     where: { userId },
     select: {
@@ -46,10 +54,15 @@ async function computePelekanState(userId) {
     },
   });
 
-  // 5) BastanActionProgress (برای done شدن ۸ اقدام)
+  // 5) BastanActionDefinition (همه اکشن‌های تعریف‌شده: باید 8 تا باشند)
+  const bastanDefs = await prisma.bastanActionDefinition.findMany({
+    select: { id: true, code: true },
+  });
+
+  // 6) BastanActionProgress (پیشرفت کاربر)
   const bastanActionProgress = await prisma.bastanActionProgress.findMany({
     where: { userId },
-    select: { status: true },
+    select: { actionId: true, status: true },
   });
 
   // maps
@@ -62,15 +75,22 @@ async function computePelekanState(userId) {
   const progressByDayId = new Map();
   for (const p of dayProgressRows) progressByDayId.set(p.dayId, p);
 
-  // Bastan completion واقعی طبق شرطی که خودت گفتی:
-  // 1) همه actions done
-  // 2) contractSignedAt موجود
-  // 3) lastSafetyCheckResult === 'none'
-  const allBastanActionsDone =
-    bastanActionProgress.length > 0 &&
-    bastanActionProgress.every((a) => a.status === 'done');
+  // --- Bastan completion واقعی ---
+  // شرط 1) همه 8 action تعریف‌شده باید progress داشته باشند و done باشند
+  const progressByActionId = new Map();
+  for (const p of bastanActionProgress) progressByActionId.set(p.actionId, p);
 
+  const allBastanActionsDone =
+    bastanDefs.length > 0 &&
+    bastanDefs.every((def) => {
+      const pr = progressByActionId.get(def.id);
+      return pr && pr.status === 'done';
+    });
+
+  // شرط 2) امضا
   const hasSignature = !!bastanState?.contractSignedAt;
+
+  // شرط 3) safety
   const safetyOk = bastanState?.lastSafetyCheckResult === 'none';
 
   const bastanCompleted = allBastanActionsDone && hasSignature && safetyOk;
@@ -96,18 +116,23 @@ async function computePelekanState(userId) {
       // unlock گسستن فقط با bastanCompleted
       unlocked = bastanCompleted;
       canUnlockNow = bastanCompleted;
+
+      // توجه: این تاریخ ممکن است از قبل دستی ست شده باشد،
+      // ولی unlock واقعی را "unlocked" تعیین می‌کند، نه این تاریخ.
       unlockedAt = bastanState?.gosastanUnlockedAt || null;
 
       // completion مراحل بعدی فعلاً با day terminal
-      completed = unlocked && daysInStage.length
-        ? allDaysTerminal(daysInStage, progressByDayId)
-        : false;
+      completed =
+        unlocked && daysInStage.length
+          ? allDaysTerminal(daysInStage, progressByDayId)
+          : false;
     } else {
-      // مراحل بعدی: فعلاً خطی بر اساس تکمیل مرحله قبلی (بعداً دقیق‌تر می‌کنیم)
+      // مراحل بعدی: فعلاً خطی بر اساس تکمیل مرحله قبلی
       unlocked = prevCompleted === true;
-      completed = unlocked && daysInStage.length
-        ? allDaysTerminal(daysInStage, progressByDayId)
-        : false;
+      completed =
+        unlocked && daysInStage.length
+          ? allDaysTerminal(daysInStage, progressByDayId)
+          : false;
       canUnlockNow = false;
     }
 
@@ -121,6 +146,8 @@ async function computePelekanState(userId) {
     stages: stageStates,
     _debug: {
       bastan: {
+        defsCount: bastanDefs.length,
+        progressCount: bastanActionProgress.length,
         allBastanActionsDone,
         hasSignature,
         safetyOk,
