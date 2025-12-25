@@ -1,6 +1,7 @@
 // routes/pelekan.js
 import express from "express";
 import pelekanSvc from "../services/pelekan/index.cjs";
+import prisma from "../utils/prisma.js";
 
 const { ensureActivePelekanDay } = pelekanSvc;
 
