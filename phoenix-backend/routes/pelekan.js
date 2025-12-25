@@ -895,7 +895,43 @@ if (!introDone) {
       gosastanUnlockedAtFinal = updated.gosastanUnlockedAt;
     }
 
-    
+    // ✅ When gosastan gate unlocks for the first time, switch Pelekan active day to gosastan day 1
+if (canUnlock && gosastanUnlockedAtFinal && !state.gosastanUnlockedAt) {
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    // 1) find Gosastan Day 1
+    const gosDay1 = await tx.pelekanDay.findFirst({
+      where: { stage: { code: "gosastan" }, dayNumberInStage: 1 },
+      select: { id: true },
+    });
+
+    if (!gosDay1?.id) return; // content missing, do nothing
+
+    // 2) deactivate any currently active day(s)
+    await tx.pelekanDayProgress.updateMany({
+      where: { userId: user.id, status: "active" },
+      data: { status: "locked", lastActivityAt: now },
+    });
+
+    // 3) activate gosastan day 1 (create if missing)
+    await tx.pelekanDayProgress.upsert({
+      where: { userId_dayId: { userId: user.id, dayId: gosDay1.id } },
+      create: {
+        userId: user.id,
+        dayId: gosDay1.id,
+        status: "active",
+        completionPercent: 0,
+        startedAt: now,
+        lastActivityAt: now,
+      },
+      update: {
+        status: "active",
+        lastActivityAt: now,
+      },
+    });
+  });
+}
 
     return res.json({
       ok: true,
