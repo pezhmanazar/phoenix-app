@@ -1050,7 +1050,9 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     }
 
     if (targetLockedByPrev) {
-      return res.status(403).json({ ok: false, error: "ACTION_LOCKED", reason: "previous_action_incomplete" });
+      return res
+        .status(403)
+        .json({ ok: false, error: "ACTION_LOCKED", reason: "previous_action_incomplete" });
     }
 
     // already done? (one-way)
@@ -1067,45 +1069,90 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     const beforeDone = doneByActionId[subtask.actionId] || 0;
 
     // upsert progress (one-way)
-    await prisma.bastanSubtaskProgress.upsert({
-      where: existing?.id
-        ? { id: existing.id }
-        : { id: "__nope__" }, // will force create below when no existing
-      create: {
-        userId: user.id,
-        actionId: subtask.actionId,
-        subtaskId: subtask.id,
-        isDone: true,
-        doneAt: new Date(),
-        payloadJson: payload ?? null,
-      },
-      update: {
-        isDone: true,
-        doneAt: new Date(),
-        payloadJson: payload ?? null,
-      },
-    }).catch(async (e) => {
-      // if the fake where id caused error, do a straight create
-      if (!existing?.id) {
-        await prisma.bastanSubtaskProgress.create({
-          data: {
-            userId: user.id,
-            actionId: subtask.actionId,
-            subtaskId: subtask.id,
-            isDone: true,
-            doneAt: new Date(),
-            payloadJson: payload ?? null,
-          },
-        });
-        return;
-      }
-      throw e;
-    });
+    await prisma.bastanSubtaskProgress
+      .upsert({
+        where: existing?.id ? { id: existing.id } : { id: "__nope__" }, // will force create below when no existing
+        create: {
+          userId: user.id,
+          actionId: subtask.actionId,
+          subtaskId: subtask.id,
+          isDone: true,
+          doneAt: new Date(),
+          payloadJson: payload ?? null,
+        },
+        update: {
+          isDone: true,
+          doneAt: new Date(),
+          payloadJson: payload ?? null,
+        },
+      })
+      .catch(async (e) => {
+        // if the fake where id caused error, do a straight create
+        if (!existing?.id) {
+          await prisma.bastanSubtaskProgress.create({
+            data: {
+              userId: user.id,
+              actionId: subtask.actionId,
+              subtaskId: subtask.id,
+              isDone: true,
+              doneAt: new Date(),
+              payloadJson: payload ?? null,
+            },
+          });
+          return;
+        }
+        throw e;
+      });
+
+    // ✅ IMPORTANT: persist contract + safety into BastanState for gosastan gate
+    // (must be OUTSIDE catch so it runs on success paths too)
+    if (subtaskKey === "CC_2_signature") {
+      const sig = payload?.signature || null;
+      const typedName = sig?.name ? String(sig.name).slice(0, 80) : null;
+
+      await prisma.bastanState.upsert({
+        where: { userId: user.id },
+        create: {
+          userId: user.id,
+          contractNameTyped: typedName,
+          contractSignatureJson: sig,
+          contractSignedAt: new Date(),
+        },
+        update: {
+          contractNameTyped: typedName,
+          contractSignatureJson: sig,
+          contractSignedAt: new Date(),
+        },
+        select: { userId: true },
+      });
+    }
+
+    if (subtaskKey === "CC_3_24h_safety_check") {
+      // payload.choice expected like: "بله (هیجانی)" | "تماس نقش‌محور" | "خیر"
+      const choiceRaw = String(payload?.choice || "").trim();
+      const result = choiceRaw === "خیر" ? "ok" : "not_ok";
+
+      await prisma.bastanState.upsert({
+        where: { userId: user.id },
+        create: {
+          userId: user.id,
+          lastSafetyCheckAt: new Date(),
+          lastSafetyCheckResult: result,
+          safetyWindowStartsAt: new Date(),
+        },
+        update: {
+          lastSafetyCheckAt: new Date(),
+          lastSafetyCheckResult: result,
+          // فقط وقتی "not_ok" شد window را ریست کن
+          ...(result !== "ok" ? { safetyWindowStartsAt: new Date() } : {}),
+        },
+        select: { userId: true },
+      });
+    }
 
     // after count
     const afterDone = beforeDone + 1;
     const minReq = subtask.action?.minRequiredSubtasks || 0;
-
     const crossedToDone = beforeDone < minReq && afterDone >= minReq;
 
     // XP for subtask (always)
@@ -1124,8 +1171,10 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
 
     // XP bonus for action completion (only once, when crossing threshold)
     let actionBonusXp = 0;
+
     if (crossedToDone) {
       actionBonusXp = Number.isFinite(subtask.action?.xpOnComplete) ? subtask.action.xpOnComplete : 0;
+
       if (actionBonusXp > 0) {
         await prisma.xpLedger.create({
           data: {
