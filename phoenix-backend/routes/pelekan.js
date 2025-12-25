@@ -1127,28 +1127,30 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       });
     }
 
-    if (subtaskKey === "CC_3_24h_safety_check") {
-      // payload.choice expected like: "بله (هیجانی)" | "تماس نقش‌محور" | "خیر"
-      const choiceRaw = String(payload?.choice || "").trim();
-      const result = choiceRaw === "خیر" ? "ok" : "not_ok";
+    // CC_3_24h_safety_check
+if (subtaskKey === "CC_3_24h_safety_check") {
+  // payload.choice: "خیر" | "تماس نقش‌محور" | "بله (هیجانی)"
+  const choiceRaw = String(payload?.choice || "").trim();
 
-      await prisma.bastanState.upsert({
-        where: { userId: user.id },
-        create: {
-          userId: user.id,
-          lastSafetyCheckAt: new Date(),
-          lastSafetyCheckResult: result,
-          safetyWindowStartsAt: new Date(),
-        },
-        update: {
-          lastSafetyCheckAt: new Date(),
-          lastSafetyCheckResult: result,
-          // فقط وقتی "not_ok" شد window را ریست کن
-          ...(result !== "ok" ? { safetyWindowStartsAt: new Date() } : {}),
-        },
-        select: { userId: true },
-      });
-    }
+  let result = "none"; // default امن
+  if (choiceRaw.includes("نقش")) result = "role_based";
+  if (choiceRaw.includes("هیجانی")) result = "emotional";
+
+  await prisma.bastanState.upsert({
+    where: { userId: user.id },
+    create: {
+      userId: user.id,
+      lastSafetyCheckAt: new Date(),
+      lastSafetyCheckResult: result,
+      safetyWindowStartsAt: new Date(),
+    },
+    update: {
+      lastSafetyCheckAt: new Date(),
+      lastSafetyCheckResult: result,
+      ...(result !== "none" ? { safetyWindowStartsAt: new Date() } : {}),
+    },
+  });
+}
 
     // after count
     const afterDone = beforeDone + 1;
