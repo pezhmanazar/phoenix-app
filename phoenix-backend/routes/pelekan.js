@@ -372,6 +372,16 @@ router.get("/state", authUser, async (req, res) => {
       select: { id: true, plan: true, planExpiresAt: true },
     });
     if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+    
+    // ✅ ensure PelekanProgress exists (self-heal)
+    await prisma.pelekanProgress.upsert({
+      where: { userId: user.id },
+      update: { lastActiveAt: new Date() },
+      create: {
+        userId: user.id,
+        lastActiveAt: new Date(),
+      },
+    });
 
     // ✅ 2) reviewSession AFTER user
     const reviewSession = await prisma.pelekanReviewSession.findUnique({
