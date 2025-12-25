@@ -24,55 +24,70 @@ async function ensureActivePelekanDay(userId) {
   }
 
   // 2) اجرا در transaction
+  await tx.pelekanDayProgress.findMany({
+  where: { userId },
+  select: { id: true },
+  take: 1,
+});
   try {
-    await prisma.$transaction(async (tx) => {
-      // 2-1) همه activeهای فعلی را بگیر
-      const actives = await tx.pelekanDayProgress.findMany({
-        where: { userId, status: 'active' },
-        select: { dayId: true },
-      });
-
-      // 2-2) هر active که dayId اش مطلوب نیست => failed کن
-      const toFail = actives
-        .filter((a) => a.dayId !== desiredDayId)
-        .map((a) => a.dayId);
-
-      if (toFail.length) {
-        await tx.pelekanDayProgress.updateMany({
-          where: { userId, dayId: { in: toFail }, status: 'active' },
-          data: { status: 'failed', lastActivityAt: new Date() },
-        });
-      }
-
-      // 2-3) dayProgress مطلوب را active کن (upsert)
-      const existing = await tx.pelekanDayProgress.findUnique({
-        where: { userId_dayId: { userId, dayId: desiredDayId } },
-        select: { id: true, status: true, startedAt: true },
-      });
-
-      if (!existing) {
-        await tx.pelekanDayProgress.create({
-          data: {
-            userId,
-            dayId: desiredDayId,
-            status: 'active',
-            completionPercent: 0,
-            startedAt: new Date(),
-            lastActivityAt: new Date(),
-          },
-        });
-      } else {
-        await tx.pelekanDayProgress.update({
-          where: { userId_dayId: { userId, dayId: desiredDayId } },
-          data: {
-            status: 'active',
-            lastActivityAt: new Date(),
-            // startedAt اگر null بود، پرش کن
-            ...(existing.startedAt ? {} : { startedAt: new Date() }),
-          },
-        });
-      }
+    await prisma.$transaction(
+  async (tx) => {
+    // 0) Lock-ish read (برای کاهش race condition روی یک user)
+    // اگر هیچ ردیفی هم نباشد مشکلی نیست؛ فقط باعث می‌شود همزمانی کمتر خرابکاری کند.
+    await tx.pelekanDayProgress.findMany({
+      where: { userId },
+      select: { id: true },
+      take: 1,
     });
+
+    // 2-1) همه activeهای فعلی را بگیر
+    const actives = await tx.pelekanDayProgress.findMany({
+      where: { userId, status: "active" },
+      select: { dayId: true },
+    });
+
+    // 2-2) هر active که dayId اش مطلوب نیست => failed کن
+    const toFail = actives
+      .filter((a) => a.dayId !== desiredDayId)
+      .map((a) => a.dayId);
+
+    if (toFail.length) {
+      await tx.pelekanDayProgress.updateMany({
+        where: { userId, dayId: { in: toFail }, status: "active" },
+        data: { status: "failed", lastActivityAt: new Date() },
+      });
+    }
+
+    // 2-3) dayProgress مطلوب را active کن (upsert)
+    const existing = await tx.pelekanDayProgress.findUnique({
+      where: { userId_dayId: { userId, dayId: desiredDayId } },
+      select: { id: true, status: true, startedAt: true },
+    });
+
+    if (!existing) {
+      await tx.pelekanDayProgress.create({
+        data: {
+          userId,
+          dayId: desiredDayId,
+          status: "active",
+          completionPercent: 0,
+          startedAt: new Date(),
+          lastActivityAt: new Date(),
+        },
+      });
+    } else {
+      await tx.pelekanDayProgress.update({
+        where: { userId_dayId: { userId, dayId: desiredDayId } },
+        data: {
+          status: "active",
+          lastActivityAt: new Date(),
+          ...(existing.startedAt ? {} : { startedAt: new Date() }),
+        },
+      });
+    }
+  },
+  { isolationLevel: "Serializable" }
+);
   } catch (e) {
     throw new ExecutorError(
       ExecutorErrorCodes.TX_FAILED,
