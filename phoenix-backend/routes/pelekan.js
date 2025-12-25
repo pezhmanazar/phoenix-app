@@ -499,8 +499,6 @@ router.get("/state", authUser, async (req, res) => {
         ? { needed: false, reason: null }
         : computePaywall(planStatusFinal, hasAnyProgressFinal);
 
-        await ensureActivePelekanDay(user.id);
-
       return res.json({
         ok: true,
         data: {
