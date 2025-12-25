@@ -366,24 +366,24 @@ function canUnlockGosastanGate({
   lastSafetyCheckResult,
   gosastanUnlockedAt,
 }) {
-  // اگر قبلاً آنلاک شده، دیگه گیت معنی ندارد
+  // already unlocked => keep true
   if (gosastanUnlockedAt) return true;
 
-  // 1) همه اقدامات بستن باید حداقل به حداقلِ لازم رسیده باشند
-  const allActionsDone =
+  // 1) actions gate: all bastan actions must meet minRequired
+  const actionsOk =
     Array.isArray(actionsProgress) &&
     actionsProgress.length > 0 &&
     actionsProgress.every((a) => (a?.completed || 0) >= (a?.minRequired || 0));
 
-  if (!allActionsDone) return false;
+  if (!actionsOk) return false;
 
-  // 2) قرارداد باید امضا شده باشد
+  // 2) contract must be signed
   if (!contractSignedAt) return false;
 
-  // 3) چک ایمنی باید انجام شده و نتیجه‌اش safe باشد
-  // (اسم مقدار safe را اگر متفاوت ذخیره می‌کنی، همینجا تغییر بده)
+  // 3) safety check must be done and be "ok"
+  // (تو بعداً هر مقدار واقعی که ذخیره می‌کنی رو همینجا هماهنگ می‌کنیم)
   if (!lastSafetyCheckAt) return false;
-  if (String(lastSafetyCheckResult || "").toLowerCase() !== "safe") return false;
+  if (lastSafetyCheckResult !== "ok") return false;
 
   return true;
 }
@@ -746,6 +746,8 @@ if (choice === "skip_review") {
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
+
+
 
 /* ---------- GET /api/pelekan/bastan/state ---------- */
 router.get("/bastan/state", authUser, async (req, res) => {
