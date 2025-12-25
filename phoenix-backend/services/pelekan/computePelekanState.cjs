@@ -3,7 +3,6 @@ const prisma = require('../../utils/prisma.cjs');
 const { StateError, StateErrorCodes } = require('./stateErrors.cjs');
 
 function allDaysTerminal(daysInStage, progressByDayId) {
-  // terminal = completed یا failed
   for (const d of daysInStage) {
     const p = progressByDayId.get(d.id);
     if (!p) return false;
@@ -12,20 +11,53 @@ function allDaysTerminal(daysInStage, progressByDayId) {
   return true;
 }
 
-/**
- * computePelekanState
- * - فقط می‌خواند و تصمیم می‌گیرد
- * - هیچ INSERT/UPDATE انجام نمی‌دهد
- */
+function findActiveStage(stageStates) {
+  const unlocked = stageStates.filter((s) => s.unlocked);
+  // آخرین stage باز شده که کامل نشده
+  for (let i = unlocked.length - 1; i >= 0; i--) {
+    if (!unlocked[i].completed) return unlocked[i];
+  }
+  return null;
+}
+
+function pickActiveDay(daysInStage, progressByDayId) {
+  // 1) اگر active وجود دارد
+  const active = [];
+  for (const d of daysInStage) {
+    const p = progressByDayId.get(d.id);
+    if (p && p.status === 'active') {
+      active.push({ day: d, progress: p });
+    }
+  }
+  if (active.length === 1) return active[0];
+  if (active.length > 1) {
+    throw new StateError(StateErrorCodes.INVALID_ACTIVE_DAY_COUNT, 'More than one active day');
+  }
+
+  // 2) اگر active نداریم: اولین day که completed/failed نیست
+  for (const d of daysInStage) {
+    const p = progressByDayId.get(d.id);
+    if (!p) {
+      // progress اصلاً ساخته نشده => یعنی هنوز شروع نشده => candidate
+      return { day: d, progress: null };
+    }
+    if (p.status !== 'completed' && p.status !== 'failed') {
+      return { day: d, progress: p };
+    }
+  }
+
+  // 3) هیچ روزی برای کار باقی نمانده
+  return null;
+}
+
 async function computePelekanState(userId) {
   if (!userId) throw new Error('userId is required');
 
-  // 1) stages (ترتیب درست = sortOrder)
+  // 1) stages
   const stages = await prisma.pelekanStage.findMany({
     orderBy: { sortOrder: 'asc' },
     select: { id: true, code: true, sortOrder: true },
   });
-
   if (!stages.length) {
     throw new StateError(StateErrorCodes.NO_ACTIVE_STAGE, 'No stages found');
   }
@@ -38,28 +70,28 @@ async function computePelekanState(userId) {
     select: { id: true, stageId: true, dayNumberInStage: true },
   });
 
-  // 3) day progress (برای user)
+  // 3) day progress
   const dayProgressRows = await prisma.pelekanDayProgress.findMany({
     where: { userId },
     select: { dayId: true, status: true },
   });
 
-  // 4) BastanState (برای امضا و safety + تاریخ unlock قبلی اگر وجود داشته)
+  // 4) BastanState
   const bastanState = await prisma.bastanState.findUnique({
     where: { userId },
     select: {
       contractSignedAt: true,
-      lastSafetyCheckResult: true, // none | role_based | emotional | null
+      lastSafetyCheckResult: true,
       gosastanUnlockedAt: true,
     },
   });
 
-  // 5) BastanActionDefinition (همه اکشن‌های تعریف‌شده: باید 8 تا باشند)
+  // 5) BastanActionDefinition
   const bastanDefs = await prisma.bastanActionDefinition.findMany({
     select: { id: true, code: true },
   });
 
-  // 6) BastanActionProgress (پیشرفت کاربر)
+  // 6) BastanActionProgress
   const bastanActionProgress = await prisma.bastanActionProgress.findMany({
     where: { userId },
     select: { actionId: true, status: true },
@@ -75,8 +107,7 @@ async function computePelekanState(userId) {
   const progressByDayId = new Map();
   for (const p of dayProgressRows) progressByDayId.set(p.dayId, p);
 
-  // --- Bastan completion واقعی ---
-  // شرط 1) همه 8 action تعریف‌شده باید progress داشته باشند و done باشند
+  // bastan completion
   const progressByActionId = new Map();
   for (const p of bastanActionProgress) progressByActionId.set(p.actionId, p);
 
@@ -87,12 +118,8 @@ async function computePelekanState(userId) {
       return pr && pr.status === 'done';
     });
 
-  // شرط 2) امضا
   const hasSignature = !!bastanState?.contractSignedAt;
-
-  // شرط 3) safety
   const safetyOk = bastanState?.lastSafetyCheckResult === 'none';
-
   const bastanCompleted = allBastanActionsDone && hasSignature && safetyOk;
 
   // stageStates
@@ -100,7 +127,7 @@ async function computePelekanState(userId) {
   let prevCompleted = true;
 
   for (const s of stages) {
-    const code = String(s.code); // enum -> string
+    const code = String(s.code);
     const daysInStage = daysByStageId.get(s.id) || [];
 
     let unlocked = false;
@@ -111,38 +138,48 @@ async function computePelekanState(userId) {
     if (code === 'bastan') {
       unlocked = true;
       completed = bastanCompleted;
-      canUnlockNow = false;
     } else if (code === 'gosastan') {
-      // unlock گسستن فقط با bastanCompleted
       unlocked = bastanCompleted;
       canUnlockNow = bastanCompleted;
-
-      // توجه: این تاریخ ممکن است از قبل دستی ست شده باشد،
-      // ولی unlock واقعی را "unlocked" تعیین می‌کند، نه این تاریخ.
       unlockedAt = bastanState?.gosastanUnlockedAt || null;
-
-      // completion مراحل بعدی فعلاً با day terminal
-      completed =
-        unlocked && daysInStage.length
-          ? allDaysTerminal(daysInStage, progressByDayId)
-          : false;
+      completed = unlocked && daysInStage.length ? allDaysTerminal(daysInStage, progressByDayId) : false;
     } else {
-      // مراحل بعدی: فعلاً خطی بر اساس تکمیل مرحله قبلی
       unlocked = prevCompleted === true;
-      completed =
-        unlocked && daysInStage.length
-          ? allDaysTerminal(daysInStage, progressByDayId)
-          : false;
-      canUnlockNow = false;
+      completed = unlocked && daysInStage.length ? allDaysTerminal(daysInStage, progressByDayId) : false;
     }
 
     stageStates.push({ code, unlocked, completed, canUnlockNow, unlockedAt });
     prevCompleted = completed;
   }
 
+  // Active Stage
+  let activeStage = findActiveStage(stageStates);
+  if (!activeStage) {
+    throw new StateError(StateErrorCodes.NO_ACTIVE_STAGE, 'No active stage could be determined');
+  }
+
+  // Active Day (داخل activeStage)
+  const activeStageEntity = stages.find((s) => String(s.code) === activeStage.code);
+  const daysInActiveStage = daysByStageId.get(activeStageEntity.id) || [];
+
+  const picked = pickActiveDay(daysInActiveStage, progressByDayId);
+  if (!picked) {
+    // یعنی کل روزهای این stage تمام شده؛ پس state فعلاً ناقص است چون هنوز executor نداریم که stage را complete کند
+    // ولی برای جلوگیری از سکوت، خطا می‌دهیم
+    throw new StateError(StateErrorCodes.INVALID_ACTIVE_DAY_COUNT, 'No remaining day to activate in active stage');
+  }
+
+  const activeDay = {
+    stageCode: activeStage.code,
+    dayNumberInStage: picked.day.dayNumberInStage,
+    status: picked.progress ? picked.progress.status : 'active',
+    dayId: picked.day.id, // مفید برای executor بعدی
+  };
+
+  // validate یکتایی: مطمئن شو activeDay متعلق به همان stage است (عملاً هست)
   return {
-    activeStage: null,
-    activeDay: null,
+    activeStage,
+    activeDay,
     stages: stageStates,
     _debug: {
       bastan: {
