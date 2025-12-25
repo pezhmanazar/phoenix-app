@@ -366,24 +366,20 @@ function canUnlockGosastanGate({
   lastSafetyCheckResult,
   gosastanUnlockedAt,
 }) {
-  // already unlocked => keep true
   if (gosastanUnlockedAt) return true;
 
-  // 1) actions gate: all bastan actions must meet minRequired
   const actionsOk =
     Array.isArray(actionsProgress) &&
     actionsProgress.length > 0 &&
     actionsProgress.every((a) => (a?.completed || 0) >= (a?.minRequired || 0));
-
   if (!actionsOk) return false;
 
-  // 2) contract must be signed
   if (!contractSignedAt) return false;
 
-  // 3) safety check must be done and be "ok"
-  // (تو بعداً هر مقدار واقعی که ذخیره می‌کنی رو همینجا هماهنگ می‌کنیم)
   if (!lastSafetyCheckAt) return false;
-  if (lastSafetyCheckResult !== "ok") return false;
+
+  // ✅ FIX: enum values: none | role_based | emotional
+  if (lastSafetyCheckResult !== "none") return false;
 
   return true;
 }
