@@ -108,6 +108,12 @@ function applyDebugProgress(req, hasAnyProgress) {
   return hasAnyProgressFinal;
 }
 
+function debugOnly(req, res, next) {
+  const isProd = process.env.NODE_ENV === "production";
+  if (isProd) return res.status(404).json({ ok: false, error: "NOT_FOUND" });
+  return next();
+}
+
 // -------------------- Baseline Assessment (hb_baseline) --------------------
 
 const HB_BASELINE_MAX_SCORE = 31;
@@ -1645,7 +1651,8 @@ router.get("/baseline/state", authUser, async (req, res) => {
 
 // GET /api/pelekan/_debug/400  => must return JSON 400 (no HTML)
 router.get("/_debug/400", (req, res) => {
-  res.status(400).json({ ok: false, error: "DEBUG_400", ts: new Date().toISOString() });
+  if (!debugOnly(req, res)) return;
+res.status(400).json({ ok: false, error: "DEBUG_400", ts: new Date().toISOString() });
 });
 
 /* ---------- POST /api/pelekan/_debug/force-active-day ---------- */
@@ -1658,6 +1665,7 @@ router.get("/_debug/400", (req, res) => {
   }
 */
 router.post("/_debug/force-active-day", async (req, res) => {
+  if (!debugOnly(req, res)) return;
   try {
     noStore(res);
 
