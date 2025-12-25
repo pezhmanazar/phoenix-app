@@ -1,5 +1,6 @@
 // routes/pelekan.js
 import express from "express";
+import pelekanEngine from "../services/pelekan/engine.cjs";
 import pelekanSvc from "../services/pelekan/index.cjs";
 import prisma from "../utils/prisma.js";
 
@@ -1010,6 +1011,7 @@ router.post("/bastan/intro/complete", authUser, async (req, res) => {
 router.post("/bastan/subtask/complete", authUser, async (req, res) => {
   try {
     noStore(res);
+
     const phone = req.userPhone;
     const { subtaskKey, payload } = req.body || {};
 
@@ -1051,6 +1053,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         },
       },
     });
+
     if (!subtask) return res.status(404).json({ ok: false, error: "SUBTASK_NOT_FOUND" });
 
     // gate: pro requirement (either action-level or subtask-level)
@@ -1070,12 +1073,14 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       where: { userId: user.id, isDone: true },
       _count: { _all: true },
     });
+
     const doneByActionId = {};
     for (const r of doneAgg) doneByActionId[r.actionId] = r._count._all || 0;
 
     // find if target action is locked by previous action
     let prevOk = true;
     let targetLockedByPrev = false;
+
     for (const a of actions) {
       const completed = doneByActionId[a.id] || 0;
       const isComplete = completed >= a.minRequiredSubtasks;
@@ -1098,6 +1103,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       where: { userId: user.id, subtaskId: subtask.id },
       select: { id: true, isDone: true },
     });
+
     if (existing?.isDone) {
       return res.status(409).json({ ok: false, error: "ALREADY_DONE" });
     }
@@ -1142,7 +1148,6 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       });
 
     // ✅ IMPORTANT: persist contract + safety into BastanState for gosastan gate
-    // (must be OUTSIDE catch so it runs on success paths too)
     if (subtaskKey === "CC_2_signature") {
       const sig = payload?.signature || null;
       const typedName = sig?.name ? String(sig.name).slice(0, 80) : null;
@@ -1252,8 +1257,8 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       },
     });
 
-    // ✅ بعد از نوشتن، موتور activeDay را تعمیر کند
-    await ensureActivePelekanDay(user.id);
+    // ✅ موتور مرکزی: هم DB را sync می‌کند، هم state نهایی را برمی‌گرداند
+    const refreshed = await pelekanEngine.refresh(user.id);
 
     return res.json({
       ok: true,
@@ -1264,6 +1269,12 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         xpAwarded: { subtask: subtaskXp, actionBonus: actionBonusXp },
         actionReachedMinRequired: crossedToDone,
         actionProgress: { before: beforeDone, after: afterDone, minRequired: minReq },
+
+        // ✅ فقط برای تست/اطمینان (هر وقت خواستی می‌تونی حذفش کنی)
+        pelekan: {
+          activeStage: refreshed?.activeStage || null,
+          activeDay: refreshed?.activeDay || null,
+        },
       },
     });
   } catch (e) {
