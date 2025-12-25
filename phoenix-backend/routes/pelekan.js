@@ -1266,6 +1266,7 @@ if (subtaskKey === "CC_3_24h_safety_check") {
         },
       });
     }
+    await ensureActivePelekanDay(user.id);
 
     return res.json({
       ok: true,
