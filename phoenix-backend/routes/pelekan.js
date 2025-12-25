@@ -359,6 +359,35 @@ function baselineError(res, error, extra = {}) {
   return res.json({ ok: false, error, ...extra });
 }
 
+function canUnlockGosastanGate({
+  actionsProgress,
+  contractSignedAt,
+  lastSafetyCheckAt,
+  lastSafetyCheckResult,
+  gosastanUnlockedAt,
+}) {
+  // اگر قبلاً آنلاک شده، دیگه گیت معنی ندارد
+  if (gosastanUnlockedAt) return true;
+
+  // 1) همه اقدامات بستن باید حداقل به حداقلِ لازم رسیده باشند
+  const allActionsDone =
+    Array.isArray(actionsProgress) &&
+    actionsProgress.length > 0 &&
+    actionsProgress.every((a) => (a?.completed || 0) >= (a?.minRequired || 0));
+
+  if (!allActionsDone) return false;
+
+  // 2) قرارداد باید امضا شده باشد
+  if (!contractSignedAt) return false;
+
+  // 3) چک ایمنی باید انجام شده و نتیجه‌اش safe باشد
+  // (اسم مقدار safe را اگر متفاوت ذخیره می‌کنی، همینجا تغییر بده)
+  if (!lastSafetyCheckAt) return false;
+  if (String(lastSafetyCheckResult || "").toLowerCase() !== "safe") return false;
+
+  return true;
+}
+
 /* ---------- GET /api/pelekan/state ---------- */
 router.get("/state", authUser, async (req, res) => {
   try {
