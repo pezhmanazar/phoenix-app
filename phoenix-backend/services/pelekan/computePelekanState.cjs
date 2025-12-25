@@ -1,5 +1,5 @@
 const prisma = require('../../utils/prisma.cjs');
-const { StateError, StateErrorCodes } = require('./stateErrors');
+const { StateError, StateErrorCodes } = require('./stateErrors.cjs');
 
 function allDaysTerminal(daysInStage, progressByDayId) {
   for (const d of daysInStage) {

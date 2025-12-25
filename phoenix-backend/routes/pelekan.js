@@ -1,10 +1,12 @@
 // routes/pelekan.js
 import express from "express";
+import pelekanSvc from "../services/pelekan/index.cjs";
 import prisma from "../utils/prisma.js";
+const { computePelekanState } = pelekanSvc;
 
 const router = express.Router();
 router.use(express.json());
-const { computePelekanState } = require('../services/pelekan');
+
 
 /* ---------- helpers (copy from users.js for consistency) ---------- */
 function normalizePhone(input) {
