@@ -932,6 +932,38 @@ if (!introDone) {
   }
 });
 
+/* ---------- POST /api/pelekan/bastan/intro/complete ---------- */
+router.post("/bastan/intro/complete", authUser, async (req, res) => {
+  try {
+    noStore(res);
+
+    const phone = req.userPhone;
+
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true },
+    });
+    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+
+    const now = new Date();
+
+    const st = await prisma.bastanState.upsert({
+      where: { userId: user.id },
+      create: { userId: user.id, introAudioCompletedAt: now },
+      update: { introAudioCompletedAt: now },
+      select: { introAudioCompletedAt: true },
+    });
+
+    return res.json({
+      ok: true,
+      data: { completedAt: st.introAudioCompletedAt },
+    });
+  } catch (e) {
+    console.error("[pelekan.bastan.intro.complete] error:", e);
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
 /* ---------- POST /api/pelekan/bastan/subtask/complete ---------- */
 router.post("/bastan/subtask/complete", authUser, async (req, res) => {
   try {
