@@ -417,7 +417,7 @@ router.get("/state", authUser, async (req, res) => {
       },
     });
 
-    await pelekanEngine.refresh(user.id);
+    await pelekanEngine.refresh(prisma, user.id);
 
     // ✅ 2) reviewSession AFTER user
     const reviewSession = await prisma.pelekanReviewSession.findUnique({
