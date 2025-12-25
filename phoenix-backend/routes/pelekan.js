@@ -4,6 +4,7 @@ import prisma from "../utils/prisma.js";
 
 const router = express.Router();
 router.use(express.json());
+const { computePelekanState } = require('../services/pelekan');
 
 /* ---------- helpers (copy from users.js for consistency) ---------- */
 function normalizePhone(input) {
@@ -1820,6 +1821,16 @@ router.post("/baseline/seen", authUser, async (req, res) => {
   } catch (e) {
     console.error("[pelekan.baseline.seen] error:", e);
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
+router.get('/_debug/state', async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    const out = await computePelekanState(userId);
+    res.json({ ok: true, out });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message, code: e.code });
   }
 });
 
