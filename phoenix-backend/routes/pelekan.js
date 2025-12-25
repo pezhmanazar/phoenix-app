@@ -805,6 +805,10 @@ router.get("/bastan/state", authUser, async (req, res) => {
     const doneByActionId = {};
     for (const r of doneAgg) doneByActionId[r.actionId] = r._count._all || 0;
 
+    // ✅ intro state
+const introDone = !!state.introAudioCompletedAt;
+const paywallNeededAfterIntro = introDone && !isProLike;
+
     // Build actions UI with sequential unlock + pro locks
     const actionsUi = [];
     let prevUnlockedByProgress = true; // first action available
@@ -861,6 +865,15 @@ router.get("/bastan/state", authUser, async (req, res) => {
       prevUnlockedByProgress = prevUnlockedByProgress && isComplete;
     }
 
+    // Hard gate: intro audio must be completed before ANY action is interactive
+if (!introDone) {
+  for (const a of actionsUi) {
+    a.locked = true;
+    a.lockReason = "intro_required";
+    a.status = "locked";
+  }
+}
+
     // Gate logic for gosastan
     const actionsProgressForGate = actionsUi.map((a) => ({
       completed: a.progress.done,
@@ -886,9 +899,7 @@ router.get("/bastan/state", authUser, async (req, res) => {
       gosastanUnlockedAtFinal = updated.gosastanUnlockedAt;
     }
 
-    // UI paywall hint: after intro audio, user should hit paywall if not pro-like
-    const introDone = !!state.introAudioCompletedAt;
-    const paywallNeededAfterIntro = introDone && !isProLike;
+    
 
     return res.json({
       ok: true,
