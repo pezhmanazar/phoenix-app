@@ -971,6 +971,11 @@ router.get("/bastan/state", authUser, async (req, res) => {
           completedAt: state.introAudioCompletedAt,
           paywallNeededAfterIntro,
         },
+        start: {
+           completedAt: state.introAudioCompletedAt,
+           locked: !state.introAudioCompletedAt,
+           paywallNeededAfterIntro,
+         },
         contract: {
           nameTyped: state.contractNameTyped,
           signatureJson: state.contractSignatureJson,
