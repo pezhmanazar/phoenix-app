@@ -7,7 +7,6 @@ import Svg, { Path } from "react-native-svg";
 /* ----------------------------- Types ----------------------------- */
 export type PlanStatus = "free" | "pro" | "expired" | "expiring";
 export type TreatmentAccess = "full" | "frozen_current" | "archive_only";
-// ✅ اینجا review رو اضافه کردیم
 export type TabState = "idle" | "baseline_assessment" | "choose_path" | "treating" | "review";
 
 export type PelekanTask = {
@@ -69,7 +68,6 @@ export type HeaderItem = { kind: "header"; id: string; stage: PelekanStage };
 export type DayItem = { kind: "day"; id: string; day: PelekanDay; stage: PelekanStage; zig: "L" | "R" };
 export type SpacerItem = { kind: "spacer"; id: string };
 
-// ✅ آیتم جدید: دایره «نتایج + بازسنجی» داخل زیگزاگ
 export type ResultsItem = {
   kind: "results";
   id: string;
@@ -85,13 +83,7 @@ type Props = {
   index: number;
   state: PelekanState;
 
-  /**
-   * ✅ الان دو حالت داریم:
-   * - mode:"active"  => وارد روز برای انجام
-   * - mode:"preview" => فقط دیدن/مرور (Read-only)
-   */
   onTapActiveDay?: (day: PelekanDay, opts?: { mode: "active" | "preview" }) => void;
-
   onTapResults?: () => void;
 };
 
@@ -189,6 +181,15 @@ function Pulsing({ children, playing }: { children: React.ReactNode; playing: bo
   return <Animated.View style={{ transform: [{ scale }] }}>{children}</Animated.View>;
 }
 
+/* ----------------------------- Helpers ----------------------------- */
+function isDoneRow(dp: DayProgressRow | undefined) {
+  if (!dp) return false;
+  const st = String(dp.status || "").toLowerCase();
+  if (st === "done" || st === "completed") return true;
+  if (typeof dp.completionPercent === "number" && dp.completionPercent >= 100) return true;
+  return false;
+}
+
 /* ----------------------------- Component (ONE ITEM) ----------------------------- */
 export default function TreatmentView({ item, state, onTapActiveDay, onTapResults }: Props) {
   const activeDayId = state.progress?.activeDayId || null;
@@ -203,15 +204,7 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
   const access = state.treatmentAccess;
   const canEnterActive = access === "full" || access === "frozen_current";
 
-  const isDone = (dayId: string) => {
-    const dp = dayProgressMap.get(dayId);
-    if (!dp) return false;
-    if (dp.status === "done") return true;
-    if (typeof dp.completionPercent === "number" && dp.completionPercent >= 100) return true;
-    return false;
-  };
-
-  // ✅ stage order logic: برای اینکه روزهای مرحله‌های قبلی فقط "قابل دیدن" باشند.
+  // ✅ stage order logic: روزهای مرحله‌های قبلی فقط preview
   const activeStageCode: string | null =
     (state?.treatment?.activeStage as string | undefined) ??
     (state?.stages || []).find((s: any) => s?.status === "active")?.code ??
@@ -219,6 +212,20 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
 
   const activeStageOrder: number =
     (state?.stages || []).find((s) => s.code === activeStageCode)?.sortOrder ?? 999;
+
+  // ✅ آخرین مرحله = rastan
+  const LAST_STAGE_CODE = "rastan";
+
+  // ✅ تشخیص آخرین day کل مسیر (برای قطع کردن زیگزاگ بالا)
+  const lastDayIdAll: string | null = useMemo(() => {
+    const st = state?.stages || [];
+    if (!st.length) return null;
+    const allDays = st.flatMap((x) => x.days || []);
+    if (!allDays.length) return null;
+    // فرض: globalDayNumber مرتب/درست است
+    const last = [...allDays].sort((a, b) => (a.globalDayNumber || 0) - (b.globalDayNumber || 0)).slice(-1)[0];
+    return last?.id ?? null;
+  }, [state?.stages]);
 
   if (item.kind === "spacer") return <View style={{ height: 10 }} />;
 
@@ -228,67 +235,39 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
 
     return (
       <View style={{ alignItems: "center", alignSelf: "center", width: PATH_W }}>
-        <View
-          style={[
-            styles.stepHeaderCard,
-            { backgroundColor: palette.stepGlass.bg, borderColor: palette.stepGlass.border },
-          ]}
-        >
+        <View style={[styles.stepHeaderCard, { backgroundColor: palette.stepGlass.bg, borderColor: palette.stepGlass.border }]}>
           <Ionicons name={icon.name} size={18} color={icon.color} style={{ marginLeft: 6 }} />
           <Text style={[styles.stepHeaderText, { color: palette.stepGlass.text }]}>{stage.titleFa}</Text>
         </View>
 
-        <View
-          style={{
-            width: 64,
-            height: 10,
-            backgroundColor: palette.stepGlass.bg,
-            borderBottomLeftRadius: 12,
-            borderBottomRightRadius: 12,
-            borderWidth: 1,
-            borderTopWidth: 0,
-            borderColor: palette.stepGlass.border,
-            marginTop: -2,
-          }}
-        />
+        {/* ✅ اگر مرحله آخره (رستن) این کلاهک پایین رو هم نذاریم که حس ادامه نده */}
+        {stage.code !== LAST_STAGE_CODE && (
+          <View
+            style={{
+              width: 64,
+              height: 10,
+              backgroundColor: palette.stepGlass.bg,
+              borderBottomLeftRadius: 12,
+              borderBottomRightRadius: 12,
+              borderWidth: 1,
+              borderTopWidth: 0,
+              borderColor: palette.stepGlass.border,
+              marginTop: -2,
+            }}
+          />
+        )}
       </View>
     );
   }
 
-  // ✅ results (دایره نتایج داخل مسیر زیگزاگی)
+  // ✅ results (دایره نتایج)
   if (item.kind === "results") {
     const done = !!item.done;
-    const nodeX = MID_X; // ✅ وسط
+    const nodeX = MID_X;
     const lineColor = done ? palette.pathDone : palette.pathIdle;
-
-    const node = (
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPress={() => onTapResults?.()}
-        style={[
-          styles.node,
-          {
-            left: nodeX - NODE_R,
-            top: CELL_H / 2 - NODE_R,
-            backgroundColor: done ? palette.node.doneBg : palette.node.availableBg,
-            borderColor: done ? palette.node.doneBorder : palette.node.availableBorder,
-          },
-        ]}
-      >
-        <Ionicons
-          name={done ? "checkmark-circle" : "star"}
-          size={22}
-          color={done ? palette.node.doneIcon : palette.node.availableIcon}
-        />
-        <Text style={[styles.nodeText, { color: done ? palette.node.doneLabel : palette.node.availableLabel }]}>
-          سنجش
-        </Text>
-      </TouchableOpacity>
-    );
 
     return (
       <View style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}>
-        {/* ✅ فقط خط صاف رو به بالا - بدون خط زیر */}
         <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
           <Path
             d={`M ${MID_X} ${CELL_H / 2} L ${MID_X} 0`}
@@ -298,71 +277,79 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
             strokeLinecap="round"
           />
         </Svg>
-        {node}
+
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => onTapResults?.()}
+          style={[
+            styles.node,
+            {
+              left: nodeX - NODE_R,
+              top: CELL_H / 2 - NODE_R,
+              backgroundColor: done ? palette.node.doneBg : palette.node.availableBg,
+              borderColor: done ? palette.node.doneBorder : palette.node.availableBorder,
+            },
+          ]}
+        >
+          <Ionicons name={done ? "checkmark-circle" : "star"} size={22} color={done ? palette.node.doneIcon : palette.node.availableIcon} />
+          <Text style={[styles.nodeText, { color: done ? palette.node.doneLabel : palette.node.availableLabel }]}>سنجش</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
   // day
-  const { day, zig } = item;
+  const { day, zig, stage } = item;
 
   const available = !!activeDayId && day.id === activeDayId;
-  const done = isDone(day.id);
+  const done = isDoneRow(dayProgressMap.get(day.id));
 
   // ✅ فقط روز active اجازه "انجام" دارد
   const canEnter = available && canEnterActive;
 
-  // ✅ روزهای مرحله‌های قبلی (یا done شده‌ها) باید قابل "دیدن" باشند
-  const thisStageOrder = item.stage?.sortOrder ?? 0;
+  // ✅ روزهای مرحله‌های قبلی (یا done شده‌ها) preview
+  const thisStageOrder = stage?.sortOrder ?? 0;
   const isPastStage = thisStageOrder < activeStageOrder;
   const canPreview = isPastStage || done;
 
-  // ✅ locked یعنی نه active و نه preview
   const locked = !available && !canPreview;
 
   const nodeX = zig === "L" ? NODE_X_LEFT : NODE_X_RIGHT;
 
-  // UI colors (preview هم با استایل available دیده بشه، ولی icon متفاوت)
-  const bg = done ? palette.node.doneBg : available ? palette.node.availableBg : locked ? palette.node.lockedBg : palette.node.availableBg;
+  const bg =
+    done ? palette.node.doneBg : available ? palette.node.availableBg : locked ? palette.node.lockedBg : palette.node.availableBg;
 
-  const border = done
-    ? palette.node.doneBorder
-    : available
-    ? palette.node.availableBorder
-    : locked
-    ? palette.node.lockedBorder
-    : palette.node.availableBorder;
+  const border =
+    done ? palette.node.doneBorder : available ? palette.node.availableBorder : locked ? palette.node.lockedBorder : palette.node.availableBorder;
 
-  const iconCol = done
-    ? palette.node.doneIcon
-    : available
-    ? palette.node.availableIcon
-    : locked
-    ? palette.node.lockedIcon
-    : palette.node.availableIcon;
+  const iconCol =
+    done ? palette.node.doneIcon : available ? palette.node.availableIcon : locked ? palette.node.lockedIcon : palette.node.availableIcon;
 
-  const labelCol = done
-    ? palette.node.doneLabel
-    : available
-    ? palette.node.availableLabel
-    : locked
-    ? palette.node.lockedLabel
-    : palette.node.availableLabel;
+  const labelCol =
+    done ? palette.node.doneLabel : available ? palette.node.availableLabel : locked ? palette.node.lockedLabel : palette.node.availableLabel;
 
   const bottomY = CELL_H;
   const topY = 0;
 
-  const pathD = `
-    M ${MID_X} ${bottomY}
-    C ${MID_X} ${bottomY - 30}, ${nodeX} ${CELL_H * 0.65}, ${nodeX} ${CELL_H * 0.5}
-    C ${nodeX} ${CELL_H * 0.35}, ${MID_X} ${topY + 30}, ${MID_X} ${topY}
-  `;
+  // ✅ اگر این آخرین day کل مسیر است، زیگزاگ را تا بالا نکش (قطع کن)
+  const isLastPathNode = !!lastDayIdAll && day.id === lastDayIdAll;
 
-  const iconName =
-    done ? "checkmark-circle" :
-    available ? "star" :
-    canPreview ? "eye" :
-    "lock-closed-outline";
+  const pathD = isLastPathNode
+    ? `
+      M ${MID_X} ${bottomY}
+      C ${MID_X} ${bottomY - 30}, ${nodeX} ${CELL_H * 0.65}, ${nodeX} ${CELL_H * 0.5}
+    `
+    : `
+      M ${MID_X} ${bottomY}
+      C ${MID_X} ${bottomY - 30}, ${nodeX} ${CELL_H * 0.65}, ${nodeX} ${CELL_H * 0.5}
+      C ${nodeX} ${CELL_H * 0.35}, ${MID_X} ${topY + 30}, ${MID_X} ${topY}
+    `;
+
+  const iconName = done ? "checkmark-circle" : available ? "star" : canPreview ? "eye" : "lock-closed-outline";
+
+  // ✅ برچسب bastan = اقدام
+  const isBastan = String(stage?.code || "") === "bastan";
+  const label = isBastan ? "اقدام" : "روز";
 
   const node = (
     <TouchableOpacity
@@ -376,7 +363,6 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
           onTapActiveDay?.(day, { mode: "preview" });
           return;
         }
-        return;
       }}
       style={[
         styles.node,
@@ -385,29 +371,24 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
           top: CELL_H / 2 - NODE_R,
           backgroundColor: bg,
           borderColor: border,
-          // اگر active هست ولی اجازه ورود نداره (archive_only) کمی کمرنگ شود
           opacity: available && !canEnter ? 0.55 : 1,
         },
       ]}
     >
       <Ionicons name={iconName as any} size={22} color={iconCol} />
-      <Text style={[styles.nodeText, { color: labelCol }]}>روز {day.dayNumberInStage}</Text>
+      <Text style={[styles.nodeText, { color: labelCol }]}>
+        {label} {day.dayNumberInStage}
+      </Text>
     </TouchableOpacity>
   );
 
   return (
     <View style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}>
       <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
-        <Path
-          d={pathD}
-          stroke={done ? palette.pathDone : palette.pathIdle}
-          strokeWidth={6}
-          fill="none"
-          strokeLinecap="round"
-        />
+        <Path d={pathD} stroke={done ? palette.pathDone : palette.pathIdle} strokeWidth={6} fill="none" strokeLinecap="round" />
       </Svg>
 
-      {available ? <Pulsing playing={true}>{node}</Pulsing> : node}
+      {available ? <Pulsing playing>{node}</Pulsing> : node}
     </View>
   );
 }

@@ -451,21 +451,36 @@ const reviewDone =
 
   /* ----------------------------- Handlers ----------------------------- */
   const onTapActiveDay = useCallback(
-    (day: PelekanDay) => {
-      console.log("👆 [PelekanTab] onTapActiveDay", {
-        dayId: day?.id,
-        paywallNeeded: state?.ui?.paywall?.needed,
-        treatmentAccess: state?.treatmentAccess,
-      });
+  (day: PelekanDay, opts?: { mode: "active" | "preview" }) => {
+    const stageId = String((day as any)?.stageId || "");
+    const st = (state?.stages || []).find((x: any) => String(x?.id) === stageId);
+    const stageCode = String(st?.code || "");
 
-      if (state?.ui?.paywall?.needed || state?.treatmentAccess !== "full") {
-        router.push("/(tabs)/Subscription");
-        return;
-      }
-      router.push({ pathname: "/pelekan/day/[id]", params: { id: day.id } });
-    },
-    [router, state?.ui?.paywall?.needed, state?.treatmentAccess]
-  );
+    console.log("👆 [PelekanTab] onTapActiveDay", {
+      dayId: day?.id,
+      stageCode,
+      mode: opts?.mode,
+      paywallNeeded: state?.ui?.paywall?.needed,
+      treatmentAccess: state?.treatmentAccess,
+    });
+
+    // paywall gate
+    if (state?.ui?.paywall?.needed || state?.treatmentAccess !== "full") {
+      router.push("/(tabs)/Subscription");
+      return;
+    }
+
+    // ✅ bastan => actions screen
+    if (stageCode === "bastan") {
+      router.push("/pelekan/bastan" as any); // یا اگر صفحه‌ات جای دیگریه، همینجا اصلاحش می‌کنیم
+      return;
+    }
+
+    // سایر مراحل => day screen
+    router.push({ pathname: "/pelekan/day/[id]", params: { id: day.id } });
+  },
+  [router, state?.ui?.paywall?.needed, state?.treatmentAccess, state?.stages]
+);
 
   const onTapResults = useCallback(() => {
     const phone = String(me?.phone || "").trim();

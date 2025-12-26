@@ -25,11 +25,12 @@ const NODE_X_RIGHT = PATH_W - 70;
 const NODE_R = 28;
 
 // برای getItemLayout (تقریبی ولی ثابت)
-const HEADER_H = 92; // headerWrap (با marginها) حدوداً
+const HEADER_H = 92;
 const DAY_H = CELL_H;
 
 /* ------------------ types ------------------ */
 type Zig = "L" | "R";
+
 type PelekanTask = {
   id: string;
   titleFa: string;
@@ -62,13 +63,23 @@ type PelekanStage = {
 type PelekanState = {
   user: { planStatus: "free" | "pro" | "expiring" | "expired"; daysLeft: number };
   stages: PelekanStage[];
-  treatment: any;
+  treatment: any; // شامل activeStage/activeDay...
   progress: { activeDayId: string | null };
 };
 
 type FlattenItem =
   | { kind: "header"; stage: PelekanStage; id: string }
-  | { kind: "day"; day: PelekanDay; zig: Zig; id: string };
+  | {
+      kind: "day";
+      day: PelekanDay;
+      zig: Zig;
+      id: string;
+      stageCode: string;
+      stageOrder: number;
+      isFutureStage: boolean;
+      isPastStage: boolean;
+      isActiveStage: boolean;
+    };
 
 type Props = {
   me: any;
@@ -109,40 +120,79 @@ export default function TreatmentPelekan({ me, state }: Props) {
   const stages = state?.stages || [];
   const activeDayId = state?.progress?.activeDayId || null;
 
+  // مهم: activeStageCode از backend (درست‌ترین)
+  const activeStageCode = useMemo(() => {
+    return String(state?.treatment?.activeStage || "").trim();
+  }, [state?.treatment?.activeStage]);
+
+  // fallback: اگر activeStageCode نبود، stage را از activeDayId پیدا کن
+  const fallbackActiveStageId = useMemo(() => {
+    if (activeStageCode) return null;
+    if (!activeDayId) return null;
+    for (const st of stages) {
+      if ((st.days || []).some((d) => d.id === activeDayId)) return st.id;
+    }
+    return null;
+  }, [activeStageCode, activeDayId, stages]);
+
   const listRef = useRef<FlatList<FlattenItem>>(null);
   const lastScrolledDayIdRef = useRef<string | null>(null);
 
-  /* ---------- flatten days ---------- */
+  /* ---------- flatten list: گذشته + فعال (روزها) / آینده (فقط عنوان) ---------- */
   const days = useMemo<FlattenItem[]>(() => {
     const list: FlattenItem[] = [];
     let zig = 0;
 
+    // چون stages بر اساس sortOrder میاد، خطی جلو می‌ریم
+    let reachedActiveStage = false;
+
     stages.forEach((stage) => {
       list.push({ kind: "header", stage, id: `h-${stage.id}` });
-      (stage.days || []).forEach((day) => {
-        list.push({
-          kind: "day",
-          day,
-          zig: zig++ % 2 === 0 ? "L" : "R",
-          id: `d-${day.id}`,
+
+      const stageCode = String(stage.code || "").trim();
+      const stageOrder = Number(stage.sortOrder || 0);
+
+      const thisIsActiveStage =
+        (!!activeStageCode && stageCode === activeStageCode) ||
+        (!!fallbackActiveStageId && stage.id === fallbackActiveStageId);
+
+      const isPastStage = !reachedActiveStage && !thisIsActiveStage;
+      const isActiveStage = thisIsActiveStage;
+      const isFutureStage = reachedActiveStage && !thisIsActiveStage;
+
+      // فقط برای stageهای past + active روزها را اضافه کن
+      const shouldIncludeDays = !isFutureStage;
+
+      if (shouldIncludeDays) {
+        (stage.days || []).forEach((day) => {
+          list.push({
+            kind: "day",
+            day,
+            zig: zig++ % 2 === 0 ? "L" : "R",
+            id: `d-${day.id}`,
+            stageCode,
+            stageOrder,
+            isFutureStage,
+            isPastStage,
+            isActiveStage,
+          });
         });
-      });
+      }
+
+      if (thisIsActiveStage) reachedActiveStage = true;
     });
 
     return list;
-  }, [stages]);
+  }, [stages, activeStageCode, fallbackActiveStageId]);
 
-  /* ---------- active index ---------- */
+  /* ---------- active index (در همین list فیلتر شده) ---------- */
   const activeIndex = useMemo(() => {
     if (!activeDayId) return -1;
     return days.findIndex((it) => it.kind === "day" && it.day.id === activeDayId);
   }, [days, activeDayId]);
 
-  /* ---------- getItemLayout (برای scrollToIndex پایدار) ---------- */
+  /* ---------- getItemLayout: ثابت و قابل اتکا ---------- */
   const getItemLayout = (_: ArrayLike<FlattenItem> | null | undefined, index: number) => {
-    // چون header/day ارتفاع ثابت داریم، offset ساده میشه:
-    // offset = sum(heights[0..index-1])
-    // ولی برای ساده‌سازی: با یک حلقه کوتاه تا index محاسبه می‌کنیم (روزها زیاد هم باشه اوکیه)
     let offset = 0;
     for (let i = 0; i < index; i++) {
       const it = days[i];
@@ -162,9 +212,14 @@ export default function TreatmentPelekan({ me, state }: Props) {
     lastScrolledDayIdRef.current = activeDayId;
 
     const task = InteractionManager.runAfterInteractions(() => {
-      // یک فریم صبر کن تا layout کامل‌تر بشه
       requestAnimationFrame(() => {
-        console.log("🎯 [TreatmentPelekan] scrollToActive", { activeDayId, activeIndex, total: days.length });
+        console.log("🎯 [TreatmentPelekan] scrollToActive", {
+          activeDayId,
+          activeIndex,
+          total: days.length,
+          inverted: true,
+          activeStageCode: activeStageCode || null,
+        });
 
         try {
           listRef.current?.scrollToIndex({
@@ -179,7 +234,7 @@ export default function TreatmentPelekan({ me, state }: Props) {
     });
 
     return () => task.cancel?.();
-  }, [activeDayId, activeIndex, days.length]);
+  }, [activeDayId, activeIndex, days.length, activeStageCode]);
 
   /* ============================ RENDER ============================ */
   const renderItem = ({ item }: { item: FlattenItem }) => {
@@ -188,14 +243,23 @@ export default function TreatmentPelekan({ me, state }: Props) {
         <View style={styles.headerWrap}>
           <View style={styles.headerCard}>
             <Text style={styles.headerText}>{item.stage.titleFa}</Text>
+
+            {/* اگر stage بعد از active است، یک hint کوچک اضافه می‌کنیم (اختیاری) */}
+            {activeStageCode &&
+            String(item.stage.code || "").trim() !== activeStageCode &&
+            stages.findIndex((s) => String(s.code).trim() === activeStageCode) >= 0 &&
+            item.stage.sortOrder >
+              (stages.find((s) => String(s.code).trim() === activeStageCode)?.sortOrder || 0) ? (
+              <Text style={styles.headerSub}>بعداً باز می‌شود</Text>
+            ) : null}
           </View>
         </View>
       );
     }
 
-    const { day, zig } = item;
-    const isActive = !!activeDayId && day.id === activeDayId;
+    const { day, zig, isPastStage, isActiveStage } = item;
 
+    const isActive = !!activeDayId && day.id === activeDayId;
     const nodeX = zig === "L" ? NODE_X_LEFT : NODE_X_RIGHT;
 
     const pathD = `
@@ -203,6 +267,22 @@ export default function TreatmentPelekan({ me, state }: Props) {
       C ${MID_X} ${CELL_H - 30}, ${nodeX} ${CELL_H * 0.65}, ${nodeX} ${CELL_H * 0.5}
       C ${nodeX} ${CELL_H * 0.35}, ${MID_X} 30, ${MID_X} 0
     `;
+
+    // ظاهر نودها:
+    // - active: ستاره + پالس
+    // - past stage: preview (آیکن چشم)
+    // - باقی: قفل
+    const iconName = isActive
+      ? "star"
+      : isPastStage
+      ? ("eye-outline" as any)
+      : "lock-closed-outline";
+
+    const iconColor = isActive
+      ? "#D4AF37"
+      : isPastStage
+      ? "rgba(231,238,247,.75)"
+      : "rgba(231,238,247,.55)";
 
     const NodeWrapper: any = isActive ? Pulsing : React.Fragment;
 
@@ -226,22 +306,41 @@ export default function TreatmentPelekan({ me, state }: Props) {
               {
                 left: nodeX - NODE_R,
                 top: CELL_H / 2 - NODE_R,
-                borderColor: isActive ? "rgba(212,175,55,.70)" : "rgba(255,255,255,.20)",
-                opacity: isActive ? 1 : 0.9,
+                borderColor: isActive
+                  ? "rgba(212,175,55,.70)"
+                  : isPastStage
+                  ? "rgba(255,255,255,.28)"
+                  : "rgba(255,255,255,.20)",
+                opacity: isActive ? 1 : isPastStage ? 0.95 : 0.85,
               },
             ]}
             onPress={() => {
-              // فعلاً فقط روز active کلیک‌پذیر
-              if (!isActive) return;
-              // TODO: navigate to Day screen
+              // فعلاً:
+              // - active => بعداً navigate به صفحه اصلی درمان (بستن/گسستن...)
+              // - past => preview (بعداً)
+              // - locked => هیچ
+              if (isActive) {
+                console.log("🟡 [TreatmentPelekan] click active day", {
+                  stage: item.stageCode,
+                  day: day.dayNumberInStage,
+                  dayId: day.id,
+                });
+                return;
+              }
+              if (isPastStage) {
+                console.log("🟦 [TreatmentPelekan] preview past day", {
+                  stage: item.stageCode,
+                  day: day.dayNumberInStage,
+                  dayId: day.id,
+                });
+                return;
+              }
             }}
           >
-            <Ionicons
-              name={isActive ? "star" : "lock-closed-outline"}
-              size={22}
-              color={isActive ? "#D4AF37" : "rgba(231,238,247,.55)"}
-            />
-            <Text style={styles.nodeText}>روز {day.dayNumberInStage}</Text>
+            <Ionicons name={iconName} size={22} color={iconColor} />
+            <Text style={styles.nodeText}>
+              {isActiveStage ? "روز " : ""} {day.dayNumberInStage}
+            </Text>
           </TouchableOpacity>
         </NodeWrapper>
       </View>
@@ -266,7 +365,6 @@ export default function TreatmentPelekan({ me, state }: Props) {
         contentContainerStyle={{ paddingBottom: 24, paddingTop: 16 }}
         showsVerticalScrollIndicator={false}
         onScrollToIndexFailed={(info) => {
-          // با getItemLayout معمولاً رخ نمی‌دهد، ولی برای اطمینان:
           console.log("🧯 [TreatmentPelekan] onScrollToIndexFailed", {
             index: info.index,
             highestMeasuredFrameIndex: info.highestMeasuredFrameIndex,
@@ -295,6 +393,7 @@ export default function TreatmentPelekan({ me, state }: Props) {
 /* ============================ STYLES ============================ */
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#0b0f14" },
+
   topBar: {
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -303,17 +402,24 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(3,7,18,.92)",
   },
 
-  // مهم: ارتفاع تقریباً ثابت برای کمک به getItemLayout
+  // ارتفاع ثابت برای کمک به getItemLayout
   headerWrap: { alignItems: "center", height: HEADER_H, justifyContent: "center" },
   headerCard: {
     paddingHorizontal: 18,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,.12)",
     backgroundColor: "rgba(255,255,255,.04)",
+    alignItems: "center",
   },
   headerText: { color: "#F9FAFB", fontWeight: "900", fontSize: 16 },
+  headerSub: {
+    marginTop: 6,
+    fontSize: 11,
+    color: "rgba(231,238,247,.60)",
+    fontWeight: "700",
+  },
 
   node: {
     position: "absolute",
@@ -325,6 +431,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#0B0F14",
   },
+
   nodeText: {
     position: "absolute",
     bottom: -22,
