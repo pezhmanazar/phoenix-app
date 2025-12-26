@@ -767,10 +767,16 @@ router.get("/bastan/state", authUser, async (req, res) => {
       where: { phone },
       select: { id: true, plan: true, planExpiresAt: true },
     });
+
     if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
 
     const basePlan = getPlanStatus(user.plan, user.planExpiresAt);
-    const { planStatusFinal, daysLeftFinal } = applyDebugPlan(req, basePlan.planStatus, basePlan.daysLeft);
+    const { planStatusFinal, daysLeftFinal } = applyDebugPlan(
+      req,
+      basePlan.planStatus,
+      basePlan.daysLeft
+    );
+
     const isProLike = planStatusFinal === "pro" || planStatusFinal === "expiring";
 
     const [state, actions] = await Promise.all([
@@ -780,24 +786,28 @@ router.get("/bastan/state", authUser, async (req, res) => {
         update: {},
         select: {
           introAudioCompletedAt: true,
+
           contractNameTyped: true,
           contractSignatureJson: true,
           contractSignedAt: true,
+
           lastSafetyCheckAt: true,
           lastSafetyCheckResult: true,
           safetyWindowStartsAt: true,
+
           gosastanUnlockedAt: true,
         },
       }),
+
       prisma.bastanActionDefinition.findMany({
         orderBy: { sortOrder: "asc" },
         include: {
-          subtasks: { orderBy: { sortOrder: "asc" } },
+          subtasks: { orderBy: { sortOrder: "asc" } }, // شامل key و بقیه فیلدها هست
         },
       }),
     ]);
 
-    // progress: count done subtasks grouped by actionId
+    // ------------------ progress by actionId ------------------
     const doneAgg = await prisma.bastanSubtaskProgress.groupBy({
       by: ["actionId"],
       where: { userId: user.id, isDone: true },
@@ -807,7 +817,8 @@ router.get("/bastan/state", authUser, async (req, res) => {
     const doneByActionId = {};
     for (const r of doneAgg) doneByActionId[r.actionId] = r._count._all || 0;
 
-    // ✅ NEW: map of done subtasks by key (برای اینکه UI بفهمه انجام شده)
+    // ------------------ ✅ NEW: done map by subtask key ------------------
+    // این دقیقاً همون چیزیه که UI لازم داره تا دکمه‌ی «انجام شد» از اول disable بشه
     const doneRows = await prisma.bastanSubtaskProgress.findMany({
       where: { userId: user.id, isDone: true },
       select: {
@@ -816,7 +827,8 @@ router.get("/bastan/state", authUser, async (req, res) => {
       },
     });
 
-    const doneMap = new Map(); // key -> ISO string
+    /** @type {Map<string, string>} key -> ISO */
+    const doneMap = new Map();
     for (const r of doneRows) {
       const k = String(r?.subtask?.key || "").trim();
       if (!k) continue;
@@ -824,18 +836,19 @@ router.get("/bastan/state", authUser, async (req, res) => {
       doneMap.set(k, iso);
     }
 
-    // ✅ intro state
+    // ------------------ intro state ------------------
     const introDone = !!state.introAudioCompletedAt;
     const paywallNeededAfterIntro = introDone && !isProLike;
 
-    // Build actions UI with sequential unlock + pro locks
+    // ------------------ Build actions UI ------------------
     const actionsUi = [];
-    let prevUnlockedByProgress = true; // first action available
+    let prevUnlockedByProgress = true;
 
     for (const a of actions) {
       const completed = doneByActionId[a.id] || 0;
       const minReq = a.minRequiredSubtasks;
       const total = a.totalSubtasks;
+
       const isComplete = completed >= minReq;
 
       let locked = false;
@@ -859,18 +872,22 @@ router.get("/bastan/state", authUser, async (req, res) => {
         sortOrder: a.sortOrder,
         medalCode: a.medalCode,
         badgeCode: a.badgeCode,
+
         isProLocked: a.isProLocked,
         totalSubtasks: total,
         minRequiredSubtasks: minReq,
+
         progress: { done: completed, required: minReq, total },
+
         status,
         locked,
         lockReason,
 
-        // ✅ NEW: done + completedAt برای هر subtask
+        // ✅ NEW: done + completedAt
         subtasks: (a.subtasks || []).map((s) => {
           const key = String(s.key || "").trim();
           const doneAt = key ? doneMap.get(key) || null : null;
+
           return {
             key: s.key,
             kind: s.kind,
@@ -887,11 +904,11 @@ router.get("/bastan/state", authUser, async (req, res) => {
         }),
       });
 
-      // next action can unlock only if current action has met requirement
       prevUnlockedByProgress = prevUnlockedByProgress && isComplete;
     }
 
-    // Hard gate: intro audio must be completed before ANY action is interactive
+    // ------------------ Hard gate: intro required ------------------
+    // تا وقتی مقدمه انجام نشده، همه اکشن‌ها قفل هستند
     if (!introDone) {
       for (const a of actionsUi) {
         a.locked = true;
@@ -900,7 +917,7 @@ router.get("/bastan/state", authUser, async (req, res) => {
       }
     }
 
-    // Gate logic for gosastan
+    // ------------------ Gate logic for gosastan ------------------
     const actionsProgressForGate = actionsUi.map((a) => ({
       completed: a.progress.done,
       minRequired: a.minRequiredSubtasks,
@@ -922,29 +939,28 @@ router.get("/bastan/state", authUser, async (req, res) => {
         data: { gosastanUnlockedAt: new Date() },
         select: { gosastanUnlockedAt: true },
       });
+
       gosastanUnlockedAtFinal = updated.gosastanUnlockedAt;
     }
 
-    // ✅ When gosastan gate unlocks for the first time, switch Pelekan active day to gosastan day 1
+    // ✅ When gosastan gate unlocks for the first time, switch active day
     if (canUnlock && gosastanUnlockedAtFinal && !state.gosastanUnlockedAt) {
       const now = new Date();
 
       await prisma.$transaction(async (tx) => {
-        // 1) find Gosastan Day 1
         const gosDay1 = await tx.pelekanDay.findFirst({
           where: { stage: { code: "gosastan" }, dayNumberInStage: 1 },
           select: { id: true },
         });
-        if (!gosDay1?.id) return; // content missing, do nothing
 
-        // 2) deactivate any currently active day(s)
-        // ⚠️ FIX: status "locked" نداریم. از active خارجش می‌کنیم.
+        if (!gosDay1?.id) return;
+
+        // ⚠️ چون status=locked نداریم، فعلاً active را به completed می‌بریم
         await tx.pelekanDayProgress.updateMany({
           where: { userId: user.id, status: "active" },
           data: { status: "completed", lastActivityAt: now, fullDoneAt: now },
         });
 
-        // 3) activate gosastan day 1 (create if missing)
         await tx.pelekanDayProgress.upsert({
           where: { userId_dayId: { userId: user.id, dayId: gosDay1.id } },
           create: {
@@ -963,33 +979,42 @@ router.get("/bastan/state", authUser, async (req, res) => {
       });
     }
 
+    // ------------------ Response ------------------
     return res.json({
       ok: true,
       data: {
         user: { planStatus: planStatusFinal, daysLeft: daysLeftFinal },
+
+        // وضعیت مقدمه (برای UI)
         intro: {
           completedAt: state.introAudioCompletedAt,
           paywallNeededAfterIntro,
         },
+
+        // ✅ NEW: آیتم جدا برای «شروع درمان» (همون ایده‌ای که گفتی)
         start: {
-           completedAt: state.introAudioCompletedAt,
-           locked: !state.introAudioCompletedAt,
-           paywallNeededAfterIntro,
-         },
+          completedAt: state.introAudioCompletedAt,
+          locked: !state.introAudioCompletedAt,
+          paywallNeededAfterIntro,
+        },
+
         contract: {
           nameTyped: state.contractNameTyped,
           signatureJson: state.contractSignatureJson,
           signedAt: state.contractSignedAt,
         },
+
         safety: {
           lastAt: state.lastSafetyCheckAt,
           lastResult: state.lastSafetyCheckResult,
           windowStartsAt: state.safetyWindowStartsAt,
         },
+
         gosastan: {
           canUnlockNow: canUnlock,
           unlockedAt: gosastanUnlockedAtFinal,
         },
+
         actions: actionsUi,
       },
     });
