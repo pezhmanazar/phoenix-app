@@ -141,14 +141,25 @@ export default function PelekanTab() {
 
         const data = json.data || {};
 
-        console.log("✅ [PelekanTab] state ok", {
-          tabState: data?.tabState,
-          treatmentAccess: data?.treatmentAccess,
-          paywall: data?.ui?.paywall,
-          baselineStatus: data?.baseline?.session?.status,
-          reviewStatus: data?.review?.session?.status,
-          reviewChosenPath: data?.review?.session?.chosenPath,
-        });
+// ✅ DEBUG: treatment brain snapshot (همین‌جا درست‌ترین نقطه است)
+const t = data?.treatment;
+
+console.log("🧠 [PELEKAN_DEBUG] activeStage:", t?.activeStage);
+console.log("🧠 [PELEKAN_DEBUG] activeDay:", t?.activeDay);
+console.log(
+  "🧠 [PELEKAN_DEBUG] stages:",
+  (t?.stages || []).map((s: any) => ({ code: s.code, status: s.status }))
+);
+console.log("🧠 [PELEKAN_DEBUG] day:", t?.day);
+
+console.log("✅ [PelekanTab] state ok", {
+  tabState: data?.tabState,
+  treatmentAccess: data?.treatmentAccess,
+  paywall: data?.ui?.paywall,
+  baselineStatus: data?.baseline?.session?.status,
+  reviewStatus: data?.review?.session?.status,
+  reviewChosenPath: data?.review?.session?.chosenPath,
+});
 
         const merged: PelekanState = {
           ...initialState,
