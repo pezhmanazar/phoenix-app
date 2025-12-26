@@ -108,19 +108,8 @@ function applyDebugProgress(req, hasAnyProgress) {
 }
 
 function debugOnly(req, res, next) {
-  // ✅ allow debug routes ONLY when explicitly enabled AND only from localhost
-  const enabled = String(process.env.DEBUG_ROUTES || "").trim() === "1";
-
-  const ip = String(req.ip || "");
-  const isLocal =
-    ip === "127.0.0.1" ||
-    ip === "::1" ||
-    ip === "::ffff:127.0.0.1";
-
-  if (!enabled || !isLocal) {
-    return res.status(404).json({ ok: false, error: "NOT_FOUND" });
-  }
-
+  const isProd = process.env.NODE_ENV === "production";
+  if (isProd) return res.status(404).json({ ok: false, error: "NOT_FOUND" });
   return next();
 }
 
