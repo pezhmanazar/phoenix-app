@@ -450,7 +450,7 @@ const reviewDone =
   }, [state.tabState, state.stages, state?.baseline?.session, state?.review?.session]);
 
   /* ----------------------------- Handlers ----------------------------- */
-  const onTapActiveDay = useCallback(
+const onTapActiveDay = useCallback(
   (day: PelekanDay, opts?: { mode: "active" | "preview" }) => {
     const stageId = String((day as any)?.stageId || "");
     const st = (state?.stages || []).find((x: any) => String(x?.id) === stageId);
@@ -460,19 +460,44 @@ const reviewDone =
       dayId: day?.id,
       stageCode,
       mode: opts?.mode,
+      dayNumberInStage: (day as any)?.dayNumberInStage,
       paywallNeeded: state?.ui?.paywall?.needed,
       treatmentAccess: state?.treatmentAccess,
     });
 
     // paywall gate
     if (state?.ui?.paywall?.needed || state?.treatmentAccess !== "full") {
+      console.log("🔒 [PelekanTab] blocked by paywall/access -> Subscription");
       router.push("/(tabs)/Subscription");
       return;
     }
 
-    // ✅ bastan => actions screen
+    // ✅ bastan: dayNumberInStage === action index (1..8)
     if (stageCode === "bastan") {
-      router.push("/pelekan/bastan" as any); // یا اگر صفحه‌ات جای دیگریه، همینجا اصلاحش می‌کنیم
+      const BASTAN_ACTION_CODES = [
+        "reality_check",
+        "adult_responsibility",
+        "unsent_letter",
+        "trigger_detox",
+        "limited_contact",
+        "meaning_learning",
+        "closure_ritual",
+        "commitment_contract",
+      ] as const;
+
+      const n = Number((day as any)?.dayNumberInStage || 0);
+      const actionCode = BASTAN_ACTION_CODES[n - 1];
+
+      console.log("🧭 [PelekanTab] bastan -> action route", { n, actionCode });
+
+      // fallback اگر دیتای روز خراب بود
+      if (!actionCode) {
+        console.log("⚠️ [PelekanTab] bastan actionCode missing -> go to bastan list");
+        router.push("/pelekan/bastan" as any);
+        return;
+      }
+
+      router.push(`/pelekan/bastan/action/${encodeURIComponent(actionCode)}` as any);
       return;
     }
 

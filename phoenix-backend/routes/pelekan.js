@@ -770,12 +770,7 @@ router.get("/bastan/state", authUser, async (req, res) => {
     if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
 
     const basePlan = getPlanStatus(user.plan, user.planExpiresAt);
-    const { planStatusFinal, daysLeftFinal } = applyDebugPlan(
-      req,
-      basePlan.planStatus,
-      basePlan.daysLeft
-    );
-
+    const { planStatusFinal, daysLeftFinal } = applyDebugPlan(req, basePlan.planStatus, basePlan.daysLeft);
     const isProLike = planStatusFinal === "pro" || planStatusFinal === "expiring";
 
     const [state, actions] = await Promise.all([
@@ -812,18 +807,35 @@ router.get("/bastan/state", authUser, async (req, res) => {
     const doneByActionId = {};
     for (const r of doneAgg) doneByActionId[r.actionId] = r._count._all || 0;
 
+    // ✅ NEW: map of done subtasks by key (برای اینکه UI بفهمه انجام شده)
+    const doneRows = await prisma.bastanSubtaskProgress.findMany({
+      where: { userId: user.id, isDone: true },
+      select: {
+        doneAt: true,
+        subtask: { select: { key: true } },
+      },
+    });
+
+    const doneMap = new Map(); // key -> ISO string
+    for (const r of doneRows) {
+      const k = String(r?.subtask?.key || "").trim();
+      if (!k) continue;
+      const iso = r?.doneAt ? r.doneAt.toISOString() : new Date().toISOString();
+      doneMap.set(k, iso);
+    }
+
     // ✅ intro state
-const introDone = !!state.introAudioCompletedAt;
-const paywallNeededAfterIntro = introDone && !isProLike;
+    const introDone = !!state.introAudioCompletedAt;
+    const paywallNeededAfterIntro = introDone && !isProLike;
 
     // Build actions UI with sequential unlock + pro locks
     const actionsUi = [];
     let prevUnlockedByProgress = true; // first action available
+
     for (const a of actions) {
       const completed = doneByActionId[a.id] || 0;
       const minReq = a.minRequiredSubtasks;
       const total = a.totalSubtasks;
-
       const isComplete = completed >= minReq;
 
       let locked = false;
@@ -839,8 +851,6 @@ const paywallNeededAfterIntro = introDone && !isProLike;
         lockReason = "pro_required";
       }
 
-      // if intro audio not completed, we still allow showing list, but can gate interaction in UI
-      // (UI rule: intro audio free -> then paywall; backend returns intro status)
       const status = locked ? "locked" : isComplete ? "done" : "active";
 
       actionsUi.push({
@@ -856,16 +866,25 @@ const paywallNeededAfterIntro = introDone && !isProLike;
         status,
         locked,
         lockReason,
-        subtasks: (a.subtasks || []).map((s) => ({
-          key: s.key,
-          kind: s.kind,
-          titleFa: s.titleFa,
-          helpFa: s.helpFa,
-          isRequired: s.isRequired,
-          isFree: s.isFree,
-          sortOrder: s.sortOrder,
-          xpReward: s.xpReward,
-        })),
+
+        // ✅ NEW: done + completedAt برای هر subtask
+        subtasks: (a.subtasks || []).map((s) => {
+          const key = String(s.key || "").trim();
+          const doneAt = key ? doneMap.get(key) || null : null;
+          return {
+            key: s.key,
+            kind: s.kind,
+            titleFa: s.titleFa,
+            helpFa: s.helpFa,
+            isRequired: s.isRequired,
+            isFree: s.isFree,
+            sortOrder: s.sortOrder,
+            xpReward: s.xpReward,
+
+            done: !!doneAt,
+            completedAt: doneAt,
+          };
+        }),
       });
 
       // next action can unlock only if current action has met requirement
@@ -873,13 +892,13 @@ const paywallNeededAfterIntro = introDone && !isProLike;
     }
 
     // Hard gate: intro audio must be completed before ANY action is interactive
-if (!introDone) {
-  for (const a of actionsUi) {
-    a.locked = true;
-    a.lockReason = "intro_required";
-    a.status = "locked";
-  }
-}
+    if (!introDone) {
+      for (const a of actionsUi) {
+        a.locked = true;
+        a.lockReason = "intro_required";
+        a.status = "locked";
+      }
+    }
 
     // Gate logic for gosastan
     const actionsProgressForGate = actionsUi.map((a) => ({
@@ -907,42 +926,42 @@ if (!introDone) {
     }
 
     // ✅ When gosastan gate unlocks for the first time, switch Pelekan active day to gosastan day 1
-if (canUnlock && gosastanUnlockedAtFinal && !state.gosastanUnlockedAt) {
-  const now = new Date();
+    if (canUnlock && gosastanUnlockedAtFinal && !state.gosastanUnlockedAt) {
+      const now = new Date();
 
-  await prisma.$transaction(async (tx) => {
-    // 1) find Gosastan Day 1
-    const gosDay1 = await tx.pelekanDay.findFirst({
-      where: { stage: { code: "gosastan" }, dayNumberInStage: 1 },
-      select: { id: true },
-    });
+      await prisma.$transaction(async (tx) => {
+        // 1) find Gosastan Day 1
+        const gosDay1 = await tx.pelekanDay.findFirst({
+          where: { stage: { code: "gosastan" }, dayNumberInStage: 1 },
+          select: { id: true },
+        });
+        if (!gosDay1?.id) return; // content missing, do nothing
 
-    if (!gosDay1?.id) return; // content missing, do nothing
+        // 2) deactivate any currently active day(s)
+        // ⚠️ FIX: status "locked" نداریم. از active خارجش می‌کنیم.
+        await tx.pelekanDayProgress.updateMany({
+          where: { userId: user.id, status: "active" },
+          data: { status: "completed", lastActivityAt: now, fullDoneAt: now },
+        });
 
-    // 2) deactivate any currently active day(s)
-    await tx.pelekanDayProgress.updateMany({
-      where: { userId: user.id, status: "active" },
-      data: { status: "locked", lastActivityAt: now },
-    });
-
-    // 3) activate gosastan day 1 (create if missing)
-    await tx.pelekanDayProgress.upsert({
-      where: { userId_dayId: { userId: user.id, dayId: gosDay1.id } },
-      create: {
-        userId: user.id,
-        dayId: gosDay1.id,
-        status: "active",
-        completionPercent: 0,
-        startedAt: now,
-        lastActivityAt: now,
-      },
-      update: {
-        status: "active",
-        lastActivityAt: now,
-      },
-    });
-  });
-}
+        // 3) activate gosastan day 1 (create if missing)
+        await tx.pelekanDayProgress.upsert({
+          where: { userId_dayId: { userId: user.id, dayId: gosDay1.id } },
+          create: {
+            userId: user.id,
+            dayId: gosDay1.id,
+            status: "active",
+            completionPercent: 0,
+            startedAt: now,
+            lastActivityAt: now,
+          },
+          update: {
+            status: "active",
+            lastActivityAt: now,
+          },
+        });
+      });
+    }
 
     return res.json({
       ok: true,
@@ -974,7 +993,6 @@ if (canUnlock && gosastanUnlockedAtFinal && !state.gosastanUnlockedAt) {
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
-
 /* ---------- POST /api/pelekan/bastan/intro/complete ---------- */
 router.post("/bastan/intro/complete", authUser, async (req, res) => {
   try {
