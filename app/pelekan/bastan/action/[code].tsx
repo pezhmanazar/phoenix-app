@@ -262,7 +262,7 @@ export default function BastanActionScreen() {
           Authorization: `Bearer ${t}`,
         },
         // ✅ phone هم در body
-        body: JSON.stringify({ phone: p, subtaskKey: key, payload: null }),
+        body: JSON.stringify({ phone, subtaskKey: key, payload: null }),
       });
 
       let json: CompleteSubtaskResponse | null = null;
