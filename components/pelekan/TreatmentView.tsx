@@ -84,7 +84,14 @@ type Props = {
   item: ListItem;
   index: number;
   state: PelekanState;
-  onTapActiveDay?: (day: PelekanDay) => void;
+
+  /**
+   * ✅ الان دو حالت داریم:
+   * - mode:"active"  => وارد روز برای انجام
+   * - mode:"preview" => فقط دیدن/مرور (Read-only)
+   */
+  onTapActiveDay?: (day: PelekanDay, opts?: { mode: "active" | "preview" }) => void;
+
   onTapResults?: () => void;
 };
 
@@ -204,6 +211,15 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
     return false;
   };
 
+  // ✅ stage order logic: برای اینکه روزهای مرحله‌های قبلی فقط "قابل دیدن" باشند.
+  const activeStageCode: string | null =
+    (state?.treatment?.activeStage as string | undefined) ??
+    (state?.stages || []).find((s: any) => s?.status === "active")?.code ??
+    null;
+
+  const activeStageOrder: number =
+    (state?.stages || []).find((s) => s.code === activeStageCode)?.sortOrder ?? 999;
+
   if (item.kind === "spacer") return <View style={{ height: 10 }} />;
 
   if (item.kind === "header") {
@@ -241,66 +257,97 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
 
   // ✅ results (دایره نتایج داخل مسیر زیگزاگی)
   if (item.kind === "results") {
-  const done = !!item.done;
+    const done = !!item.done;
+    const nodeX = MID_X; // ✅ وسط
+    const lineColor = done ? palette.pathDone : palette.pathIdle;
 
-  const nodeX = MID_X; // ✅ وسط
-  const lineColor = done ? palette.pathDone : palette.pathIdle;
-
-  const node = (
-    <TouchableOpacity
-      activeOpacity={0.9}
-      onPress={() => onTapResults?.()}
-      style={[
-        styles.node,
-        {
-          left: nodeX - NODE_R,
-          top: CELL_H / 2 - NODE_R,
-          backgroundColor: done ? palette.node.doneBg : palette.node.availableBg,
-          borderColor: done ? palette.node.doneBorder : palette.node.availableBorder,
-        },
-      ]}
-    >
-      <Ionicons
-        name={done ? "checkmark-circle" : "star"}
-        size={22}
-        color={done ? palette.node.doneIcon : palette.node.availableIcon}
-      />
-      <Text style={[styles.nodeText, { color: done ? palette.node.doneLabel : palette.node.availableLabel }]}>
-        سنجش
-      </Text>
-    </TouchableOpacity>
-  );
-
-  return (
-    <View style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}>
-      {/* ✅ فقط خط صاف رو به بالا - بدون خط زیر */}
-      <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
-        <Path
-          d={`M ${MID_X} ${CELL_H / 2} L ${MID_X} 0`}
-          stroke={lineColor}
-          strokeWidth={6}
-          fill="none"
-          strokeLinecap="round"
+    const node = (
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => onTapResults?.()}
+        style={[
+          styles.node,
+          {
+            left: nodeX - NODE_R,
+            top: CELL_H / 2 - NODE_R,
+            backgroundColor: done ? palette.node.doneBg : palette.node.availableBg,
+            borderColor: done ? palette.node.doneBorder : palette.node.availableBorder,
+          },
+        ]}
+      >
+        <Ionicons
+          name={done ? "checkmark-circle" : "star"}
+          size={22}
+          color={done ? palette.node.doneIcon : palette.node.availableIcon}
         />
-      </Svg>
-      {node}
-    </View>
-  );
-}
+        <Text style={[styles.nodeText, { color: done ? palette.node.doneLabel : palette.node.availableLabel }]}>
+          سنجش
+        </Text>
+      </TouchableOpacity>
+    );
+
+    return (
+      <View style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}>
+        {/* ✅ فقط خط صاف رو به بالا - بدون خط زیر */}
+        <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
+          <Path
+            d={`M ${MID_X} ${CELL_H / 2} L ${MID_X} 0`}
+            stroke={lineColor}
+            strokeWidth={6}
+            fill="none"
+            strokeLinecap="round"
+          />
+        </Svg>
+        {node}
+      </View>
+    );
+  }
 
   // day
   const { day, zig } = item;
+
   const available = !!activeDayId && day.id === activeDayId;
   const done = isDone(day.id);
-  const locked = !done && !available;
-  const canEnter = available ? canEnterActive : false;
+
+  // ✅ فقط روز active اجازه "انجام" دارد
+  const canEnter = available && canEnterActive;
+
+  // ✅ روزهای مرحله‌های قبلی (یا done شده‌ها) باید قابل "دیدن" باشند
+  const thisStageOrder = item.stage?.sortOrder ?? 0;
+  const isPastStage = thisStageOrder < activeStageOrder;
+  const canPreview = isPastStage || done;
+
+  // ✅ locked یعنی نه active و نه preview
+  const locked = !available && !canPreview;
 
   const nodeX = zig === "L" ? NODE_X_LEFT : NODE_X_RIGHT;
 
-  const bg = done ? palette.node.doneBg : available ? palette.node.availableBg : palette.node.lockedBg;
-  const border = done ? palette.node.doneBorder : available ? palette.node.availableBorder : palette.node.lockedBorder;
-  const iconCol = done ? palette.node.doneIcon : available ? palette.node.availableIcon : palette.node.lockedIcon;
-  const labelCol = done ? palette.node.doneLabel : available ? palette.node.availableLabel : palette.node.lockedLabel;
+  // UI colors (preview هم با استایل available دیده بشه، ولی icon متفاوت)
+  const bg = done ? palette.node.doneBg : available ? palette.node.availableBg : locked ? palette.node.lockedBg : palette.node.availableBg;
+
+  const border = done
+    ? palette.node.doneBorder
+    : available
+    ? palette.node.availableBorder
+    : locked
+    ? palette.node.lockedBorder
+    : palette.node.availableBorder;
+
+  const iconCol = done
+    ? palette.node.doneIcon
+    : available
+    ? palette.node.availableIcon
+    : locked
+    ? palette.node.lockedIcon
+    : palette.node.availableIcon;
+
+  const labelCol = done
+    ? palette.node.doneLabel
+    : available
+    ? palette.node.availableLabel
+    : locked
+    ? palette.node.lockedLabel
+    : palette.node.availableLabel;
 
   const bottomY = CELL_H;
   const topY = 0;
@@ -311,13 +358,25 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
     C ${nodeX} ${CELL_H * 0.35}, ${MID_X} ${topY + 30}, ${MID_X} ${topY}
   `;
 
+  const iconName =
+    done ? "checkmark-circle" :
+    available ? "star" :
+    canPreview ? "eye" :
+    "lock-closed-outline";
+
   const node = (
     <TouchableOpacity
       activeOpacity={0.9}
       onPress={() => {
-        if (!available) return;
-        if (!canEnter) return;
-        onTapActiveDay?.(day);
+        if (canEnter) {
+          onTapActiveDay?.(day, { mode: "active" });
+          return;
+        }
+        if (canPreview) {
+          onTapActiveDay?.(day, { mode: "preview" });
+          return;
+        }
+        return;
       }}
       style={[
         styles.node,
@@ -326,11 +385,12 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
           top: CELL_H / 2 - NODE_R,
           backgroundColor: bg,
           borderColor: border,
+          // اگر active هست ولی اجازه ورود نداره (archive_only) کمی کمرنگ شود
           opacity: available && !canEnter ? 0.55 : 1,
         },
       ]}
     >
-      <Ionicons name={done ? "checkmark-circle" : locked ? "lock-closed-outline" : "star"} size={22} color={iconCol} />
+      <Ionicons name={iconName as any} size={22} color={iconCol} />
       <Text style={[styles.nodeText, { color: labelCol }]}>روز {day.dayNumberInStage}</Text>
     </TouchableOpacity>
   );
@@ -346,6 +406,7 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
           strokeLinecap="round"
         />
       </Svg>
+
       {available ? <Pulsing playing={true}>{node}</Pulsing> : node}
     </View>
   );

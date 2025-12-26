@@ -88,6 +88,9 @@ export default function PelekanTab() {
   // ✅ refs برای لاگ امن (بدون dependency-loop)
   const mountedRef = useRef(false);
   const lastFocusRef = useRef<string>("__init__");
+  const fetchSeqRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
+  
 
   const palette = useMemo(
     () => ({
@@ -101,115 +104,257 @@ export default function PelekanTab() {
     []
   );
 
-  /* ----------------------------- Fetch State ----------------------------- */
-  const fetchState = useCallback(
-    async (opts?: { initial?: boolean; reason?: string }) => {
-      const isInitial = !!opts?.initial;
-      const reason = opts?.reason || (isInitial ? "initial" : "refresh");
+ 
+/* ----------------------------- Fetch State ----------------------------- */
+const fetchState = useCallback(
+  async (opts?: { initial?: boolean; reason?: string }) => {
+    const isInitial = !!opts?.initial;
+    const reason = opts?.reason || (isInitial ? "initial" : "refresh");
+    const phone = me?.phone;
 
-      const phone = me?.phone;
+    // ✅ 1) sequence id (anti-race)
+    const seq = ++fetchSeqRef.current;
 
-      console.log("🧭 [PelekanTab] fetchState:start", {
-        reason,
-        isInitial,
-        phone: phone || null,
-        focus,
-        forceView,
+    // ✅ 3) abort previous in-flight request
+    try {
+      abortRef.current?.abort();
+    } catch {}
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    console.log("🧭 [PelekanTab] fetchState:start", {
+      seq,
+      reason,
+      isInitial,
+      phone: phone || null,
+      focus,
+      forceView,
+    });
+
+    try {
+      if (isInitial) setInitialLoading(true);
+      else setRefreshing(true);
+
+      if (!phone) {
+        console.log("⚠️ [PelekanTab] no phone -> initialState", { seq });
+        if (seq === fetchSeqRef.current) setState(initialState);
+        return;
+      }
+
+      const url = `https://api.qoqnoos.app/api/pelekan/state?phone=${encodeURIComponent(phone)}`;
+      console.log("🌐 [PelekanTab] GET", { seq, url });
+
+      const res = await fetch(url, {
+        headers: { "Cache-Control": "no-store" },
+        signal: controller.signal,
       });
 
+      if (controller.signal.aborted) {
+        console.log("🧯 [PelekanTab] aborted after fetch()", { seq });
+        return;
+      }
+
+      let json: any = null;
       try {
-        if (isInitial) setInitialLoading(true);
-        else setRefreshing(true);
+        json = await res.json();
+      } catch {
+        json = null;
+      }
 
-        if (!phone) {
-          console.log("⚠️ [PelekanTab] no phone -> initialState");
-          setState(initialState);
-          return;
-        }
+      // ✅ 2) stale guard
+      if (seq !== fetchSeqRef.current) {
+        console.log("🧯 [PelekanTab] stale response ignored", {
+          seq,
+          latest: fetchSeqRef.current,
+          http: res.status,
+          ok: json?.ok,
+        });
+        return;
+      }
 
-        const url = `https://api.qoqnoos.app/api/pelekan/state?phone=${encodeURIComponent(phone)}`;
-        console.log("🌐 [PelekanTab] GET", url);
-
-        const res = await fetch(url, { headers: { "Cache-Control": "no-store" } });
-        const json = await res.json().catch(() => null);
-
-        if (!json?.ok) {
-          console.log("❌ [PelekanTab] state not ok", json);
-          setState(initialState);
-          return;
-        }
-
-        const data = json.data || {};
-
-// ✅ DEBUG: treatment brain snapshot (همین‌جا درست‌ترین نقطه است)
-const t = data?.treatment;
-
-console.log("🧠 [PELEKAN_DEBUG] activeStage:", t?.activeStage);
-console.log("🧠 [PELEKAN_DEBUG] activeDay:", t?.activeDay);
-console.log(
-  "🧠 [PELEKAN_DEBUG] stages:",
-  (t?.stages || []).map((s: any) => ({ code: s.code, status: s.status }))
-);
-console.log("🧠 [PELEKAN_DEBUG] day:", t?.day);
-
-console.log("✅ [PelekanTab] state ok", {
-  tabState: data?.tabState,
-  treatmentAccess: data?.treatmentAccess,
-  paywall: data?.ui?.paywall,
-  baselineStatus: data?.baseline?.session?.status,
-  reviewStatus: data?.review?.session?.status,
-  reviewChosenPath: data?.review?.session?.chosenPath,
-});
-
-        const merged: PelekanState = {
-          ...initialState,
-          ...data,
-          tabState: data.tabState as TabState,
-          ui: {
-            paywall: data?.ui?.paywall ?? initialState.ui.paywall,
-            flags: data?.ui?.flags ?? {},
-          },
-          treatment: data?.treatment ?? null,
-          stages: Array.isArray(data?.stages) ? data.stages : [],
-        };
-
-        setState(merged);
-      } catch (e: any) {
-        console.log("💥 [PelekanTab] fetchState:error", String(e?.message || e));
+      if (!res.ok || !json?.ok) {
+        console.log("❌ [PelekanTab] state not ok", {
+          seq,
+          http: res.status,
+          ok: json?.ok,
+          error: json?.error,
+        });
         setState(initialState);
-      } finally {
+        return;
+      }
+
+      const data = json.data || {};
+
+      // -----------------------------
+      // ✅ stages merge (UI list needs days + status/title)
+      // -----------------------------
+      const stagesWithDays = Array.isArray(data?.stages) ? data.stages : [];
+      const tStages = Array.isArray(data?.treatment?.stages) ? data.treatment.stages : [];
+
+      const tMap = new Map<string, any>();
+      for (const s of tStages) {
+        const code = String(s?.code || "").trim();
+        if (code) tMap.set(code, s);
+      }
+
+      const mergedStages = stagesWithDays.map((s: any) => {
+        const code = String(s?.code || "").trim();
+        const tMeta = tMap.get(code);
+        return {
+          ...s,
+          id: s?.id ?? `stage:${code}`,
+          title: s?.title ?? tMeta?.title ?? code,
+          status: s?.status ?? tMeta?.status ?? "locked",
+        };
+      });
+
+      // -----------------------------
+      // ✅ derive activeDayId if missing
+      // -----------------------------
+      const t = data?.treatment;
+      const activeStageCode = String(t?.activeStage || "").trim();
+      const activeDayNumber = Number(t?.activeDay || 0);
+
+      let derivedActiveDayId: string | null = null;
+      if (activeStageCode && activeDayNumber > 0) {
+        const st = mergedStages.find((x: any) => String(x?.code || "").trim() === activeStageCode);
+        const dayRow = (st?.days || []).find((d: any) => Number(d?.dayNumberInStage || 0) === activeDayNumber);
+        derivedActiveDayId = dayRow?.id ?? null;
+      }
+
+      const progressFromApi = data?.progress ?? null;
+      const activeDayIdFinal = progressFromApi?.activeDayId ?? derivedActiveDayId ?? null;
+
+      console.log("🎯 [PelekanTab] activeDayId resolved", {
+        seq,
+        activeStageCode,
+        activeDayNumber,
+        apiActiveDayId: progressFromApi?.activeDayId ?? null,
+        derivedActiveDayId,
+        activeDayIdFinal,
+      });
+
+      // ✅ ensure progress is NOT null (so TreatmentView can work)
+      const safeProgress = progressFromApi
+        ? { ...progressFromApi, activeDayId: activeDayIdFinal }
+        : {
+            activeDayId: activeDayIdFinal,
+            dayProgress: [],
+            taskProgress: [],
+            xpTotal: 0,
+            streak: { currentDays: 0, bestDays: 0, lastCompletedAt: null },
+          };
+
+      // -----------------------------
+      // ✅ summary logs
+      // -----------------------------
+      console.log("✅ [PelekanTab] state ok", {
+        seq,
+        tabState: data?.tabState,
+        treatmentAccess: data?.treatmentAccess,
+        paywall: data?.ui?.paywall,
+        baselineStatus: data?.baseline?.session?.status,
+        reviewStatus: data?.review?.session?.status,
+        reviewChosenPath: data?.review?.session?.chosenPath,
+        activeStage: t?.activeStage,
+        activeDay: t?.activeDay,
+      });
+
+      console.log(
+        "🧩 [MERGE] sample",
+        mergedStages.slice(0, 2).map((s: any) => ({
+          code: s.code,
+          title: s.title,
+          status: s.status,
+          daysLen: Array.isArray(s.days) ? s.days.length : 0,
+          firstDayId: s?.days?.[0]?.id ?? null,
+        }))
+      );
+
+      const merged: PelekanState = {
+        ...initialState,
+        ...data,
+        tabState: (data.tabState as TabState) || initialState.tabState,
+        ui: {
+          paywall: data?.ui?.paywall ?? initialState.ui.paywall,
+          flags: data?.ui?.flags ?? {},
+        },
+        treatment: data?.treatment ?? null,
+        stages: mergedStages,
+        progress: safeProgress,
+      };
+
+      // =============================
+      // ✅ NEW: Bastan shape log (کم‌حجم و دقیق)
+      // =============================
+      const treatment = data?.treatment || {};
+      const bastan = (data as any)?.bastan ?? (treatment as any)?.bastan ?? null;
+
+      console.log("🧠 [STATE_SHAPE] bastan keys", {
+        hasBastan: !!bastan,
+        bastanKeys: bastan ? Object.keys(bastan) : [],
+        treatmentKeys: Object.keys(treatment || {}),
+        activeStage: treatment?.activeStage,
+        activeDay: treatment?.activeDay,
+      });
+
+      if ((bastan as any)?.actions) {
+        console.log("🧠 [STATE_SHAPE] bastan.actions keys", Object.keys((bastan as any).actions));
+      }
+
+      if (seq === fetchSeqRef.current) {
+        setState(merged);
+      } else {
+        console.log("🧯 [PelekanTab] stale merged ignored", { seq, latest: fetchSeqRef.current });
+      }
+    } catch (e: any) {
+      const msg = String(e?.message || e);
+      if (msg.toLowerCase().includes("aborted") || msg.toLowerCase().includes("abort")) {
+        console.log("🧯 [PelekanTab] fetch aborted (caught)");
+        return;
+      }
+      console.log("💥 [PelekanTab] fetchState:error", { msg });
+      if (seq === fetchSeqRef.current) setState(initialState);
+    } finally {
+      if (seq === fetchSeqRef.current) {
         if (isInitial) setInitialLoading(false);
         else setRefreshing(false);
-
-        console.log("🧭 [PelekanTab] fetchState:end", { reason, isInitial });
+        console.log("🧭 [PelekanTab] fetchState:end", { seq, reason, isInitial });
       }
-    },
-    [me?.phone, focus, forceView]
-  );
-
-  // ✅ Initial fetch فقط وقتی phone عوض شد (نه هر رندر)
-  useEffect(() => {
-    if (!mountedRef.current) {
-      mountedRef.current = true;
-      console.log("🔁 [PelekanTab] mount");
     }
-    fetchState({ initial: true, reason: "mount_or_phone_change" });
-    // فقط phone trigger باشد
-  }, [me?.phone, fetchState]);
+  },
+  [me?.phone, focus, forceView]
+);
 
-  // ✅ Refresh وقتی تب فوکوس می‌گیرد (بدون params در deps)
-  useFocusEffect(
-    useCallback(() => {
-      console.log("🎯 [PelekanTab] focus -> refresh", {
-        phone: me?.phone || null,
-        focus,
-        forceView,
-        tabState: state.tabState,
-      });
-      fetchState({ initial: false, reason: "focus" });
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [fetchState])
-  );
+// ✅ Initial fetch فقط وقتی phone عوض شد
+useEffect(() => {
+  if (!mountedRef.current) {
+    mountedRef.current = true;
+    console.log("🔁 [PelekanTab] mount");
+  }
+  fetchState({ initial: true, reason: "mount_or_phone_change" });
+}, [me?.phone, fetchState]);
+
+// ✅ Refresh وقتی تب فوکوس می‌گیرد
+useFocusEffect(
+  useCallback(() => {
+    if (initialLoading) {
+      console.log("⏭️ [PelekanTab] focus refresh skipped (initialLoading)");
+      return;
+    }
+
+    console.log("🎯 [PelekanTab] focus -> refresh", {
+      phone: me?.phone || null,
+      focus,
+      forceView,
+      tabState: state.tabState,
+    });
+
+    fetchState({ initial: false, reason: "focus" });
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchState, initialLoading])
+);
 
   // ✅ NEW: chosenPath برای گیت‌کردن focus=review_tests
   const reviewChosenPath = String(state?.review?.session?.chosenPath || "");

@@ -5,6 +5,7 @@ import {
   Dimensions,
   Easing,
   FlatList,
+  InteractionManager,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -23,9 +24,12 @@ const NODE_X_LEFT = 70;
 const NODE_X_RIGHT = PATH_W - 70;
 const NODE_R = 28;
 
+// برای getItemLayout (تقریبی ولی ثابت)
+const HEADER_H = 92; // headerWrap (با marginها) حدوداً
+const DAY_H = CELL_H;
+
 /* ------------------ types ------------------ */
 type Zig = "L" | "R";
-
 type PelekanTask = {
   id: string;
   titleFa: string;
@@ -58,7 +62,7 @@ type PelekanStage = {
 type PelekanState = {
   user: { planStatus: "free" | "pro" | "expiring" | "expired"; daysLeft: number };
   stages: PelekanStage[];
-  treatment: any; // فعلاً لازم نداریم، بعداً دقیق می‌کنیم
+  treatment: any;
   progress: { activeDayId: string | null };
 };
 
@@ -67,7 +71,7 @@ type FlattenItem =
   | { kind: "day"; day: PelekanDay; zig: Zig; id: string };
 
 type Props = {
-  me: any; // همون آبجکتی که PlanStatusBadge می‌خواد
+  me: any;
   state: PelekanState;
 };
 
@@ -102,19 +106,20 @@ function Pulsing({ children }: { children: React.ReactNode }) {
 /* ============================ MAIN ============================ */
 export default function TreatmentPelekan({ me, state }: Props) {
   const insets = useSafeAreaInsets();
-
   const stages = state?.stages || [];
   const activeDayId = state?.progress?.activeDayId || null;
+
+  const listRef = useRef<FlatList<FlattenItem>>(null);
+  const lastScrolledDayIdRef = useRef<string | null>(null);
 
   /* ---------- flatten days ---------- */
   const days = useMemo<FlattenItem[]>(() => {
     const list: FlattenItem[] = [];
     let zig = 0;
 
-    stages.forEach((stage: PelekanStage) => {
+    stages.forEach((stage) => {
       list.push({ kind: "header", stage, id: `h-${stage.id}` });
-
-      (stage.days || []).forEach((day: PelekanDay) => {
+      (stage.days || []).forEach((day) => {
         list.push({
           kind: "day",
           day,
@@ -126,6 +131,55 @@ export default function TreatmentPelekan({ me, state }: Props) {
 
     return list;
   }, [stages]);
+
+  /* ---------- active index ---------- */
+  const activeIndex = useMemo(() => {
+    if (!activeDayId) return -1;
+    return days.findIndex((it) => it.kind === "day" && it.day.id === activeDayId);
+  }, [days, activeDayId]);
+
+  /* ---------- getItemLayout (برای scrollToIndex پایدار) ---------- */
+  const getItemLayout = (_: ArrayLike<FlattenItem> | null | undefined, index: number) => {
+    // چون header/day ارتفاع ثابت داریم، offset ساده میشه:
+    // offset = sum(heights[0..index-1])
+    // ولی برای ساده‌سازی: با یک حلقه کوتاه تا index محاسبه می‌کنیم (روزها زیاد هم باشه اوکیه)
+    let offset = 0;
+    for (let i = 0; i < index; i++) {
+      const it = days[i];
+      offset += it?.kind === "header" ? HEADER_H : DAY_H;
+    }
+    const length = days[index]?.kind === "header" ? HEADER_H : DAY_H;
+    return { length, offset, index };
+  };
+
+  /* ---------- scroll to active (once per activeDayId) ---------- */
+  useEffect(() => {
+    if (!activeDayId) return;
+    if (activeIndex < 0) return;
+
+    // فقط وقتی activeDayId واقعاً عوض شده
+    if (lastScrolledDayIdRef.current === activeDayId) return;
+    lastScrolledDayIdRef.current = activeDayId;
+
+    const task = InteractionManager.runAfterInteractions(() => {
+      // یک فریم صبر کن تا layout کامل‌تر بشه
+      requestAnimationFrame(() => {
+        console.log("🎯 [TreatmentPelekan] scrollToActive", { activeDayId, activeIndex, total: days.length });
+
+        try {
+          listRef.current?.scrollToIndex({
+            index: activeIndex,
+            animated: false,
+            viewPosition: 0.35,
+          });
+        } catch (e: any) {
+          console.log("🧯 [TreatmentPelekan] scrollToIndex threw", String(e?.message || e));
+        }
+      });
+    });
+
+    return () => task.cancel?.();
+  }, [activeDayId, activeIndex, days.length]);
 
   /* ============================ RENDER ============================ */
   const renderItem = ({ item }: { item: FlattenItem }) => {
@@ -140,7 +194,7 @@ export default function TreatmentPelekan({ me, state }: Props) {
     }
 
     const { day, zig } = item;
-    const isActive = day.id === activeDayId;
+    const isActive = !!activeDayId && day.id === activeDayId;
 
     const nodeX = zig === "L" ? NODE_X_LEFT : NODE_X_RIGHT;
 
@@ -173,10 +227,13 @@ export default function TreatmentPelekan({ me, state }: Props) {
                 left: nodeX - NODE_R,
                 top: CELL_H / 2 - NODE_R,
                 borderColor: isActive ? "rgba(212,175,55,.70)" : "rgba(255,255,255,.20)",
+                opacity: isActive ? 1 : 0.9,
               },
             ]}
             onPress={() => {
-              // فعلاً فقط کلیک—بعداً می‌بریمش روی صفحه Day و Taskها
+              // فعلاً فقط روز active کلیک‌پذیر
+              if (!isActive) return;
+              // TODO: navigate to Day screen
             }}
           >
             <Ionicons
@@ -200,15 +257,36 @@ export default function TreatmentPelekan({ me, state }: Props) {
 
       {/* ---------- PATH ---------- */}
       <FlatList
+        ref={listRef}
         data={days}
         keyExtractor={(it) => it.id}
         renderItem={renderItem}
         inverted
-        contentContainerStyle={{
-          paddingBottom: 24,
-          paddingTop: 16,
-        }}
+        getItemLayout={getItemLayout}
+        contentContainerStyle={{ paddingBottom: 24, paddingTop: 16 }}
         showsVerticalScrollIndicator={false}
+        onScrollToIndexFailed={(info) => {
+          // با getItemLayout معمولاً رخ نمی‌دهد، ولی برای اطمینان:
+          console.log("🧯 [TreatmentPelekan] onScrollToIndexFailed", {
+            index: info.index,
+            highestMeasuredFrameIndex: info.highestMeasuredFrameIndex,
+            averageItemLength: info.averageItemLength,
+          });
+
+          requestAnimationFrame(() => {
+            try {
+              listRef.current?.scrollToOffset({
+                offset: Math.max(0, info.averageItemLength * info.index),
+                animated: false,
+              });
+              listRef.current?.scrollToIndex({
+                index: info.index,
+                animated: false,
+                viewPosition: 0.35,
+              });
+            } catch {}
+          });
+        }}
       />
     </SafeAreaView>
   );
@@ -217,7 +295,6 @@ export default function TreatmentPelekan({ me, state }: Props) {
 /* ============================ STYLES ============================ */
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#0b0f14" },
-
   topBar: {
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -226,7 +303,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(3,7,18,.92)",
   },
 
-  headerWrap: { alignItems: "center", marginVertical: 12 },
+  // مهم: ارتفاع تقریباً ثابت برای کمک به getItemLayout
+  headerWrap: { alignItems: "center", height: HEADER_H, justifyContent: "center" },
   headerCard: {
     paddingHorizontal: 18,
     paddingVertical: 8,
