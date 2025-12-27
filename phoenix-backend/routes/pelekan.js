@@ -340,7 +340,18 @@ function baselineError(res, error, extra = {}) {
   return res.json({ ok: false, error, ...extra });
 }
 
-function canUnlockGosastanGate({ actionsProgress, contractSignedAt, lastSafetyCheckAt, lastSafetyCheckResult, gosastanUnlockedAt }) {
+/** ✅ WCDN workaround: for bastan endpoints (and any endpoint behind WCDN that must never HTML), prefer 200 + {ok:false} */
+function wcdnOkError(res, error, extra = {}) {
+  return res.json({ ok: false, error, ...extra });
+}
+
+function canUnlockGosastanGate({
+  actionsProgress,
+  contractSignedAt,
+  lastSafetyCheckAt,
+  lastSafetyCheckResult,
+  gosastanUnlockedAt,
+}) {
   if (gosastanUnlockedAt) return true;
 
   const actionsOk =
@@ -566,7 +577,9 @@ router.get("/state", authUser, async (req, res) => {
       const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasAnyProgressFinal);
 
       const suppressPaywall = tabState === "baseline_assessment";
-      const paywall = suppressPaywall ? { needed: false, reason: null } : computePaywall(planStatusFinal, hasAnyProgressFinal);
+      const paywall = suppressPaywall
+        ? { needed: false, reason: null }
+        : computePaywall(planStatusFinal, hasAnyProgressFinal);
 
       return res.json({
         ok: true,
@@ -803,7 +816,8 @@ router.get("/bastan/state", authUser, async (req, res) => {
       where: { phone },
       select: { id: true, plan: true, planExpiresAt: true },
     });
-    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+    // ✅ به جای 404 (که پشت WCDN ممکن است HTML شود) 200+ok:false
+    if (!user) return wcdnOkError(res, "USER_NOT_FOUND");
 
     const basePlan = getPlanStatus(user.plan, user.planExpiresAt);
     const { planStatusFinal, daysLeftFinal } = applyDebugPlan(req, basePlan.planStatus, basePlan.daysLeft);
@@ -950,70 +964,66 @@ router.get("/bastan/state", authUser, async (req, res) => {
       gosastanUnlockedAtFinal = updated.gosastanUnlockedAt;
     }
 
-    // When gosastan gate unlocks for the first time, switch active day
-    // نکته: اینجا همچنان "همه active ها" را completed می‌کند (مثل کد خودت).
-    // اگر خواستی بعداً ایمن‌ترش کنیم، باید فقط dayهای bastan را target کنیم.
     // ✅ Ensure transition to gosastan day1 happens even if unlockedAt was set earlier
-if (canUnlock && gosastanUnlockedAtFinal) {
-  const now = new Date();
+    if (canUnlock && gosastanUnlockedAtFinal) {
+      const now = new Date();
 
-  const gosDay1 = await prisma.pelekanDay.findFirst({
-    where: { stage: { code: "gosastan" }, dayNumberInStage: 1 },
-    select: { id: true },
-  });
-  if (!gosDay1?.id) {
-    // nothing to activate
-  } else {
-    const gosActive = await prisma.pelekanDayProgress.findFirst({
-      where: { userId: user.id, dayId: gosDay1.id, status: "active" },
-      select: { dayId: true },
-    });
+      const gosDay1 = await prisma.pelekanDay.findFirst({
+        where: { stage: { code: "gosastan" }, dayNumberInStage: 1 },
+        select: { id: true },
+      });
 
-    if (!gosActive) {
-      await prisma.$transaction(async (tx) => {
-        // ✅ فقط dayهای bastan را هدف بگیر
-        const bastanDayIds = await tx.pelekanDay.findMany({
-          where: { stage: { code: "bastan" } },
-          select: { id: true },
+      if (gosDay1?.id) {
+        const gosActive = await prisma.pelekanDayProgress.findFirst({
+          where: { userId: user.id, dayId: gosDay1.id, status: "active" },
+          select: { dayId: true },
         });
-        const ids = bastanDayIds.map((x) => x.id);
 
-        if (ids.length) {
-          await tx.pelekanDayProgress.updateMany({
-            where: {
-              userId: user.id,
-              status: "active",
-              dayId: { in: ids },
-            },
-            data: {
-              status: "completed",
-              completionPercent: 100,
-              completedAt: now,
-              lastActivityAt: now,
-            },
+        if (!gosActive) {
+          await prisma.$transaction(async (tx) => {
+            // ✅ فقط dayهای bastan را هدف بگیر
+            const bastanDayIds = await tx.pelekanDay.findMany({
+              where: { stage: { code: "bastan" } },
+              select: { id: true },
+            });
+            const ids = bastanDayIds.map((x) => x.id);
+
+            if (ids.length) {
+              await tx.pelekanDayProgress.updateMany({
+                where: {
+                  userId: user.id,
+                  status: "active",
+                  dayId: { in: ids },
+                },
+                data: {
+                  status: "completed",
+                  completionPercent: 100,
+                  completedAt: now,
+                  lastActivityAt: now,
+                },
+              });
+            }
+
+            await tx.pelekanDayProgress.upsert({
+              where: { userId_dayId: { userId: user.id, dayId: gosDay1.id } },
+              create: {
+                userId: user.id,
+                dayId: gosDay1.id,
+                status: "active",
+                completionPercent: 0,
+                startedAt: now,
+                lastActivityAt: now,
+              },
+              update: {
+                status: "active",
+                lastActivityAt: now,
+                completedAt: null,
+              },
+            });
           });
         }
-
-        await tx.pelekanDayProgress.upsert({
-          where: { userId_dayId: { userId: user.id, dayId: gosDay1.id } },
-          create: {
-            userId: user.id,
-            dayId: gosDay1.id,
-            status: "active",
-            completionPercent: 0,
-            startedAt: now,
-            lastActivityAt: now,
-          },
-          update: {
-            status: "active",
-            lastActivityAt: now,
-            completedAt: null,
-          },
-        });
-      });
+      }
     }
-  }
-}
 
     // Response
     return res.json({
@@ -1048,7 +1058,7 @@ if (canUnlock && gosastanUnlockedAtFinal) {
     });
   } catch (e) {
     console.error("[pelekan.bastan.state] error:", e);
-    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+    return wcdnOkError(res, "SERVER_ERROR");
   }
 });
 
@@ -1061,14 +1071,15 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     const { subtaskKey, payload } = req.body || {};
 
     if (!subtaskKey || typeof subtaskKey !== "string") {
-  return wcdnOkError(res, "SUBTASK_KEY_REQUIRED");
+      return wcdnOkError(res, "SUBTASK_KEY_REQUIRED");
     }
 
     const user = await prisma.user.findUnique({
       where: { phone },
       select: { id: true, plan: true, planExpiresAt: true },
     });
-    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+    // ✅ (گفتیم) به جای 404
+    if (!user) return wcdnOkError(res, "USER_NOT_FOUND");
 
     const basePlan = getPlanStatus(user.plan, user.planExpiresAt);
     const { planStatusFinal } = applyDebugPlan(req, basePlan.planStatus, basePlan.daysLeft);
@@ -1102,7 +1113,8 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
 
     // gate: pro requirement (either action-level or subtask-level)
     if ((subtask.action?.isProLocked || subtask.isFree === false) && !isProLike) {
-      return res.status(403).json({ ok: false, error: "PRO_REQUIRED" });
+      // ✅ (گفتیم) به جای 403
+      return wcdnOkError(res, "PRO_REQUIRED");
     }
 
     // gate: sequential unlock (must not be blocked by previous action)
@@ -1133,7 +1145,8 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       prevOk = prevOk && isComplete;
     }
     if (targetLockedByPrev) {
-      return res.status(403).json({ ok: false, error: "ACTION_LOCKED", reason: "previous_action_incomplete" });
+      // ✅ (گفتیم) به جای 403 + JSON
+      return wcdnOkError(res, "ACTION_LOCKED", { reason: "previous_action_incomplete" });
     }
 
     // already done? (one-way)
@@ -1142,7 +1155,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       select: { id: true, isDone: true },
     });
     if (existing?.isDone) {
-  return wcdnOkError(res, "ALREADY_DONE");
+      return wcdnOkError(res, "ALREADY_DONE");
     }
 
     // compute before/after for action completion bonus
@@ -1295,20 +1308,20 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     await pelekanEngine.refresh(prisma, user.id);
 
     return res.json({
-  ok: true,
-  data: {
-    subtaskKey: subtask.key,
-    actionCode: subtask.action?.code || null,
-    done: true,
-    xpAwarded: { subtask: subtaskXp, actionBonus: actionBonusXp },
-    actionReachedMinRequired: crossedToDone,
-    actionProgress: { before: beforeDone, after: afterDone, minRequired: minReq },
-  },
-});
+      ok: true,
+      data: {
+        subtaskKey: subtask.key,
+        actionCode: subtask.action?.code || null,
+        done: true,
+        xpAwarded: { subtask: subtaskXp, actionBonus: actionBonusXp },
+        actionReachedMinRequired: crossedToDone,
+        actionProgress: { before: beforeDone, after: afterDone, minRequired: minReq },
+      },
+    });
   } catch (e) {
-  console.error("[pelekan.bastan.subtask.complete] error:", e);
-  return wcdnOkError(res, "SERVER_ERROR");
-}
+    console.error("[pelekan.bastan.subtask.complete] error:", e);
+    return wcdnOkError(res, "SERVER_ERROR");
+  }
 });
 
 /* ---------- POST /api/pelekan/bastan/intro/complete ---------- */
@@ -1322,7 +1335,8 @@ router.post("/bastan/intro/complete", authUser, async (req, res) => {
       where: { phone },
       select: { id: true },
     });
-    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+    // ✅ به جای 404
+    if (!user) return wcdnOkError(res, "USER_NOT_FOUND");
 
     const now = new Date();
 
@@ -1336,7 +1350,7 @@ router.post("/bastan/intro/complete", authUser, async (req, res) => {
     return res.json({ ok: true, data: { completedAt: st.introAudioCompletedAt } });
   } catch (e) {
     console.error("[pelekan.bastan.intro.complete] error:", e);
-    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+    return wcdnOkError(res, "SERVER_ERROR");
   }
 });
 
@@ -1763,10 +1777,11 @@ router.post("/baseline/seen", authUser, async (req, res) => {
 
 // -------------------- Debug Endpoints --------------------
 
-// GET /api/pelekan/_debug/400  => must return JSON 400 (no HTML)
+// GET /api/pelekan/_debug/400  => must return JSON (no HTML behind WCDN)
+// ✅ تغییر: به جای status(400)، 200 می‌دهیم و داخل body ok:false می‌گذاریم
 router.get("/_debug/400", (req, res) => {
   if (!isDebugAllowed(req)) return res.status(404).json({ ok: false, error: "NOT_FOUND" });
-  res.status(400).json({ ok: false, error: "DEBUG_400", ts: new Date().toISOString() });
+  return res.json({ ok: false, error: "DEBUG_400", ts: new Date().toISOString() });
 });
 
 /* ---------- POST /api/pelekan/_debug/force-active-day ---------- */
