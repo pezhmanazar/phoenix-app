@@ -972,14 +972,18 @@ if (canUnlock && gosastanUnlockedAtFinal) {
     if (!gosActive) {
       await prisma.$transaction(async (tx) => {
         await tx.pelekanDayProgress.updateMany({
-          where: { userId: user.id, status: "active" },
-          data: {
-            status: "completed",
-            completionPercent: 100,
-            completedAt: now,
-            lastActivityAt: now,
-          },
-        });
+  where: {
+    userId: user.id,
+    status: "active",
+    day: { stage: { code: "bastan" } },
+  },
+  data: {
+    status: "completed",
+    completionPercent: 100,
+    completedAt: now,
+    lastActivityAt: now,
+  },
+});
 
         await tx.pelekanDayProgress.upsert({
           where: { userId_dayId: { userId: user.id, dayId: gosDay1.id } },
