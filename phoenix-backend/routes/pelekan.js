@@ -953,15 +953,24 @@ router.get("/bastan/state", authUser, async (req, res) => {
     // When gosastan gate unlocks for the first time, switch active day
     // نکته: اینجا همچنان "همه active ها" را completed می‌کند (مثل کد خودت).
     // اگر خواستی بعداً ایمن‌ترش کنیم، باید فقط dayهای bastan را target کنیم.
-    if (canUnlock && gosastanUnlockedAtFinal && !state.gosastanUnlockedAt) {
-      const now = new Date();
-      await prisma.$transaction(async (tx) => {
-        const gosDay1 = await tx.pelekanDay.findFirst({
-          where: { stage: { code: "gosastan" }, dayNumberInStage: 1 },
-          select: { id: true },
-        });
-        if (!gosDay1?.id) return;
+    // ✅ Ensure transition to gosastan day1 happens even if unlockedAt was set earlier
+if (canUnlock && gosastanUnlockedAtFinal) {
+  const now = new Date();
 
+  const gosDay1 = await prisma.pelekanDay.findFirst({
+    where: { stage: { code: "gosastan" }, dayNumberInStage: 1 },
+    select: { id: true },
+  });
+
+  if (gosDay1?.id) {
+    const gosActive = await prisma.pelekanDayProgress.findFirst({
+      where: { userId: user.id, dayId: gosDay1.id, status: "active" },
+      select: { dayId: true },
+    });
+
+    // اگر هنوز روز 1 گسستن active نشده، ترنزیشن را انجام بده
+    if (!gosActive) {
+      await prisma.$transaction(async (tx) => {
         await tx.pelekanDayProgress.updateMany({
           where: { userId: user.id, status: "active" },
           data: {
@@ -985,10 +994,13 @@ router.get("/bastan/state", authUser, async (req, res) => {
           update: {
             status: "active",
             lastActivityAt: now,
+            completedAt: null,
           },
         });
       });
     }
+  }
+}
 
     // Response
     return res.json({
