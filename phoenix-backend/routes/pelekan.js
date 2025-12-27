@@ -1278,6 +1278,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         xpAwarded: { subtask: subtaskXp, actionBonus: actionBonusXp },
         actionReachedMinRequired: crossedToDone,
         actionProgress: { before: beforeDone, after: afterDone, minRequired: minReq },
+        refreshDebug: { refreshArgsLen: pelekanEngine.refresh.length },
         pelekan: {
           activeStage: refreshed?.activeStage || null,
           activeDay: refreshed?.activeDay || null,
