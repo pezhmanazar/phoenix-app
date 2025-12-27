@@ -489,7 +489,7 @@ router.get("/state", authUser, async (req, res) => {
       where: { phone },
       select: { id: true, plan: true, planExpiresAt: true },
     });
-    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+    if (!user) return res.json({ ok: false, error: "USER_NOT_FOUND" });
 
     // ensure PelekanProgress exists (self-heal)
     await prisma.pelekanProgress.upsert({
