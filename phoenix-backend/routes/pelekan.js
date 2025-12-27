@@ -965,65 +965,73 @@ router.get("/bastan/state", authUser, async (req, res) => {
     }
 
     // ✅ Ensure transition to gosastan day1 happens even if unlockedAt was set earlier
-    if (canUnlock && gosastanUnlockedAtFinal) {
-      const now = new Date();
+if (canUnlock && gosastanUnlockedAtFinal) {
+  const now = new Date();
 
-      const gosDay1 = await prisma.pelekanDay.findFirst({
-        where: { stage: { code: "gosastan" }, dayNumberInStage: 1 },
-        select: { id: true },
-      });
+  const gosDay1 = await prisma.pelekanDay.findFirst({
+    where: { stage: { code: "gosastan" }, dayNumberInStage: 1 },
+    select: { id: true },
+  });
 
-      if (gosDay1?.id) {
-        const gosActive = await prisma.pelekanDayProgress.findFirst({
-          where: { userId: user.id, dayId: gosDay1.id, status: "active" },
-          select: { dayId: true },
+  if (gosDay1?.id) {
+    const gosActive = await prisma.pelekanDayProgress.findFirst({
+      where: { userId: user.id, dayId: gosDay1.id, status: "active" },
+      select: { dayId: true },
+    });
+
+    // اگر هنوز روز 1 گسستن active نشده، ترنزیشن را انجام بده
+    if (!gosActive) {
+      await prisma.$transaction(async (tx) => {
+        // 1) همه روزهای bastan را completed کن (backfill کامل 1..8)
+        const bastanDays = await tx.pelekanDay.findMany({
+          where: { stage: { code: "bastan" } },
+          orderBy: { dayNumberInStage: "asc" },
+          select: { id: true },
         });
 
-        if (!gosActive) {
-          await prisma.$transaction(async (tx) => {
-            // ✅ فقط dayهای bastan را هدف بگیر
-            const bastanDayIds = await tx.pelekanDay.findMany({
-              where: { stage: { code: "bastan" } },
-              select: { id: true },
-            });
-            const ids = bastanDayIds.map((x) => x.id);
-
-            if (ids.length) {
-              await tx.pelekanDayProgress.updateMany({
-                where: {
-                  userId: user.id,
-                  status: "active",
-                  dayId: { in: ids },
-                },
-                data: {
-                  status: "completed",
-                  completionPercent: 100,
-                  completedAt: now,
-                  lastActivityAt: now,
-                },
-              });
-            }
-
-            await tx.pelekanDayProgress.upsert({
-              where: { userId_dayId: { userId: user.id, dayId: gosDay1.id } },
-              create: {
-                userId: user.id,
-                dayId: gosDay1.id,
-                status: "active",
-                completionPercent: 0,
-                startedAt: now,
-                lastActivityAt: now,
-              },
-              update: {
-                status: "active",
-                lastActivityAt: now,
-                completedAt: null,
-              },
-            });
+        for (const d of bastanDays) {
+          await tx.pelekanDayProgress.upsert({
+            where: { userId_dayId: { userId: user.id, dayId: d.id } },
+            create: {
+              userId: user.id,
+              dayId: d.id,
+              status: "completed",
+              completionPercent: 100,
+              startedAt: now,
+              lastActivityAt: now,
+              completedAt: now,
+              xpEarned: 0,
+            },
+            update: {
+              status: "completed",
+              completionPercent: 100,
+              lastActivityAt: now,
+              completedAt: now,
+            },
           });
         }
-      }
+
+        // 2) روز 1 گسستن را active کن
+        await tx.pelekanDayProgress.upsert({
+          where: { userId_dayId: { userId: user.id, dayId: gosDay1.id } },
+          create: {
+            userId: user.id,
+            dayId: gosDay1.id,
+            status: "active",
+            completionPercent: 0,
+            startedAt: now,
+            lastActivityAt: now,
+          },
+          update: {
+            status: "active",
+            lastActivityAt: now,
+            completedAt: null,
+          },
+        });
+      });
     }
+  }
+}
 
     // Response
     return res.json({
