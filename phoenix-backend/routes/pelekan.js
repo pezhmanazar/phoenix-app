@@ -1267,24 +1267,19 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     await syncBastanActionsToPelekanDays(prisma, user.id);
 
     // ✅ engine signature: (prisma, userId) — یکپارچه
-    const refreshed = await pelekanEngine.refresh(prisma, user.id);
+    await pelekanEngine.refresh(prisma, user.id);
 
     return res.json({
-      ok: true,
-      data: {
-        subtaskKey: subtask.key,
-        actionCode: subtask.action?.code || null,
-        done: true,
-        xpAwarded: { subtask: subtaskXp, actionBonus: actionBonusXp },
-        actionReachedMinRequired: crossedToDone,
-        actionProgress: { before: beforeDone, after: afterDone, minRequired: minReq },
-        refreshDebug: { refreshArgsLen: pelekanEngine.refresh.length },
-        pelekan: {
-          activeStage: refreshed?.activeStage || null,
-          activeDay: refreshed?.activeDay || null,
-        },
-      },
-    });
+  ok: true,
+  data: {
+    subtaskKey: subtask.key,
+    actionCode: subtask.action?.code || null,
+    done: true,
+    xpAwarded: { subtask: subtaskXp, actionBonus: actionBonusXp },
+    actionReachedMinRequired: crossedToDone,
+    actionProgress: { before: beforeDone, after: afterDone, minRequired: minReq },
+  },
+});
   } catch (e) {
     console.error("[pelekan.bastan.subtask.complete] error:", e);
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
