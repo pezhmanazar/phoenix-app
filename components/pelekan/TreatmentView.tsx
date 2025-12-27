@@ -76,7 +76,24 @@ export type ResultsItem = {
   done: boolean;
 };
 
-export type ListItem = HeaderItem | DayItem | SpacerItem | ResultsItem;
+export type StartItem = {
+  kind: "start";
+  id: string;
+  zig: "L" | "R";
+  titleFa: string;
+  done: boolean;
+};
+
+export type StageNodeItem = {
+  kind: "stage_node";
+  id: string;
+  zig: "L" | "R";
+  stage: PelekanStage;
+  done?: boolean;
+  active?: boolean;
+};
+
+export type ListItem = HeaderItem | DayItem | SpacerItem | ResultsItem | StartItem | StageNodeItem;
 
 type Props = {
   item: ListItem;
@@ -85,6 +102,7 @@ type Props = {
 
   onTapActiveDay?: (day: PelekanDay, opts?: { mode: "active" | "preview" }) => void;
   onTapResults?: () => void;
+  onTapStart?: () => void;
 };
 
 /* ----------------------------- UI Consts ----------------------------- */
@@ -117,34 +135,17 @@ const palette = {
     doneIcon: "#FFFFFF",
     doneLabel: "#FFFFFF",
   },
-  stepGlass: {
-    bg: "rgba(255,255,255,.04)",
-    border: "rgba(255,255,255,.10)",
-    text: "#F9FAFB",
-  },
-  stepIcon: {
-    bastan: "#E98A15",
-    gosastan: "#FBBF24",
-    sookhtan: "#F97316",
-    sarashtan: "#60A5FA",
-    ziestan: "#4ADE80",
-    sakhtan: "#A78BFA",
-    rastan: "#F472B6",
-    default: "rgba(231,238,247,.70)",
-  },
 };
 
-function stageIcon(code: string): { name: keyof typeof Ionicons.glyphMap; color: string } {
-  const color = (palette.stepIcon as any)[code] ?? palette.stepIcon.default;
-  const name =
-    code === "bastan"
-      ? ("flame" as const)
-      : code === "ziestan"
-      ? ("leaf" as const)
-      : code === "rastan"
-      ? ("sparkles" as const)
-      : ("ellipse-outline" as const);
-  return { name, color };
+function stageIconName(code: string): keyof typeof Ionicons.glyphMap {
+  if (code === "bastan") return "flame";
+  if (code === "gosastan") return "link";
+  if (code === "sookhtan") return "bonfire";
+  if (code === "sarashtan") return "person";
+  if (code === "ziestan") return "leaf";
+  if (code === "sakhtan") return "hammer";
+  if (code === "rastan") return "sparkles";
+  return "ellipse-outline";
 }
 
 /* ----------------------------- Pulsing ----------------------------- */
@@ -159,18 +160,8 @@ function Pulsing({ children, playing }: { children: React.ReactNode; playing: bo
 
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(scale, {
-          toValue: 1.08,
-          duration: 700,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(scale, {
-          toValue: 1.0,
-          duration: 700,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
+        Animated.timing(scale, { toValue: 1.08, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(scale, { toValue: 1.0, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ])
     );
 
@@ -181,7 +172,6 @@ function Pulsing({ children, playing }: { children: React.ReactNode; playing: bo
   return <Animated.View style={{ transform: [{ scale }] }}>{children}</Animated.View>;
 }
 
-/* ----------------------------- Helpers ----------------------------- */
 function isDoneRow(dp: DayProgressRow | undefined) {
   if (!dp) return false;
   const st = String(dp.status || "").toLowerCase();
@@ -191,7 +181,7 @@ function isDoneRow(dp: DayProgressRow | undefined) {
 }
 
 /* ----------------------------- Component (ONE ITEM) ----------------------------- */
-export default function TreatmentView({ item, state, onTapActiveDay, onTapResults }: Props) {
+export default function TreatmentView({ item, state, onTapActiveDay, onTapResults, onTapStart }: Props) {
   const activeDayId = state.progress?.activeDayId || null;
 
   const dayProgressMap = useMemo(() => {
@@ -201,66 +191,9 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
     return m;
   }, [state.progress?.dayProgress]);
 
-  const access = state.treatmentAccess;
-  const canEnterActive = access === "full" || access === "frozen_current";
-
-  // ✅ stage order logic: روزهای مرحله‌های قبلی فقط preview
-  const activeStageCode: string | null =
-    (state?.treatment?.activeStage as string | undefined) ??
-    (state?.stages || []).find((s: any) => s?.status === "active")?.code ??
-    null;
-
-  const activeStageOrder: number =
-    (state?.stages || []).find((s) => s.code === activeStageCode)?.sortOrder ?? 999;
-
-  // ✅ آخرین مرحله = rastan
-  const LAST_STAGE_CODE = "rastan";
-
-  // ✅ تشخیص آخرین day کل مسیر (برای قطع کردن زیگزاگ بالا)
-  const lastDayIdAll: string | null = useMemo(() => {
-    const st = state?.stages || [];
-    if (!st.length) return null;
-    const allDays = st.flatMap((x) => x.days || []);
-    if (!allDays.length) return null;
-    // فرض: globalDayNumber مرتب/درست است
-    const last = [...allDays].sort((a, b) => (a.globalDayNumber || 0) - (b.globalDayNumber || 0)).slice(-1)[0];
-    return last?.id ?? null;
-  }, [state?.stages]);
-
   if (item.kind === "spacer") return <View style={{ height: 10 }} />;
 
-  if (item.kind === "header") {
-    const { stage } = item;
-    const icon = stageIcon(stage.code);
-
-    return (
-      <View style={{ alignItems: "center", alignSelf: "center", width: PATH_W }}>
-        <View style={[styles.stepHeaderCard, { backgroundColor: palette.stepGlass.bg, borderColor: palette.stepGlass.border }]}>
-          <Ionicons name={icon.name} size={18} color={icon.color} style={{ marginLeft: 6 }} />
-          <Text style={[styles.stepHeaderText, { color: palette.stepGlass.text }]}>{stage.titleFa}</Text>
-        </View>
-
-        {/* ✅ اگر مرحله آخره (رستن) این کلاهک پایین رو هم نذاریم که حس ادامه نده */}
-        {stage.code !== LAST_STAGE_CODE && (
-          <View
-            style={{
-              width: 64,
-              height: 10,
-              backgroundColor: palette.stepGlass.bg,
-              borderBottomLeftRadius: 12,
-              borderBottomRightRadius: 12,
-              borderWidth: 1,
-              borderTopWidth: 0,
-              borderColor: palette.stepGlass.border,
-              marginTop: -2,
-            }}
-          />
-        )}
-      </View>
-    );
-  }
-
-  // ✅ results (دایره نتایج)
+  // ✅ results (دایره سنجش) — خط صاف عمودی
   if (item.kind === "results") {
     const done = !!item.done;
     const nodeX = MID_X;
@@ -269,13 +202,7 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
     return (
       <View style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}>
         <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
-          <Path
-            d={`M ${MID_X} ${CELL_H / 2} L ${MID_X} 0`}
-            stroke={lineColor}
-            strokeWidth={6}
-            fill="none"
-            strokeLinecap="round"
-          />
+          <Path d={`M ${MID_X} ${CELL_H / 2} L ${MID_X} 0`} stroke={lineColor} strokeWidth={6} fill="none" strokeLinecap="round" />
         </Svg>
 
         <TouchableOpacity
@@ -292,62 +219,120 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
           ]}
         >
           <Ionicons name={done ? "checkmark-circle" : "star"} size={22} color={done ? palette.node.doneIcon : palette.node.availableIcon} />
-          <Text style={[styles.nodeText, { color: done ? palette.node.doneLabel : palette.node.availableLabel }]}>سنجش</Text>
+          <Text style={[styles.nodeText, { color: done ? palette.node.doneLabel : palette.node.availableLabel }]}>{item.titleFa}</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
+  // ✅ NEW: start (دایره شروع درمان) — خط صاف عمودی مثل سنجش
+  if (item.kind === "start") {
+    const nodeX = MID_X;
+    const lineColor = palette.pathIdle;
+
+    return (
+      <View style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}>
+        <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
+          <Path d={`M ${MID_X} ${CELL_H} L ${MID_X} 0`} stroke={lineColor} strokeWidth={6} fill="none" strokeLinecap="round" />
+        </Svg>
+
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => onTapStart?.()}
+          style={[
+            styles.node,
+            {
+              left: nodeX - NODE_R,
+              top: CELL_H / 2 - NODE_R,
+              backgroundColor: palette.node.availableBg,
+              borderColor: palette.node.availableBorder,
+            },
+          ]}
+        >
+          <Ionicons name={"play"} size={22} color={palette.node.availableIcon} />
+          <Text style={[styles.nodeText, { color: palette.node.availableLabel }]}>{item.titleFa}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // ✅ NEW: stage_node (فقط اسم مرحله، زیگزاگی)
+  if (item.kind === "stage_node") {
+    const { zig, stage } = item;
+    const nodeX = zig === "L" ? NODE_X_LEFT : NODE_X_RIGHT;
+
+    const done = !!item.done;
+    const active = !!item.active;
+
+    const bg = done ? palette.node.doneBg : active ? palette.node.availableBg : palette.node.lockedBg;
+    const border = done ? palette.node.doneBorder : active ? palette.node.availableBorder : palette.node.lockedBorder;
+    const iconCol = done ? palette.node.doneIcon : active ? palette.node.availableIcon : palette.node.lockedIcon;
+    const labelCol = done ? palette.node.doneLabel : active ? palette.node.availableLabel : palette.node.lockedLabel;
+
+    const bottomY = CELL_H;
+    const topY = 0;
+
+    const pathD = `
+      M ${MID_X} ${bottomY}
+      C ${MID_X} ${bottomY - 30}, ${nodeX} ${CELL_H * 0.65}, ${nodeX} ${CELL_H * 0.5}
+      C ${nodeX} ${CELL_H * 0.35}, ${MID_X} ${topY + 30}, ${MID_X} ${topY}
+    `;
+
+    return (
+      <View style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}>
+        <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
+          <Path d={pathD} stroke={done ? palette.pathDone : palette.pathIdle} strokeWidth={6} fill="none" strokeLinecap="round" />
+        </Svg>
+
+        <View
+          style={[
+            styles.node,
+            {
+              left: nodeX - NODE_R,
+              top: CELL_H / 2 - NODE_R,
+              backgroundColor: bg,
+              borderColor: border,
+            },
+          ]}
+        >
+          <Ionicons name={stageIconName(String(stage?.code || "")) as any} size={22} color={iconCol} />
+          <Text style={[styles.nodeText, { color: labelCol }]}>{stage.titleFa}</Text>
+        </View>
+      </View>
+    );
+  }
+
   // day
-  const { day, zig, stage } = item;
+  const { day, zig, stage } = item as any;
 
   const available = !!activeDayId && day.id === activeDayId;
   const done = isDoneRow(dayProgressMap.get(day.id));
 
-  // ✅ فقط روز active اجازه "انجام" دارد
+  const access = state.treatmentAccess;
+  const canEnterActive = access === "full" || access === "frozen_current";
   const canEnter = available && canEnterActive;
 
-  // ✅ روزهای مرحله‌های قبلی (یا done شده‌ها) preview
-  const thisStageOrder = stage?.sortOrder ?? 0;
-  const isPastStage = thisStageOrder < activeStageOrder;
-  const canPreview = isPastStage || done;
-
-  const locked = !available && !canPreview;
+  const locked = !available && !done;
 
   const nodeX = zig === "L" ? NODE_X_LEFT : NODE_X_RIGHT;
-
-  const bg =
-    done ? palette.node.doneBg : available ? palette.node.availableBg : locked ? palette.node.lockedBg : palette.node.availableBg;
-
+  const bg = done ? palette.node.doneBg : available ? palette.node.availableBg : locked ? palette.node.lockedBg : palette.node.availableBg;
   const border =
     done ? palette.node.doneBorder : available ? palette.node.availableBorder : locked ? palette.node.lockedBorder : palette.node.availableBorder;
-
   const iconCol =
     done ? palette.node.doneIcon : available ? palette.node.availableIcon : locked ? palette.node.lockedIcon : palette.node.availableIcon;
-
   const labelCol =
     done ? palette.node.doneLabel : available ? palette.node.availableLabel : locked ? palette.node.lockedLabel : palette.node.availableLabel;
 
   const bottomY = CELL_H;
   const topY = 0;
 
-  // ✅ اگر این آخرین day کل مسیر است، زیگزاگ را تا بالا نکش (قطع کن)
-  const isLastPathNode = !!lastDayIdAll && day.id === lastDayIdAll;
+  const pathD = `
+    M ${MID_X} ${bottomY}
+    C ${MID_X} ${bottomY - 30}, ${nodeX} ${CELL_H * 0.65}, ${nodeX} ${CELL_H * 0.5}
+    C ${nodeX} ${CELL_H * 0.35}, ${MID_X} ${topY + 30}, ${MID_X} ${topY}
+  `;
 
-  const pathD = isLastPathNode
-    ? `
-      M ${MID_X} ${bottomY}
-      C ${MID_X} ${bottomY - 30}, ${nodeX} ${CELL_H * 0.65}, ${nodeX} ${CELL_H * 0.5}
-    `
-    : `
-      M ${MID_X} ${bottomY}
-      C ${MID_X} ${bottomY - 30}, ${nodeX} ${CELL_H * 0.65}, ${nodeX} ${CELL_H * 0.5}
-      C ${nodeX} ${CELL_H * 0.35}, ${MID_X} ${topY + 30}, ${MID_X} ${topY}
-    `;
-
-  const iconName = done ? "checkmark-circle" : available ? "star" : canPreview ? "eye" : "lock-closed-outline";
-
-  // ✅ برچسب bastan = اقدام
+  const iconName = done ? "checkmark-circle" : available ? "star" : "lock-closed-outline";
   const isBastan = String(stage?.code || "") === "bastan";
   const label = isBastan ? "اقدام" : "روز";
 
@@ -355,14 +340,7 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
     <TouchableOpacity
       activeOpacity={0.9}
       onPress={() => {
-        if (canEnter) {
-          onTapActiveDay?.(day, { mode: "active" });
-          return;
-        }
-        if (canPreview) {
-          onTapActiveDay?.(day, { mode: "preview" });
-          return;
-        }
+        if (canEnter) onTapActiveDay?.(day, { mode: "active" });
       }}
       style={[
         styles.node,
@@ -395,22 +373,6 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
 
 /* ----------------------------- Styles ----------------------------- */
 const styles = StyleSheet.create({
-  stepHeaderCard: {
-    borderWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 8,
-    alignSelf: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 6,
-  },
-  stepHeaderText: { fontWeight: "900", fontSize: 16 },
   node: {
     position: "absolute",
     width: NODE_R * 2,

@@ -401,79 +401,75 @@ export default function BastanActionScreen() {
             </View>
 
             {/* Subtasks */}
-            <Text style={styles.sectionTitle}>ریز‌اقدام‌ها</Text>
+<Text style={styles.sectionTitle}>ریز‌اقدام‌ها</Text>
 
-            {subtasks.map((s, i) => {
-              const key = String(s.key || "").trim();
-              const isDone = !!doneKeys[key] || !!(s as any)?.done || !!(s as any)?.completedAt;
-              const isSending = !!inFlightKeys[key];
-              const disabled = isDone || isSending;
+{subtasks.map((s, i) => {
+  const key = String(s.key || "").trim();
+  const isDone = !!doneKeys[key] || !!(s as any)?.done || !!(s as any)?.completedAt;
+  const isSending = !!inFlightKeys[key];
 
-              return (
-                <View key={key} style={styles.subtaskCard}>
-                  <View style={styles.subtaskRow}>
-                    <View style={styles.bullet}>
-                      <Text style={styles.bulletText}>{i + 1}</Text>
-                    </View>
+  return (
+    <View key={key} style={styles.subtaskCard}>
+      <View style={styles.subtaskRow}>
+        <View style={styles.bullet}>
+          <Text style={styles.bulletText}>{i + 1}</Text>
+        </View>
 
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.subtaskTitle}>{faOnlyTitle(s.titleFa)}</Text>
-                      {!!s.helpFa ? <Text style={styles.subtaskHelp}>{faOnlyTitle(s.helpFa)}</Text> : null}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.subtaskTitle}>{faOnlyTitle(s.titleFa)}</Text>
+          {!!s.helpFa ? <Text style={styles.subtaskHelp}>{faOnlyTitle(s.helpFa)}</Text> : null}
 
-                      <View style={styles.metaRow}>
-                        <View style={styles.metaPill}>
-                          <Ionicons
-                            name={s.isRequired ? "alert" : "information-circle"}
-                            size={14}
-                            color="rgba(231,238,247,.85)"
-                          />
-                          <Text style={styles.metaPillText}>{s.isRequired ? "اجباری" : "اختیاری"}</Text>
-                        </View>
+          <View style={styles.metaRow}>
+            <View style={styles.metaPill}>
+              <Ionicons
+                name={s.isRequired ? "alert" : "information-circle"}
+                size={14}
+                color="rgba(231,238,247,.85)"
+              />
+              <Text style={styles.metaPillText}>{s.isRequired ? "اجباری" : "اختیاری"}</Text>
+            </View>
 
-                        <View style={styles.metaPill}>
-                          <Ionicons
-                            name={s.isFree ? "lock-open-outline" : "lock-closed-outline"}
-                            size={14}
-                            color="rgba(231,238,247,.85)"
-                          />
-                          <Text style={styles.metaPillText}>{s.isFree ? "رایگان" : "حرفه‌ای"}</Text>
-                        </View>
+            <View style={styles.metaPill}>
+              <Ionicons
+                name={s.isFree ? "lock-open-outline" : "lock-closed-outline"}
+                size={14}
+                color="rgba(231,238,247,.85)"
+              />
+              <Text style={styles.metaPillText}>{s.isFree ? "رایگان" : "حرفه‌ای"}</Text>
+            </View>
 
-                        <View style={styles.metaPill}>
-                          <Ionicons name="flash" size={14} color="rgba(231,238,247,.85)" />
-                          <Text style={styles.metaPillText}>امتیاز: {s.xpReward}</Text>
-                        </View>
-                      </View>
-                    </View>
-                  </View>
+            <View style={styles.metaPill}>
+              <Ionicons name="flash" size={14} color="rgba(231,238,247,.85)" />
+              <Text style={styles.metaPillText}>امتیاز: {s.xpReward}</Text>
+            </View>
+          </View>
+        </View>
+      </View>
 
-                  {/* ✅ دکمه: چپ‌چین */}
-                  <View style={{ flexDirection: "row", justifyContent: "flex-start", marginTop: 12 }}>
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      disabled={disabled}
-                      onPress={() => completeSubtask(key)}
-                      style={[
-                        styles.doneBtn,
-                        isDone && styles.doneBtnDone,
-                        disabled && !isDone && { opacity: 0.6 },
-                      ]}
-                    >
-                      <Ionicons
-                        name={isDone ? "checkmark-circle" : isSending ? "time" : "checkmark"}
-                        size={18}
-                        color={palette.bg}
-                      />
-                      <Text style={[styles.doneBtnText, isDone && { color: palette.bg }]}>
-                        {isDone ? "انجام شده" : isSending ? "در حال ثبت…" : "انجام شد"}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })}
+      {/* پایین کارت */}
+      <View style={{ flexDirection: "row", justifyContent: "flex-start", marginTop: 12 }}>
+        {isDone ? (
+          <View style={styles.doneBadge}>
+            <Ionicons name="checkmark-circle" size={18} color={palette.green} />
+            <Text style={styles.doneBadgeText}>انجام شده</Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            disabled={isSending}
+            onPress={() => completeSubtask(key)}
+            style={[styles.doneBtn, isSending && { opacity: 0.6 }]}
+          >
+            <Ionicons name={isSending ? "time" : "checkmark"} size={18} color={palette.bg} />
+            <Text style={styles.doneBtnText}>{isSending ? "در حال ثبت…" : "انجام شد"}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+})}
 
-            {!subtasks.length ? <Text style={styles.mutedText}>برای این اقدام ریز‌اقدامی نیامده.</Text> : null}
+{!subtasks.length ? <Text style={styles.mutedText}>برای این اقدام ریز‌اقدامی نیامده.</Text> : null}
           </>
         )}
       </ScrollView>
@@ -530,6 +526,22 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(233,138,21,.10)",
     transform: [{ rotate: "-10deg" }],
   },
+  doneBadge: {
+  flexDirection: "row-reverse",
+  alignItems: "center",
+  gap: 8,
+  paddingHorizontal: 14,
+  paddingVertical: 10,
+  borderRadius: 14,
+  borderWidth: 1,
+  borderColor: "rgba(34,197,94,.28)",
+  backgroundColor: "rgba(34,197,94,.10)",
+},
+doneBadgeText: {
+  fontWeight: "900",
+  color: "rgba(231,238,247,.92)",
+  fontSize: 12,
+},
 
   errBox: { padding: 16, gap: 10, alignItems: "flex-start" },
   errText: { color: palette.red, fontWeight: "800", textAlign: "right" },
