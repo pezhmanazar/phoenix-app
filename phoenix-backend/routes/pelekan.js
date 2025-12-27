@@ -974,21 +974,26 @@ if (canUnlock && gosastanUnlockedAtFinal) {
   });
 
   if (gosDay1?.id) {
-    const gosActive = await prisma.pelekanDayProgress.findFirst({
-      where: { userId: user.id, dayId: gosDay1.id, status: "active" },
-      select: { dayId: true },
-    });
+    await prisma.$transaction(async (tx) => {
+      // --- A) Backfill bastan days to completed (even if already in gosastan) ---
+      const bastanDays = await tx.pelekanDay.findMany({
+        where: { stage: { code: "bastan" } },
+        orderBy: { dayNumberInStage: "asc" },
+        select: { id: true },
+      });
 
-    // اگر هنوز روز 1 گسستن active نشده، ترنزیشن را انجام بده
-    if (!gosActive) {
-      await prisma.$transaction(async (tx) => {
-        // 1) همه روزهای bastan را completed کن (backfill کامل 1..8)
-        const bastanDays = await tx.pelekanDay.findMany({
-          where: { stage: { code: "bastan" } },
-          orderBy: { dayNumberInStage: "asc" },
-          select: { id: true },
-        });
+      const bastanDayIds = bastanDays.map((d) => d.id);
 
+      const bastanCompletedCount = await tx.pelekanDayProgress.count({
+        where: {
+          userId: user.id,
+          dayId: { in: bastanDayIds },
+          status: "completed",
+        },
+      });
+
+      // اگر همه ۸ روز completed نیستند، بک‌فیل کن
+      if (bastanCompletedCount !== bastanDayIds.length) {
         for (const d of bastanDays) {
           await tx.pelekanDayProgress.upsert({
             where: { userId_dayId: { userId: user.id, dayId: d.id } },
@@ -1010,8 +1015,15 @@ if (canUnlock && gosastanUnlockedAtFinal) {
             },
           });
         }
+      }
 
-        // 2) روز 1 گسستن را active کن
+      // --- B) Ensure gosastan day1 is active (only if not already active) ---
+      const gosActive = await tx.pelekanDayProgress.findFirst({
+        where: { userId: user.id, dayId: gosDay1.id, status: "active" },
+        select: { dayId: true },
+      });
+
+      if (!gosActive) {
         await tx.pelekanDayProgress.upsert({
           where: { userId_dayId: { userId: user.id, dayId: gosDay1.id } },
           create: {
@@ -1028,8 +1040,8 @@ if (canUnlock && gosastanUnlockedAtFinal) {
             completedAt: null,
           },
         });
-      });
-    }
+      }
+    });
   }
 }
 
