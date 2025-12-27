@@ -1061,7 +1061,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     const { subtaskKey, payload } = req.body || {};
 
     if (!subtaskKey || typeof subtaskKey !== "string") {
-      return res.status(400).json({ ok: false, error: "SUBTASK_KEY_REQUIRED" });
+  return wcdnOkError(res, "SUBTASK_KEY_REQUIRED");
     }
 
     const user = await prisma.user.findUnique({
@@ -1098,7 +1098,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         },
       },
     });
-    if (!subtask) return res.status(404).json({ ok: false, error: "SUBTASK_NOT_FOUND" });
+    if (!subtask) return wcdnOkError(res, "SUBTASK_NOT_FOUND");
 
     // gate: pro requirement (either action-level or subtask-level)
     if ((subtask.action?.isProLocked || subtask.isFree === false) && !isProLike) {
@@ -1142,7 +1142,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       select: { id: true, isDone: true },
     });
     if (existing?.isDone) {
-      return res.status(409).json({ ok: false, error: "ALREADY_DONE" });
+  return wcdnOkError(res, "ALREADY_DONE");
     }
 
     // compute before/after for action completion bonus
@@ -1306,9 +1306,9 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
   },
 });
   } catch (e) {
-    console.error("[pelekan.bastan.subtask.complete] error:", e);
-    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
-  }
+  console.error("[pelekan.bastan.subtask.complete] error:", e);
+  return wcdnOkError(res, "SERVER_ERROR");
+}
 });
 
 /* ---------- POST /api/pelekan/bastan/intro/complete ---------- */
