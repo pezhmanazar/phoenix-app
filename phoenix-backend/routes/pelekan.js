@@ -961,29 +961,38 @@ if (canUnlock && gosastanUnlockedAtFinal) {
     where: { stage: { code: "gosastan" }, dayNumberInStage: 1 },
     select: { id: true },
   });
-
-  if (gosDay1?.id) {
+  if (!gosDay1?.id) {
+    // nothing to activate
+  } else {
     const gosActive = await prisma.pelekanDayProgress.findFirst({
       where: { userId: user.id, dayId: gosDay1.id, status: "active" },
       select: { dayId: true },
     });
 
-    // اگر هنوز روز 1 گسستن active نشده، ترنزیشن را انجام بده
     if (!gosActive) {
       await prisma.$transaction(async (tx) => {
-        await tx.pelekanDayProgress.updateMany({
-  where: {
-    userId: user.id,
-    status: "active",
-    day: { stage: { code: "bastan" } },
-  },
-  data: {
-    status: "completed",
-    completionPercent: 100,
-    completedAt: now,
-    lastActivityAt: now,
-  },
-});
+        // ✅ فقط dayهای bastan را هدف بگیر
+        const bastanDayIds = await tx.pelekanDay.findMany({
+          where: { stage: { code: "bastan" } },
+          select: { id: true },
+        });
+        const ids = bastanDayIds.map((x) => x.id);
+
+        if (ids.length) {
+          await tx.pelekanDayProgress.updateMany({
+            where: {
+              userId: user.id,
+              status: "active",
+              dayId: { in: ids },
+            },
+            data: {
+              status: "completed",
+              completionPercent: 100,
+              completedAt: now,
+              lastActivityAt: now,
+            },
+          });
+        }
 
         await tx.pelekanDayProgress.upsert({
           where: { userId_dayId: { userId: user.id, dayId: gosDay1.id } },
