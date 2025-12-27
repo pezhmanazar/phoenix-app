@@ -2,11 +2,11 @@
 import express from "express";
 import engineModule from "../services/pelekan/engine.cjs";
 import prisma from "../utils/prisma.js";
+
 const pelekanEngine = engineModule.default ?? engineModule;
 
 const router = express.Router();
 router.use(express.json());
-
 
 /* ---------- helpers (copy from users.js for consistency) ---------- */
 function normalizePhone(input) {
@@ -60,9 +60,7 @@ function getPlanStatus(plan, planExpiresAt) {
 function computeActiveDayId({ stages, dayProgress }) {
   const active = (dayProgress || [])
     .filter((d) => d.status === "active")
-    .sort(
-      (a, b) => new Date(b.lastActivityAt || 0).getTime() - new Date(a.lastActivityAt || 0).getTime()
-    )[0];
+    .sort((a, b) => new Date(b.lastActivityAt || 0).getTime() - new Date(a.lastActivityAt || 0).getTime())[0];
 
   const firstDay = stages?.[0]?.days?.[0];
   return active?.dayId || firstDay?.id || null;
@@ -107,10 +105,9 @@ function applyDebugProgress(req, hasAnyProgress) {
   return hasAnyProgressFinal;
 }
 
-function debugOnly(req, res, next) {
+function isDebugAllowed(req) {
   const isProd = process.env.NODE_ENV === "production";
-  if (isProd) return res.status(404).json({ ok: false, error: "NOT_FOUND" });
-  return next();
+  return !isProd;
 }
 
 // -------------------- Baseline Assessment (hb_baseline) --------------------
@@ -127,11 +124,7 @@ const HB_BASELINE = {
       "این سنجش کمک می‌کند شدت فشار روانی و جسمیِ مرتبط با شکست عاطفی یا جدایی را بهتر بشناسی. این یک ابزار خودآگاهی است و جایگزین ارزیابی تخصصی نیست.",
   },
   consentSteps: [
-    {
-      id: "quiet_place",
-      text: "این سنجش را در یک جای آرام و بدون مزاحمت انجام بده.",
-      optionText: "متوجه شدم",
-    },
+    { id: "quiet_place", text: "این سنجش را در یک جای آرام و بدون مزاحمت انجام بده.", optionText: "متوجه شدم" },
     {
       id: "read_calmly",
       text: "هر سؤال را با دقت بخوان و بعد از فهم دقیق، روی اولین پاسخی که به ذهنت می‌آید کلیک کن.",
@@ -156,31 +149,16 @@ const HB_BASELINE = {
         "وقتی به شکست عاطفی یا جدایی فکر می‌کنی، تا چه اندازه از نظر جسمی احساس ناخوشی می‌کنی؟\nمثل خستگی، عصبانیت، بی‌حالی، حالت تهوع، سردرد و غیره",
       options: [
         { label: "اصلاً؛ هیچ احساس جسمی ناخوشایندی در من نیست", score: 0 },
-        {
-          label:
-            "کمی ناخوشم؛ گاهی آشفتگی جسمی یا تحریک‌پذیری گذرا دارم",
-          score: 1,
-        },
-        {
-          label:
-            "تا حدی ناخوشم؛ آشفتگی جسمی واضحی دارم که معمولاً در کمتر از ده دقیقه کم می‌شود",
-          score: 2,
-        },
-        {
-          label:
-            "خیلی ناخوشم؛ آشفتگی جسمی عمیق دارم که می‌تواند از چند دقیقه تا چند ساعت طول بکشد",
-          score: 3,
-        },
+        { label: "کمی ناخوشم؛ گاهی آشفتگی جسمی یا تحریک‌پذیری گذرا دارم", score: 1 },
+        { label: "تا حدی ناخوشم؛ آشفتگی جسمی واضحی دارم که معمولاً در کمتر از ده دقیقه کم می‌شود", score: 2 },
+        { label: "خیلی ناخوشم؛ آشفتگی جسمی عمیق دارم که می‌تواند از چند دقیقه تا چند ساعت طول بکشد", score: 3 },
       ],
     },
     {
       id: "q3_acceptance",
       text: "پذیرش واقعیت و دردِ شکست عاطفی یا جدایی برایت چقدر آسان است؟",
       options: [
-        {
-          label: "خیلی سخت است؛ نمی‌توانم باور کنم این اتفاق افتاده",
-          score: 3,
-        },
+        { label: "خیلی سخت است؛ نمی‌توانم باور کنم این اتفاق افتاده", score: 3 },
         { label: "تا حدی سخت است؛ اما معمولاً می‌توانم تحملش کنم", score: 2 },
         { label: "کمی سخت است؛ و می‌توانم تحملش کنم", score: 1 },
         { label: "اصلاً سخت نیست؛ و می‌توانم ناراحتی‌اش را مدیریت کنم", score: 0 },
@@ -324,11 +302,7 @@ function toBaselineUiContent() {
       scoreHintFa: HB_BASELINE.meta.scoreHintFa,
       descriptionFa: HB_BASELINE.meta.descriptionFa,
     },
-    consentSteps: HB_BASELINE.consentSteps.map((s) => ({
-      id: s.id,
-      text: s.text,
-      optionText: s.optionText,
-    })),
+    consentSteps: HB_BASELINE.consentSteps.map((s) => ({ id: s.id, text: s.text, optionText: s.optionText })),
     questions: HB_BASELINE.questions.map((q) => ({
       id: q.id,
       text: q.text,
@@ -349,7 +323,6 @@ function getMissingSteps(answersJson) {
   const aj = answersJson || {};
   const consent = aj?.consent || {};
   const answers = aj?.answers || {};
-
   const missing = [];
 
   for (const s of HB_BASELINE.consentSteps) {
@@ -359,7 +332,6 @@ function getMissingSteps(answersJson) {
     const v = answers[q.id];
     if (typeof v !== "number") missing.push({ type: "question", id: q.id });
   }
-
   return missing;
 }
 
@@ -368,13 +340,7 @@ function baselineError(res, error, extra = {}) {
   return res.json({ ok: false, error, ...extra });
 }
 
-function canUnlockGosastanGate({
-  actionsProgress,
-  contractSignedAt,
-  lastSafetyCheckAt,
-  lastSafetyCheckResult,
-  gosastanUnlockedAt,
-}) {
+function canUnlockGosastanGate({ actionsProgress, contractSignedAt, lastSafetyCheckAt, lastSafetyCheckResult, gosastanUnlockedAt }) {
   if (gosastanUnlockedAt) return true;
 
   const actionsOk =
@@ -384,13 +350,120 @@ function canUnlockGosastanGate({
   if (!actionsOk) return false;
 
   if (!contractSignedAt) return false;
-
   if (!lastSafetyCheckAt) return false;
 
-  // ✅ FIX: enum values: none | role_based | emotional
+  // enum values: none | role_based | emotional  => only "none" is safe
   if (lastSafetyCheckResult !== "none") return false;
 
   return true;
+}
+
+/* ------------------ ✅ helper: Bastan actions -> PelekanDayProgress ------------------ */
+/**
+ * مهم:
+ * - وضعیت enum فقط: active | completed | failed
+ * - این sync فقط برای روزهای bastan است.
+ * - اگر همه actionها done باشند، این تابع هیچ کاری نمی‌کند (گذار به گسستن باید توسط gate/engine انجام شود).
+ */
+async function syncBastanActionsToPelekanDays(prismaClient, userId) {
+  const now = new Date();
+
+  // 1) bastan days
+  const bastanDays = await prismaClient.pelekanDay.findMany({
+    where: { stage: { code: "bastan" } },
+    orderBy: { dayNumberInStage: "asc" },
+    select: { id: true, dayNumberInStage: true },
+  });
+  if (!bastanDays.length) return;
+
+  // 2) actions + done counts
+  const actions = await prismaClient.bastanActionDefinition.findMany({
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, sortOrder: true, minRequiredSubtasks: true },
+  });
+  if (!actions.length) return;
+
+  const doneAgg = await prismaClient.bastanSubtaskProgress.groupBy({
+    by: ["actionId"],
+    where: { userId, isDone: true },
+    _count: { _all: true },
+  });
+
+  const doneByActionId = {};
+  for (const r of doneAgg) doneByActionId[r.actionId] = r._count._all || 0;
+
+  // ✅ اگر همه actionها done هستند => اینجا دخالت نکن (گذار به gosastan با gate/engine)
+  const allDone = actions.every((a) => (doneByActionId[a.id] || 0) >= (a.minRequiredSubtasks || 0));
+  if (allDone) return;
+
+  // 3) تعیین index اقدام فعال (اولین اقدامِ ناقص)
+  let activeIndex = 0; // 0-based
+  for (let i = 0; i < actions.length; i++) {
+    const a = actions[i];
+    const done = doneByActionId[a.id] || 0;
+    const minReq = a.minRequiredSubtasks || 0;
+    if (done < minReq) {
+      activeIndex = i;
+      break;
+    }
+  }
+
+  // clamp نسبت به تعداد dayها (اگر mismatch شد)
+  if (activeIndex < 0) activeIndex = 0;
+  if (activeIndex >= bastanDays.length) activeIndex = bastanDays.length - 1;
+
+  // 4) فقط در bastan:
+  //    dayهای قبل completed، روز active -> active
+  for (let i = 0; i < bastanDays.length; i++) {
+    const dayId = bastanDays[i].id;
+
+    if (i < activeIndex) {
+      await prismaClient.pelekanDayProgress.upsert({
+        where: { userId_dayId: { userId, dayId } },
+        create: {
+          userId,
+          dayId,
+          status: "completed",
+          completionPercent: 100,
+          startedAt: now,
+          lastActivityAt: now,
+          completedAt: now,
+          xpEarned: 0,
+        },
+        update: {
+          status: "completed",
+          completionPercent: 100,
+          lastActivityAt: now,
+          completedAt: now,
+        },
+      });
+      continue;
+    }
+
+    if (i === activeIndex) {
+      await prismaClient.pelekanDayProgress.upsert({
+        where: { userId_dayId: { userId, dayId } },
+        create: {
+          userId,
+          dayId,
+          status: "active",
+          completionPercent: 0,
+          startedAt: now,
+          lastActivityAt: now,
+          xpEarned: 0,
+        },
+        update: {
+          status: "active",
+          lastActivityAt: now,
+          completedAt: null,
+        },
+      });
+      continue;
+    }
+
+    // ✅ روزهای بعد از active را دست نمی‌زنیم.
+    // چون enum "idle" نداریم و نمی‌خواهیم رکوردهای آینده را خراب کنیم.
+  }
 }
 
 /* ---------- GET /api/pelekan/state ---------- */
@@ -400,56 +473,48 @@ router.get("/state", authUser, async (req, res) => {
 
     const phone = req.userPhone;
 
-    // ✅ 1) user first
+    // 1) user first
     const user = await prisma.user.findUnique({
       where: { phone },
       select: { id: true, plan: true, planExpiresAt: true },
     });
     if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
-    
-    // ✅ ensure PelekanProgress exists (self-heal)
+
+    // ensure PelekanProgress exists (self-heal)
     await prisma.pelekanProgress.upsert({
       where: { userId: user.id },
       update: { lastActiveAt: new Date() },
-      create: {
-        userId: user.id,
-        lastActiveAt: new Date(),
-      },
+      create: { userId: user.id, lastActiveAt: new Date() },
     });
 
+    // ✅ engine signature: (prisma, userId)
     await pelekanEngine.refresh(prisma, user.id);
 
-    // ✅ 2) reviewSession AFTER user
+    // 2) reviewSession AFTER user
     const reviewSession = await prisma.pelekanReviewSession.findUnique({
       where: { userId: user.id },
       select: {
-  id: true,
-  status: true,
-  chosenPath: true,
-  currentTest: true,
-  currentIndex: true,
-  test1CompletedAt: true,
-  test2CompletedAt: true,
-  test2SkippedAt: true, 
-  paywallShownAt: true,
-  unlockedAt: true,
-  startedAt: true,
-  completedAt: true,
-  updatedAt: true,
-},
+        id: true,
+        status: true,
+        chosenPath: true,
+        currentTest: true,
+        currentIndex: true,
+        test1CompletedAt: true,
+        test2CompletedAt: true,
+        test2SkippedAt: true,
+        paywallShownAt: true,
+        unlockedAt: true,
+        startedAt: true,
+        completedAt: true,
+        updatedAt: true,
+      },
     });
 
-    // ✅ 3) review object safely
-    const review = reviewSession
-      ? { hasSession: true, session: reviewSession }
-      : { hasSession: false, session: null };
+    // 3) review object safely
+    const review = reviewSession ? { hasSession: true, session: reviewSession } : { hasSession: false, session: null };
 
     const basePlan = getPlanStatus(user.plan, user.planExpiresAt);
-    const { planStatusFinal, daysLeftFinal } = applyDebugPlan(
-      req,
-      basePlan.planStatus,
-      basePlan.daysLeft
-    );
+    const { planStatusFinal, daysLeftFinal } = applyDebugPlan(req, basePlan.planStatus, basePlan.daysLeft);
 
     // baseline session (hb_baseline)
     const baselineSession = await prisma.assessmentSession.findUnique({
@@ -471,17 +536,15 @@ router.get("/state", authUser, async (req, res) => {
     const isBaselineCompleted = baselineSession?.status === "completed";
     const seenAt = baselineSession?.scalesJson?.baselineResultSeenAt || null;
 
-    const baselineNeedsResultScreen =
-   isBaselineCompleted && !!baselineSession?.totalScore && !seenAt;
+    const baselineNeedsResultScreen = isBaselineCompleted && !!baselineSession?.totalScore && !seenAt;
+
     // content
     const stages = await prisma.pelekanStage.findMany({
       orderBy: { sortOrder: "asc" },
       include: {
         days: {
           orderBy: { dayNumberInStage: "asc" },
-          include: {
-            tasks: { orderBy: { sortOrder: "asc" } },
-          },
+          include: { tasks: { orderBy: { sortOrder: "asc" } } },
         },
       },
     });
@@ -493,7 +556,7 @@ router.get("/state", authUser, async (req, res) => {
       let tabState = "idle";
       if (isBaselineInProgress) tabState = "baseline_assessment";
 
-      // ✅ اگر مسیر بازسنجی انتخاب شده، از choose_path عبور کن
+      // اگر مسیر بازسنجی انتخاب شده، از choose_path عبور کن
       if (!isBaselineInProgress && reviewSession?.chosenPath === "review") {
         tabState = "review";
       } else if (isBaselineCompleted) {
@@ -503,9 +566,7 @@ router.get("/state", authUser, async (req, res) => {
       const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasAnyProgressFinal);
 
       const suppressPaywall = tabState === "baseline_assessment";
-      const paywall = suppressPaywall
-        ? { needed: false, reason: null }
-        : computePaywall(planStatusFinal, hasAnyProgressFinal);
+      const paywall = suppressPaywall ? { needed: false, reason: null } : computePaywall(planStatusFinal, hasAnyProgressFinal);
 
       return res.json({
         ok: true,
@@ -513,24 +574,20 @@ router.get("/state", authUser, async (req, res) => {
           tabState,
           user: { planStatus: planStatusFinal, daysLeft: daysLeftFinal },
           treatmentAccess,
-          ui: {
-            paywall,
-            flags: { suppressPaywall, isBaselineInProgress, isBaselineCompleted },
-          },
+          ui: { paywall, flags: { suppressPaywall, isBaselineInProgress, isBaselineCompleted } },
           baseline: baselineSession
-  ? {
-      session: {
-        id: baselineSession.id,
-        status: baselineSession.status,
-        totalScore: baselineSession.totalScore,
-        level: baselineSession.scalesJson?.level || null,
-        interpretationText:
-          baselineSession.scalesJson?.interpretationTextSafe || null,
-        completedAt: baselineSession.completedAt,
-      },
-      content: toBaselineUiContent(),
-    }
-  : null,
+            ? {
+                session: {
+                  id: baselineSession.id,
+                  status: baselineSession.status,
+                  totalScore: baselineSession.totalScore,
+                  level: baselineSession.scalesJson?.level || null,
+                  interpretationText: baselineSession.scalesJson?.interpretationTextSafe || null,
+                  completedAt: baselineSession.completedAt,
+                },
+                content: toBaselineUiContent(),
+              }
+            : null,
           path: null,
           review,
           bastanIntro: null,
@@ -577,31 +634,28 @@ router.get("/state", authUser, async (req, res) => {
     const activeDayId = computeActiveDayId({ stages, dayProgress });
 
     const hasAnyProgress = Array.isArray(dayProgress) && dayProgress.length > 0;
-const hasAnyProgressFinal = applyDebugProgress(req, hasAnyProgress);
+    const hasAnyProgressFinal = applyDebugProgress(req, hasAnyProgress);
 
-// ✅ اگر بازسنجی کامل یا اسکیپ شده باشد، باید بتواند وارد پلکان شود حتی بدون dayProgress
-const reviewDoneOrSkipped = !!reviewSession?.completedAt || !!reviewSession?.test2SkippedAt;
+    // اگر بازسنجی کامل یا اسکیپ شده باشد، باید بتواند وارد پلکان شود حتی بدون dayProgress
+    const reviewDoneOrSkipped = !!reviewSession?.completedAt || !!reviewSession?.test2SkippedAt;
 
-// ✅ معیار واقعی "شروع درمان" برای تب پلکان
-const hasStartedTreatment = hasAnyProgressFinal || reviewDoneOrSkipped;
+    // معیار واقعی "شروع درمان" برای تب پلکان
+    const hasStartedTreatment = hasAnyProgressFinal || reviewDoneOrSkipped;
 
-let tabState = "idle";
+    let tabState = "idle";
 
-if (hasStartedTreatment) tabState = "treating";
-else if (isBaselineInProgress) tabState = "baseline_assessment";
-else if (baselineNeedsResultScreen) tabState = "baseline_result"; // ✅ جدید
-else if (reviewSession?.chosenPath === "review") tabState = "review";
-else if (isBaselineCompleted) tabState = "choose_path";
+    if (hasStartedTreatment) tabState = "treating";
+    else if (isBaselineInProgress) tabState = "baseline_assessment";
+    else if (baselineNeedsResultScreen) tabState = "baseline_result";
+    else if (reviewSession?.chosenPath === "review") tabState = "review";
+    else if (isBaselineCompleted) tabState = "choose_path";
 
-// ⬅️ این دو تا هم باید از hasStartedTreatment استفاده کنند وگرنه باز paywall/archive_only خراب می‌شود
-const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasStartedTreatment);
+    const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasStartedTreatment);
 
-// ✅ IMPORTANT: do NOT show paywall while baseline is in progress
-const suppressPaywall = tabState === "baseline_assessment";
-const paywall = suppressPaywall
-  ? { needed: false, reason: null }
-  : computePaywall(planStatusFinal, hasStartedTreatment);
-  
+    // do NOT show paywall while baseline is in progress
+    const suppressPaywall = tabState === "baseline_assessment";
+    const paywall = suppressPaywall ? { needed: false, reason: null } : computePaywall(planStatusFinal, hasStartedTreatment);
+
     let treatment = null;
     if (tabState === "treating") {
       const allDays = stages.flatMap((s) => s.days);
@@ -634,10 +688,7 @@ const paywall = suppressPaywall
         tabState,
         user: { planStatus: planStatusFinal, daysLeft: daysLeftFinal },
         treatmentAccess,
-        ui: {
-          paywall,
-          flags: { suppressPaywall, isBaselineInProgress, isBaselineCompleted },
-        },
+        ui: { paywall, flags: { suppressPaywall, isBaselineInProgress, isBaselineCompleted } },
         baseline: baselineSession ? { session: baselineSession, content: toBaselineUiContent() } : null,
         path: null,
         review,
@@ -662,7 +713,6 @@ const paywall = suppressPaywall
 
 // -------------------- Review Choose Path --------------------
 // POST /api/pelekan/review/choose  body: { phone, choice: "skip_review" | "review" }
-
 router.post("/review/choose", authUser, async (req, res) => {
   try {
     noStore(res);
@@ -674,78 +724,67 @@ router.post("/review/choose", authUser, async (req, res) => {
       return res.status(400).json({ ok: false, error: "CHOICE_REQUIRED" });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { phone },
-      select: { id: true },
-    });
+    const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
     if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
 
     const now = new Date();
 
     // 1) upsert review session
-const session = await prisma.pelekanReviewSession.upsert({
-  where: { userId: user.id },
-  create: {
-    userId: user.id,
-    chosenPath: choice,
-    status: choice === "review" ? "in_progress" : "completed_locked",
-    startedAt: now,
-    completedAt: null,
-    test2SkippedAt: null,
-    updatedAt: now,
-  },
-  update: {
-    chosenPath: choice,
-    status: choice === "review" ? "in_progress" : "completed_locked",
-    completedAt: null,
-    test2SkippedAt: null,
-    updatedAt: now,
-  },
-  select: {
-    id: true,
-    status: true,
-    chosenPath: true,
-    completedAt: true,
-    test2SkippedAt: true,
-    updatedAt: true,
-  },
-});
-
-// 2) اگر کاربر skip_review زد -> روز 1 bastan را active کن + نتایج دو آزمون آخر را ریست کن
-if (choice === "skip_review") {
-  // ✅ A) ورود به treating با ساختن progress واقعی
-  const firstDay = await prisma.pelekanDay.findFirst({
-    where: { stage: { code: "bastan" }, dayNumberInStage: 1 },
-    select: { id: true },
-  });
-
-  if (firstDay?.id) {
-    await prisma.pelekanDayProgress.upsert({
-      where: { userId_dayId: { userId: user.id, dayId: firstDay.id } },
+    const session = await prisma.pelekanReviewSession.upsert({
+      where: { userId: user.id },
       create: {
         userId: user.id,
-        dayId: firstDay.id,
-        status: "active",
-        completionPercent: 0,
+        chosenPath: choice,
+        status: choice === "review" ? "in_progress" : "completed_locked",
         startedAt: now,
-        lastActivityAt: now,
+        completedAt: null,
+        test2SkippedAt: null,
+        updatedAt: now,
       },
-      update: { lastActivityAt: now },
+      update: {
+        chosenPath: choice,
+        status: choice === "review" ? "in_progress" : "completed_locked",
+        completedAt: null,
+        test2SkippedAt: null,
+        updatedAt: now,
+      },
+      select: { id: true, status: true, chosenPath: true, completedAt: true, test2SkippedAt: true, updatedAt: true },
     });
-  }
 
-  // ✅ B) ریست دو آزمون آخر (تا UI نتیجه صفر نشان ندهد و اجازه انجام بدهد)
-  // اگر اسم دو آزمون شما همین‌هاست:
-  const RESET_KINDS = ["relationship_rescan", "ex_returns"];
+    // 2) اگر کاربر skip_review زد -> روز 1 bastan را active کن + نتایج دو آزمون آخر را ریست کن
+    if (choice === "skip_review") {
+      // A) ورود به treating با ساختن progress واقعی
+      const firstDay = await prisma.pelekanDay.findFirst({
+        where: { stage: { code: "bastan" }, dayNumberInStage: 1 },
+        select: { id: true },
+      });
 
-  await prisma.assessmentResult.deleteMany({
-    where: { userId: user.id, kind: { in: RESET_KINDS } },
-  });
+      if (firstDay?.id) {
+        await prisma.pelekanDayProgress.upsert({
+          where: { userId_dayId: { userId: user.id, dayId: firstDay.id } },
+          create: {
+            userId: user.id,
+            dayId: firstDay.id,
+            status: "active",
+            completionPercent: 0,
+            startedAt: now,
+            lastActivityAt: now,
+          },
+          update: { lastActivityAt: now, status: "active" },
+        });
+      }
 
-  await prisma.assessmentSession.deleteMany({
-    where: { userId: user.id, kind: { in: RESET_KINDS } },
-  });
-}
+      // B) ریست دو آزمون آخر
+      const RESET_KINDS = ["relationship_rescan", "ex_returns"];
+
+      await prisma.assessmentResult.deleteMany({
+        where: { userId: user.id, kind: { in: RESET_KINDS } },
+      });
+
+      await prisma.assessmentSession.deleteMany({
+        where: { userId: user.id, kind: { in: RESET_KINDS } },
+      });
+    }
 
     return res.json({ ok: true, data: { session } });
   } catch (e) {
@@ -754,29 +793,20 @@ if (choice === "skip_review") {
   }
 });
 
-
-
 /* ---------- GET /api/pelekan/bastan/state ---------- */
 router.get("/bastan/state", authUser, async (req, res) => {
   try {
     noStore(res);
-
     const phone = req.userPhone;
 
     const user = await prisma.user.findUnique({
       where: { phone },
       select: { id: true, plan: true, planExpiresAt: true },
     });
-
     if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
 
     const basePlan = getPlanStatus(user.plan, user.planExpiresAt);
-    const { planStatusFinal, daysLeftFinal } = applyDebugPlan(
-      req,
-      basePlan.planStatus,
-      basePlan.daysLeft
-    );
-
+    const { planStatusFinal, daysLeftFinal } = applyDebugPlan(req, basePlan.planStatus, basePlan.daysLeft);
     const isProLike = planStatusFinal === "pro" || planStatusFinal === "expiring";
 
     const [state, actions] = await Promise.all([
@@ -786,28 +816,22 @@ router.get("/bastan/state", authUser, async (req, res) => {
         update: {},
         select: {
           introAudioCompletedAt: true,
-
           contractNameTyped: true,
           contractSignatureJson: true,
           contractSignedAt: true,
-
           lastSafetyCheckAt: true,
           lastSafetyCheckResult: true,
           safetyWindowStartsAt: true,
-
           gosastanUnlockedAt: true,
         },
       }),
-
       prisma.bastanActionDefinition.findMany({
         orderBy: { sortOrder: "asc" },
-        include: {
-          subtasks: { orderBy: { sortOrder: "asc" } }, // شامل key و بقیه فیلدها هست
-        },
+        include: { subtasks: { orderBy: { sortOrder: "asc" } } },
       }),
     ]);
 
-    // ------------------ progress by actionId ------------------
+    // progress by actionId
     const doneAgg = await prisma.bastanSubtaskProgress.groupBy({
       by: ["actionId"],
       where: { userId: user.id, isDone: true },
@@ -817,17 +841,12 @@ router.get("/bastan/state", authUser, async (req, res) => {
     const doneByActionId = {};
     for (const r of doneAgg) doneByActionId[r.actionId] = r._count._all || 0;
 
-    // ------------------ ✅ NEW: done map by subtask key ------------------
-    // این دقیقاً همون چیزیه که UI لازم داره تا دکمه‌ی «انجام شد» از اول disable بشه
+    // done map by subtask key
     const doneRows = await prisma.bastanSubtaskProgress.findMany({
       where: { userId: user.id, isDone: true },
-      select: {
-        doneAt: true,
-        subtask: { select: { key: true } },
-      },
+      select: { doneAt: true, subtask: { select: { key: true } } },
     });
 
-    /** @type {Map<string, string>} key -> ISO */
     const doneMap = new Map();
     for (const r of doneRows) {
       const k = String(r?.subtask?.key || "").trim();
@@ -836,11 +855,11 @@ router.get("/bastan/state", authUser, async (req, res) => {
       doneMap.set(k, iso);
     }
 
-    // ------------------ intro state ------------------
+    // intro state
     const introDone = !!state.introAudioCompletedAt;
     const paywallNeededAfterIntro = introDone && !isProLike;
 
-    // ------------------ Build actions UI ------------------
+    // Build actions UI
     const actionsUi = [];
     let prevUnlockedByProgress = true;
 
@@ -848,7 +867,6 @@ router.get("/bastan/state", authUser, async (req, res) => {
       const completed = doneByActionId[a.id] || 0;
       const minReq = a.minRequiredSubtasks;
       const total = a.totalSubtasks;
-
       const isComplete = completed >= minReq;
 
       let locked = false;
@@ -858,7 +876,6 @@ router.get("/bastan/state", authUser, async (req, res) => {
         locked = true;
         lockReason = "previous_action_incomplete";
       }
-
       if (!locked && a.isProLocked && !isProLike) {
         locked = true;
         lockReason = "pro_required";
@@ -872,22 +889,16 @@ router.get("/bastan/state", authUser, async (req, res) => {
         sortOrder: a.sortOrder,
         medalCode: a.medalCode,
         badgeCode: a.badgeCode,
-
         isProLocked: a.isProLocked,
         totalSubtasks: total,
         minRequiredSubtasks: minReq,
-
         progress: { done: completed, required: minReq, total },
-
         status,
         locked,
         lockReason,
-
-        // ✅ NEW: done + completedAt
         subtasks: (a.subtasks || []).map((s) => {
           const key = String(s.key || "").trim();
           const doneAt = key ? doneMap.get(key) || null : null;
-
           return {
             key: s.key,
             kind: s.kind,
@@ -897,7 +908,6 @@ router.get("/bastan/state", authUser, async (req, res) => {
             isFree: s.isFree,
             sortOrder: s.sortOrder,
             xpReward: s.xpReward,
-
             done: !!doneAt,
             completedAt: doneAt,
           };
@@ -907,8 +917,7 @@ router.get("/bastan/state", authUser, async (req, res) => {
       prevUnlockedByProgress = prevUnlockedByProgress && isComplete;
     }
 
-    // ------------------ Hard gate: intro required ------------------
-    // تا وقتی مقدمه انجام نشده، همه اکشن‌ها قفل هستند
+    // Hard gate: intro required
     if (!introDone) {
       for (const a of actionsUi) {
         a.locked = true;
@@ -917,7 +926,7 @@ router.get("/bastan/state", authUser, async (req, res) => {
       }
     }
 
-    // ------------------ Gate logic for gosastan ------------------
+    // Gate logic for gosastan
     const actionsProgressForGate = actionsUi.map((a) => ({
       completed: a.progress.done,
       minRequired: a.minRequiredSubtasks,
@@ -932,33 +941,35 @@ router.get("/bastan/state", authUser, async (req, res) => {
     });
 
     let gosastanUnlockedAtFinal = state.gosastanUnlockedAt;
-
     if (canUnlock && !gosastanUnlockedAtFinal) {
       const updated = await prisma.bastanState.update({
         where: { userId: user.id },
         data: { gosastanUnlockedAt: new Date() },
         select: { gosastanUnlockedAt: true },
       });
-
       gosastanUnlockedAtFinal = updated.gosastanUnlockedAt;
     }
 
-    // ✅ When gosastan gate unlocks for the first time, switch active day
+    // When gosastan gate unlocks for the first time, switch active day
+    // نکته: اینجا همچنان "همه active ها" را completed می‌کند (مثل کد خودت).
+    // اگر خواستی بعداً ایمن‌ترش کنیم، باید فقط dayهای bastan را target کنیم.
     if (canUnlock && gosastanUnlockedAtFinal && !state.gosastanUnlockedAt) {
       const now = new Date();
-
       await prisma.$transaction(async (tx) => {
         const gosDay1 = await tx.pelekanDay.findFirst({
           where: { stage: { code: "gosastan" }, dayNumberInStage: 1 },
           select: { id: true },
         });
-
         if (!gosDay1?.id) return;
 
-        // ⚠️ چون status=locked نداریم، فعلاً active را به completed می‌بریم
         await tx.pelekanDayProgress.updateMany({
           where: { userId: user.id, status: "active" },
-          data: { status: "completed", lastActivityAt: now, fullDoneAt: now },
+          data: {
+            status: "completed",
+            completionPercent: 100,
+            completedAt: now,
+            lastActivityAt: now,
+          },
         });
 
         await tx.pelekanDayProgress.upsert({
@@ -979,78 +990,39 @@ router.get("/bastan/state", authUser, async (req, res) => {
       });
     }
 
-    // ------------------ Response ------------------
+    // Response
     return res.json({
       ok: true,
       data: {
         user: { planStatus: planStatusFinal, daysLeft: daysLeftFinal },
-
-        // وضعیت مقدمه (برای UI)
         intro: {
           completedAt: state.introAudioCompletedAt,
           paywallNeededAfterIntro,
         },
-
-        // ✅ NEW: آیتم جدا برای «شروع درمان» (همون ایده‌ای که گفتی)
         start: {
           completedAt: state.introAudioCompletedAt,
           locked: !state.introAudioCompletedAt,
           paywallNeededAfterIntro,
         },
-
         contract: {
           nameTyped: state.contractNameTyped,
           signatureJson: state.contractSignatureJson,
           signedAt: state.contractSignedAt,
         },
-
         safety: {
           lastAt: state.lastSafetyCheckAt,
           lastResult: state.lastSafetyCheckResult,
           windowStartsAt: state.safetyWindowStartsAt,
         },
-
         gosastan: {
           canUnlockNow: canUnlock,
           unlockedAt: gosastanUnlockedAtFinal,
         },
-
         actions: actionsUi,
       },
     });
   } catch (e) {
     console.error("[pelekan.bastan.state] error:", e);
-    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
-  }
-});
-/* ---------- POST /api/pelekan/bastan/intro/complete ---------- */
-router.post("/bastan/intro/complete", authUser, async (req, res) => {
-  try {
-    noStore(res);
-
-    const phone = req.userPhone;
-
-    const user = await prisma.user.findUnique({
-      where: { phone },
-      select: { id: true },
-    });
-    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
-
-    const now = new Date();
-
-    const st = await prisma.bastanState.upsert({
-      where: { userId: user.id },
-      create: { userId: user.id, introAudioCompletedAt: now },
-      update: { introAudioCompletedAt: now },
-      select: { introAudioCompletedAt: true },
-    });
-
-    return res.json({
-      ok: true,
-      data: { completedAt: st.introAudioCompletedAt },
-    });
-  } catch (e) {
-    console.error("[pelekan.bastan.intro.complete] error:", e);
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -1077,7 +1049,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     const { planStatusFinal } = applyDebugPlan(req, basePlan.planStatus, basePlan.daysLeft);
     const isProLike = planStatusFinal === "pro" || planStatusFinal === "expiring";
 
-    // find subtask by key (we assume keys are globally unique by convention)
+    // find subtask by key (keys are globally unique by convention)
     const subtask = await prisma.bastanSubtaskDefinition.findFirst({
       where: { key: subtaskKey },
       select: {
@@ -1101,7 +1073,6 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         },
       },
     });
-
     if (!subtask) return res.status(404).json({ ok: false, error: "SUBTASK_NOT_FOUND" });
 
     // gate: pro requirement (either action-level or subtask-level)
@@ -1121,29 +1092,23 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       where: { userId: user.id, isDone: true },
       _count: { _all: true },
     });
-
     const doneByActionId = {};
     for (const r of doneAgg) doneByActionId[r.actionId] = r._count._all || 0;
 
     // find if target action is locked by previous action
     let prevOk = true;
     let targetLockedByPrev = false;
-
     for (const a of actions) {
       const completed = doneByActionId[a.id] || 0;
       const isComplete = completed >= a.minRequiredSubtasks;
-
       if (a.id === subtask.actionId) {
         targetLockedByPrev = !prevOk;
         break;
       }
       prevOk = prevOk && isComplete;
     }
-
     if (targetLockedByPrev) {
-      return res
-        .status(403)
-        .json({ ok: false, error: "ACTION_LOCKED", reason: "previous_action_incomplete" });
+      return res.status(403).json({ ok: false, error: "ACTION_LOCKED", reason: "previous_action_incomplete" });
     }
 
     // already done? (one-way)
@@ -1151,7 +1116,6 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       where: { userId: user.id, subtaskId: subtask.id },
       select: { id: true, isDone: true },
     });
-
     if (existing?.isDone) {
       return res.status(409).json({ ok: false, error: "ALREADY_DONE" });
     }
@@ -1162,7 +1126,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     // upsert progress (one-way)
     await prisma.bastanSubtaskProgress
       .upsert({
-        where: existing?.id ? { id: existing.id } : { id: "__nope__" }, // will force create below when no existing
+        where: existing?.id ? { id: existing.id } : { id: "__nope__" }, // force create below when no existing
         create: {
           userId: user.id,
           actionId: subtask.actionId,
@@ -1195,11 +1159,10 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         throw e;
       });
 
-    // ✅ IMPORTANT: persist contract + safety into BastanState for gosastan gate
+    // persist contract + safety into BastanState for gosastan gate
     if (subtaskKey === "CC_2_signature") {
       const sig = payload?.signature || null;
       const typedName = sig?.name ? String(sig.name).slice(0, 80) : null;
-
       await prisma.bastanState.upsert({
         where: { userId: user.id },
         create: {
@@ -1221,7 +1184,6 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     if (subtaskKey === "CC_3_24h_safety_check") {
       // payload.choice: "خیر" | "تماس نقش‌محور" | "بله (هیجانی)"
       const choiceRaw = String(payload?.choice || "").trim();
-
       let result = "none"; // default امن
       if (choiceRaw.includes("نقش")) result = "role_based";
       if (choiceRaw.includes("هیجانی")) result = "emotional";
@@ -1245,8 +1207,6 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     // after count
     const afterDone = beforeDone + 1;
     const minReq = subtask.action?.minRequiredSubtasks || 0;
-
-    // عبور از آستانه (برای XP اکشن فقط یکبار)
     const crossedToDone = beforeDone < minReq && afterDone >= minReq;
 
     // XP for subtask (always)
@@ -1263,13 +1223,11 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       });
     }
 
-    // ✅ XP bonus for action completion (only once, when crossing threshold)
+    // XP bonus for action completion (only once, when crossing threshold)
     let actionBonusXp = 0;
     const shouldBeDone = afterDone >= minReq;
-
     if (crossedToDone) {
       actionBonusXp = Number.isFinite(subtask.action?.xpOnComplete) ? subtask.action.xpOnComplete : 0;
-
       if (actionBonusXp > 0) {
         await prisma.xpLedger.create({
           data: {
@@ -1283,7 +1241,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       }
     }
 
-    // ✅ همیشه status را همسان کن (دیگه گیر نمی‌کنه)
+    // همیشه status را همسان کن
     await prisma.bastanActionProgress.upsert({
       where: { userId_actionId: { userId: user.id, actionId: subtask.actionId } },
       create: {
@@ -1305,8 +1263,11 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       },
     });
 
-    // ✅ موتور مرکزی: هم DB را sync می‌کند، هم state نهایی را برمی‌گرداند
-    const refreshed = await pelekanEngine.refresh(user.id);
+    // ✅✅ FIX اصلی: sync کردن اقدام‌ها به dayProgress های bastan (بدون idle و بدون دخالت وقتی همه done هستند)
+    await syncBastanActionsToPelekanDays(prisma, user.id);
+
+    // ✅ engine signature: (prisma, userId) — یکپارچه
+    const refreshed = await pelekanEngine.refresh(prisma, user.id);
 
     return res.json({
       ok: true,
@@ -1317,8 +1278,6 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         xpAwarded: { subtask: subtaskXp, actionBonus: actionBonusXp },
         actionReachedMinRequired: crossedToDone,
         actionProgress: { before: beforeDone, after: afterDone, minRequired: minReq },
-
-        // ✅ فقط برای تست/اطمینان (هر وقت خواستی می‌تونی حذفش کنی)
         pelekan: {
           activeStage: refreshed?.activeStage || null,
           activeDay: refreshed?.activeDay || null,
@@ -1330,6 +1289,37 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
+
+/* ---------- POST /api/pelekan/bastan/intro/complete ---------- */
+router.post("/bastan/intro/complete", authUser, async (req, res) => {
+  try {
+    noStore(res);
+
+    const phone = req.userPhone;
+
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true },
+    });
+    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+
+    const now = new Date();
+
+    const st = await prisma.bastanState.upsert({
+      where: { userId: user.id },
+      create: { userId: user.id, introAudioCompletedAt: now },
+      update: { introAudioCompletedAt: now },
+      select: { introAudioCompletedAt: true },
+    });
+
+    return res.json({ ok: true, data: { completedAt: st.introAudioCompletedAt } });
+  } catch (e) {
+    console.error("[pelekan.bastan.intro.complete] error:", e);
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
+// -------------------- Baseline Endpoints --------------------
 
 // POST /api/pelekan/baseline/start
 router.post("/baseline/start", authUser, async (req, res) => {
@@ -1408,7 +1398,6 @@ router.post("/baseline/answer", authUser, async (req, res) => {
 
     const indexRaw = session.currentIndex || 0;
 
-    // ✅ If user is at end but answers missing -> force reset (NO back/repair here)
     if (indexRaw >= total) {
       const missingAll = getMissingSteps(session.answersJson);
       if (missingAll.length > 0) {
@@ -1420,7 +1409,6 @@ router.post("/baseline/answer", authUser, async (req, res) => {
       return baselineError(res, "ALREADY_COMPLETE");
     }
 
-    // Normal one-way: only answer CURRENT step
     const index = Math.max(0, Math.min(total - 1, indexRaw));
     const expected = steps[index];
     if (!expected) return baselineError(res, "INVALID_INDEX");
@@ -1447,7 +1435,6 @@ router.post("/baseline/answer", authUser, async (req, res) => {
       return baselineError(res, "INVALID_STEP_TYPE");
     }
 
-    // Move forward by 1
     const newIndex = Math.min(total, index + 1);
 
     const updated = await prisma.assessmentSession.update({
@@ -1498,7 +1485,6 @@ router.post("/baseline/submit", authUser, async (req, res) => {
         status: "completed",
         completedAt: new Date(),
         totalScore: calc.totalScore,
-        // ✅ فقط متن امن ذخیره می‌شود
         scalesJson: {
           level: calc.level,
           interpretationTextSafe: calc.safeText,
@@ -1582,11 +1568,7 @@ router.get("/baseline/state", authUser, async (req, res) => {
     if (!session) {
       return res.json({
         ok: true,
-        data: {
-          started: false,
-          kind: HB_BASELINE.kind,
-          totalItems: total,
-        },
+        data: { started: false, kind: HB_BASELINE.kind, totalItems: total },
       });
     }
 
@@ -1613,11 +1595,8 @@ router.get("/baseline/state", authUser, async (req, res) => {
     const answers = aj.answers || {};
 
     const missingAll = getMissingSteps(session.answersJson);
-
     let indexRaw = session.currentIndex || 0;
 
-    // ✅ CRITICAL FIX:
-    // If index is at end (>=total) but something missing -> return review_missing (NO step:null)
     if (indexRaw >= total && missingAll.length > 0) {
       return res.json({
         ok: true,
@@ -1626,13 +1605,7 @@ router.get("/baseline/state", authUser, async (req, res) => {
           sessionId: session.id,
           status: session.status,
           kind: HB_BASELINE.kind,
-          nav: {
-            index: total,
-            total,
-            canPrev: false,
-            canNext: false,
-            canSubmit: false,
-          },
+          nav: { index: total, total, canPrev: false, canNext: false, canSubmit: false },
           step: {
             type: "review_missing",
             message: "چند پاسخ ثبت نشده. لطفاً آزمون را از ابتدا دوباره انجام بده.",
@@ -1642,33 +1615,23 @@ router.get("/baseline/state", authUser, async (req, res) => {
       });
     }
 
-    // Normal index clamp
     const index = Math.max(0, Math.min(total - 1, indexRaw));
     const step = steps[index] || null;
 
-    // compute selectedIndex for UI
     let selectedIndex = null;
     if (step?.type === "question") {
       const v = answers?.[step.id];
       selectedIndex = typeof v === "number" ? v : null;
     }
 
-    // forced-answer navigation flags (NO back)
     let canNext = false;
     if (step?.type === "consent") canNext = consent?.[step.id] === true;
     else if (step?.type === "question") canNext = selectedIndex !== null;
 
-    // submit allowed only when nothing missing AND we are at last step and it is answered
     const isLast = index >= total - 1;
     const canSubmit = missingAll.length === 0 && isLast && canNext;
 
-    const nav = {
-      index,
-      total,
-      canPrev: false,
-      canNext,
-      canSubmit,
-    };
+    const nav = { index, total, canPrev: false, canNext, canSubmit };
 
     let uiStep = null;
     if (step) {
@@ -1708,103 +1671,6 @@ router.get("/baseline/state", authUser, async (req, res) => {
   }
 });
 
-// GET /api/pelekan/_debug/400  => must return JSON 400 (no HTML)
-router.get("/_debug/400", (req, res) => {
-  if (!debugOnly(req, res)) return;
-res.status(400).json({ ok: false, error: "DEBUG_400", ts: new Date().toISOString() });
-});
-
-/* ---------- POST /api/pelekan/_debug/force-active-day ---------- */
-/*
-  body:
-  {
-    "phone": "09xxxxxxxxx",
-    "stageCode": "bastan" | "gosastan" | ...,
-    "dayNumber": 1
-  }
-*/
-router.post("/_debug/force-active-day", async (req, res) => {
-  if (!debugOnly(req, res)) return;
-  try {
-    noStore(res);
-
-    const { phone, stageCode, dayNumber } = req.body || {};
-
-    if (!phone || !stageCode || !dayNumber) {
-      return res.status(400).json({
-        ok: false,
-        error: "REQUIRED_FIELDS",
-        required: ["phone", "stageCode", "dayNumber"],
-      });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { phone },
-      select: { id: true },
-    });
-    if (!user) {
-      return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
-    }
-
-    const day = await prisma.pelekanDay.findFirst({
-      where: {
-        dayNumberInStage: Number(dayNumber),
-        stage: { code: stageCode },
-      },
-      select: { id: true },
-    });
-    if (!day) {
-      return res.status(404).json({ ok: false, error: "DAY_NOT_FOUND" });
-    }
-
-    // 1) Fail any currently active day
-    await prisma.pelekanDayProgress.updateMany({
-      where: {
-        userId: user.id,
-        status: "active",
-      },
-      data: {
-        status: "failed",
-        lastActivityAt: new Date(),
-      },
-    });
-
-    // 2) Activate target day
-    await prisma.pelekanDayProgress.upsert({
-      where: {
-        userId_dayId: {
-          userId: user.id,
-          dayId: day.id,
-        },
-      },
-      create: {
-        userId: user.id,
-        dayId: day.id,
-        status: "active",
-        completionPercent: 0,
-        startedAt: new Date(),
-        lastActivityAt: new Date(),
-      },
-      update: {
-        status: "active",
-        lastActivityAt: new Date(),
-      },
-    });
-
-    return res.json({
-      ok: true,
-      data: {
-        forced: true,
-        stageCode,
-        dayNumber,
-      },
-    });
-  } catch (e) {
-    console.error("[pelekan._debug.force-active-day] error:", e);
-    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
-  }
-});
-
 // POST /api/pelekan/baseline/reset
 router.post("/baseline/reset", authUser, async (req, res) => {
   try {
@@ -1823,12 +1689,10 @@ router.post("/baseline/reset", authUser, async (req, res) => {
       return res.json({ ok: true, data: { reset: true, note: "NO_SESSION" } });
     }
 
-    // اگر completed بود و force ندادی، ریست نکن
     if (session.status === "completed" && !force) {
       return baselineError(res, "SESSION_ALREADY_COMPLETED");
     }
 
-    // پاک کردن نتیجه و سشن (clean slate)
     await prisma.assessmentResult.deleteMany({
       where: { userId: user.id, kind: HB_BASELINE.kind, wave: 1 },
     });
@@ -1872,6 +1736,78 @@ router.post("/baseline/seen", authUser, async (req, res) => {
     return res.json({ ok: true, data: { seenAt: nextScales.baselineResultSeenAt } });
   } catch (e) {
     console.error("[pelekan.baseline.seen] error:", e);
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
+// -------------------- Debug Endpoints --------------------
+
+// GET /api/pelekan/_debug/400  => must return JSON 400 (no HTML)
+router.get("/_debug/400", (req, res) => {
+  if (!isDebugAllowed(req)) return res.status(404).json({ ok: false, error: "NOT_FOUND" });
+  res.status(400).json({ ok: false, error: "DEBUG_400", ts: new Date().toISOString() });
+});
+
+/* ---------- POST /api/pelekan/_debug/force-active-day ---------- */
+/*
+  body:
+  {
+    "phone": "09xxxxxxxxx",
+    "stageCode": "bastan" | "gosastan" | ...,
+    "dayNumber": 1
+  }
+*/
+router.post("/_debug/force-active-day", async (req, res) => {
+  if (!isDebugAllowed(req)) return res.status(404).json({ ok: false, error: "NOT_FOUND" });
+
+  try {
+    noStore(res);
+
+    const { phone, stageCode, dayNumber } = req.body || {};
+
+    if (!phone || !stageCode || !dayNumber) {
+      return res.status(400).json({
+        ok: false,
+        error: "REQUIRED_FIELDS",
+        required: ["phone", "stageCode", "dayNumber"],
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true },
+    });
+    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+
+    const day = await prisma.pelekanDay.findFirst({
+      where: { dayNumberInStage: Number(dayNumber), stage: { code: stageCode } },
+      select: { id: true },
+    });
+    if (!day) return res.status(404).json({ ok: false, error: "DAY_NOT_FOUND" });
+
+    // Fail any currently active day
+    await prisma.pelekanDayProgress.updateMany({
+      where: { userId: user.id, status: "active" },
+      data: { status: "failed", lastActivityAt: new Date() },
+    });
+
+    // Activate target day
+    await prisma.pelekanDayProgress.upsert({
+      where: { userId_dayId: { userId: user.id, dayId: day.id } },
+      create: {
+        userId: user.id,
+        dayId: day.id,
+        status: "active",
+        completionPercent: 0,
+        startedAt: new Date(),
+        lastActivityAt: new Date(),
+      },
+      update: { status: "active", lastActivityAt: new Date() },
+    });
+
+    return res.json({ ok: true, data: { forced: true, stageCode, dayNumber } });
+  } catch (e) {
+    console.error("[pelekan._debug.force-active-day] error:", e);
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
