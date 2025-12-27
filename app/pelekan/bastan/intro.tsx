@@ -1,5 +1,6 @@
 // app/pelekan/bastan/intro.tsx
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio } from "expo-av";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -32,12 +33,11 @@ export default function BastanIntroScreen() {
 
   const apiBase = "https://api.qoqnoos.app";
 
-  // ✅ این URL ویس را خودت ست کن (از CDN/Storage خودت)
   const AUDIO_URL = useMemo(() => {
-    // مثال:
-    // return "https://cdn.qoqnoos.app/audio/bastan-intro.mp3";
     return "https://api.qoqnoos.app/static/audio/bastan-intro.mp3";
   }, []);
+
+  const STORAGE_POS_KEY = useMemo(() => `bastan_intro_pos_ms:${phone || "no_phone"}`, [phone]);
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -53,7 +53,16 @@ export default function BastanIntroScreen() {
   const [posMs, setPosMs] = useState(0);
   const [durMs, setDurMs] = useState(1);
 
-  const canContinue = introDone; // ✅ فقط وقتی کامل گوش کرد فعال
+  // ✅ NEW: width of progress track (for tap-to-seek)
+  const [trackW, setTrackW] = useState(0);
+
+  // ✅ NEW: restore position
+  const restorePosRef = useRef<number | null>(null);
+
+  // ✅ NEW: prevent double complete
+  const completingRef = useRef(false);
+
+  const canContinue = introDone;
 
   const fetchIntroState = useCallback(async () => {
     if (!phone) {
@@ -101,43 +110,67 @@ export default function BastanIntroScreen() {
 
   const markIntroComplete = useCallback(async () => {
     if (!phone) return;
+    if (introDone) return;
+    if (completingRef.current) return;
 
-    // ✅ اینجا فقط یک endpoint می‌زنیم تا introAudioCompletedAt ثبت شود
-    const url = `${apiBase}/api/pelekan/bastan/intro/complete`;
-    console.log("[bastan-intro] POST complete ->", url);
+    completingRef.current = true;
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-      body: JSON.stringify({ phone }),
-    });
-
-    let json: any = null;
     try {
-      json = await res.json();
-    } catch {
-      json = null;
-    }
+      const url = `${apiBase}/api/pelekan/bastan/intro/complete`;
+      console.log("[bastan-intro] POST complete ->", url);
 
-    if (!res.ok || !json?.ok) {
-      throw new Error(json?.error || `HTTP_${res.status}`);
-    }
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+        body: JSON.stringify({ phone }),
+      });
 
-    setIntroDone(true);
-  }, [phone]);
+      let json: any = null;
+      try {
+        json = await res.json();
+      } catch {
+        json = null;
+      }
+
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || `HTTP_${res.status}`);
+      }
+
+      setIntroDone(true);
+
+      // ✅ وقتی کامل شد، دیگه ادامه از وسط معنی نداره؛ پاک می‌کنیم
+      try {
+        await AsyncStorage.removeItem(STORAGE_POS_KEY);
+      } catch {}
+    } finally {
+      completingRef.current = false;
+    }
+  }, [phone, introDone, STORAGE_POS_KEY]);
 
   const unload = useCallback(async () => {
     try {
       const s = soundRef.current;
       if (s) {
+        // ✅ قبل از unload، پوزیشن رو ذخیره کن (اگر کامل نشده)
+        try {
+          const st: any = await s.getStatusAsync();
+          if (st?.isLoaded && !introDone) {
+            const p = Number(st.positionMillis ?? 0);
+            if (p > 0) {
+              await AsyncStorage.setItem(STORAGE_POS_KEY, String(p));
+            }
+          }
+        } catch {}
+
         await s.stopAsync().catch(() => {});
         await s.unloadAsync().catch(() => {});
       }
     } catch {}
+
     soundRef.current = null;
     setIsLoaded(false);
     setIsPlaying(false);
-  }, []);
+  }, [introDone, STORAGE_POS_KEY]);
 
   const loadIfNeeded = useCallback(async () => {
     if (soundRef.current) return;
@@ -150,6 +183,17 @@ export default function BastanIntroScreen() {
       playThroughEarpieceAndroid: false,
     });
 
+    // ✅ قبل از load، pos ذخیره شده رو بخونیم
+    if (!introDone && phone) {
+      try {
+        const raw = await AsyncStorage.getItem(STORAGE_POS_KEY);
+        const n = raw ? Number(raw) : 0;
+        if (Number.isFinite(n) && n > 0) restorePosRef.current = n;
+      } catch {}
+    } else {
+      restorePosRef.current = null;
+    }
+
     const { sound } = await Audio.Sound.createAsync(
       { uri: AUDIO_URL },
       { shouldPlay: false },
@@ -161,8 +205,12 @@ export default function BastanIntroScreen() {
         setPosMs(st.positionMillis ?? 0);
         setDurMs(st.durationMillis ?? 1);
 
-        // ✅ وقتی ویس تموم شد
-        if (st.didJustFinish) {
+        // ✅ اگر کاربر نزدیک پایان برد (seek) ولی didJustFinish نخورد
+        const position = Number(st.positionMillis ?? 0);
+        const duration = Number(st.durationMillis ?? 0);
+        const nearEnd = duration > 0 && duration - position <= 800;
+
+        if ((st.didJustFinish || nearEnd) && !introDone) {
           setIsPlaying(false);
           try {
             await markIntroComplete();
@@ -170,11 +218,35 @@ export default function BastanIntroScreen() {
             setErr(String(e?.message || e));
           }
         }
+
+        // ✅ ذخیره‌ی پوزیشن (هر چند ثانیه، سبک)
+        if (!introDone && duration > 0) {
+          // فقط وقتی واقعاً حرکت کرده و در حال پخش/یا seek شده
+          if (position > 0) {
+            try {
+              // ذخیره‌ی سبک: هر ~3 ثانیه یکبار
+              if (position % 3000 < 250) {
+                await AsyncStorage.setItem(STORAGE_POS_KEY, String(position));
+              }
+            } catch {}
+          }
+        }
       }
     );
 
     soundRef.current = sound;
-  }, [AUDIO_URL, markIntroComplete]);
+
+    // ✅ بعد از load: اگر پوزیشن ذخیره داشتیم، ست کنیم
+    try {
+      const restore = restorePosRef.current;
+      if (restore && restore > 0 && !introDone) {
+        const st: any = await sound.getStatusAsync();
+        const duration = Number(st?.durationMillis ?? 0);
+        const safeRestore = duration > 0 ? Math.min(restore, Math.max(0, duration - 1200)) : restore;
+        await sound.setPositionAsync(safeRestore);
+      }
+    } catch {}
+  }, [AUDIO_URL, introDone, phone, STORAGE_POS_KEY, markIntroComplete]);
 
   const togglePlay = useCallback(async () => {
     try {
@@ -182,7 +254,7 @@ export default function BastanIntroScreen() {
       const s = soundRef.current;
       if (!s) return;
 
-      const st = await s.getStatusAsync();
+      const st: any = await s.getStatusAsync();
       if (!st.isLoaded) return;
 
       if (st.isPlaying) {
@@ -194,6 +266,36 @@ export default function BastanIntroScreen() {
       setErr(String(e?.message || e));
     }
   }, [loadIfNeeded]);
+
+  // ✅ NEW: tap-to-seek on progress bar
+  const seekTo = useCallback(
+    async (ms: number) => {
+      try {
+        await loadIfNeeded();
+        const s = soundRef.current;
+        if (!s) return;
+
+        const st: any = await s.getStatusAsync();
+        if (!st.isLoaded) return;
+
+        const d = Number(st.durationMillis ?? durMs);
+        const clamped = Math.max(0, Math.min(ms, Math.max(1, d)));
+        await s.setPositionAsync(clamped);
+
+        // ✅ اگر کاربر خودش برد نزدیک پایان، همونجا کامل حساب کنیم
+        if (!introDone && d > 0 && d - clamped <= 800) {
+          try {
+            await markIntroComplete();
+          } catch (e: any) {
+            setErr(String(e?.message || e));
+          }
+        }
+      } catch (e: any) {
+        setErr(String(e?.message || e));
+      }
+    },
+    [durMs, loadIfNeeded, introDone, markIntroComplete]
+  );
 
   useEffect(() => {
     fetchIntroState();
@@ -242,12 +344,26 @@ export default function BastanIntroScreen() {
         </TouchableOpacity>
 
         <Text style={styles.title}>شروع درمان</Text>
-        <Text style={styles.desc}>ویس را کامل گوش کن تا دکمه «ادامه» فعال شود.</Text>
+        <Text style={styles.desc}>
+          {introDone ? "این ویس کامل شده. هر وقت خواستی دوباره گوش کن." : "ویس را کامل گوش کن تا دکمه «ادامه» فعال شود."}
+        </Text>
 
-        {/* ✅ Progress */}
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${Math.round(progressPct * 100)}%` }]} />
+        {/* ✅ Progress (Tap-to-seek) */}
+        <View style={styles.progressTrack} onLayout={(e) => setTrackW(e?.nativeEvent?.layout?.width ?? 0)}>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            style={{ flex: 1 }}
+            onPress={(e) => {
+              if (!trackW) return;
+              const x = e.nativeEvent.locationX;
+              const pct = Math.max(0, Math.min(1, x / trackW));
+              seekTo(Math.floor(pct * durMs));
+            }}
+          >
+            <View style={[styles.progressFill, { width: `${Math.round(progressPct * 100)}%` }]} />
+          </TouchableOpacity>
         </View>
+
         <Text style={styles.timeText}>
           {fmt(posMs)} / {fmt(durMs)}
         </Text>
@@ -265,7 +381,8 @@ export default function BastanIntroScreen() {
               return;
             }
 
-            router.replace("/pelekan/bastan" as any);
+            // هر صفحه‌ای که بعد از intro می‌خوای
+            router.replace("/(tabs)/Pelekan" as any);
           }}
         >
           <Text style={[styles.continueText, !canContinue && styles.continueTextDisabled]}>ادامه</Text>
@@ -303,7 +420,9 @@ const styles = StyleSheet.create({
     width: 280,
     height: 280,
     borderRadius: 999,
-    backgroundColor: "rgba(233,138,21,.10)"},
+    backgroundColor: "rgba(233,138,21,.10)",
+  },
+
   errBox: { padding: 16 },
   errText: { color: "#FCA5A5", fontWeight: "700", textAlign: "right" },
   retryBtn: {
