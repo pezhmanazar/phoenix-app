@@ -333,19 +333,20 @@ export default function PelekanTab() {
         active: isActive ? true : false,
       } as any);
 
-      // فقط برای مرحله فعال: روزها را نشان بده
-      if (isActive) {
-        for (const d of st.days || []) {
-          const z2: "L" | "R" = zigCounter++ % 2 === 0 ? "L" : "R";
-          list.push({
-            kind: "day",
-            id: `d-${d.id}`,
-            day: d as PelekanDay,
-            stage: st,
-            zig: z2,
-          });
-        }
-      }
+      // ✅ برای مرحله فعال: روزها را نشان بده
+// ✅ + برای bastan هم همیشه روزها/اقدام‌ها را نشان بده (حتی اگر گذشته/انجام‌شده باشد)
+if (isActive || String(st?.code || "") === "bastan") {
+  for (const d of st.days || []) {
+    const z2: "L" | "R" = zigCounter++ % 2 === 0 ? "L" : "R";
+    list.push({
+      kind: "day",
+      id: `d-${d.id}`,
+      day: d as PelekanDay,
+      stage: st,
+      zig: z2,
+    });
+  }
+}
 
       list.push({ kind: "spacer", id: `sp-${st.id}` } as any);
     }

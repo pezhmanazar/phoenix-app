@@ -228,7 +228,14 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
   // ✅ NEW: start (دایره شروع درمان) — خط صاف عمودی مثل سنجش
   if (item.kind === "start") {
     const nodeX = MID_X;
-    const lineColor = palette.pathIdle;
+
+    // ✅ startDone را از state می‌خوانیم (منبع حقیقت: bastan intro)
+    const startDone =
+      !!(state as any)?.bastanIntro?.completedAt ||
+      !!(state as any)?.bastanIntro?.introCompletedAt ||
+      !!(state as any)?.treatment?.bastanIntro?.completedAt;
+
+    const lineColor = startDone ? palette.pathDone : palette.pathIdle;
 
     return (
       <View style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}>
@@ -244,13 +251,17 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
             {
               left: nodeX - NODE_R,
               top: CELL_H / 2 - NODE_R,
-              backgroundColor: palette.node.availableBg,
-              borderColor: palette.node.availableBorder,
+              backgroundColor: startDone ? palette.node.doneBg : palette.node.availableBg,
+              borderColor: startDone ? palette.node.doneBorder : palette.node.availableBorder,
             },
           ]}
         >
-          <Ionicons name={"play"} size={22} color={palette.node.availableIcon} />
-          <Text style={[styles.nodeText, { color: palette.node.availableLabel }]}>{item.titleFa}</Text>
+          <Ionicons
+            name={startDone ? "checkmark-circle" : "play"}
+            size={22}
+            color={startDone ? palette.node.doneIcon : palette.node.availableIcon}
+          />
+          <Text style={[styles.nodeText, { color: startDone ? palette.node.doneLabel : palette.node.availableLabel }]}>{item.titleFa}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -269,6 +280,15 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
     const iconCol = done ? palette.node.doneIcon : active ? palette.node.availableIcon : palette.node.lockedIcon;
     const labelCol = done ? palette.node.doneLabel : active ? palette.node.availableLabel : palette.node.lockedLabel;
 
+    // ✅ فقط همین: اگر «شروع درمان» کامل شده و این نود «بستن» است، مسیرش سبز شود.
+    const startDone =
+      !!(state as any)?.bastanIntro?.completedAt ||
+      !!(state as any)?.bastanIntro?.introCompletedAt ||
+      !!(state as any)?.treatment?.bastanIntro?.completedAt;
+
+    const isBastanStage = String(stage?.code || "") === "bastan";
+    const strokeCol = done ? palette.pathDone : isBastanStage && startDone ? palette.pathDone : palette.pathIdle;
+
     const bottomY = CELL_H;
     const topY = 0;
 
@@ -281,7 +301,7 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
     return (
       <View style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}>
         <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
-          <Path d={pathD} stroke={done ? palette.pathDone : palette.pathIdle} strokeWidth={6} fill="none" strokeLinecap="round" />
+          <Path d={pathD} stroke={strokeCol} strokeWidth={6} fill="none" strokeLinecap="round" />
         </Svg>
 
         <View
@@ -310,7 +330,7 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
 
   const access = state.treatmentAccess;
   const canEnterActive = access === "full" || access === "frozen_current";
-  const canEnter = available && canEnterActive;
+  const canEnter = (available || done) && canEnterActive;
 
   const locked = !available && !done;
 
@@ -340,7 +360,8 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
     <TouchableOpacity
       activeOpacity={0.9}
       onPress={() => {
-        if (canEnter) onTapActiveDay?.(day, { mode: "active" });
+        if (!canEnter) return;
+        onTapActiveDay?.(day, { mode: available ? "active" : "preview" });
       }}
       style={[
         styles.node,
