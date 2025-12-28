@@ -1,3 +1,4 @@
+// phoenix-backend/prisma/seed-bastan-subtasks-action1.cjs
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
@@ -11,18 +12,18 @@ async function main() {
     {
       key: "RC_1_red_flags",
       kind: "checklist",
-      titleFa: "۱۰ پرچم قرمز رابطه‌ات را تیک بزن",
+      titleFa: "نشانه های هشداردهنده رابطت رو بررسی کن",
       helpFa: null,
       isRequired: true,
       isFree: true,
       sortOrder: 1,
-      xpReward: 10,
+      xpReward: 30,
     },
     {
       key: "RC_2_costs",
       kind: "form",
-      titleFa: "۳ هزینه‌ای که این رابطه از تو گرفت",
-      helpFa: "وقت/سلامت روان/اعتبار/پول/…",
+      titleFa: "این رابطه چه چیزهایی از تو گرفت؟",
+      helpFa: "مثال: وقت, آرامش, پول, تمرکز, اعتماد به نفس, اعتبار, خواب",
       isRequired: true,
       isFree: true,
       sortOrder: 2,
@@ -31,8 +32,8 @@ async function main() {
     {
       key: "RC_3_reality_vs_fantasy",
       kind: "text",
-      titleFa: "واقعیت رابطه vs خیال: ۵ جمله بنویس",
-      helpFa: null,
+      titleFa: "واقعیت رابطه رو بنویس, خیال‌هایی که داشتی رو هم بنویس",
+      helpFa: "پنج جمله کوتاه",
       isRequired: true,
       isFree: true,
       sortOrder: 3,
@@ -41,8 +42,8 @@ async function main() {
     {
       key: "RC_4_deal_breakers",
       kind: "choice",
-      titleFa: "اگر دوستت همین رابطه را داشت، به او می‌گفتی ادامه بده؟",
-      helpFa: "ادامه بده / تمامش کن / مطمئن نیستم",
+      titleFa: "اگر دوست صمیمیت جای تو داخل این رابطه بود, بهش می‌گفتی ادامه بده؟",
+      helpFa: null,
       isRequired: false,
       isFree: true,
       sortOrder: 4,
@@ -51,7 +52,7 @@ async function main() {
     {
       key: "RC_5_commit_confirm",
       kind: "confirm",
-      titleFa: "تأیید می‌کنم امروز واقعیت را دیدم، نه توهم را",
+      titleFa: "امروز توهم رو کنار گذاشتم و واقعیت رابطه رو دیدم",
       helpFa: null,
       isRequired: true,
       isFree: true,
@@ -65,20 +66,18 @@ async function main() {
       where: { actionId_key: { actionId: action.id, key: s.key } },
       create: { ...s, actionId: action.id },
       update: {
-  kind: s.kind,
-  titleFa: s.titleFa,
-  helpFa: s.helpFa,
-  isRequired: s.isRequired,
-  isFree: s.isFree,
-  sortOrder: s.sortOrder,
-  xpReward: s.xpReward,
-},
+        kind: s.kind,
+        titleFa: s.titleFa,
+        helpFa: s.helpFa,
+        isRequired: s.isRequired,
+        isFree: s.isFree,
+        sortOrder: s.sortOrder,
+        xpReward: s.xpReward,
+      },
     });
   }
 
-  const n = await prisma.bastanSubtaskDefinition.count({
-    where: { actionId: action.id },
-  });
+  const n = await prisma.bastanSubtaskDefinition.count({ where: { actionId: action.id } });
   console.log("Seeded Reality Check subtasks. Count =", n);
 }
 

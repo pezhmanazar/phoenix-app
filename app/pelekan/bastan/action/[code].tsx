@@ -26,7 +26,6 @@ type SubtaskUi = {
   sortOrder: number;
   xpReward: number;
 
-  // ممکنه از بک‌اند بیاد، اگر نیاد مشکلی نیست
   done?: boolean;
   completedAt?: string | null;
 };
@@ -40,6 +39,8 @@ type ActionUi = {
   isProLocked: boolean;
   progress: { done: number; required: number; total: number };
   subtasks?: SubtaskUi[];
+
+  sortOrder?: number; // برای شماره اقدام
 };
 
 type BastanStateResponse = {
@@ -74,10 +75,8 @@ const palette = {
 function faOnlyTitle(raw?: string) {
   const s = String(raw || "").trim();
   if (!s) return "—";
-  // اگر قالب «English – فارسی» بود، فقط فارسی را نشان بده
   const parts = s.split("–").map((x) => x.trim());
   if (parts.length >= 2) return parts.slice(1).join(" – ");
-  // حذف حروف لاتین
   return s.replace(/[A-Za-z]/g, "").replace(/\s{2,}/g, " ").trim() || "—";
 }
 
@@ -85,6 +84,21 @@ function statusFa(st?: ActionUi["status"]) {
   if (st === "done") return "انجام‌شده";
   if (st === "active") return "فعال";
   return "قفل";
+}
+
+function actionNumberFa(n?: number) {
+  const num = Number(n || 0);
+  const map: Record<number, string> = {
+    1: "اقدام اول",
+    2: "اقدام دوم",
+    3: "اقدام سوم",
+    4: "اقدام چهارم",
+    5: "اقدام پنجم",
+    6: "اقدام ششم",
+    7: "اقدام هفتم",
+    8: "اقدام هشتم",
+  };
+  return map[num] || (num ? `اقدام ${num}` : "اقدام");
 }
 
 export default function BastanActionScreen() {
@@ -96,29 +110,22 @@ export default function BastanActionScreen() {
   const { me } = useUser();
   const phone = String(me?.phone || "").trim();
 
-  // ✅ توکن احراز هویت از هوک
   const { token } = useAuth();
-
   const apiBase = "https://api.qoqnoos.app";
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-
   const [action, setAction] = useState<ActionUi | null>(null);
 
-  // ✅ جلوگیری از اسپم کلیک
   const inFlightRef = useRef(new Set<string>());
   const [inFlightKeys, setInFlightKeys] = useState<Record<string, boolean>>({});
-
-  // ✅ وضعیت انجام‌شده‌ها
   const [doneKeys, setDoneKeys] = useState<Record<string, boolean>>({});
 
   const log = useCallback((msg: string, extra?: any) => {
     console.log(`🟩 [BastanAction] ${msg}`, extra ?? {});
   }, []);
 
-  // ✅ یک لاگ سبک از وضعیت توکن
   useEffect(() => {
     log("auth:token", { hasToken: !!String(token || "").trim() });
   }, [token, log]);
@@ -177,7 +184,7 @@ export default function BastanActionScreen() {
 
         setAction(found);
 
-        // ✅ sync doneKeys از داده‌های بک‌اند (اگر وجود داشت)
+        // sync doneKeys
         const serverKeys: Record<string, boolean> = {};
         for (const s of found.subtasks || []) {
           const k = String((s as any)?.key || "").trim();
@@ -215,110 +222,122 @@ export default function BastanActionScreen() {
     return [...s].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   }, [action?.subtasks]);
 
-  const completeSubtask = useCallback(
-  async (subtaskKey: string) => {
-    const key = String(subtaskKey || "").trim();
-    if (!key) return;
+  const openSubtask = useCallback(
+    (key: string) => {
+      const k = String(key || "").trim();
+      if (!k) return;
 
-    if (doneKeys[key]) {
-      log("completeSubtask:skip_done", { subtaskKey: key });
-      return;
-    }
-
-    if (inFlightRef.current.has(key) || inFlightKeys[key]) {
-      log("completeSubtask:skip_inflight", { subtaskKey: key });
-      return;
-    }
-
-    const t = String(token || "").trim();
-    if (!t) {
-      setErr("برای ثبت انجام‌شدن، باید وارد حساب باشی.");
-      log("completeSubtask:skip_no_token", { subtaskKey: key });
-      return;
-    }
-
-    const p = String(phone || "").trim();
-    if (!p) {
-      setErr("شماره پیدا نشد.");
-      return;
-    }
-
-    inFlightRef.current.add(key);
-    setInFlightKeys((prev) => ({ ...prev, [key]: true }));
-
-    try {
-      setErr(null);
-
-      // ✅ phone هم در query
-      const url = `${apiBase}/api/pelekan/bastan/subtask/complete?phone=${encodeURIComponent(p)}`;
-
-      log("completeSubtask:start", { code: actionCode, phone: p, subtaskKey: key });
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-store",
-          Authorization: `Bearer ${t}`,
-        },
-        // ✅ phone هم در body
-        body: JSON.stringify({ phone, subtaskKey: key, payload: null }),
+      // ✅ مسیر درست برای فایل: app/pelekan/bastan/subtask/[key].tsx
+      router.push({
+        pathname: "/pelekan/bastan/subtask/[key]",
+        params: { key: k },
       });
+    },
+    [router]
+  );
 
-      let json: CompleteSubtaskResponse | null = null;
-      try {
-        json = (await res.json()) as any;
-      } catch {
-        json = null;
+  const completeSubtask = useCallback(
+    async (subtaskKey: string) => {
+      const key = String(subtaskKey || "").trim();
+      if (!key) return;
+
+      if (doneKeys[key]) {
+        log("completeSubtask:skip_done", { subtaskKey: key });
+        return;
       }
 
-      const error = String((json as any)?.error || "").trim();
-      log("completeSubtask:res", {
-        http: res.status,
-        ok: json?.ok ?? false,
-        error: error || null,
-        subtaskKey: key,
-      });
+      if (inFlightRef.current.has(key) || inFlightKeys[key]) {
+        log("completeSubtask:skip_inflight", { subtaskKey: key });
+        return;
+      }
 
-      if (res.status === 409 && error === "ALREADY_DONE") {
+      const t = String(token || "").trim();
+      if (!t) {
+        setErr("برای ثبت انجام‌شدن، باید وارد حساب باشی.");
+        log("completeSubtask:skip_no_token", { subtaskKey: key });
+        return;
+      }
+
+      const p = String(phone || "").trim();
+      if (!p) {
+        setErr("شماره پیدا نشد.");
+        return;
+      }
+
+      inFlightRef.current.add(key);
+      setInFlightKeys((prev) => ({ ...prev, [key]: true }));
+
+      try {
+        setErr(null);
+
+        const url = `${apiBase}/api/pelekan/bastan/subtask/complete?phone=${encodeURIComponent(p)}`;
+
+        log("completeSubtask:start", { code: actionCode, phone: p, subtaskKey: key });
+
+        const res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-store",
+            Authorization: `Bearer ${t}`,
+          },
+          body: JSON.stringify({ phone: p, subtaskKey: key, payload: null }),
+        });
+
+        let json: CompleteSubtaskResponse | null = null;
+        try {
+          json = (await res.json()) as any;
+        } catch {
+          json = null;
+        }
+
+        const error = String((json as any)?.error || "").trim();
+        log("completeSubtask:res", {
+          http: res.status,
+          ok: json?.ok ?? false,
+          error: error || null,
+          subtaskKey: key,
+        });
+
+        if (res.status === 409 && error === "ALREADY_DONE") {
+          setErr(null);
+          setDoneKeys((p2) => ({ ...p2, [key]: true }));
+          fetchOne({ initial: false, reason: "تازه‌سازی بعد از قبلاً انجام‌شده" });
+          return;
+        }
+
+        if (res.status === 401) {
+          setErr("مشکل در احراز هویت. یک‌بار خارج و دوباره وارد شو.");
+          return;
+        }
+
+        if (!res.ok || !json?.ok) {
+          setErr(error || "خطا در ثبت انجام‌شدن");
+          return;
+        }
+
         setErr(null);
         setDoneKeys((p2) => ({ ...p2, [key]: true }));
-        fetchOne({ initial: false, reason: "تازه‌سازی بعد از قبلاً انجام‌شده" });
-        return;
+        fetchOne({ initial: false, reason: "تازه‌سازی بعد از انجام" });
+      } catch (e: any) {
+        setErr(String(e?.message || e));
+      } finally {
+        inFlightRef.current.delete(key);
+        setInFlightKeys((prev) => {
+          const n = { ...prev };
+          delete n[key];
+          return n;
+        });
       }
-
-      if (res.status === 401) {
-        setErr("مشکل در احراز هویت. یک‌بار خارج و دوباره وارد شو.");
-        return;
-      }
-
-      if (!res.ok || !json?.ok) {
-        setErr(error || "خطا در ثبت انجام‌شدن");
-        return;
-      }
-
-      setErr(null);
-      setDoneKeys((p2) => ({ ...p2, [key]: true }));
-      fetchOne({ initial: false, reason: "تازه‌سازی بعد از انجام" });
-    } catch (e: any) {
-      setErr(String(e?.message || e));
-    } finally {
-      inFlightRef.current.delete(key);
-      setInFlightKeys((prev) => {
-        const n = { ...prev };
-        delete n[key];
-        return n;
-      });
-    }
-  },
-  [actionCode, apiBase, doneKeys, fetchOne, inFlightKeys, log, phone, token]
-);
+    },
+    [actionCode, apiBase, doneKeys, fetchOne, inFlightKeys, log, phone, token]
+  );
 
   /* ----------------------------- Render ----------------------------- */
   if (loading) {
     return (
       <SafeAreaView style={styles.root} edges={["top", "left", "right"]}>
-        <View style={[styles.center, { paddingTop: insets.top }]}>
+        <View style={styles.center}>
           <ActivityIndicator color={palette.gold} />
           <Text style={styles.mutedText}>در حال بارگذاری…</Text>
         </View>
@@ -327,21 +346,18 @@ export default function BastanActionScreen() {
   }
 
   const headerTitleFa = faOnlyTitle(action?.titleFa);
+  const actionNo = actionNumberFa(action?.sortOrder);
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        {/* ✅ برگشت سمت چپ */}
+      <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.8}>
-          <Ionicons name="chevron-back" size={20} color={palette.text} />
+          <Ionicons name="chevron-forward" size={20} color={palette.text} />
         </TouchableOpacity>
 
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>اقدام</Text>
-          <Text style={styles.headerSub} numberOfLines={2}>
-            {headerTitleFa}
-          </Text>
+          <Text style={styles.headerTitle}>{actionNo}</Text>
         </View>
 
         <View style={{ width: 34, height: 34 }} />
@@ -401,75 +417,90 @@ export default function BastanActionScreen() {
             </View>
 
             {/* Subtasks */}
-<Text style={styles.sectionTitle}>ریز‌اقدام‌ها</Text>
+            <Text style={styles.sectionTitle}>ریز‌اقدام‌ها</Text>
 
-{subtasks.map((s, i) => {
-  const key = String(s.key || "").trim();
-  const isDone = !!doneKeys[key] || !!(s as any)?.done || !!(s as any)?.completedAt;
-  const isSending = !!inFlightKeys[key];
+            {subtasks.map((s, i) => {
+              const key = String(s.key || "").trim();
+              if (!key) return null;
 
-  return (
-    <View key={key} style={styles.subtaskCard}>
-      <View style={styles.subtaskRow}>
-        <View style={styles.bullet}>
-          <Text style={styles.bulletText}>{i + 1}</Text>
-        </View>
+              const isDone =
+                !!doneKeys[key] || !!(s as any)?.done || !!(s as any)?.completedAt;
 
-        <View style={{ flex: 1 }}>
-          <Text style={styles.subtaskTitle}>{faOnlyTitle(s.titleFa)}</Text>
-          {!!s.helpFa ? <Text style={styles.subtaskHelp}>{faOnlyTitle(s.helpFa)}</Text> : null}
+              const isSending = !!inFlightKeys[key];
 
-          <View style={styles.metaRow}>
-            <View style={styles.metaPill}>
-              <Ionicons
-                name={s.isRequired ? "alert" : "information-circle"}
-                size={14}
-                color="rgba(231,238,247,.85)"
-              />
-              <Text style={styles.metaPillText}>{s.isRequired ? "اجباری" : "اختیاری"}</Text>
-            </View>
+              return (
+                <TouchableOpacity
+                  key={key}
+                  activeOpacity={0.92}
+                  onPress={() => openSubtask(key)}
+                  style={styles.subtaskCard}
+                >
+                  <View style={styles.subtaskRow}>
+                    <View style={styles.bullet}>
+                      <Text style={styles.bulletText}>{i + 1}</Text>
+                    </View>
 
-            <View style={styles.metaPill}>
-              <Ionicons
-                name={s.isFree ? "lock-open-outline" : "lock-closed-outline"}
-                size={14}
-                color="rgba(231,238,247,.85)"
-              />
-              <Text style={styles.metaPillText}>{s.isFree ? "رایگان" : "حرفه‌ای"}</Text>
-            </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.subtaskTitle}>{faOnlyTitle(s.titleFa)}</Text>
 
-            <View style={styles.metaPill}>
-              <Ionicons name="flash" size={14} color="rgba(231,238,247,.85)" />
-              <Text style={styles.metaPillText}>امتیاز: {s.xpReward}</Text>
-            </View>
-          </View>
-        </View>
-      </View>
+                      {!!s.helpFa ? (
+                        <Text style={styles.subtaskHelp}>{faOnlyTitle(s.helpFa)}</Text>
+                      ) : null}
 
-      {/* پایین کارت */}
-      <View style={{ flexDirection: "row", justifyContent: "flex-start", marginTop: 12 }}>
-        {isDone ? (
-          <View style={styles.doneBadge}>
-            <Ionicons name="checkmark-circle" size={18} color={palette.green} />
-            <Text style={styles.doneBadgeText}>انجام شده</Text>
-          </View>
-        ) : (
-          <TouchableOpacity
-            activeOpacity={0.85}
-            disabled={isSending}
-            onPress={() => completeSubtask(key)}
-            style={[styles.doneBtn, isSending && { opacity: 0.6 }]}
-          >
-            <Ionicons name={isSending ? "time" : "checkmark"} size={18} color={palette.bg} />
-            <Text style={styles.doneBtnText}>{isSending ? "در حال ثبت…" : "انجام شد"}</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
-  );
-})}
+                      <View style={styles.metaRow}>
+                        <View style={styles.metaPill}>
+                          <Ionicons
+                            name={s.isRequired ? "alert" : "information-circle"}
+                            size={14}
+                            color="rgba(231,238,247,.85)"
+                          />
+                          <Text style={styles.metaPillText}>
+                            {s.isRequired ? "اجباری" : "اختیاری"}
+                          </Text>
+                        </View>
 
-{!subtasks.length ? <Text style={styles.mutedText}>برای این اقدام ریز‌اقدامی نیامده.</Text> : null}
+                        <View style={styles.metaPill}>
+                          <Ionicons name="flash" size={14} color="rgba(231,238,247,.85)" />
+                          <Text style={styles.metaPillText}>امتیاز: {s.xpReward}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: "row", justifyContent: "flex-start", marginTop: 12 }}>
+                    {isDone ? (
+                      <View style={styles.doneBadge}>
+                        <Ionicons name="checkmark-circle" size={18} color={palette.green} />
+                        <Text style={styles.doneBadgeText}>انجام شده</Text>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        disabled={isSending}
+                        onPress={(e: any) => {
+                          e?.stopPropagation?.(); // ✅ خیلی مهم
+                          completeSubtask(key);
+                        }}
+                        style={[styles.doneBtn, isSending && { opacity: 0.6 }]}
+                      >
+                        <Ionicons
+                          name={isSending ? "time" : "checkmark"}
+                          size={18}
+                          color={palette.bg}
+                        />
+                        <Text style={styles.doneBtnText}>
+                          {isSending ? "در حال ثبت…" : "انجام شد"}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+
+            {!subtasks.length ? (
+              <Text style={styles.mutedText}>برای این اقدام ریز‌اقدامی نیامده.</Text>
+            ) : null}
           </>
         )}
       </ScrollView>
@@ -485,11 +516,12 @@ const styles = StyleSheet.create({
 
   header: {
     paddingHorizontal: 16,
-    paddingBottom: 14,
+    paddingTop: 0, // ✅ SafeAreaView خودش top رو هندل می‌کنه
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: palette.border,
     backgroundColor: palette.glass2,
-    flexDirection: "row",
+    flexDirection: "row-reverse",
     alignItems: "center",
     gap: 12,
   },
@@ -504,7 +536,6 @@ const styles = StyleSheet.create({
     borderColor: palette.border,
   },
   headerTitle: { color: palette.text, fontWeight: "900", fontSize: 16, textAlign: "center" },
-  headerSub: { color: "rgba(231,238,247,.85)", marginTop: 4, fontSize: 12, textAlign: "center" },
 
   glowTop: {
     position: "absolute",
@@ -526,22 +557,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(233,138,21,.10)",
     transform: [{ rotate: "-10deg" }],
   },
-  doneBadge: {
-  flexDirection: "row-reverse",
-  alignItems: "center",
-  gap: 8,
-  paddingHorizontal: 14,
-  paddingVertical: 10,
-  borderRadius: 14,
-  borderWidth: 1,
-  borderColor: "rgba(34,197,94,.28)",
-  backgroundColor: "rgba(34,197,94,.10)",
-},
-doneBadgeText: {
-  fontWeight: "900",
-  color: "rgba(231,238,247,.92)",
-  fontSize: 12,
-},
 
   errBox: { padding: 16, gap: 10, alignItems: "flex-start" },
   errText: { color: palette.red, fontWeight: "800", textAlign: "right" },
@@ -626,6 +641,19 @@ doneBadgeText: {
   },
   metaPillText: { color: "rgba(231,238,247,.85)", fontWeight: "800", fontSize: 11, textAlign: "right" },
 
+  doneBadge: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,.28)",
+    backgroundColor: "rgba(34,197,94,.10)",
+  },
+  doneBadgeText: { fontWeight: "900", color: "rgba(231,238,247,.92)", fontSize: 12 },
+
   doneBtn: {
     flexDirection: "row-reverse",
     alignItems: "center",
@@ -637,13 +665,5 @@ doneBadgeText: {
     borderColor: "rgba(212,175,55,.35)",
     backgroundColor: "rgba(212,175,55,.92)",
   },
-  doneBtnDone: {
-    backgroundColor: "rgba(212,175,55,.35)",
-    borderColor: "rgba(212,175,55,.18)",
-  },
-  doneBtnText: {
-    fontWeight: "900",
-    color: palette.bg,
-    fontSize: 12,
-  },
+  doneBtnText: { fontWeight: "900", color: palette.bg, fontSize: 12 },
 });
