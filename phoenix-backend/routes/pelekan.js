@@ -110,6 +110,55 @@ function isDebugAllowed(req) {
   return !isProd;
 }
 
+async function updateStreakOnDayComplete(tx, userId, completedAt) {
+  const today = new Date(completedAt);
+  today.setHours(0, 0, 0, 0);
+
+  const streak = await tx.pelekanStreak.findUnique({
+    where: { userId },
+  });
+
+  // اولین بار
+  if (!streak) {
+    await tx.pelekanStreak.create({
+      data: {
+        userId,
+        currentDays: 1,
+        bestDays: 1,
+        lastCompletedAt: completedAt,
+      },
+    });
+    return;
+  }
+
+  const last = streak.lastCompletedAt
+    ? new Date(streak.lastCompletedAt)
+    : null;
+
+  if (last) last.setHours(0, 0, 0, 0);
+
+  const diffDays = last
+    ? Math.round((today - last) / 86400000)
+    : null;
+
+  let currentDays = streak.currentDays;
+
+  if (diffDays === 1) {
+    currentDays += 1;
+  } else if (diffDays > 1) {
+    currentDays = 1;
+  } // diffDays === 0 → همان روز، کاری نکن
+
+  await tx.pelekanStreak.update({
+    where: { userId },
+    data: {
+      currentDays,
+      bestDays: Math.max(streak.bestDays, currentDays),
+      lastCompletedAt: completedAt,
+    },
+  });
+}
+
 // -------------------- Baseline Assessment (hb_baseline) --------------------
 
 const HB_BASELINE_MAX_SCORE = 31;
@@ -1285,19 +1334,18 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     let actionBonusXp = 0;
     const shouldBeDone = afterDone >= minReq;
     if (crossedToDone) {
-      actionBonusXp = Number.isFinite(subtask.action?.xpOnComplete) ? subtask.action.xpOnComplete : 0;
-      if (actionBonusXp > 0) {
-        await prisma.xpLedger.create({
-          data: {
-            userId: user.id,
-            amount: actionBonusXp,
-            reason: "bastan_action_done",
-            refType: "bastan_action",
-            refId: subtask.actionId,
-          },
-        });
-      }
-    }
+  const now = new Date();
+
+  await tx.pelekanDayProgress.update({
+    where: { userId_dayId: { userId: user.id, dayId } },
+    data: {
+      status: "completed",
+      completedAt: now,
+    },
+  });
+
+  await updateStreakOnDayComplete(tx, user.id, now);
+}
 
     // همیشه status را همسان کن
     await prisma.bastanActionProgress.upsert({
