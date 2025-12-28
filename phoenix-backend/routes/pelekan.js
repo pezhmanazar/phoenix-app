@@ -1142,7 +1142,8 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       where: { phone },
       select: { id: true, plan: true, planExpiresAt: true },
     });
-    // ✅ (گفتیم) به جای 404
+
+    // ✅ به جای 404
     if (!user) return wcdnOkError(res, "USER_NOT_FOUND");
 
     const basePlan = getPlanStatus(user.plan, user.planExpiresAt);
@@ -1173,11 +1174,12 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         },
       },
     });
+
     if (!subtask) return wcdnOkError(res, "SUBTASK_NOT_FOUND");
 
     // gate: pro requirement (either action-level or subtask-level)
     if ((subtask.action?.isProLocked || subtask.isFree === false) && !isProLike) {
-      // ✅ (گفتیم) به جای 403
+      // ✅ به جای 403
       return wcdnOkError(res, "PRO_REQUIRED");
     }
 
@@ -1193,23 +1195,27 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       where: { userId: user.id, isDone: true },
       _count: { _all: true },
     });
+
     const doneByActionId = {};
     for (const r of doneAgg) doneByActionId[r.actionId] = r._count._all || 0;
 
     // find if target action is locked by previous action
     let prevOk = true;
     let targetLockedByPrev = false;
+
     for (const a of actions) {
       const completed = doneByActionId[a.id] || 0;
       const isComplete = completed >= a.minRequiredSubtasks;
+
       if (a.id === subtask.actionId) {
         targetLockedByPrev = !prevOk;
         break;
       }
+
       prevOk = prevOk && isComplete;
     }
+
     if (targetLockedByPrev) {
-      // ✅ (گفتیم) به جای 403 + JSON
       return wcdnOkError(res, "ACTION_LOCKED", { reason: "previous_action_incomplete" });
     }
 
@@ -1218,6 +1224,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       where: { userId: user.id, subtaskId: subtask.id },
       select: { id: true, isDone: true },
     });
+
     if (existing?.isDone) {
       return wcdnOkError(res, "ALREADY_DONE");
     }
@@ -1265,6 +1272,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     if (subtaskKey === "CC_2_signature") {
       const sig = payload?.signature || null;
       const typedName = sig?.name ? String(sig.name).slice(0, 80) : null;
+
       await prisma.bastanState.upsert({
         where: { userId: user.id },
         create: {
@@ -1286,6 +1294,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     if (subtaskKey === "CC_3_24h_safety_check") {
       // payload.choice: "خیر" | "تماس نقش‌محور" | "بله (هیجانی)"
       const choiceRaw = String(payload?.choice || "").trim();
+
       let result = "none"; // default امن
       if (choiceRaw.includes("نقش")) result = "role_based";
       if (choiceRaw.includes("هیجانی")) result = "emotional";
@@ -1305,6 +1314,36 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         },
       });
     }
+
+    // -------------------- FIX #1: resolve dayId for this bastan action --------------------
+    const actionCode = subtask.action?.code;
+
+    const actionToDay = {
+      reality_check: 1,
+      adult_responsibility: 2,
+      unsent_letter: 3,
+      trigger_detox: 4,
+      limited_contact: 5,
+      meaning_learning: 6,
+      closure_ritual: 7,
+      commitment_contract: 8,
+    };
+
+    const dayNumberInStage = actionToDay[actionCode] || null;
+    if (!dayNumberInStage) {
+      return wcdnOkError(res, "DAY_NOT_FOUND_FOR_ACTION");
+    }
+
+    const dayRow = await prisma.pelekanDay.findFirst({
+      where: { stage: { code: "bastan" }, dayNumberInStage },
+      select: { id: true },
+    });
+
+    const dayId = dayRow?.id;
+    if (!dayId) {
+      return wcdnOkError(res, "BASTAN_DAY_NOT_FOUND");
+    }
+    // -------------------- /FIX #1 --------------------
 
     // after count
     const afterDone = beforeDone + 1;
@@ -1326,25 +1365,38 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     }
 
     // XP bonus for action completion (only once, when crossing threshold)
-let actionBonusXp = 0;
-const shouldBeDone = afterDone >= minReq;
+    let actionBonusXp = 0;
+    const shouldBeDone = afterDone >= minReq;
 
-if (crossedToDone) {
-  const now = new Date();
+    // -------------------- FIX #2: use tx in a transaction (and update streak with same tx) --------------------
+    if (crossedToDone) {
+      const now = new Date();
 
-  await prisma.pelekanDayProgress.update({
-    where: { userId_dayId: { userId: user.id, dayId } },
-    data: {
-      status: "completed",
-      completedAt: now,
-      lastActivityAt: now,
-      completionPercent: 100,
-    },
-  });
+      await prisma.$transaction(async (tx) => {
+        await tx.pelekanDayProgress.upsert({
+          where: { userId_dayId: { userId: user.id, dayId } },
+          create: {
+            userId: user.id,
+            dayId,
+            status: "completed",
+            completionPercent: 100,
+            startedAt: now,
+            lastActivityAt: now,
+            completedAt: now,
+            xpEarned: 0,
+          },
+          update: {
+            status: "completed",
+            completionPercent: 100,
+            lastActivityAt: now,
+            completedAt: now,
+          },
+        });
 
-  // این تابع فقط یک prisma-client می‌خواهد؛ tx لازم نیست
-  await updateStreakOnDayComplete(prisma, user.id, now);
-}
+        await updateStreakOnDayComplete(tx, user.id, now);
+      });
+    }
+    // -------------------- /FIX #2 --------------------
 
     // همیشه status را همسان کن
     await prisma.bastanActionProgress.upsert({
@@ -1368,10 +1420,10 @@ if (crossedToDone) {
       },
     });
 
-    // ✅✅ FIX اصلی: sync کردن اقدام‌ها به dayProgress های bastan (بدون idle و بدون دخالت وقتی همه done هستند)
+    // ✅✅ sync کردن اقدام‌ها به dayProgress های bastan
     await syncBastanActionsToPelekanDays(prisma, user.id);
 
-    // ✅ engine signature: (prisma, userId) — یکپارچه
+    // ✅ engine signature: (prisma, userId)
     await pelekanEngine.refresh(prisma, user.id);
 
     return res.json({
