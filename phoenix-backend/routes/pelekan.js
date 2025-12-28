@@ -111,6 +111,7 @@ function isDebugAllowed(req) {
 }
 
 async function updateStreakOnDayComplete(tx, userId, completedAt) {
+  const now = new Date();
   const today = new Date(completedAt);
   today.setHours(0, 0, 0, 0);
 
@@ -126,28 +127,21 @@ async function updateStreakOnDayComplete(tx, userId, completedAt) {
         currentDays: 1,
         bestDays: 1,
         lastCompletedAt: completedAt,
+        yellowCardAt: null,
+        updatedAt: now, // ✅ لازم (NOT NULL)
       },
     });
     return;
   }
 
-  const last = streak.lastCompletedAt
-    ? new Date(streak.lastCompletedAt)
-    : null;
-
+  const last = streak.lastCompletedAt ? new Date(streak.lastCompletedAt) : null;
   if (last) last.setHours(0, 0, 0, 0);
 
-  const diffDays = last
-    ? Math.round((today - last) / 86400000)
-    : null;
+  const diffDays = last ? Math.round((today - last) / 86400000) : null;
 
   let currentDays = streak.currentDays;
-
-  if (diffDays === 1) {
-    currentDays += 1;
-  } else if (diffDays > 1) {
-    currentDays = 1;
-  } // diffDays === 0 → همان روز، کاری نکن
+  if (diffDays === 1) currentDays += 1;
+  else if (diffDays > 1) currentDays = 1; // diffDays === 0 => همون روز
 
   await tx.pelekanStreak.update({
     where: { userId },
@@ -155,6 +149,7 @@ async function updateStreakOnDayComplete(tx, userId, completedAt) {
       currentDays,
       bestDays: Math.max(streak.bestDays, currentDays),
       lastCompletedAt: completedAt,
+      updatedAt: now, // ✅ لازم (NOT NULL)
     },
   });
 }
