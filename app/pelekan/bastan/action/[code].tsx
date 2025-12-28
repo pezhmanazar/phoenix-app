@@ -1,7 +1,7 @@
 // app/pelekan/bastan/action/[code].tsx
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -40,7 +40,7 @@ type ActionUi = {
   progress: { done: number; required: number; total: number };
   subtasks?: SubtaskUi[];
 
-  sortOrder?: number; // برای شماره اقدام
+  sortOrder?: number; // شماره اقدام
 };
 
 type BastanStateResponse = {
@@ -50,12 +50,6 @@ type BastanStateResponse = {
     intro?: { completedAt: string | null; paywallNeededAfterIntro: boolean };
   };
   error?: string;
-};
-
-type CompleteSubtaskResponse = {
-  ok: boolean;
-  error?: string;
-  data?: any;
 };
 
 /* ----------------------------- UI ----------------------------- */
@@ -110,7 +104,7 @@ export default function BastanActionScreen() {
   const { me } = useUser();
   const phone = String(me?.phone || "").trim();
 
-  const { token } = useAuth();
+  useAuth(); // فقط برای همگام بودن با وضعیت احراز هویت (فعلاً استفاده مستقیم نداریم)
   const apiBase = "https://api.qoqnoos.app";
 
   const [loading, setLoading] = useState(true);
@@ -118,17 +112,9 @@ export default function BastanActionScreen() {
   const [err, setErr] = useState<string | null>(null);
   const [action, setAction] = useState<ActionUi | null>(null);
 
-  const inFlightRef = useRef(new Set<string>());
-  const [inFlightKeys, setInFlightKeys] = useState<Record<string, boolean>>({});
-  const [doneKeys, setDoneKeys] = useState<Record<string, boolean>>({});
-
   const log = useCallback((msg: string, extra?: any) => {
     console.log(`🟩 [BastanAction] ${msg}`, extra ?? {});
   }, []);
-
-  useEffect(() => {
-    log("auth:token", { hasToken: !!String(token || "").trim() });
-  }, [token, log]);
 
   const fetchOne = useCallback(
     async (opts?: { initial?: boolean; reason?: string }) => {
@@ -184,16 +170,6 @@ export default function BastanActionScreen() {
 
         setAction(found);
 
-        // sync doneKeys
-        const serverKeys: Record<string, boolean> = {};
-        for (const s of found.subtasks || []) {
-          const k = String((s as any)?.key || "").trim();
-          if (!k) continue;
-          const done = !!(s as any)?.done || !!(s as any)?.completedAt;
-          if (done) serverKeys[k] = true;
-        }
-        setDoneKeys((prev) => ({ ...prev, ...serverKeys }));
-
         log("find action", {
           found: true,
           foundCode: found.code,
@@ -227,7 +203,6 @@ export default function BastanActionScreen() {
       const k = String(key || "").trim();
       if (!k) return;
 
-      // ✅ مسیر درست برای فایل: app/pelekan/bastan/subtask/[key].tsx
       router.push({
         pathname: "/pelekan/bastan/subtask/[key]",
         params: { key: k },
@@ -236,108 +211,11 @@ export default function BastanActionScreen() {
     [router]
   );
 
-  const completeSubtask = useCallback(
-    async (subtaskKey: string) => {
-      const key = String(subtaskKey || "").trim();
-      if (!key) return;
-
-      if (doneKeys[key]) {
-        log("completeSubtask:skip_done", { subtaskKey: key });
-        return;
-      }
-
-      if (inFlightRef.current.has(key) || inFlightKeys[key]) {
-        log("completeSubtask:skip_inflight", { subtaskKey: key });
-        return;
-      }
-
-      const t = String(token || "").trim();
-      if (!t) {
-        setErr("برای ثبت انجام‌شدن، باید وارد حساب باشی.");
-        log("completeSubtask:skip_no_token", { subtaskKey: key });
-        return;
-      }
-
-      const p = String(phone || "").trim();
-      if (!p) {
-        setErr("شماره پیدا نشد.");
-        return;
-      }
-
-      inFlightRef.current.add(key);
-      setInFlightKeys((prev) => ({ ...prev, [key]: true }));
-
-      try {
-        setErr(null);
-
-        const url = `${apiBase}/api/pelekan/bastan/subtask/complete?phone=${encodeURIComponent(p)}`;
-
-        log("completeSubtask:start", { code: actionCode, phone: p, subtaskKey: key });
-
-        const res = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Cache-Control": "no-store",
-            Authorization: `Bearer ${t}`,
-          },
-          body: JSON.stringify({ phone: p, subtaskKey: key, payload: null }),
-        });
-
-        let json: CompleteSubtaskResponse | null = null;
-        try {
-          json = (await res.json()) as any;
-        } catch {
-          json = null;
-        }
-
-        const error = String((json as any)?.error || "").trim();
-        log("completeSubtask:res", {
-          http: res.status,
-          ok: json?.ok ?? false,
-          error: error || null,
-          subtaskKey: key,
-        });
-
-        if (res.status === 409 && error === "ALREADY_DONE") {
-          setErr(null);
-          setDoneKeys((p2) => ({ ...p2, [key]: true }));
-          fetchOne({ initial: false, reason: "تازه‌سازی بعد از قبلاً انجام‌شده" });
-          return;
-        }
-
-        if (res.status === 401) {
-          setErr("مشکل در احراز هویت. یک‌بار خارج و دوباره وارد شو.");
-          return;
-        }
-
-        if (!res.ok || !json?.ok) {
-          setErr(error || "خطا در ثبت انجام‌شدن");
-          return;
-        }
-
-        setErr(null);
-        setDoneKeys((p2) => ({ ...p2, [key]: true }));
-        fetchOne({ initial: false, reason: "تازه‌سازی بعد از انجام" });
-      } catch (e: any) {
-        setErr(String(e?.message || e));
-      } finally {
-        inFlightRef.current.delete(key);
-        setInFlightKeys((prev) => {
-          const n = { ...prev };
-          delete n[key];
-          return n;
-        });
-      }
-    },
-    [actionCode, apiBase, doneKeys, fetchOne, inFlightKeys, log, phone, token]
-  );
-
   /* ----------------------------- Render ----------------------------- */
   if (loading) {
     return (
-      <SafeAreaView style={styles.root} edges={["top", "left", "right"]}>
-        <View style={styles.center}>
+      <SafeAreaView style={styles.root} edges={["left", "right", "bottom"]}>
+        <View style={[styles.center, { paddingTop: insets.top + 12 }]}>
           <ActivityIndicator color={palette.gold} />
           <Text style={styles.mutedText}>در حال بارگذاری…</Text>
         </View>
@@ -349,9 +227,9 @@ export default function BastanActionScreen() {
   const actionNo = actionNumberFa(action?.sortOrder);
 
   return (
-    <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
-      {/* Header */}
-      <View style={styles.header}>
+    <SafeAreaView style={styles.root} edges={["left", "right", "bottom"]}>
+      {/* Header (✅ پدینگ دقیق زیر استاتوس‌بار) */}
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.8}>
           <Ionicons name="chevron-forward" size={20} color={palette.text} />
         </TouchableOpacity>
@@ -423,10 +301,8 @@ export default function BastanActionScreen() {
               const key = String(s.key || "").trim();
               if (!key) return null;
 
-              const isDone =
-                !!doneKeys[key] || !!(s as any)?.done || !!(s as any)?.completedAt;
-
-              const isSending = !!inFlightKeys[key];
+              // ✅ فقط از سرور: اگر done/completedAt بود "انجام شده" نمایش بده
+              const isDone = !!(s as any)?.done || !!(s as any)?.completedAt;
 
               return (
                 <TouchableOpacity
@@ -467,6 +343,7 @@ export default function BastanActionScreen() {
                     </View>
                   </View>
 
+                  {/* ✅ پایین کارت: فقط نمایش وضعیت (بدون دکمه انجام شد) */}
                   <View style={{ flexDirection: "row", justifyContent: "flex-start", marginTop: 12 }}>
                     {isDone ? (
                       <View style={styles.doneBadge}>
@@ -474,24 +351,10 @@ export default function BastanActionScreen() {
                         <Text style={styles.doneBadgeText}>انجام شده</Text>
                       </View>
                     ) : (
-                      <TouchableOpacity
-                        activeOpacity={0.85}
-                        disabled={isSending}
-                        onPress={(e: any) => {
-                          e?.stopPropagation?.(); // ✅ خیلی مهم
-                          completeSubtask(key);
-                        }}
-                        style={[styles.doneBtn, isSending && { opacity: 0.6 }]}
-                      >
-                        <Ionicons
-                          name={isSending ? "time" : "checkmark"}
-                          size={18}
-                          color={palette.bg}
-                        />
-                        <Text style={styles.doneBtnText}>
-                          {isSending ? "در حال ثبت…" : "انجام شد"}
-                        </Text>
-                      </TouchableOpacity>
+                      <View style={styles.openHint}>
+                        <Ionicons name="chevron-back" size={18} color="rgba(231,238,247,.75)" />
+                        <Text style={styles.openHintText}>باز کردن</Text>
+                      </View>
                     )}
                   </View>
                 </TouchableOpacity>
@@ -516,7 +379,6 @@ const styles = StyleSheet.create({
 
   header: {
     paddingHorizontal: 16,
-    paddingTop: 0, // ✅ SafeAreaView خودش top رو هندل می‌کنه
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: palette.border,
@@ -654,16 +516,16 @@ const styles = StyleSheet.create({
   },
   doneBadgeText: { fontWeight: "900", color: "rgba(231,238,247,.92)", fontSize: 12 },
 
-  doneBtn: {
+  openHint: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 14,
+    gap: 6,
+    paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(212,175,55,.35)",
-    backgroundColor: "rgba(212,175,55,.92)",
+    borderColor: "rgba(255,255,255,.12)",
+    backgroundColor: "rgba(0,0,0,.14)",
   },
-  doneBtnText: { fontWeight: "900", color: palette.bg, fontSize: 12 },
+  openHintText: { fontWeight: "900", color: "rgba(231,238,247,.82)", fontSize: 12 },
 });
