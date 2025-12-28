@@ -12,7 +12,7 @@ async function main() {
     {
       key: "RC_1_red_flags",
       kind: "checklist",
-      titleFa: "نشانه های هشداردهنده رابطت رو بررسی کن",
+      titleFa: "نشانه‌های هشداردهنده رابطت رو بررسی کن",
       helpFa: null,
       isRequired: true,
       isFree: true,
