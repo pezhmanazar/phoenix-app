@@ -4,15 +4,18 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    InteractionManager,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  InteractionManager,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -58,51 +61,52 @@ type RC1Saved = {
 type FlagItem = { id: string; text: string };
 
 /* ----------------------------- Storage Keys ----------------------------- */
-const KEY_RC1 = "pelekan:bastan:subtask:RC_1_red_flags:v1";
+// ✅ فقط بعد از ثبت نهایی ساخته می‌شود (قبلش هیچ ذخیره‌ای نداریم)
+const KEY_RC1_FINAL = "pelekan:bastan:subtask:RC_1_red_flags:final:v1";
 const KEY_BASTAN_DIRTY = "pelekan:bastan:dirty:v1";
 
 /* ----------------------------- Data ----------------------------- */
 const RC1_FLAGS: FlagItem[] = [
-  { id: "rc1_01", text: "احساس می‌کردم باید خودم را سانسور کنم تا دعوا نشود." },
-  { id: "rc1_02", text: "ناراحتی‌هایم جدی گرفته نمی‌شد یا کوچک شمرده می‌شد." },
+  { id: "rc1_01", text: "احساس می‌کردم باید خودم رو سانسور کنم تا دعوا نشه." },
+  { id: "rc1_02", text: "ناراحتی‌هام جدی گرفته نمی‌شد یا کوچیک شمرده می‌شد." },
   { id: "rc1_03", text: "وقتی اعتراض می‌کردم، متهم می‌شدم که «حساسم» یا «زیادی فکر می‌کنم»." },
-  { id: "rc1_04", text: "برای آرام نگه‌داشتن رابطه، از خواسته‌هایم می‌گذشتم." },
+  { id: "rc1_04", text: "برای آروم نگه‌داشتن رابطه، از خواسته‌هام می‌گذشتم." },
   { id: "rc1_05", text: "احساس گناه دائمی بابت ناراحت شدن داشتم." },
   { id: "rc1_06", text: "عذرخواهی‌ها بیشتر از سمت من بود، حتی وقتی مقصر نبودم." },
-  { id: "rc1_07", text: "مدام نگران واکنش او به حرف‌ها یا احساساتم بودم." },
-  { id: "rc1_08", text: "احساس می‌کردم باید حال او را مدیریت کنم." },
-  { id: "rc1_09", text: "بعد از صحبت‌ها، بیشتر گیج می‌شدم تا آرام." },
-  { id: "rc1_10", text: "حس می‌کردم «خودِ واقعی‌ام» در رابطه جا ندارد." },
+  { id: "rc1_07", text: "مدام نگران واکنش اون به حرف‌ها یا احساساتم بودم." },
+  { id: "rc1_08", text: "احساس می‌کردم باید حالش رو مدیریت کنم." },
+  { id: "rc1_09", text: "بعد از صحبت‌ کردن باهاش، بیشتر گیج می‌شدم تا آروم." },
+  { id: "rc1_10", text: "حس می‌کردم «خودِ واقعیم» توو رابطه جا نداره." },
   { id: "rc1_11", text: "تصمیم‌های مهم بیشتر یک‌طرفه گرفته می‌شد." },
-  { id: "rc1_12", text: "استقلال من (دوست‌ها، کار، علایق) تهدید تلقی می‌شد." },
-  { id: "rc1_13", text: "تماس‌ها یا پیام‌هایم چک می‌شد یا بابتشان بازخواست می‌شدم." },
+  { id: "rc1_12", text: "استقلال من (مثل دوست‌هام، کارم و علایقم) تهدید تلقی می‌شد." },
+  { id: "rc1_13", text: "تماس‌ها یا پیام‌هام چک می‌شد یا بابتشون بازخواست می‌شدم." },
   { id: "rc1_14", text: "سکوت یا قهر به‌عنوان تنبیه استفاده می‌شد." },
   { id: "rc1_15", text: "احساس می‌کردم باید ثابت کنم «وفادارم»." },
   { id: "rc1_16", text: "تحقیر کلامی، طعنه یا شوخی‌های آزاردهنده وجود داشت." },
-  { id: "rc1_17", text: "اختلاف‌ها به تهدید ختم می‌شد (ترک کردن، بی‌محلی، حذف)." },
-  { id: "rc1_18", text: "نظر من فقط وقتی پذیرفته می‌شد که مطابق خواست او بود." },
+  { id: "rc1_17", text: "اختلاف‌ها به تهدید ختم می‌شد (مثل ترک کردن، بی‌محلی و حذف)." },
+  { id: "rc1_18", text: "نظر من فقط وقتی پذیرفته می‌شد که مطابق خواستش بود." },
   { id: "rc1_19", text: "احساس می‌کردم قدرت رابطه متوازن نیست." },
-  { id: "rc1_20", text: "بیشتر می‌ترسیدم تا احساس امنیت کنم." },
+  { id: "rc1_20", text: "داخل رابطه بیشتر می‌ترسیدم تا احساس امنیت کنم." },
   { id: "rc1_21", text: "خواسته‌ها یا مرزهای جنسی من نادیده گرفته می‌شد." },
   { id: "rc1_22", text: "احساس فشار برای رابطه‌ی جنسی داشتم." },
   { id: "rc1_23", text: "نه گفتن من با دلخوری، قهر یا فاصله پاسخ داده می‌شد." },
-  { id: "rc1_24", text: "صمیمیت فقط وقتی بود که او می‌خواست." },
-  { id: "rc1_25", text: "بعد از صمیمیت، احساس نزدیکی عاطفی نمی‌کردم." },
-  { id: "rc1_26", text: "صمیمیت جای گفت‌وگوهای حل‌نشده را پر می‌کرد." },
-  { id: "rc1_27", text: "بدن یا تمایلات من مقایسه می‌شد." },
-  { id: "rc1_28", text: "احساس می‌کردم وسیله‌ی حفظ رابطه هستم نه شریک آن." },
+  { id: "rc1_24", text: "صمیمیت فقط وقتی بود که اون می‌خواست." },
+  { id: "rc1_25", text: "بعد از رابطه جنسی و صمیمیت زیاد، احساس نزدیکی عاطفی نمی‌کردم." },
+  { id: "rc1_26", text: "رابطه جنسی جای گفت‌وگوهای حل‌نشده رو پر می‌کرد." },
+  { id: "rc1_27", text: "بدن یا تمایلات من با دیگران مقایسه می‌شد." },
+  { id: "rc1_28", text: "احساس می‌کردم وسیله‌ی حفظ رابطه هستم نه شریکش." },
   { id: "rc1_29", text: "صمیمیت به ابزار کنترل تبدیل شده بود." },
-  { id: "rc1_30", text: "درباره‌ی مسائل جنسی نمی‌توانستم آزادانه حرف بزنم." },
+  { id: "rc1_30", text: "درباره‌ی مسائل جنسی نمی‌تونستم آزادانه حرف بزنم." },
   { id: "rc1_31", text: "مسائل مالی شفاف نبود." },
-  { id: "rc1_32", text: "خرج‌ها یا تصمیم‌های مالی پنهان می‌شد." },
-  { id: "rc1_33", text: "احساس بدهکاری عاطفی یا مالی داشتم." },
-  { id: "rc1_34", text: "قول‌ها داده می‌شد ولی عملی نمی‌شد." },
+  { id: "rc1_32", text: "خرج‌ها یا تصمیم‌های مالی پنهون می‌شد." },
+  { id: "rc1_33", text: "احساس بدهکاری عاطفی یا مالی بهش داشتم." },
+  { id: "rc1_34", text: "قول‌های زیادی داده می‌شد ولی عملی نمی‌شد." },
   { id: "rc1_35", text: "تناقض بین حرف‌ها و رفتارها وجود داشت." },
-  { id: "rc1_36", text: "درباره‌ی ارتباط با دیگران شفافیت نبود." },
-  { id: "rc1_37", text: "احساس می‌کردم چیزهایی از من پنهان می‌شود." },
-  { id: "rc1_38", text: "به حس درونی‌ام اعتماد نداشتم اما آرامش هم نداشتم." },
+  { id: "rc1_36", text: "درباره‌ی ارتباط با دیگران شفافیت نداشت." },
+  { id: "rc1_37", text: "احساس می‌کردم چیزهایی از من پنهون میشه." },
+  { id: "rc1_38", text: "به حس درونیم اعتماد نداشتم اما آرامش هم نداشتم." },
   { id: "rc1_39", text: "اعتمادم تدریجی فرسوده شد، نه یک‌باره." },
-  { id: "rc1_40", text: "بیشتر امیدوار بودم تغییر کند تا اینکه واقعیت را ببینم." },
+  { id: "rc1_40", text: "بیشتر امیدوار بودم تغییر کنه تا اینکه واقعیت رو ببینم." },
 ];
 
 /* ----------------------------- Themed Modal ----------------------------- */
@@ -190,8 +194,10 @@ function ThemedModal({
 export default function RC1RedFlagsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams();
-  const subtaskKey = String((params as any)?.key || "").trim();
+  useLocalSearchParams(); // فقط برای اینکه اگر جایی route params عوض شد، رندر پایدار باشد
+
+  const subtaskKey = "RC_1_red_flags";
+  const headerNo = subtaskNumberFa(subtaskKey);
 
   const { me } = useUser();
   const phone = String(me?.phone || "").trim();
@@ -217,6 +223,9 @@ export default function RC1RedFlagsScreen() {
 
   // ✅ اسکرول نرم بعد از تغییر step (بیس استاندارد)
   const scrollRef = useRef<ScrollView>(null);
+
+  // ✅ برای جلوگیری از رفتن باکس زیر کیبورد: اسکرول به ورودی فعال
+  const inputRefs = useRef<Record<string, TextInput | null>>({});
 
   // ✅ مودال‌ها
   const [confirmLockModal, setConfirmLockModal] = useState(false);
@@ -244,41 +253,35 @@ export default function RC1RedFlagsScreen() {
     setModal((m) => ({ ...m, visible: false, loading: false }));
   }, []);
 
-  const openModal = useCallback(
-    (cfg: Omit<typeof modal, "visible"> & { visible?: boolean }) => {
-      setModal({
-        ...cfg,
-        visible: true,
-      } as any);
-    },
-    []
-  );
+  const openModal = useCallback((cfg: Omit<typeof modal, "visible"> & { visible?: boolean }) => {
+    setModal({ ...cfg, visible: true } as any);
+  }, []);
 
-  const loadLocal = useCallback(async () => {
-    const raw = await AsyncStorage.getItem(KEY_RC1);
-    if (!raw) return { loaded: false, savedAt: null as string | null };
+  // ✅ فقط FINAL را می‌خوانیم
+  const loadFinalIfAny = useCallback(async () => {
+    const raw = await AsyncStorage.getItem(KEY_RC1_FINAL);
+    if (!raw) return { loaded: false as const };
+
     const j = JSON.parse(raw) as RC1Saved;
-    if (!j || j.version !== 1) return { loaded: false, savedAt: null as string | null };
+    if (!j || j.version !== 1) return { loaded: false as const };
 
     setSelected(Array.isArray(j.selected) ? j.selected : []);
     setTop3(Array.isArray(j.top3) ? j.top3 : []);
     setNotes(j.notes && typeof j.notes === "object" ? j.notes : {});
-    return { loaded: true, savedAt: String(j.savedAt || null) };
+    return { loaded: true as const };
   }, []);
 
   useEffect(() => {
     let alive = true;
 
     const run = async () => {
-      if (subtaskKey !== "RC_1_red_flags") return;
-
       setBooting(true);
       try {
-        const { loaded } = await loadLocal();
-
-        // ✅ اگر داده لوکال هست، ما این رو «مرور» در نظر می‌گیریم
-        // (چون بعد از ثبت، داده همیشه روی گوشی هست)
-        if (alive) setIsReview(!!loaded);
+        const { loaded } = await loadFinalIfAny();
+        if (!alive) return;
+        setIsReview(!!loaded);
+        // ✅ اگر مرور است، برو مرحله 3 تا متن‌ها جلوی چشم باشد
+        if (loaded) setStep(3);
       } catch {
         if (alive) setIsReview(false);
       } finally {
@@ -290,7 +293,7 @@ export default function RC1RedFlagsScreen() {
     return () => {
       alive = false;
     };
-  }, [subtaskKey, loadLocal]);
+  }, [loadFinalIfAny]);
 
   // ✅ اسکرول نرم و بدون پرش بعد از تغییر step
   useEffect(() => {
@@ -308,62 +311,60 @@ export default function RC1RedFlagsScreen() {
 
     return () => {
       cancelled = true;
-      // @ts-ignore (RN type mismatch in some versions)
+      // @ts-ignore
       if (typeof task?.cancel === "function") task.cancel();
     };
   }, [step, booting]);
 
-  const persistLocal = useCallback(
-    async (next?: Partial<RC1Saved>) => {
-      const payload: RC1Saved = {
-        version: 1,
-        savedAt: new Date().toISOString(),
-        selected,
-        top3,
-        notes,
-        ...(next || {}),
-      };
-      await AsyncStorage.setItem(KEY_RC1, JSON.stringify(payload));
-    },
-    [notes, selected, top3]
-  );
+  // ✅ وقتی یک input فوکوس شد، ببریمش بالاتر که زیر کیبورد نره
+  const scrollToInput = useCallback((id: string) => {
+    const ref = inputRefs.current[id];
+    if (!ref) return;
 
+    try {
+      ref.measureLayout(
+        // @ts-ignore - ScrollView inner view handle
+        scrollRef.current?.getInnerViewNode?.() ?? (scrollRef.current as any),
+        (_x: number, y: number) => {
+          // یک فاصله برای اینکه ورودی بالای کیبورد دیده شود
+          scrollRef.current?.scrollTo({ y: Math.max(0, y - 24), animated: true });
+        },
+        () => {}
+      );
+    } catch {
+      // silent
+    }
+  }, []);
+
+  /* ----------------------------- Helpers ----------------------------- */
   const toggleSelect = useCallback(
-    async (idRaw: string) => {
-      if (isReview) return; // ✅ قفل در حالت مرور
+    (idRaw: string) => {
+      if (isReview) return;
       const id = String(idRaw || "").trim();
       if (!id) return;
 
       const nextSelected = selectedSet.has(id) ? selected.filter((x) => x !== id) : [...selected, id];
 
+      // top3 باید زیرمجموعه selected بماند
       const nextTop3 = top3.filter((x) => nextSelected.includes(x));
 
+      // notes فقط برای top3 نگه داشته شود
       const nextNotes = { ...notes };
-      for (const k of top3) {
+      for (const k of Object.keys(nextNotes)) {
         if (!nextTop3.includes(k)) delete nextNotes[k];
       }
 
       setSelected(nextSelected);
       setTop3(nextTop3);
       setNotes(nextNotes);
-
-      await AsyncStorage.setItem(
-        KEY_RC1,
-        JSON.stringify({
-          version: 1,
-          savedAt: new Date().toISOString(),
-          selected: nextSelected,
-          top3: nextTop3,
-          notes: nextNotes,
-        } satisfies RC1Saved)
-      );
+      // ❌ هیچ ذخیره‌ای تا مرحله آخر
     },
     [isReview, notes, selected, selectedSet, top3]
   );
 
   const toggleTop3 = useCallback(
-    async (idRaw: string) => {
-      if (isReview) return; // ✅ قفل در حالت مرور
+    (idRaw: string) => {
+      if (isReview) return;
       const id = String(idRaw || "").trim();
       if (!id) return;
       if (!selectedSet.has(id)) return;
@@ -380,21 +381,20 @@ export default function RC1RedFlagsScreen() {
 
       setTop3(next);
       setNotes(nextNotes);
-      await persistLocal({ top3: next, notes: nextNotes });
+      // ❌ هیچ ذخیره‌ای تا مرحله آخر
     },
-    [isReview, notes, persistLocal, selectedSet, top3]
+    [isReview, notes, selectedSet, top3]
   );
 
   const setNote = useCallback(
-    async (idRaw: string, v: string) => {
-      if (isReview) return; // ✅ قفل در حالت مرور
+    (idRaw: string, v: string) => {
+      if (isReview) return;
       const id = String(idRaw || "").trim();
       const txt = String(v || "");
-      const next = { ...notes, [id]: txt };
-      setNotes(next);
-      await persistLocal({ notes: next });
+      setNotes((prev) => ({ ...prev, [id]: txt }));
+      // ❌ هیچ ذخیره‌ای تا مرحله آخر
     },
-    [isReview, notes, persistLocal]
+    [isReview]
   );
 
   const canGoStep2 = selected.length >= 3;
@@ -408,6 +408,17 @@ export default function RC1RedFlagsScreen() {
     }
     return true;
   }, [notes, top3]);
+
+  const persistFinalLocal = useCallback(async () => {
+    const payload: RC1Saved = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      selected,
+      top3,
+      notes,
+    };
+    await AsyncStorage.setItem(KEY_RC1_FINAL, JSON.stringify(payload));
+  }, [notes, selected, top3]);
 
   const completeOnServer = useCallback(async (): Promise<"ok" | "already" | "fail"> => {
     const t = String(token || "").trim();
@@ -426,6 +437,15 @@ export default function RC1RedFlagsScreen() {
 
     const url = `${apiBase}/api/pelekan/bastan/subtask/complete?phone=${encodeURIComponent(p)}`;
 
+    // ✅ فقط در ثبت نهایی، payload واقعی بفرست
+    const payloadToSend: RC1Saved = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      selected,
+      top3,
+      notes,
+    };
+
     const res = await fetch(url, {
       method: "POST",
       headers: {
@@ -436,7 +456,7 @@ export default function RC1RedFlagsScreen() {
       body: JSON.stringify({
         phone: p,
         subtaskKey: "RC_1_red_flags",
-        payload: null,
+        payload: payloadToSend,
       }),
     });
 
@@ -460,7 +480,7 @@ export default function RC1RedFlagsScreen() {
       onPrimary: closeModal,
     });
     return "fail";
-  }, [apiBase, closeModal, openModal, phone, token]);
+  }, [apiBase, closeModal, notes, openModal, phone, selected, token, top3]);
 
   const doFinalize = useCallback(async () => {
     if (!notesOk) return;
@@ -471,14 +491,13 @@ export default function RC1RedFlagsScreen() {
     try {
       setSaving(true);
 
-      // 1) لوکال
-      await persistLocal();
-
-      // 2) سرور
+      // 1) سرور
       const r = await completeOnServer();
       if (r === "fail") return;
 
-      // ✅ چه ok چه already: نتیجه نهایی یکیه (ثبت شده)
+      // 2) لوکال (فقط بعد از ok/already)
+      await persistFinalLocal();
+
       await AsyncStorage.setItem(KEY_BASTAN_DIRTY, new Date().toISOString());
 
       if (r === "already") {
@@ -495,7 +514,6 @@ export default function RC1RedFlagsScreen() {
         return;
       }
 
-      // ok
       openModal({
         kind: "success",
         title: "ثبت شد",
@@ -509,23 +527,20 @@ export default function RC1RedFlagsScreen() {
     } finally {
       setSaving(false);
       savingRef.current = false;
-      // بعد از ثبت، صفحه باید «مرور» شود
       setIsReview(true);
+      setStep(3);
     }
-  }, [closeModal, completeOnServer, notesOk, openModal, persistLocal, router]);
+  }, [closeModal, completeOnServer, notesOk, openModal, persistFinalLocal, router]);
 
   const onFinishPress = useCallback(() => {
-    // ✅ در حالت مرور: اصلاً ثبت نکن، فقط خروج
     if (isReview) {
       router.back();
       return;
     }
-    // ✅ قبل از ثبت، هشدار غیرقابل‌تغییر شدن
     setConfirmLockModal(true);
   }, [isReview, router]);
 
-  const title = "۴۰ نشانه هشداردهنده رابطه‌ات را تیک بزن";
-  const headerNo = subtaskNumberFa(subtaskKey);
+  const title = " نشونه‌های هشداردهنده رابطت رو تیک بزن";
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
@@ -548,204 +563,220 @@ export default function RC1RedFlagsScreen() {
         <View style={{ width: 34, height: 34 }} />
       </View>
 
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={{ padding: 16, paddingBottom: 18 + insets.bottom }}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 72 : 0}
       >
-        {/* Review Banner */}
-        {isReview ? (
-          <View style={styles.reviewBanner}>
-            <Ionicons name="eye" size={16} color="rgba(231,238,247,.88)" />
-            <Text style={styles.reviewBannerText}>حالت مرور: این ریز‌اقدام قبلاً ثبت شده و قابل تغییر نیست.</Text>
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={{ padding: 16, paddingBottom: 18 + insets.bottom + 120 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Review Banner */}
+          {isReview ? (
+            <View style={styles.reviewBanner}>
+              <Ionicons name="eye" size={16} color="rgba(231,238,247,.88)" />
+              <Text style={styles.reviewBannerText}>حالت مرور: این ریز‌اقدام قبلاً ثبت شده و قابل تغییر نیست.</Text>
+            </View>
+          ) : null}
+
+          {/* Step indicator */}
+          <View style={styles.stepPills}>
+            <View style={[styles.stepPill, step === 1 && styles.stepPillOn]}>
+              <Text style={styles.stepPillText}>۱) انتخاب</Text>
+            </View>
+            <View style={[styles.stepPill, step === 2 && styles.stepPillOn]}>
+              <Text style={styles.stepPillText}>۲) انتخاب سه مورد</Text>
+            </View>
+            <View style={[styles.stepPill, step === 3 && styles.stepPillOn]}>
+              <Text style={styles.stepPillText}>۳) نوشتن</Text>
+            </View>
           </View>
-        ) : null}
 
-        {/* Step indicator */}
-        <View style={styles.stepPills}>
-          <View style={[styles.stepPill, step === 1 && styles.stepPillOn]}>
-            <Text style={styles.stepPillText}>۱) انتخاب</Text>
-          </View>
-          <View style={[styles.stepPill, step === 2 && styles.stepPillOn]}>
-            <Text style={styles.stepPillText}>۲) انتخاب ۳ مورد</Text>
-          </View>
-          <View style={[styles.stepPill, step === 3 && styles.stepPillOn]}>
-            <Text style={styles.stepPillText}>۳) نوشتن</Text>
-          </View>
-        </View>
+          {step === 1 ? (
+            <>
+              <View style={styles.sectionCard}>
+                <Text style={styles.h1}>اون چیزی که دیدی رو انکار نکن</Text>
+                <Text style={styles.p}>
+                  هر موردی که در رابطت بوده رو تیک بزن.{"\n"}این‌ها فقط داخل گوشی خودت ذخیره میشن.{"\n"}
+                  برای رفتن به مرحله بعد، حداقل ۳ مورد رو انتخاب کن.
+                </Text>
+              </View>
 
-        {step === 1 ? (
-          <>
-            <View style={styles.sectionCard}>
-              <Text style={styles.h1}>اون چیزی که دیدی رو انکار نکن</Text>
-              <Text style={styles.p}>
-                هر موردی که در رابطت بوده رو تیک بزن.{"\n"}این‌ها فقط داخل گوشی خودت ذخیره میشن.{"\n"}
-                برای رفتن به مرحله بعد، حداقل ۳ مورد رو انتخاب کن.
-              </Text>
-            </View>
+              <View style={{ gap: 10, marginTop: 10 }}>
+                {RC1_FLAGS.map((it) => {
+                  const on = selectedSet.has(it.id);
+                  return (
+                    <Pressable
+                      key={it.id}
+                      onPress={() => toggleSelect(it.id)}
+                      style={[styles.choiceCard, on && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
+                      disabled={isReview}
+                    >
+                      <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+                        <Ionicons
+                          name={on ? "checkmark-circle" : "ellipse-outline"}
+                          size={18}
+                          color={on ? palette.green : "rgba(231,238,247,.55)"}
+                        />
+                        <Text style={styles.choiceText}>{it.text}</Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
 
-            <View style={{ gap: 10, marginTop: 10 }}>
-              {RC1_FLAGS.map((it) => {
-                const on = selectedSet.has(it.id);
-                return (
-                  <Pressable
-                    key={it.id}
-                    onPress={() => toggleSelect(it.id)}
-                    style={[styles.choiceCard, on && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
-                    disabled={isReview}
-                  >
-                    <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
-                      <Ionicons
-                        name={on ? "checkmark-circle" : "ellipse-outline"}
-                        size={18}
-                        color={on ? palette.green : "rgba(231,238,247,.55)"}
-                      />
-                      <Text style={styles.choiceText}>{it.text}</Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <View style={{ marginTop: 14, gap: 10 }}>
-              <Text style={styles.small}>انتخاب‌شده: {selected.length} مورد</Text>
-
-              <TouchableOpacity
-                activeOpacity={0.9}
-                disabled={!canGoStep2}
-                onPress={() => setStep(2)}
-                style={[styles.primaryBtn, !canGoStep2 && { opacity: 0.45 }]}
-              >
-                <Text style={styles.primaryBtnText}>ادامه</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        ) : null}
-
-        {step === 2 ? (
-          <>
-            <View style={styles.sectionCard}>
-              <Text style={styles.h1}>۳ موردی که بیشترین آسیب رو زد</Text>
-              <Text style={styles.p}>فقط از میان موارد تیک‌خورده، دقیقاً ۳ مورد رو انتخاب کن.</Text>
-            </View>
-
-            <View style={{ gap: 10, marginTop: 10 }}>
-              {selected.map((id) => {
-                const it = RC1_FLAGS.find((x) => x.id === id);
-                if (!it) return null;
-                const on = top3.includes(id);
-
-                return (
-                  <Pressable
-                    key={id}
-                    onPress={() => toggleTop3(id)}
-                    style={[styles.choiceCard, on && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
-                    disabled={isReview}
-                  >
-                    <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
-                      <Ionicons
-                        name={on ? "checkmark-circle" : "ellipse-outline"}
-                        size={18}
-                        color={on ? palette.green : "rgba(231,238,247,.55)"}
-                      />
-                      <Text style={styles.choiceText}>{it.text}</Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <View style={{ marginTop: 14, gap: 10 }}>
-              <Text style={styles.small}>انتخاب‌شده برای مرحله بعد: {top3.length}/3</Text>
-
-              <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-                <TouchableOpacity activeOpacity={0.9} onPress={() => setStep(1)} style={[styles.secondaryBtn, { flex: 1 }]}>
-                  <Text style={styles.secondaryBtnText}>بازگشت</Text>
-                </TouchableOpacity>
+              <View style={{ marginTop: 14, gap: 10 }}>
+                <Text style={styles.small}>انتخاب‌شده: {selected.length} مورد</Text>
 
                 <TouchableOpacity
                   activeOpacity={0.9}
-                  disabled={!canGoStep3}
-                  onPress={() => setStep(3)}
-                  style={[styles.primaryBtn, { flex: 1 }, !canGoStep3 && { opacity: 0.45 }]}
+                  disabled={!canGoStep2}
+                  onPress={() => setStep(2)}
+                  style={[styles.primaryBtn, !canGoStep2 && { opacity: 0.45 }]}
                 >
                   <Text style={styles.primaryBtnText}>ادامه</Text>
                 </TouchableOpacity>
               </View>
-            </View>
-          </>
-        ) : null}
+            </>
+          ) : null}
 
-        {step === 3 ? (
-          <>
-            <View style={styles.sectionCard}>
-              <Text style={styles.h1}>هر سه رو به شکل واقعی بررسی کن</Text>
-              <Text style={styles.p}>
-                برای هر مورد حداقل ۱۶۰ کاراکتر بنویس. تا وقتی هر سه کامل نشه، نمیتونی این اقدام رو ثبت کنی.
-              </Text>
-            </View>
-
-            <View style={{ gap: 12, marginTop: 10 }}>
-              {top3.map((id, idx) => {
-                const it = RC1_FLAGS.find((x) => x.id === id);
-                const val = String(notes[id] || "");
-                const len = val.trim().length;
-
-                return (
-                  <View key={id} style={[styles.noteCard, isReview && { opacity: 0.9 }]}>
-                    <Text style={styles.noteTitle}>
-                      {idx + 1}) {it?.text || id}
-                    </Text>
-
-                    <TextInput
-                      value={val}
-                      onChangeText={(t) => setNote(id, t)}
-                      placeholder="توضیح بده دقیقاً چه شد، چند بار تکرار شد، و چه اثری روی تو گذاشت…"
-                      placeholderTextColor="rgba(231,238,247,.35)"
-                      multiline
-                      style={[styles.input, isReview && styles.inputReadOnly]}
-                      textAlign="right"
-                      textAlignVertical="top"
-                      editable={!isReview}
-                      selectTextOnFocus={!isReview}
-                    />
-
-                    <Text style={[styles.small, !isReview && len < 160 ? { color: palette.red } : null]}>
-                      {isReview ? "ثبت شده" : `${len}/160`}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-
-            <View style={{ marginTop: 14, gap: 10 }}>
-              <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  onPress={() => setStep(2)}
-                  style={[styles.secondaryBtn, { flex: 1 }]}
-                  disabled={saving}
-                >
-                  <Text style={styles.secondaryBtnText}>بازگشت</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  disabled={(!isReview && !notesOk) || saving}
-                  onPress={onFinishPress}
-                  style={[styles.primaryBtn, { flex: 1 }, ((!isReview && !notesOk) || saving) && { opacity: 0.45 }]}
-                >
-                  <Text style={styles.primaryBtnText}>{saving ? "در حال انجام…" : isReview ? "خروج" : "ثبت و پایان"}</Text>
-                </TouchableOpacity>
+          {step === 2 ? (
+            <>
+              <View style={styles.sectionCard}>
+                <Text style={styles.h1}>سه موردی که بیشترین آسیب رو زد</Text>
+                <Text style={styles.p}> از میان موارد تیک‌خورده، سه مورد رو انتخاب کن.</Text>
               </View>
 
-              {!isReview && !notesOk ? (
-                <Text style={styles.warn}>باید برای هر سه مورد حداقل ۱۶۰ کاراکتر بنویسی.</Text>
-              ) : null}
-            </View>
-          </>
-        ) : null}
-      </ScrollView>
+              <View style={{ gap: 10, marginTop: 10 }}>
+                {selected.map((id) => {
+                  const it = RC1_FLAGS.find((x) => x.id === id);
+                  if (!it) return null;
+                  const on = top3.includes(id);
+
+                  return (
+                    <Pressable
+                      key={id}
+                      onPress={() => toggleTop3(id)}
+                      style={[styles.choiceCard, on && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
+                      disabled={isReview}
+                    >
+                      <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+                        <Ionicons
+                          name={on ? "checkmark-circle" : "ellipse-outline"}
+                          size={18}
+                          color={on ? palette.green : "rgba(231,238,247,.55)"}
+                        />
+                        <Text style={styles.choiceText}>{it.text}</Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <View style={{ marginTop: 14, gap: 10 }}>
+                <Text style={styles.small}>انتخاب‌شده برای مرحله بعد: {top3.length}/3</Text>
+
+                <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+                  <TouchableOpacity activeOpacity={0.9} onPress={() => setStep(1)} style={[styles.secondaryBtn, { flex: 1 }]}>
+                    <Text style={styles.secondaryBtnText}>بازگشت</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    disabled={!canGoStep3}
+                    onPress={() => setStep(3)}
+                    style={[styles.primaryBtn, { flex: 1 }, !canGoStep3 && { opacity: 0.45 }]}
+                  >
+                    <Text style={styles.primaryBtnText}>ادامه</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </>
+          ) : null}
+
+          {step === 3 ? (
+            <>
+              <View style={styles.sectionCard}>
+                <Text style={styles.h1}>هر سه رو به شکل واقعی بررسی کن</Text>
+                <Text style={styles.p}>
+                  هر مورد رو در چند جمله توضیح بده.{"\n"} تا وقتی هر سه کامل نشه، نمیتونی این اقدام رو ثبت کنی.
+                </Text>
+              </View>
+
+              <View style={{ gap: 12, marginTop: 10 }}>
+                {top3.map((id, idx) => {
+                  const it = RC1_FLAGS.find((x) => x.id === id);
+                  const val = String(notes[id] || "");
+                  const len = val.trim().length;
+
+                  return (
+                    <View key={id} style={[styles.noteCard, isReview && { opacity: 0.9 }]}>
+                      <Text style={styles.noteTitle}>
+                        {idx + 1}) {it?.text || id}
+                      </Text>
+
+                      <TextInput
+                        ref={(r) => {
+                          inputRefs.current[id] = r;
+                        }}
+                        value={val}
+                        onChangeText={(t) => setNote(id, t)}
+                        onFocus={() => {
+                          // کمی تأخیر تا کیبورد بالا بیاید بعد اسکرول کنیم
+                          setTimeout(() => scrollToInput(id), 90);
+                        }}
+                        placeholder="توضیح بده دقیقاً چه شد، چند بار تکرار شد، و چه اثری روی تو گذاشت…"
+                        placeholderTextColor="rgba(231,238,247,.35)"
+                        multiline
+                        style={[styles.input, isReview && styles.inputReadOnly]}
+                        textAlign="right"
+                        textAlignVertical="top"
+                        editable={!isReview}
+                        selectTextOnFocus={!isReview}
+                        blurOnSubmit={false}
+                      />
+
+                      <Text style={[styles.small, !isReview && len < 160 ? { color: palette.red } : null]}>
+                        {isReview ? "ثبت شده" : `${len}/160`}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+
+              <View style={{ marginTop: 14, gap: 10 }}>
+                <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setStep(2);
+                    }}
+                    style={[styles.secondaryBtn, { flex: 1 }]}
+                    disabled={saving}
+                  >
+                    <Text style={styles.secondaryBtnText}>بازگشت</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    disabled={(!isReview && !notesOk) || saving}
+                    onPress={onFinishPress}
+                    style={[styles.primaryBtn, { flex: 1 }, ((!isReview && !notesOk) || saving) && { opacity: 0.45 }]}
+                  >
+                    <Text style={styles.primaryBtnText}>{saving ? "در حال انجام…" : isReview ? "خروج" : "ثبت و پایان"}</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {!isReview && !notesOk ? <Text style={styles.warn}>باید برای هر سه مورد حداقل ۱۶۰ کاراکتر بنویسی.</Text> : null}
+              </View>
+            </>
+          ) : null}
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* ✅ لودینگ ورود */}
       {booting ? (

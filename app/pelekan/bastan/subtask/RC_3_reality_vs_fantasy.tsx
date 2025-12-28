@@ -602,8 +602,8 @@ export default function RC3RealityVsFantasyScreen() {
               <View style={styles.sectionCard}>
                 <Text style={styles.h1}>واقعیت رابطه چی بود؟</Text>
                 <Text style={styles.p}>
-                  فقط چیزی که واقعاً اتفاق افتاد.{"\n"}
-                  نه تحلیل، نه توجیه.
+                  فقط چیزی که واقعاً اتفاق افتاد رو بنویس.{"\n"}
+                  نه تحلیل کن، نه توجیه.
                 </Text>
                 <Text style={[styles.small, { marginTop: 8 }]}>
                   مثلا: دیر جواب می‌داد یا به قول‌هاش عمل نمی‌کرد یا توجه داخل رابطه کم بود
@@ -718,7 +718,7 @@ export default function RC3RealityVsFantasyScreen() {
           {step === 4 ? (
             <>
               <View style={styles.sectionCard}>
-                <Text style={styles.h1}>این خیال چه هزینه‌ای داشت؟</Text>
+                <Text style={styles.h1}>این خیالپردازی‌ها چه هزینه‌ای داشت؟</Text>
                 <Text style={styles.p}>
                   قرار نیست خودتو بکوبی.{"\n"}
                   فقط اثر واقعیِ خیال رو بنویس.

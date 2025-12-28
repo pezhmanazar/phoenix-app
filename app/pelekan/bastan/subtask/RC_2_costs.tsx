@@ -4,15 +4,15 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    InteractionManager,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  InteractionManager,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -75,7 +75,7 @@ const CATEGORIES: { key: CategoryKey; title: string; hint: string; examples: str
     key: "time_energy",
     title: "زمان و انرژی",
     hint: "چیزهای ملموس بنویس",
-    examples: "مثال: ساعت‌های از دست رفته، انرژی برای کار و خانواده، خستگی دائمی",
+    examples: "مثال: ساعت‌های از دست رفته، انرژی برای کار و خانواده و خستگی دائمی",
   },
   {
     key: "peace_focus",
@@ -86,26 +86,26 @@ const CATEGORIES: { key: CategoryKey; title: string; hint: string; examples: str
   {
     key: "sleep_body",
     title: "خواب و بدن",
-    hint: "اثر روی بدن را بگو",
+    hint: "اثرش روی بدنت بگو",
     examples: "مثال: بی‌خوابی، تپش قلب، سردرد، بی‌اشتهایی یا پرخوری",
   },
   {
     key: "money_work",
-    title: "پول و شغل",
+    title: "پول و شغل یا تحصیل",
     hint: "واقعی و قابل سنجش",
-    examples: "مثال: هزینه‌ها، افت عملکرد کاری، از دست دادن فرصت‌ها",
+    examples: "مثال: هزینه‌ها، افت عملکرد کاری یا تحصیلی، از دست دادن فرصت‌ها",
   },
   {
     key: "self_esteem",
-    title: "اعتمادبه‌نفس و ارزشمندی",
+    title: "اعتمادبه‌نفس و احساس ارزشمندی",
     hint: "اثر روی تصویر از خود",
-    examples: "مثال: احساس کم‌ارزشی، شک به خود، شرمندگی، مقایسه شدن",
+    examples: "مثال: احساس کم‌ارزشی، شک داشتن به خودت، شرمندگی، احساس مقایسه شدن و احساس جذاب نبودن",
   },
   {
     key: "relationships",
     title: "روابط دیگر",
     hint: "خانواده یا دوست‌ها",
-    examples: "مثال: دور شدن از دوستان، تنش با خانواده، انزوا",
+    examples: "مثال: دور شدن از دوستان، تنش با خانواده و انزوا",
   },
   {
     key: "freedom",
@@ -597,10 +597,10 @@ export default function RC2CostsScreen() {
         {step === 1 ? (
           <>
             <View style={styles.sectionCard}>
-              <Text style={styles.h1}>کجاها این رابطه از تو کم کرد؟</Text>
+              <Text style={styles.h1}> در چه زمینه‌هایی این رابطه برای تو مشکل ایجاد کرد؟</Text>
               <Text style={styles.p}>
-                حداقل ۲ دسته رو انتخاب کن. بعد می‌ریم سراغ نوشتن.{"\n"}
-                (هر دسته حداکثر ۳ مورد)
+               حداقل ۲ دسته رو انتخاب کن.
+              
               </Text>
             </View>
 
@@ -659,11 +659,11 @@ export default function RC2CostsScreen() {
             <View style={styles.sectionCard}>
               <Text style={styles.h1}>کوتاه و واقعی بنویس</Text>
               <Text style={styles.p}>
-                در هر دسته حداکثر ۳ مورد.{"\n"}
+                در هر دسته حداکثر سه مورد بنویس.{"\n"}
                 هر مورد یک جمله کوتاه و ملموس.
               </Text>
               <Text style={[styles.small, { marginTop: 8 }]}>
-                حداقل ۵ مورد در مجموع لازم است تا بتوانی به مرحله مرور بروی.
+                حداقل پنج مورد در مجموع لازمه تا بتونی به مرحله بعد بری.
               </Text>
             </View>
 
