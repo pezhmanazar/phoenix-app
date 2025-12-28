@@ -1,22 +1,22 @@
-// app/pelekan/bastan/subtask/RC_1_red_flags.tsx
+// app/pelekan/bastan/subtask/RC_4_deal_breakers.tsx
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  InteractionManager,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  findNodeHandle,
+    ActivityIndicator,
+    InteractionManager,
+    Keyboard,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    findNodeHandle,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -38,8 +38,8 @@ const palette = {
 
 function subtaskNumberFa(key: string) {
   const k = String(key || "").trim();
-  if (k === "RC_1_red_flags") return "ریز‌اقدام اول";
-  return "ریز‌اقدام";
+  if (k === "RC_4_deal_breakers") return "ریز اقدام چهارم";
+  return "ریز اقدام";
 }
 
 function faOnlyTitle(raw?: string) {
@@ -51,64 +51,27 @@ function faOnlyTitle(raw?: string) {
 }
 
 /* ----------------------------- Types ----------------------------- */
-type RC1Saved = {
-  version: 1;
-  savedAt: string; // ISO
-  selected: string[];
-  top3: string[];
-  notes: Record<string, string>;
+type DealAnswer = "continue" | "stop" | "unsure";
+type Confidence = 25 | 50 | 75 | 100;
+
+type RC4Reason = {
+  seen: string;   // چی دیدی
+  wound: string;  // کجای تو زخمی شد
+  future: string; // اگر ادامه بده چه میشه
 };
 
-type FlagItem = { id: string; text: string };
+type RC4Saved = {
+  version: 1;
+  savedAt: string; // ISO
+  answer: DealAnswer;
+  confidence: Confidence;
+  reasons: RC4Reason[]; // دقیقا 3 تا
+  finalMessage: string;
+};
 
 /* ----------------------------- Storage Keys ----------------------------- */
-// ✅ فقط بعد از ثبت نهایی ساخته می‌شود (قبلش هیچ ذخیره‌ای نداریم)
-const KEY_RC1_FINAL = "pelekan:bastan:subtask:RC_1_red_flags:final:v1";
+const KEY_RC4_FINAL = "pelekan:bastan:subtask:RC_4_deal_breakers:final:v1";
 const KEY_BASTAN_DIRTY = "pelekan:bastan:dirty:v1";
-
-/* ----------------------------- Data ----------------------------- */
-const RC1_FLAGS: FlagItem[] = [
-  { id: "rc1_01", text: "احساس می‌کردم باید خودم رو سانسور کنم تا دعوا نشه." },
-  { id: "rc1_02", text: "ناراحتی‌هام جدی گرفته نمی‌شد یا کوچیک شمرده می‌شد." },
-  { id: "rc1_03", text: "وقتی اعتراض می‌کردم، متهم می‌شدم که «حساسم» یا «زیادی فکر می‌کنم»." },
-  { id: "rc1_04", text: "برای آروم نگه‌داشتن رابطه، از خواسته‌هام می‌گذشتم." },
-  { id: "rc1_05", text: "احساس گناه دائمی بابت ناراحت شدن داشتم." },
-  { id: "rc1_06", text: "عذرخواهی‌ها بیشتر از سمت من بود، حتی وقتی مقصر نبودم." },
-  { id: "rc1_07", text: "مدام نگران واکنش اون به حرف‌ها یا احساساتم بودم." },
-  { id: "rc1_08", text: "احساس می‌کردم باید حالش رو مدیریت کنم." },
-  { id: "rc1_09", text: "بعد از صحبت‌ کردن باهاش، بیشتر گیج می‌شدم تا آروم." },
-  { id: "rc1_10", text: "حس می‌کردم «خودِ واقعیم» توو رابطه جا نداره." },
-  { id: "rc1_11", text: "تصمیم‌های مهم بیشتر یک‌طرفه گرفته می‌شد." },
-  { id: "rc1_12", text: "استقلال من (مثل دوست‌هام، کارم و علایقم) تهدید تلقی می‌شد." },
-  { id: "rc1_13", text: "تماس‌ها یا پیام‌هام چک می‌شد یا بابتشون بازخواست می‌شدم." },
-  { id: "rc1_14", text: "سکوت یا قهر به‌عنوان تنبیه استفاده می‌شد." },
-  { id: "rc1_15", text: "احساس می‌کردم باید ثابت کنم «وفادارم»." },
-  { id: "rc1_16", text: "تحقیر کلامی، طعنه یا شوخی‌های آزاردهنده وجود داشت." },
-  { id: "rc1_17", text: "اختلاف‌ها به تهدید ختم می‌شد (مثل ترک کردن، بی‌محلی و حذف)." },
-  { id: "rc1_18", text: "نظر من فقط وقتی پذیرفته می‌شد که مطابق خواستش بود." },
-  { id: "rc1_19", text: "احساس می‌کردم قدرت رابطه متوازن نیست." },
-  { id: "rc1_20", text: "داخل رابطه بیشتر می‌ترسیدم تا احساس امنیت کنم." },
-  { id: "rc1_21", text: "خواسته‌ها یا مرزهای جنسی من نادیده گرفته می‌شد." },
-  { id: "rc1_22", text: "احساس فشار برای رابطه‌ی جنسی داشتم." },
-  { id: "rc1_23", text: "نه گفتن من با دلخوری، قهر یا فاصله پاسخ داده می‌شد." },
-  { id: "rc1_24", text: "صمیمیت فقط وقتی بود که اون می‌خواست." },
-  { id: "rc1_25", text: "بعد از رابطه جنسی و صمیمیت زیاد، احساس نزدیکی عاطفی نمی‌کردم." },
-  { id: "rc1_26", text: "رابطه جنسی جای گفت‌وگوهای حل‌نشده رو پر می‌کرد." },
-  { id: "rc1_27", text: "بدن یا تمایلات من با دیگران مقایسه می‌شد." },
-  { id: "rc1_28", text: "احساس می‌کردم وسیله‌ی حفظ رابطه هستم نه شریکش." },
-  { id: "rc1_29", text: "صمیمیت به ابزار کنترل تبدیل شده بود." },
-  { id: "rc1_30", text: "درباره‌ی مسائل جنسی نمی‌تونستم آزادانه حرف بزنم." },
-  { id: "rc1_31", text: "مسائل مالی شفاف نبود." },
-  { id: "rc1_32", text: "خرج‌ها یا تصمیم‌های مالی پنهون می‌شد." },
-  { id: "rc1_33", text: "احساس بدهکاری عاطفی یا مالی بهش داشتم." },
-  { id: "rc1_34", text: "قول‌های زیادی داده می‌شد ولی عملی نمی‌شد." },
-  { id: "rc1_35", text: "تناقض بین حرف‌ها و رفتارها وجود داشت." },
-  { id: "rc1_36", text: "درباره‌ی ارتباط با دیگران شفافیت نداشت." },
-  { id: "rc1_37", text: "احساس می‌کردم چیزهایی از من پنهون میشه." },
-  { id: "rc1_38", text: "به حس درونیم اعتماد نداشتم اما آرامش هم نداشتم." },
-  { id: "rc1_39", text: "اعتمادم تدریجی فرسوده شد، نه یک‌باره." },
-  { id: "rc1_40", text: "بیشتر امیدوار بودم تغییر کنه تا اینکه واقعیت رو ببینم." },
-];
 
 /* ----------------------------- Themed Modal ----------------------------- */
 type ModalKind = "info" | "warn" | "error" | "success";
@@ -140,19 +103,19 @@ function ThemedModal({
     kind === "success"
       ? "checkmark-circle"
       : kind === "warn"
-        ? "warning"
-        : kind === "info"
-          ? "information-circle"
-          : "alert-circle";
+      ? "warning"
+      : kind === "info"
+      ? "information-circle"
+      : "alert-circle";
 
   const iconColor =
     kind === "success"
       ? palette.green
       : kind === "warn"
-        ? palette.orange
-        : kind === "info"
-          ? "rgba(231,238,247,.85)"
-          : palette.red;
+      ? palette.orange
+      : kind === "info"
+      ? "rgba(231,238,247,.85)"
+      : palette.red;
 
   return (
     <View style={styles.modalOverlay} pointerEvents="auto">
@@ -192,12 +155,13 @@ function ThemedModal({
   );
 }
 
-export default function RC1RedFlagsScreen() {
+/* ----------------------------- Screen ----------------------------- */
+export default function RC4DealBreakersScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  useLocalSearchParams(); // فقط برای اینکه اگر جایی route params عوض شد، رندر پایدار باشد
+  useLocalSearchParams();
 
-  const subtaskKey = "RC_1_red_flags";
+  const subtaskKey = "RC_4_deal_breakers";
   const headerNo = subtaskNumberFa(subtaskKey);
 
   const { me } = useUser();
@@ -206,29 +170,29 @@ export default function RC1RedFlagsScreen() {
 
   const apiBase = "https://api.qoqnoos.app";
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  // 0 معرفی 1 پاسخ 2 دلیل ها 3 حرف آخر
+  const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
 
-  const [selected, setSelected] = useState<string[]>([]);
-  const [top3, setTop3] = useState<string[]>([]);
-  const [notes, setNotes] = useState<Record<string, string>>({});
-
-  // ✅ ورود/مرور
   const [booting, setBooting] = useState(false);
-
-  // ✅ حالت مرور (وقتی قبلاً ثبت شده)
   const [isReview, setIsReview] = useState(false);
 
-  // ✅ قفل submit
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
 
-  // ✅ اسکرول نرم بعد از تغییر step (بیس استاندارد)
   const scrollRef = useRef<ScrollView>(null);
-
-  // ✅ برای جلوگیری از رفتن باکس زیر کیبورد: اسکرول به ورودی فعال (ref نیتیو)
   const inputRefs = useRef<Record<string, TextInput | null>>({});
 
-  // ✅ مودال‌ها
+  const [answer, setAnswer] = useState<DealAnswer | null>(null);
+  const [confidence, setConfidence] = useState<Confidence>(50);
+
+  const [reasons, setReasons] = useState<RC4Reason[]>([
+    { seen: "", wound: "", future: "" },
+    { seen: "", wound: "", future: "" },
+    { seen: "", wound: "", future: "" },
+  ]);
+
+  const [finalMessage, setFinalMessage] = useState("");
+
   const [confirmLockModal, setConfirmLockModal] = useState(false);
   const [modal, setModal] = useState<{
     visible: boolean;
@@ -248,8 +212,6 @@ export default function RC1RedFlagsScreen() {
     primaryText: "باشه",
   });
 
-  const selectedSet = useMemo(() => new Set(selected), [selected]);
-
   const closeModal = useCallback(() => {
     setModal((m) => ({ ...m, visible: false, loading: false }));
   }, []);
@@ -258,18 +220,20 @@ export default function RC1RedFlagsScreen() {
     setModal({ ...cfg, visible: true } as any);
   }, []);
 
-  // ✅ فقط FINAL را می‌خوانیم
+  /* ----------------------------- Load FINAL if exists ----------------------------- */
   const loadFinalIfAny = useCallback(async () => {
-    const raw = await AsyncStorage.getItem(KEY_RC1_FINAL);
+    const raw = await AsyncStorage.getItem(KEY_RC4_FINAL);
     if (!raw) return { loaded: false as const };
 
-    const j = JSON.parse(raw) as RC1Saved;
+    const j = JSON.parse(raw) as RC4Saved;
     if (!j || j.version !== 1) return { loaded: false as const };
 
-    setSelected(Array.isArray(j.selected) ? j.selected : []);
-    setTop3(Array.isArray(j.top3) ? j.top3 : []);
-    setNotes(j.notes && typeof j.notes === "object" ? j.notes : {});
+    setAnswer(j.answer);
+    setConfidence(j.confidence);
+    setReasons(Array.isArray(j.reasons) && j.reasons.length === 3 ? j.reasons : reasons);
+    setFinalMessage(String(j.finalMessage || ""));
     return { loaded: true as const };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -281,7 +245,6 @@ export default function RC1RedFlagsScreen() {
         const { loaded } = await loadFinalIfAny();
         if (!alive) return;
         setIsReview(!!loaded);
-        // ✅ اگر مرور است، برو مرحله 3 تا متن‌ها جلوی چشم باشد
         if (loaded) setStep(3);
       } catch {
         if (alive) setIsReview(false);
@@ -296,7 +259,7 @@ export default function RC1RedFlagsScreen() {
     };
   }, [loadFinalIfAny]);
 
-  // ✅ اسکرول نرم و بدون پرش بعد از تغییر step
+  /* ----------------------------- Smooth scroll on step change ----------------------------- */
   useEffect(() => {
     if (booting) return;
 
@@ -317,105 +280,58 @@ export default function RC1RedFlagsScreen() {
     };
   }, [step, booting]);
 
-  // ✅ وقتی یک input فوکوس شد، بدون measureLayout ببریمش بالا که زیر کیبورد نره
-  const scrollToInput = useCallback(
-    (id: string, extraOffset = 22) => {
-      const input = inputRefs.current[id] as any;
-      const scroll = scrollRef.current as any;
-      if (!input || !scroll) return;
+  /* ----------------------------- Scroll to input (keyboard safe) ----------------------------- */
+  const scrollToInput = useCallback((id: string, extraOffset = 22) => {
+    const input = inputRefs.current[id] as any;
+    const scroll = scrollRef.current as any;
+    if (!input || !scroll) return;
 
-      const node = findNodeHandle(input);
-      if (!node) return;
+    const node = findNodeHandle(input);
+    if (!node) return;
 
-      const responder = scroll.getScrollResponder?.();
-      responder?.scrollResponderScrollNativeHandleToKeyboard?.(node, extraOffset, true);
-    },
-    []
-  );
+    const responder = scroll.getScrollResponder?.();
+    responder?.scrollResponderScrollNativeHandleToKeyboard?.(node, extraOffset, true);
+  }, []);
+
+  /* ----------------------------- Validation ----------------------------- */
+  const reasonsOk = useMemo(() => {
+    // هر فیلد حداقل 50 کاراکتر
+    return reasons.every((r) => {
+      const a = String(r.seen || "").trim().length >= 50;
+      const b = String(r.wound || "").trim().length >= 50;
+      const c = String(r.future || "").trim().length >= 50;
+      return a && b && c;
+    });
+  }, [reasons]);
+
+  const finalOk = useMemo(() => String(finalMessage || "").trim().length >= 140, [finalMessage]);
 
   /* ----------------------------- Helpers ----------------------------- */
-  const toggleSelect = useCallback(
-    (idRaw: string) => {
+  const setReasonField = useCallback(
+    (idx: number, field: keyof RC4Reason, value: string) => {
       if (isReview) return;
-      const id = String(idRaw || "").trim();
-      if (!id) return;
-
-      const nextSelected = selectedSet.has(id) ? selected.filter((x) => x !== id) : [...selected, id];
-
-      // top3 باید زیرمجموعه selected بماند
-      const nextTop3 = top3.filter((x) => nextSelected.includes(x));
-
-      // notes فقط برای top3 نگه داشته شود
-      const nextNotes: Record<string, string> = {};
-      for (const k of Object.keys(notes || {})) {
-        if (nextTop3.includes(k)) nextNotes[k] = String((notes as any)[k] || "");
-      }
-
-      setSelected(nextSelected);
-      setTop3(nextTop3);
-      setNotes(nextNotes);
-      // ❌ هیچ ذخیره‌ای تا مرحله آخر
-    },
-    [isReview, notes, selected, selectedSet, top3]
-  );
-
-  const toggleTop3 = useCallback(
-    (idRaw: string) => {
-      if (isReview) return;
-      const id = String(idRaw || "").trim();
-      if (!id) return;
-      if (!selectedSet.has(id)) return;
-
-      let next = [...top3];
-      if (next.includes(id)) next = next.filter((x) => x !== id);
-      else {
-        if (next.length >= 3) return;
-        next = [...next, id];
-      }
-
-      const nextNotes = { ...(notes || {}) };
-      if (!next.includes(id)) delete nextNotes[id];
-
-      setTop3(next);
-      setNotes(nextNotes);
-      // ❌ هیچ ذخیره‌ای تا مرحله آخر
-    },
-    [isReview, notes, selectedSet, top3]
-  );
-
-  const setNote = useCallback(
-    (idRaw: string, v: string) => {
-      if (isReview) return;
-      const id = String(idRaw || "").trim();
-      const txt = String(v || "");
-      setNotes((prev) => ({ ...(prev || {}), [id]: txt }));
-      // ❌ هیچ ذخیره‌ای تا مرحله آخر
+      setReasons((prev) => {
+        const next = [...prev];
+        const row = { ...next[idx] };
+        row[field] = String(value || "");
+        next[idx] = row;
+        return next;
+      });
     },
     [isReview]
   );
 
-  const canGoStep2 = selected.length >= 3;
-  const canGoStep3 = top3.length === 3;
-
-  const notesOk = useMemo(() => {
-    if (top3.length !== 3) return false;
-    for (const id of top3) {
-      const n = String(notes[id] || "").trim();
-      if (n.length < 160) return false;
-    }
-    return true;
-  }, [notes, top3]);
-
   const persistFinalLocal = useCallback(async () => {
-    const payload: RC1Saved = {
+    const payload: RC4Saved = {
       version: 1,
       savedAt: new Date().toISOString(),
-      selected,
-      top3,
-      notes,
+      answer: answer!,
+      confidence,
+      reasons,
+      finalMessage,
     };
-    await AsyncStorage.setItem(KEY_RC1_FINAL, JSON.stringify(payload));
-  }, [notes, selected, top3]);
+    await AsyncStorage.setItem(KEY_RC4_FINAL, JSON.stringify(payload));
+  }, [answer, confidence, finalMessage, reasons]);
 
   const completeOnServer = useCallback(async (): Promise<"ok" | "already" | "fail"> => {
     const t = String(token || "").trim();
@@ -425,7 +341,18 @@ export default function RC1RedFlagsScreen() {
       openModal({
         kind: "error",
         title: "ورود لازم است",
-        message: "برای ثبت انجام‌شدن باید وارد حساب باشی.",
+        message: "برای ثبت انجام شدن باید وارد حساب باشی.",
+        primaryText: "باشه",
+        onPrimary: closeModal,
+      });
+      return "fail";
+    }
+
+    if (!answer) {
+      openModal({
+        kind: "error",
+        title: "یک پاسخ لازم است",
+        message: "اول مشخص کن به دوستت می گفتی ادامه بده یا نه.",
         primaryText: "باشه",
         onPrimary: closeModal,
       });
@@ -434,13 +361,13 @@ export default function RC1RedFlagsScreen() {
 
     const url = `${apiBase}/api/pelekan/bastan/subtask/complete?phone=${encodeURIComponent(p)}`;
 
-    // ✅ فقط در ثبت نهایی، payload واقعی بفرست
-    const payloadToSend: RC1Saved = {
+    const payloadToSend: RC4Saved = {
       version: 1,
       savedAt: new Date().toISOString(),
-      selected,
-      top3,
-      notes,
+      answer,
+      confidence,
+      reasons,
+      finalMessage,
     };
 
     const res = await fetch(url, {
@@ -452,7 +379,7 @@ export default function RC1RedFlagsScreen() {
       },
       body: JSON.stringify({
         phone: p,
-        subtaskKey: "RC_1_red_flags",
+        subtaskKey: "RC_4_deal_breakers",
         payload: payloadToSend,
       }),
     });
@@ -477,10 +404,10 @@ export default function RC1RedFlagsScreen() {
       onPrimary: closeModal,
     });
     return "fail";
-  }, [apiBase, closeModal, notes, openModal, phone, selected, token, top3]);
+  }, [answer, apiBase, closeModal, confidence, finalMessage, openModal, phone, reasons, token]);
 
   const doFinalize = useCallback(async () => {
-    if (!notesOk) return;
+    if (!answer || !reasonsOk || !finalOk) return;
 
     if (savingRef.current) return;
     savingRef.current = true;
@@ -492,16 +419,15 @@ export default function RC1RedFlagsScreen() {
       const r = await completeOnServer();
       if (r === "fail") return;
 
-      // 2) لوکال (فقط بعد از ok/already) — مشکل «سیو نشدن روی گوشی» همینجا حل میشه
+      // 2) لوکال فقط بعد از ok یا already
       await persistFinalLocal();
-
       await AsyncStorage.setItem(KEY_BASTAN_DIRTY, new Date().toISOString());
 
       if (r === "already") {
         openModal({
           kind: "info",
-          title: "قبلاً ثبت شده",
-          message: "این ریز‌اقدام قبلاً ثبت شده و نیازی به ثبت دوباره نیست.",
+          title: "قبلا ثبت شده",
+          message: "این ریز اقدام قبلا ثبت شده و نیازی به ثبت دوباره نیست.",
           primaryText: "خروج",
           onPrimary: () => {
             closeModal();
@@ -514,7 +440,7 @@ export default function RC1RedFlagsScreen() {
       openModal({
         kind: "success",
         title: "ثبت شد",
-        message: "ثبت انجام شد. از این به بعد امکان تغییر این ریز‌اقدام وجود ندارد.",
+        message: "ثبت انجام شد. از این به بعد امکان تغییر این ریز اقدام وجود ندارد.",
         primaryText: "خروج",
         onPrimary: () => {
           closeModal();
@@ -527,7 +453,7 @@ export default function RC1RedFlagsScreen() {
       setIsReview(true);
       setStep(3);
     }
-  }, [closeModal, completeOnServer, notesOk, openModal, persistFinalLocal, router]);
+  }, [answer, closeModal, completeOnServer, finalOk, openModal, persistFinalLocal, reasonsOk, router]);
 
   const onFinishPress = useCallback(() => {
     if (isReview) {
@@ -537,7 +463,10 @@ export default function RC1RedFlagsScreen() {
     setConfirmLockModal(true);
   }, [isReview, router]);
 
-  const title = " نشونه‌های هشداردهنده رابطت رو تیک بزن";
+  const title = "اگه دوست صمیمیت جای تو بود بهش چی می گفتی؟";
+
+  const stepLabel =
+    step === 0 ? "۰) شروع" : step === 1 ? "۱) انتخاب" : step === 2 ? "۲) دلیل ها" : "۳) حرف آخر";
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
@@ -575,40 +504,88 @@ export default function RC1RedFlagsScreen() {
           {isReview ? (
             <View style={styles.reviewBanner}>
               <Ionicons name="eye" size={16} color="rgba(231,238,247,.88)" />
-              <Text style={styles.reviewBannerText}>حالت مرور: این ریز‌اقدام قبلاً ثبت شده و قابل تغییر نیست.</Text>
+              <Text style={styles.reviewBannerText}>حالت مرور. این ریز اقدام قبلا ثبت شده و قابل تغییر نیست.</Text>
             </View>
           ) : null}
 
-          {/* Step indicator */}
+          {/* Step pills */}
           <View style={styles.stepPills}>
+            <View style={[styles.stepPill, step === 0 && styles.stepPillOn]}>
+              <Text style={styles.stepPillText}>شروع</Text>
+            </View>
             <View style={[styles.stepPill, step === 1 && styles.stepPillOn]}>
-              <Text style={styles.stepPillText}>۱) انتخاب</Text>
+              <Text style={styles.stepPillText}>انتخاب</Text>
             </View>
             <View style={[styles.stepPill, step === 2 && styles.stepPillOn]}>
-              <Text style={styles.stepPillText}>۲) انتخاب سه مورد</Text>
+              <Text style={styles.stepPillText}>دلیل ها</Text>
             </View>
             <View style={[styles.stepPill, step === 3 && styles.stepPillOn]}>
-              <Text style={styles.stepPillText}>۳) نوشتن</Text>
+              <Text style={styles.stepPillText}>حرف آخر</Text>
             </View>
           </View>
 
+          {/* mini label */}
+          <Text style={[styles.small, { textAlign: "center", marginBottom: 10 }]}>{stepLabel}</Text>
+
+          {/* Step 0 */}
+          {step === 0 ? (
+            <>
+              <View style={styles.sectionCard}>
+                <Text style={styles.h1}>قراره اینجا چیکار کنی؟</Text>
+                <Text style={styles.p}>
+                  یک لحظه خودتو کنار بذار
+                  {"\n"}
+                  فرض کن بهترین دوستت دقیقا همین رابطه رو داره
+                  {"\n"}
+                  همون حرف‍‌ها
+                  {"\n"}
+                  همون رفتارها
+                  {"\n"}
+                  همون دردها
+                  {"\n"}
+                  حالا اینجا فقط یک کار می‌کنی
+                  {"\n"}بهش میگی ادامه بده یا نه؟؟
+                  {"\n"}
+                  این تمرین بهت کمک میکنه از حالت کودک زخمی بیرون بیایی و در نقش بزرگسال بالغ تصمیم بگیری
+                </Text>
+              </View>
+
+              <TouchableOpacity activeOpacity={0.9} onPress={() => setStep(1)} style={styles.primaryBtn}>
+                <Text style={styles.primaryBtnText}>شروع</Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
+
+          {/* Step 1 */}
           {step === 1 ? (
             <>
               <View style={styles.sectionCard}>
-                <Text style={styles.h1}>اون چیزی که دیدی رو انکار نکن</Text>
+                <Text style={styles.h1}>اگه دوستت جای تو بود</Text>
                 <Text style={styles.p}>
-                  هر موردی که در رابطت بوده رو تیک بزن.{"\n"}این‌ها فقط داخل گوشی خودت ذخیره میشن.{"\n"}
-                  برای رفتن به مرحله بعد، حداقل ۳ مورد رو انتخاب کن.
+                  بدون توضیح دادن
+                  {"\n"}
+                  فقط یکی رو انتخاب کن
+                  {"\n"}
+                  این پاسخ قرار نیست حقیقت مطلق باشه
+                  {"\n"}
+                  فقط اولین پاسخ ذهن بالغ و عاقل توئه
                 </Text>
               </View>
 
               <View style={{ gap: 10, marginTop: 10 }}>
-                {RC1_FLAGS.map((it) => {
-                  const on = selectedSet.has(it.id);
+                {[
+                  { k: "continue" as DealAnswer, t: "ادامه بده" },
+                  { k: "stop" as DealAnswer, t: "ادامه نده" },
+                  { k: "unsure" as DealAnswer, t: "مطمئن نیستم" },
+                ].map((o) => {
+                  const on = answer === o.k;
                   return (
                     <Pressable
-                      key={it.id}
-                      onPress={() => toggleSelect(it.id)}
+                      key={o.k}
+                      onPress={() => {
+                        if (isReview) return;
+                        setAnswer(o.k);
+                      }}
                       style={[styles.choiceCard, on && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
                       disabled={isReview}
                     >
@@ -618,74 +595,55 @@ export default function RC1RedFlagsScreen() {
                           size={18}
                           color={on ? palette.green : "rgba(231,238,247,.55)"}
                         />
-                        <Text style={styles.choiceText}>{it.text}</Text>
+                        <Text style={styles.choiceText}>{o.t}</Text>
                       </View>
                     </Pressable>
                   );
                 })}
               </View>
 
-              <View style={{ marginTop: 14, gap: 10 }}>
-                <Text style={styles.small}>انتخاب‌شده: {selected.length} مورد</Text>
+              <View style={[styles.sectionCard, { marginTop: 12 }]}>
+                <Text style={styles.h1}>چقدر به جوابت مطمئنی؟</Text>
+                <Text style={styles.p}>
+                  این فقط کمک میکنه بفهمی هنوز توو حالت دودلی هستی یا نه!
+                </Text>
 
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  disabled={!canGoStep2}
-                  onPress={() => setStep(2)}
-                  style={[styles.primaryBtn, !canGoStep2 && { opacity: 0.45 }]}
-                >
-                  <Text style={styles.primaryBtnText}>ادامه</Text>
-                </TouchableOpacity>
-              </View>
-            </>
-          ) : null}
-
-          {step === 2 ? (
-            <>
-              <View style={styles.sectionCard}>
-                <Text style={styles.h1}>سه موردی که بیشترین آسیب رو زد</Text>
-                <Text style={styles.p}> از میان موارد تیک‌خورده، سه مورد رو انتخاب کن.</Text>
-              </View>
-
-              <View style={{ gap: 10, marginTop: 10 }}>
-                {selected.map((id) => {
-                  const it = RC1_FLAGS.find((x) => x.id === id);
-                  if (!it) return null;
-                  const on = top3.includes(id);
-
-                  return (
-                    <Pressable
-                      key={id}
-                      onPress={() => toggleTop3(id)}
-                      style={[styles.choiceCard, on && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
-                      disabled={isReview}
-                    >
-                      <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
-                        <Ionicons
-                          name={on ? "checkmark-circle" : "ellipse-outline"}
-                          size={18}
-                          color={on ? palette.green : "rgba(231,238,247,.55)"}
-                        />
-                        <Text style={styles.choiceText}>{it.text}</Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
+                <View style={{ flexDirection: "row-reverse", gap: 10, marginTop: 10 }}>
+                  {[
+                    { v: 25 as Confidence, t: "کم" },
+                    { v: 50 as Confidence, t: "متوسط" },
+                    { v: 75 as Confidence, t: "زیاد" },
+                    { v: 100 as Confidence, t: "خیلی زیاد" },
+                  ].map((x) => {
+                    const on = confidence === x.v;
+                    return (
+                      <Pressable
+                        key={x.v}
+                        onPress={() => {
+                          if (isReview) return;
+                          setConfidence(x.v);
+                        }}
+                        style={[styles.pillBtn, on && styles.pillBtnOn, isReview && { opacity: 0.7 }]}
+                        disabled={isReview}
+                      >
+                        <Text style={[styles.pillBtnText, on && { color: palette.text }]}>{x.t}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
 
               <View style={{ marginTop: 14, gap: 10 }}>
-                <Text style={styles.small}>انتخاب‌شده برای مرحله بعد: {top3.length}/3</Text>
-
                 <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-                  <TouchableOpacity activeOpacity={0.9} onPress={() => setStep(1)} style={[styles.secondaryBtn, { flex: 1 }]}>
+                  <TouchableOpacity activeOpacity={0.9} onPress={() => setStep(0)} style={[styles.secondaryBtn, { flex: 1 }]}>
                     <Text style={styles.secondaryBtnText}>بازگشت</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     activeOpacity={0.9}
-                    disabled={!canGoStep3}
-                    onPress={() => setStep(3)}
-                    style={[styles.primaryBtn, { flex: 1 }, !canGoStep3 && { opacity: 0.45 }]}
+                    disabled={!answer}
+                    onPress={() => setStep(2)}
+                    style={[styles.primaryBtn, { flex: 1 }, !answer && { opacity: 0.45 }]}
                   >
                     <Text style={styles.primaryBtnText}>ادامه</Text>
                   </TouchableOpacity>
@@ -694,38 +652,45 @@ export default function RC1RedFlagsScreen() {
             </>
           ) : null}
 
-          {step === 3 ? (
+          {/* Step 2 */}
+          {step === 2 ? (
             <>
               <View style={styles.sectionCard}>
-                <Text style={styles.h1}>هر سه رو به شکل واقعی بررسی کن</Text>
+                <Text style={styles.h1}>از جواب خودت دفاع کن</Text>
                 <Text style={styles.p}>
-                  هر مورد رو در چند جمله توضیح بده.{"\n"} تا وقتی هر سه کامل نشه، نمیتونی این اقدام رو ثبت کنی.
+                  اینجا هدف تحلیل پیچیده نیست
+                  {"\n"}
+                  هدف اینه که ببینی جوابت چقد منطقیه
+                  {"\n"}
+                  پس سه دلیل برای جوابت بیار و دو مدرک برای دلیلت بگو
+                  {"\n"}
+                  مثلا بگو چرا باید به حرف تو گوش بده
+                  {"\n"}
+                  یا چه اتفاقی داخل رابطه افتاده که این دلیل رو منطقی میکنه
+                  {"\n"}
+                  و با این تصمیم چه چیزهایی رو به دست میاره
                 </Text>
               </View>
 
               <View style={{ gap: 12, marginTop: 10 }}>
-                {top3.map((id, idx) => {
-                  const it = RC1_FLAGS.find((x) => x.id === id);
-                  const val = String(notes[id] || "");
-                  const len = val.trim().length;
+                {reasons.map((r, i) => {
+                  const base = `r${i}`;
+                  const a = String(r.seen || "").trim().length;
+                  const b = String(r.wound || "").trim().length;
+                  const c = String(r.future || "").trim().length;
 
                   return (
-                    <View key={id} style={[styles.noteCard, isReview && { opacity: 0.9 }]}>
-                      <Text style={styles.noteTitle}>
-                        {idx + 1}) {it?.text || id}
-                      </Text>
+                    <View key={i} style={[styles.noteCard, isReview && { opacity: 0.9 }]}>
+                      <Text style={styles.noteTitle}>دلیل {i + 1}</Text>
 
                       <TextInput
-                        ref={(r) => {
-                          inputRefs.current[id] = r;
+                        ref={(x) => {
+                          inputRefs.current[`${base}:seen`] = x;
                         }}
-                        value={val}
-                        onChangeText={(t) => setNote(id, t)}
-                        onFocus={() => {
-                          // کمی تأخیر تا کیبورد بالا بیاید بعد اسکرول کنیم
-                          setTimeout(() => scrollToInput(id, 22), 60);
-                        }}
-                        placeholder="توضیح بده دقیقاً چه شد، چند بار تکرار شد، و چه اثری روی تو گذاشت…"
+                        value={r.seen}
+                        onChangeText={(t) => setReasonField(i, "seen", t)}
+                        onFocus={() => setTimeout(() => scrollToInput(`${base}:seen`, 22), 60)}
+                        
                         placeholderTextColor="rgba(231,238,247,.35)"
                         multiline
                         style={[styles.input, isReview && styles.inputReadOnly]}
@@ -733,15 +698,126 @@ export default function RC1RedFlagsScreen() {
                         textAlignVertical="top"
                         editable={!isReview}
                         selectTextOnFocus={!isReview}
-                        blurOnSubmit={false}
                       />
+                      <Text style={[styles.small, !isReview && a < 50 ? { color: palette.red } : null]}>
+                        {isReview ? "ثبت شده" : `${a}/50`}
+                      </Text>
 
-                      <Text style={[styles.small, !isReview && len < 160 ? { color: palette.red } : null]}>
-                        {isReview ? "ثبت شده" : `${len}/160`}
+                      <TextInput
+                        ref={(x) => {
+                          inputRefs.current[`${base}:wound`] = x;
+                        }}
+                        value={r.wound}
+                        onChangeText={(t) => setReasonField(i, "wound", t)}
+                        onFocus={() => setTimeout(() => scrollToInput(`${base}:wound`, 22), 60)}
+                        placeholder="مدارک، شواهد و دلایل منطقی برای این دلیل"
+                        placeholderTextColor="rgba(231,238,247,.35)"
+                        multiline
+                        style={[styles.input, isReview && styles.inputReadOnly]}
+                        textAlign="right"
+                        textAlignVertical="top"
+                        editable={!isReview}
+                        selectTextOnFocus={!isReview}
+                      />
+                      <Text style={[styles.small, !isReview && b < 50 ? { color: palette.red } : null]}>
+                        {isReview ? "ثبت شده" : `${b}/50`}
+                      </Text>
+
+                      <TextInput
+                        ref={(x) => {
+                          inputRefs.current[`${base}:future`] = x;
+                        }}
+                        value={r.future}
+                        onChangeText={(t) => setReasonField(i, "future", t)}
+                        onFocus={() => setTimeout(() => scrollToInput(`${base}:future`, 22), 60)}
+                        placeholder="مدارک، شواهد و دلایل منطقی برای این دلیل"
+                        placeholderTextColor="rgba(231,238,247,.35)"
+                        multiline
+                        style={[styles.input, isReview && styles.inputReadOnly]}
+                        textAlign="right"
+                        textAlignVertical="top"
+                        editable={!isReview}
+                        selectTextOnFocus={!isReview}
+                      />
+                      <Text style={[styles.small, !isReview && c < 50 ? { color: palette.red } : null]}>
+                        {isReview ? "ثبت شده" : `${c}/50`}
                       </Text>
                     </View>
                   );
                 })}
+              </View>
+
+              <View style={{ marginTop: 14, gap: 10 }}>
+                <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setStep(1);
+                    }}
+                    style={[styles.secondaryBtn, { flex: 1 }]}
+                    disabled={saving}
+                  >
+                    <Text style={styles.secondaryBtnText}>بازگشت</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    disabled={!reasonsOk}
+                    onPress={() => setStep(3)}
+                    style={[styles.primaryBtn, { flex: 1 }, !reasonsOk && { opacity: 0.45 }]}
+                  >
+                    <Text style={styles.primaryBtnText}>ادامه</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {!reasonsOk ? <Text style={styles.warn}>برای هر سه دلیل هر سه بخش را حداقل 50 کاراکتر بنویس.</Text> : null}
+              </View>
+            </>
+          ) : null}
+
+          {/* Step 3 */}
+          {step === 3 ? (
+            <>
+              <View style={styles.sectionCard}>
+                <Text style={styles.h1}>حرف آخر به دوستت</Text>
+                <Text style={styles.p}>
+                  یک پیام کوتاه و روشن بهش بگو که بتونه تصمیم بگیره
+                  {"\n"}
+                 نصیحتش نکن
+                  {"\n"}
+                 سرزنشش نکن
+                  {"\n"}
+                 فقط بهش بگو دقیقا چیکار کنه
+                </Text>
+              </View>
+
+              <View style={[styles.noteCard, isReview && { opacity: 0.9 }]}>
+                <Text style={styles.noteTitle}>پیام تو</Text>
+
+                <TextInput
+                  ref={(x) => {
+                    inputRefs.current["final"] = x;
+                  }}
+                  value={finalMessage}
+                  onChangeText={(t) => {
+                    if (isReview) return;
+                    setFinalMessage(String(t || ""));
+                  }}
+                  onFocus={() => setTimeout(() => scrollToInput("final", 22), 60)}
+                  placeholder="مثلا: تو حق داری امنیت داشته باشی. اگه رابطه تو رو کوچیک می کنه ادامه نده. اگه داخلش تغییر واقعی نیست خودت رو قربانی امید نکن."
+                  placeholderTextColor="rgba(231,238,247,.35)"
+                  multiline
+                  style={[styles.input, { minHeight: 140 }, isReview && styles.inputReadOnly]}
+                  textAlign="right"
+                  textAlignVertical="top"
+                  editable={!isReview}
+                  selectTextOnFocus={!isReview}
+                />
+
+                <Text style={[styles.small, !isReview && String(finalMessage || "").trim().length < 140 ? { color: palette.red } : null]}>
+                  {isReview ? "ثبت شده" : `${String(finalMessage || "").trim().length}/140`}
+                </Text>
               </View>
 
               <View style={{ marginTop: 14, gap: 10 }}>
@@ -760,39 +836,43 @@ export default function RC1RedFlagsScreen() {
 
                   <TouchableOpacity
                     activeOpacity={0.9}
-                    disabled={(!isReview && !notesOk) || saving}
+                    disabled={(!isReview && (!answer || !reasonsOk || !finalOk)) || saving}
                     onPress={onFinishPress}
-                    style={[styles.primaryBtn, { flex: 1 }, ((!isReview && !notesOk) || saving) && { opacity: 0.45 }]}
+                    style={[
+                      styles.primaryBtn,
+                      { flex: 1 },
+                      ((!isReview && (!answer || !reasonsOk || !finalOk)) || saving) && { opacity: 0.45 },
+                    ]}
                   >
                     <Text style={styles.primaryBtnText}>{saving ? "در حال انجام…" : isReview ? "خروج" : "ثبت و پایان"}</Text>
                   </TouchableOpacity>
                 </View>
 
-                {!isReview && !notesOk ? <Text style={styles.warn}>باید برای هر سه مورد حداقل ۱۶۰ کاراکتر بنویسی.</Text> : null}
+                {!isReview && !finalOk ? <Text style={styles.warn}>حرف آخر باید حداقل 140 کاراکتر باشد.</Text> : null}
               </View>
             </>
           ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ✅ لودینگ ورود */}
+      {/* Boot overlay */}
       {booting ? (
         <View style={styles.bootOverlay} pointerEvents="auto">
           <View style={styles.bootCard}>
             <ActivityIndicator />
-            <Text style={styles.bootText}>در حال بارگذاری اطلاعات ذخیره‌شده…</Text>
+            <Text style={styles.bootText}>در حال بارگذاری اطلاعات ذخیره شده…</Text>
           </View>
         </View>
       ) : null}
 
-      {/* ✅ مودال هشدار قبل از قفل شدن */}
+      {/* Confirm lock modal */}
       <ThemedModal
         visible={confirmLockModal}
         kind="warn"
-        title="قبل از ثبت، این رو بدون"
-        message="با زدن «ثبت و پایان»، این ریز‌اقدام قفل میشه و دیگر امکان تغییر انتخاب‌ها و متن‌ها رو نخواهی داشت."
+        title="قبل از ثبت این را بدان"
+        message="با زدن ثبت و پایان این ریز اقدام قفل می شود و دیگر امکان تغییر پاسخ ها و متن ها را نداری."
         primaryText="ثبت و قفل کن"
-        secondaryText="فعلاً نه"
+        secondaryText="فعلا نه"
         loading={saving}
         onPrimary={() => {
           setConfirmLockModal(false);
@@ -801,7 +881,7 @@ export default function RC1RedFlagsScreen() {
         onSecondary={() => setConfirmLockModal(false)}
       />
 
-      {/* ✅ مودال‌های تم برای خطا/موفقیت/اطلاع */}
+      {/* General modal */}
       <ThemedModal
         visible={modal.visible}
         kind={modal.kind}
@@ -895,7 +975,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
 
-  stepPills: { flexDirection: "row-reverse", gap: 8, justifyContent: "center", marginBottom: 12 },
+  stepPills: { flexDirection: "row-reverse", gap: 8, justifyContent: "center", marginBottom: 10 },
   stepPill: {
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -930,6 +1010,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   noteTitle: { color: palette.text, fontWeight: "900", fontSize: 13, textAlign: "right", lineHeight: 18 },
+
   input: {
     marginTop: 10,
     minHeight: 110,
@@ -967,6 +1048,21 @@ const styles = StyleSheet.create({
   },
   secondaryBtnText: { color: palette.text, fontWeight: "900" },
 
+  pillBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,.03)",
+    alignItems: "center",
+  },
+  pillBtnOn: {
+    borderColor: "rgba(212,175,55,.35)",
+    backgroundColor: "rgba(212,175,55,.14)",
+  },
+  pillBtnText: { color: "rgba(231,238,247,.85)", fontWeight: "900", fontSize: 11 },
+
   bootOverlay: {
     position: "absolute",
     top: 0,
@@ -996,7 +1092,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  /* Modal */
   modalOverlay: {
     position: "absolute",
     top: 0,
