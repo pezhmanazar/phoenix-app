@@ -2,9 +2,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
+  ActivityIndicator,
+  InteractionManager,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -31,6 +32,12 @@ const palette = {
   green: "#22C55E",
 };
 
+function subtaskNumberFa(key: string) {
+  const k = String(key || "").trim();
+  if (k === "RC_1_red_flags") return "ریز‌اقدام اول";
+  return "ریز‌اقدام";
+}
+
 function faOnlyTitle(raw?: string) {
   const s = String(raw || "").trim();
   if (!s) return "—";
@@ -39,25 +46,22 @@ function faOnlyTitle(raw?: string) {
   return s.replace(/[A-Za-z]/g, "").replace(/\s{2,}/g, " ").trim() || "—";
 }
 
-function subtaskNumberFa(key: string) {
-  const k = String(key || "").trim();
-  if (k === "RC_1_red_flags") return "ریز‌اقدام اول";
-  return "ریز‌اقدام";
-}
-
+/* ----------------------------- Types ----------------------------- */
 type RC1Saved = {
   version: 1;
   savedAt: string; // ISO
-  selected: string[]; // ids of items
-  top3: string[]; // 3 selected ids
-  notes: Record<string, string>; // id -> note
+  selected: string[];
+  top3: string[];
+  notes: Record<string, string>;
 };
 
 type FlagItem = { id: string; text: string };
 
+/* ----------------------------- Storage Keys ----------------------------- */
 const KEY_RC1 = "pelekan:bastan:subtask:RC_1_red_flags:v1";
+const KEY_BASTAN_DIRTY = "pelekan:bastan:dirty:v1";
 
-// ✅ لیست ۴۰تایی دقیقا همان‌هایی که دادی
+/* ----------------------------- Data ----------------------------- */
 const RC1_FLAGS: FlagItem[] = [
   { id: "rc1_01", text: "احساس می‌کردم باید خودم را سانسور کنم تا دعوا نشود." },
   { id: "rc1_02", text: "ناراحتی‌هایم جدی گرفته نمی‌شد یا کوچک شمرده می‌شد." },
@@ -101,6 +105,88 @@ const RC1_FLAGS: FlagItem[] = [
   { id: "rc1_40", text: "بیشتر امیدوار بودم تغییر کند تا اینکه واقعیت را ببینم." },
 ];
 
+/* ----------------------------- Themed Modal ----------------------------- */
+type ModalKind = "info" | "warn" | "error" | "success";
+
+function ThemedModal({
+  visible,
+  kind,
+  title,
+  message,
+  primaryText,
+  onPrimary,
+  secondaryText,
+  onSecondary,
+  loading,
+}: {
+  visible: boolean;
+  kind: ModalKind;
+  title: string;
+  message?: string;
+  primaryText: string;
+  onPrimary: () => void;
+  secondaryText?: string;
+  onSecondary?: () => void;
+  loading?: boolean;
+}) {
+  if (!visible) return null;
+
+  const icon =
+    kind === "success"
+      ? "checkmark-circle"
+      : kind === "warn"
+        ? "warning"
+        : kind === "info"
+          ? "information-circle"
+          : "alert-circle";
+
+  const iconColor =
+    kind === "success"
+      ? palette.green
+      : kind === "warn"
+        ? palette.orange
+        : kind === "info"
+          ? "rgba(231,238,247,.85)"
+          : palette.red;
+
+  return (
+    <View style={styles.modalOverlay} pointerEvents="auto">
+      <View style={styles.modalCard}>
+        <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+          <Ionicons name={icon as any} size={22} color={iconColor} />
+          <Text style={styles.modalTitle}>{title}</Text>
+        </View>
+
+        {!!message ? <Text style={styles.modalMsg}>{message}</Text> : null}
+
+        <View style={{ flexDirection: "row-reverse", gap: 10, marginTop: 14 }}>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={onPrimary}
+            style={[styles.modalPrimaryBtn, loading && { opacity: 0.6 }]}
+            disabled={!!loading}
+          >
+            {loading ? (
+              <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
+                <ActivityIndicator />
+                <Text style={styles.modalPrimaryText}>در حال انجام…</Text>
+              </View>
+            ) : (
+              <Text style={styles.modalPrimaryText}>{primaryText}</Text>
+            )}
+          </TouchableOpacity>
+
+          {secondaryText && onSecondary ? (
+            <TouchableOpacity activeOpacity={0.9} onPress={onSecondary} style={styles.modalSecondaryBtn}>
+              <Text style={styles.modalSecondaryText}>{secondaryText}</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export default function BastanSubtaskScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -118,27 +204,114 @@ export default function BastanSubtaskScreen() {
   const [selected, setSelected] = useState<string[]>([]);
   const [top3, setTop3] = useState<string[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
+
+  // ✅ ورود/مرور
+  const [booting, setBooting] = useState(false);
+
+  // ✅ حالت مرور (وقتی قبلاً ثبت شده)
+  const [isReview, setIsReview] = useState(false);
+
+  // ✅ قفل submit
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+
+  // ✅ اسکرول نرم بعد از تغییر step (بیس استاندارد)
+  const scrollRef = useRef<ScrollView>(null);
+
+  // ✅ مودال‌ها
+  const [confirmLockModal, setConfirmLockModal] = useState(false);
+  const [modal, setModal] = useState<{
+    visible: boolean;
+    kind: ModalKind;
+    title: string;
+    message?: string;
+    primaryText: string;
+    secondaryText?: string;
+    onPrimary?: () => void;
+    onSecondary?: () => void;
+    loading?: boolean;
+  }>({
+    visible: false,
+    kind: "info",
+    title: "",
+    message: "",
+    primaryText: "باشه",
+  });
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
 
+  const closeModal = useCallback(() => {
+    setModal((m) => ({ ...m, visible: false, loading: false }));
+  }, []);
+
+  const openModal = useCallback(
+    (cfg: Omit<typeof modal, "visible"> & { visible?: boolean }) => {
+      setModal({
+        ...cfg,
+        visible: true,
+      } as any);
+    },
+    []
+  );
+
   const loadLocal = useCallback(async () => {
-    try {
-      const raw = await AsyncStorage.getItem(KEY_RC1);
-      if (!raw) return;
-      const j = JSON.parse(raw) as RC1Saved;
-      if (!j || j.version !== 1) return;
-      setSelected(Array.isArray(j.selected) ? j.selected : []);
-      setTop3(Array.isArray(j.top3) ? j.top3 : []);
-      setNotes(j.notes && typeof j.notes === "object" ? j.notes : {});
-    } catch {
-      // ignore
-    }
+    const raw = await AsyncStorage.getItem(KEY_RC1);
+    if (!raw) return { loaded: false, savedAt: null as string | null };
+    const j = JSON.parse(raw) as RC1Saved;
+    if (!j || j.version !== 1) return { loaded: false, savedAt: null as string | null };
+
+    setSelected(Array.isArray(j.selected) ? j.selected : []);
+    setTop3(Array.isArray(j.top3) ? j.top3 : []);
+    setNotes(j.notes && typeof j.notes === "object" ? j.notes : {});
+    return { loaded: true, savedAt: String(j.savedAt || null) };
   }, []);
 
   useEffect(() => {
-    if (subtaskKey === "RC_1_red_flags") loadLocal();
+    let alive = true;
+
+    const run = async () => {
+      if (subtaskKey !== "RC_1_red_flags") return;
+
+      setBooting(true);
+      try {
+        const { loaded } = await loadLocal();
+
+        // ✅ اگر داده لوکال هست، ما این رو «مرور» در نظر می‌گیریم
+        // (چون بعد از ثبت، داده همیشه روی گوشی هست)
+        if (alive) setIsReview(!!loaded);
+      } catch {
+        if (alive) setIsReview(false);
+      } finally {
+        if (alive) setBooting(false);
+      }
+    };
+
+    run();
+    return () => {
+      alive = false;
+    };
   }, [subtaskKey, loadLocal]);
+
+  // ✅ اسکرول نرم و بدون پرش بعد از تغییر step
+  useEffect(() => {
+    if (booting) return;
+
+    let cancelled = false;
+
+    const task = InteractionManager.runAfterInteractions(() => {
+      if (cancelled) return;
+      requestAnimationFrame(() => {
+        if (cancelled) return;
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      // @ts-ignore (RN type mismatch in some versions)
+      if (typeof task?.cancel === "function") task.cancel();
+    };
+  }, [step, booting]);
 
   const persistLocal = useCallback(
     async (next?: Partial<RC1Saved>) => {
@@ -157,6 +330,7 @@ export default function BastanSubtaskScreen() {
 
   const toggleSelect = useCallback(
     async (idRaw: string) => {
+      if (isReview) return; // ✅ قفل در حالت مرور
       const id = String(idRaw || "").trim();
       if (!id) return;
 
@@ -186,11 +360,12 @@ export default function BastanSubtaskScreen() {
         } satisfies RC1Saved)
       );
     },
-    [notes, selected, selectedSet, top3]
+    [isReview, notes, selected, selectedSet, top3]
   );
 
   const toggleTop3 = useCallback(
     async (idRaw: string) => {
+      if (isReview) return; // ✅ قفل در حالت مرور
       const id = String(idRaw || "").trim();
       if (!id) return;
       if (!selectedSet.has(id)) return;
@@ -209,18 +384,19 @@ export default function BastanSubtaskScreen() {
       setNotes(nextNotes);
       await persistLocal({ top3: next, notes: nextNotes });
     },
-    [notes, persistLocal, selectedSet, top3]
+    [isReview, notes, persistLocal, selectedSet, top3]
   );
 
   const setNote = useCallback(
     async (idRaw: string, v: string) => {
+      if (isReview) return; // ✅ قفل در حالت مرور
       const id = String(idRaw || "").trim();
       const txt = String(v || "");
       const next = { ...notes, [id]: txt };
       setNotes(next);
       await persistLocal({ notes: next });
     },
-    [notes, persistLocal]
+    [isReview, notes, persistLocal]
   );
 
   const canGoStep2 = selected.length >= 3;
@@ -235,12 +411,19 @@ export default function BastanSubtaskScreen() {
     return true;
   }, [notes, top3]);
 
-  const completeOnServer = useCallback(async () => {
+  const completeOnServer = useCallback(async (): Promise<"ok" | "already" | "fail"> => {
     const t = String(token || "").trim();
     const p = String(phone || "").trim();
+
     if (!t || !p) {
-      Alert.alert("خطا", "برای ثبت انجام‌شدن باید وارد حساب باشی.");
-      return;
+      openModal({
+        kind: "error",
+        title: "ورود لازم است",
+        message: "برای ثبت انجام‌شدن باید وارد حساب باشی.",
+        primaryText: "باشه",
+        onPrimary: closeModal,
+      });
+      return "fail";
     }
 
     const url = `${apiBase}/api/pelekan/bastan/subtask/complete?phone=${encodeURIComponent(p)}`;
@@ -255,7 +438,7 @@ export default function BastanSubtaskScreen() {
       body: JSON.stringify({
         phone: p,
         subtaskKey: "RC_1_red_flags",
-        payload: null, // لوکال است
+        payload: null,
       }),
     });
 
@@ -266,29 +449,90 @@ export default function BastanSubtaskScreen() {
       json = null;
     }
 
-    if (!res.ok || !json?.ok) {
-      Alert.alert("خطا", String(json?.error || "ثبت انجام‌شدن ناموفق بود"));
-      return;
-    }
+    if (res.ok && json?.ok) return "ok";
 
-    router.back();
-  }, [apiBase, phone, router, token]);
+    const err = String(json?.error || "");
+    if (err === "ALREADY_DONE") return "already";
 
-  const onFinish = useCallback(async () => {
+    openModal({
+      kind: "error",
+      title: "ثبت ناموفق بود",
+      message: faOnlyTitle(err || "مشکلی پیش آمد. دوباره تلاش کن."),
+      primaryText: "باشه",
+      onPrimary: closeModal,
+    });
+    return "fail";
+  }, [apiBase, closeModal, openModal, phone, token]);
+
+  const doFinalize = useCallback(async () => {
     if (!notesOk) return;
+
+    if (savingRef.current) return;
+    savingRef.current = true;
+
     try {
       setSaving(true);
+
+      // 1) لوکال
       await persistLocal();
-      await completeOnServer();
+
+      // 2) سرور
+      const r = await completeOnServer();
+      if (r === "fail") return;
+
+      // ✅ چه ok چه already: نتیجه نهایی یکیه (ثبت شده)
+      await AsyncStorage.setItem(KEY_BASTAN_DIRTY, new Date().toISOString());
+
+      if (r === "already") {
+        openModal({
+          kind: "info",
+          title: "قبلاً ثبت شده",
+          message: "این ریز‌اقدام قبلاً ثبت شده و نیازی به ثبت دوباره نیست.",
+          primaryText: "خروج",
+          onPrimary: () => {
+            closeModal();
+            router.back();
+          },
+        });
+        return;
+      }
+
+      // ok
+      openModal({
+        kind: "success",
+        title: "ثبت شد",
+        message: "ثبت انجام شد. از این به بعد امکان تغییر این ریز‌اقدام وجود ندارد.",
+        primaryText: "خروج",
+        onPrimary: () => {
+          closeModal();
+          router.back();
+        },
+      });
     } finally {
       setSaving(false);
+      savingRef.current = false;
+      // بعد از ثبت، صفحه باید «مرور» شود
+      setIsReview(true);
     }
-  }, [completeOnServer, notesOk, persistLocal]);
+  }, [closeModal, completeOnServer, notesOk, openModal, persistLocal, router]);
+
+  const onFinishPress = useCallback(() => {
+    // ✅ در حالت مرور: اصلاً ثبت نکن، فقط خروج
+    if (isReview) {
+      router.back();
+      return;
+    }
+    // ✅ قبل از ثبت، هشدار غیرقابل‌تغییر شدن
+    setConfirmLockModal(true);
+  }, [isReview, router]);
 
   // فقط برای RC_1
   if (subtaskKey !== "RC_1_red_flags") {
     return (
       <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
+        <View pointerEvents="none" style={styles.glowTop} />
+        <View pointerEvents="none" style={styles.glowBottom} />
+
         <View style={[styles.header, { paddingTop: insets.top }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.8}>
             <Ionicons name="chevron-forward" size={20} color={palette.text} />
@@ -304,10 +548,6 @@ export default function BastanSubtaskScreen() {
           <View style={{ width: 34, height: 34 }} />
         </View>
 
-        {/* Glow */}
-        <View pointerEvents="none" style={styles.glowTop} />
-        <View pointerEvents="none" style={styles.glowBottom} />
-
         <View style={styles.center}>
           <Text style={styles.mutedText}>این ریز‌اقدام هنوز طراحی نشده.</Text>
         </View>
@@ -320,7 +560,6 @@ export default function BastanSubtaskScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
-      {/* Glow */}
       <View pointerEvents="none" style={styles.glowTop} />
       <View pointerEvents="none" style={styles.glowBottom} />
 
@@ -341,9 +580,18 @@ export default function BastanSubtaskScreen() {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={{ padding: 16, paddingBottom: 18 + insets.bottom }}
         showsVerticalScrollIndicator={false}
       >
+        {/* Review Banner */}
+        {isReview ? (
+          <View style={styles.reviewBanner}>
+            <Ionicons name="eye" size={16} color="rgba(231,238,247,.88)" />
+            <Text style={styles.reviewBannerText}>حالت مرور: این ریز‌اقدام قبلاً ثبت شده و قابل تغییر نیست.</Text>
+          </View>
+        ) : null}
+
         {/* Step indicator */}
         <View style={styles.stepPills}>
           <View style={[styles.stepPill, step === 1 && styles.stepPillOn]}>
@@ -362,8 +610,7 @@ export default function BastanSubtaskScreen() {
             <View style={styles.sectionCard}>
               <Text style={styles.h1}>اون چیزی که دیدی رو انکار نکن</Text>
               <Text style={styles.p}>
-                هر موردی که در رابطت بوده رو تیک بزن.{"\n"} این‌ها فقط داخل گوشی خودت ذخیره میشن.
-                {"\n"}
+                هر موردی که در رابطت بوده رو تیک بزن.{"\n"}این‌ها فقط داخل گوشی خودت ذخیره میشن.{"\n"}
                 برای رفتن به مرحله بعد، حداقل ۳ مورد رو انتخاب کن.
               </Text>
             </View>
@@ -375,7 +622,8 @@ export default function BastanSubtaskScreen() {
                   <Pressable
                     key={it.id}
                     onPress={() => toggleSelect(it.id)}
-                    style={[styles.choiceCard, on && styles.choiceCardOn]}
+                    style={[styles.choiceCard, on && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
+                    disabled={isReview}
                   >
                     <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
                       <Ionicons
@@ -417,11 +665,13 @@ export default function BastanSubtaskScreen() {
                 const it = RC1_FLAGS.find((x) => x.id === id);
                 if (!it) return null;
                 const on = top3.includes(id);
+
                 return (
                   <Pressable
                     key={id}
                     onPress={() => toggleTop3(id)}
-                    style={[styles.choiceCard, on && styles.choiceCardOn]}
+                    style={[styles.choiceCard, on && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
+                    disabled={isReview}
                   >
                     <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
                       <Ionicons
@@ -477,7 +727,7 @@ export default function BastanSubtaskScreen() {
                 const len = val.trim().length;
 
                 return (
-                  <View key={id} style={styles.noteCard}>
+                  <View key={id} style={[styles.noteCard, isReview && { opacity: 0.9 }]}>
                     <Text style={styles.noteTitle}>
                       {idx + 1}) {it?.text || id}
                     </Text>
@@ -488,13 +738,15 @@ export default function BastanSubtaskScreen() {
                       placeholder="توضیح بده دقیقاً چه شد، چند بار تکرار شد، و چه اثری روی تو گذاشت…"
                       placeholderTextColor="rgba(231,238,247,.35)"
                       multiline
-                      style={styles.input}
+                      style={[styles.input, isReview && styles.inputReadOnly]}
                       textAlign="right"
                       textAlignVertical="top"
+                      editable={!isReview}
+                      selectTextOnFocus={!isReview}
                     />
 
-                    <Text style={[styles.small, len < 160 ? { color: palette.red } : null]}>
-                      {len}/160
+                    <Text style={[styles.small, !isReview && len < 160 ? { color: palette.red } : null]}>
+                      {isReview ? "ثبت شده" : `${len}/160`}
                     </Text>
                   </View>
                 );
@@ -507,27 +759,81 @@ export default function BastanSubtaskScreen() {
                   activeOpacity={0.9}
                   onPress={() => setStep(2)}
                   style={[styles.secondaryBtn, { flex: 1 }]}
+                  disabled={saving}
                 >
                   <Text style={styles.secondaryBtnText}>بازگشت</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   activeOpacity={0.9}
-                  disabled={!notesOk || saving}
-                  onPress={onFinish}
-                  style={[styles.primaryBtn, { flex: 1 }, (!notesOk || saving) && { opacity: 0.45 }]}
+                  disabled={(!isReview && !notesOk) || saving}
+                  onPress={onFinishPress}
+                  style={[
+                    styles.primaryBtn,
+                    { flex: 1 },
+                    (((!isReview && !notesOk) || saving) && { opacity: 0.45 }) as any,
+                  ]}
                 >
-                  <Text style={styles.primaryBtnText}>{saving ? "در حال ثبت…" : "ثبت و پایان"}</Text>
+                  <Text style={styles.primaryBtnText}>
+                    {saving ? "در حال انجام…" : isReview ? "خروج" : "ثبت و پایان"}
+                  </Text>
                 </TouchableOpacity>
               </View>
 
-              {!notesOk ? (
+              {!isReview && !notesOk ? (
                 <Text style={styles.warn}>باید برای هر سه مورد حداقل ۱۶۰ کاراکتر بنویسی.</Text>
               ) : null}
             </View>
           </>
         ) : null}
       </ScrollView>
+
+      {/* ✅ لودینگ ورود */}
+      {booting ? (
+        <View style={styles.bootOverlay} pointerEvents="auto">
+          <View style={styles.bootCard}>
+            <ActivityIndicator />
+            <Text style={styles.bootText}>در حال بارگذاری اطلاعات ذخیره‌شده…</Text>
+          </View>
+        </View>
+      ) : null}
+
+      {/* ✅ مودال هشدار قبل از قفل شدن */}
+      <ThemedModal
+        visible={confirmLockModal}
+        kind="warn"
+        title="قبل از ثبت، این را بدان"
+        message="با زدن «ثبت و پایان»، این ریز‌اقدام قفل می‌شود و دیگر امکان تغییر انتخاب‌ها و متن‌ها را نخواهی داشت."
+        primaryText="ثبت و قفل کن"
+        secondaryText="فعلاً نه"
+        loading={saving}
+        onPrimary={() => {
+          setConfirmLockModal(false);
+          doFinalize();
+        }}
+        onSecondary={() => setConfirmLockModal(false)}
+      />
+
+      {/* ✅ مودال‌های تم برای خطا/موفقیت/اطلاع */}
+      <ThemedModal
+        visible={modal.visible}
+        kind={modal.kind}
+        title={modal.title}
+        message={modal.message}
+        primaryText={modal.primaryText}
+        secondaryText={modal.secondaryText}
+        loading={modal.loading}
+        onPrimary={() => {
+          const fn = modal.onPrimary;
+          if (fn) fn();
+          else closeModal();
+        }}
+        onSecondary={() => {
+          const fn = modal.onSecondary;
+          if (fn) fn();
+          else closeModal();
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -536,7 +842,6 @@ export default function BastanSubtaskScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: palette.bg },
 
-  // ✅ تم/گلو مثل صفحه اقدام
   glowTop: {
     position: "absolute",
     top: 0,
@@ -557,9 +862,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(233,138,21,.10)",
     transform: [{ rotate: "-10deg" }],
   },
-
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  mutedText: { color: palette.muted, fontSize: 12, textAlign: "center" },
 
   header: {
     paddingHorizontal: 16,
@@ -584,7 +886,22 @@ const styles = StyleSheet.create({
   headerTitle: { color: palette.text, fontWeight: "900", fontSize: 16, textAlign: "center" },
   headerSub: { color: "rgba(231,238,247,.85)", marginTop: 4, fontSize: 12, textAlign: "center" },
 
-  // ✅ کارت توضیحات بالا هم گلس‌دار
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  mutedText: { color: palette.muted, fontSize: 12, textAlign: "center" },
+
+  reviewBanner: {
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.12)",
+    backgroundColor: "rgba(0,0,0,.18)",
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 12,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+  },
+  reviewBannerText: { color: "rgba(231,238,247,.88)", fontWeight: "800", fontSize: 12, textAlign: "right", flex: 1 },
+
   sectionCard: {
     borderWidth: 1,
     borderColor: palette.border,
@@ -641,6 +958,10 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: "right",
   },
+  inputReadOnly: {
+    backgroundColor: "rgba(0,0,0,.12)",
+    borderColor: "rgba(255,255,255,.08)",
+  },
 
   primaryBtn: {
     paddingVertical: 14,
@@ -661,4 +982,77 @@ const styles = StyleSheet.create({
     borderColor: palette.border,
   },
   secondaryBtnText: { color: palette.text, fontWeight: "900" },
+
+  bootOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,.35)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 18,
+  },
+  bootCard: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(3,7,18,.94)",
+    padding: 16,
+    gap: 10,
+    alignItems: "center",
+  },
+  bootText: {
+    color: "rgba(231,238,247,.88)",
+    fontWeight: "800",
+    fontSize: 12,
+    textAlign: "center",
+  },
+
+  /* Modal */
+  modalOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,.42)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 18,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 380,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(3,7,18,.96)",
+    padding: 16,
+  },
+  modalTitle: { color: palette.text, fontWeight: "900", fontSize: 14, textAlign: "right", flex: 1 },
+  modalMsg: { color: "rgba(231,238,247,.82)", marginTop: 10, fontSize: 12, lineHeight: 18, textAlign: "right" },
+  modalPrimaryBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: "center",
+    backgroundColor: "rgba(212,175,55,.92)",
+    borderWidth: 1,
+    borderColor: "rgba(212,175,55,.35)",
+  },
+  modalPrimaryText: { color: palette.bg, fontWeight: "900" },
+  modalSecondaryBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,.06)",
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  modalSecondaryText: { color: palette.text, fontWeight: "900" },
 });

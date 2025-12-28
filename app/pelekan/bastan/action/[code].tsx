@@ -1,7 +1,8 @@
 // app/pelekan/bastan/action/[code].tsx
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -95,6 +96,10 @@ function actionNumberFa(n?: number) {
   return map[num] || (num ? `اقدام ${num}` : "اقدام");
 }
 
+/* ----------------------------- Storage Keys ----------------------------- */
+// همونی که در subtask ست می‌کنیم
+const KEY_BASTAN_DIRTY = "pelekan:bastan:dirty:v1";
+
 export default function BastanActionScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -104,7 +109,7 @@ export default function BastanActionScreen() {
   const { me } = useUser();
   const phone = String(me?.phone || "").trim();
 
-  useAuth(); // فقط برای همگام بودن با وضعیت احراز هویت (فعلاً استفاده مستقیم نداریم)
+  useAuth(); // همگام با auth
   const apiBase = "https://api.qoqnoos.app";
 
   const [loading, setLoading] = useState(true);
@@ -112,50 +117,79 @@ export default function BastanActionScreen() {
   const [err, setErr] = useState<string | null>(null);
   const [action, setAction] = useState<ActionUi | null>(null);
 
+  // ✅ ضد ریس: فقط آخرین fetch حق دارد state را آپدیت کند
+  const fetchSeqRef = useRef(0);
+
+  // ✅ قفل کلیک روی یک کارت ریزاقدام تا وقتی وارد صفحه شود
+  const [openingKey, setOpeningKey] = useState<string | null>(null);
+
   const log = useCallback((msg: string, extra?: any) => {
     console.log(`🟩 [BastanAction] ${msg}`, extra ?? {});
   }, []);
 
+  const applyIfLatest = useCallback((seq: number, fn: () => void) => {
+    if (seq !== fetchSeqRef.current) return;
+    fn();
+  }, []);
+
   const fetchOne = useCallback(
     async (opts?: { initial?: boolean; reason?: string }) => {
+      const seq = ++fetchSeqRef.current;
       const isInitial = !!opts?.initial;
       const reason = opts?.reason || (isInitial ? "باز شدن صفحه" : "تازه‌سازی");
 
-      log("fetchOne:start", { code: actionCode, isInitial, phone, reason });
+      log("fetchOne:start", { seq, code: actionCode, isInitial, phone, reason });
 
       if (!phone) {
-        setErr("شماره پیدا نشد");
-        setAction(null);
-        setLoading(false);
+        applyIfLatest(seq, () => {
+          setErr("شماره پیدا نشد");
+          setAction(null);
+          setLoading(false);
+          setRefreshing(false);
+        });
         return;
       }
       if (!actionCode) {
-        setErr("کد اقدام نامعتبر است");
-        setAction(null);
-        setLoading(false);
+        applyIfLatest(seq, () => {
+          setErr("کد اقدام نامعتبر است");
+          setAction(null);
+          setLoading(false);
+          setRefreshing(false);
+        });
         return;
       }
 
       try {
-        setErr(null);
-        if (isInitial) setLoading(true);
-        else setRefreshing(true);
+        applyIfLatest(seq, () => {
+          setErr(null);
+          if (isInitial) setLoading(true);
+          else setRefreshing(true);
+        });
 
         const url = `${apiBase}/api/pelekan/bastan/state?phone=${encodeURIComponent(phone)}`;
         const res = await fetch(url, { headers: { "Cache-Control": "no-store" } });
-        const json = (await res.json()) as BastanStateResponse;
+
+        let json: BastanStateResponse | null = null;
+        try {
+          json = (await res.json()) as BastanStateResponse;
+        } catch {
+          json = null;
+        }
 
         log("response", {
+          seq,
           http: res.status,
           ok: json?.ok,
           hasData: !!json?.data,
-          actionsLen: Array.isArray(json?.data?.actions) ? json.data!.actions.length : 0,
+          actionsLen: Array.isArray(json?.data?.actions) ? json!.data!.actions.length : 0,
           error: json?.error ?? null,
         });
 
         if (!res.ok || !json?.ok || !json.data) {
-          setErr(json?.error || "دریافت اطلاعات ناموفق بود");
-          setAction(null);
+          applyIfLatest(seq, () => {
+            setErr(json?.error || "دریافت اطلاعات ناموفق بود");
+            setAction(null);
+          });
           return;
         }
 
@@ -163,35 +197,82 @@ export default function BastanActionScreen() {
         const found = list.find((a) => String(a?.code || "").trim() === actionCode) || null;
 
         if (!found) {
-          setErr("این اقدام پیدا نشد");
-          setAction(null);
+          applyIfLatest(seq, () => {
+            setErr("این اقدام پیدا نشد");
+            setAction(null);
+          });
           return;
         }
 
-        setAction(found);
+        applyIfLatest(seq, () => {
+          setAction(found);
+          setErr(null);
+        });
 
         log("find action", {
+          seq,
           found: true,
           foundCode: found.code,
           foundTitle: found.titleFa,
           subtasksLen: found.subtasks?.length ?? 0,
         });
       } catch (e: any) {
-        setErr(String(e?.message || e));
-        setAction(null);
+        applyIfLatest(seq, () => {
+          setErr(String(e?.message || e));
+          setAction(null);
+        });
       } finally {
-        setLoading(false);
-        setRefreshing(false);
-        log("fetchOne:end");
+        applyIfLatest(seq, () => {
+          setLoading(false);
+          setRefreshing(false);
+        });
+        log("fetchOne:end", { seq });
       }
     },
-    [actionCode, apiBase, log, phone]
+    [actionCode, apiBase, applyIfLatest, log, phone]
   );
 
+  // ✅ بار اول
   useEffect(() => {
     log("صفحه اقدام باز شد", { actionCode });
     fetchOne({ initial: true, reason: "باز شدن صفحه" });
   }, [fetchOne, log, actionCode]);
+
+  // ✅ ضدگلوله: هر بار صفحه فوکوس شد (یعنی از subtask برگشتی) بررسی کن dirty هست یا نه
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+
+      const run = async () => {
+        try {
+          const dirty = await AsyncStorage.getItem(KEY_BASTAN_DIRTY);
+          // اگر dirty بود یا حتی فقط برگشتیم، بهتره رفرش کنیم
+          // اما برای جلوگیری از فشار، شرط dirty می‌ذاریم.
+          if (!alive) return;
+
+          if (dirty) {
+            log("dirty detected -> refresh", { dirty });
+            await AsyncStorage.removeItem(KEY_BASTAN_DIRTY); // ✅ یکبار مصرف
+            fetchOne({ initial: false, reason: "بازگشت از ریزاقدام (dirty)" });
+          } else {
+            // این حالت اختیاریه. اگر خواستی همیشه بعد از برگشت رفرش کن:
+            // fetchOne({ initial: false, reason: "بازگشت از ریزاقدام" });
+          }
+        } catch {
+          // ignore
+        } finally {
+          // وقتی از subtask برمی‌گرده، قفل کلیک روی کارت را هم باز کن
+          if (alive) setOpeningKey(null);
+        }
+      };
+
+      run();
+
+      return () => {
+        alive = false;
+      };
+    }, [fetchOne, log])
+  );
 
   const subtasks = useMemo(() => {
     const s = action?.subtasks || [];
@@ -203,18 +284,27 @@ export default function BastanActionScreen() {
       const k = String(key || "").trim();
       if (!k) return;
 
+      // ✅ ضد دوبار کلیک: اگر همین کارت در حال باز شدن است، هیچ کاری نکن
+      if (openingKey === k) return;
+
+      setOpeningKey(k);
+
       router.push({
         pathname: "/pelekan/bastan/subtask/[key]",
         params: { key: k },
       });
     },
-    [router]
+    [openingKey, router]
   );
 
   /* ----------------------------- Render ----------------------------- */
   if (loading) {
     return (
       <SafeAreaView style={styles.root} edges={["left", "right", "bottom"]}>
+        {/* Glow */}
+        <View pointerEvents="none" style={styles.glowTop} />
+        <View pointerEvents="none" style={styles.glowBottom} />
+
         <View style={[styles.center, { paddingTop: insets.top + 12 }]}>
           <ActivityIndicator color={palette.gold} />
           <Text style={styles.mutedText}>در حال بارگذاری…</Text>
@@ -228,7 +318,7 @@ export default function BastanActionScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["left", "right", "bottom"]}>
-      {/* Header (✅ پدینگ دقیق زیر استاتوس‌بار) */}
+      {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.8}>
           <Ionicons name="chevron-forward" size={20} color={palette.text} />
@@ -301,15 +391,16 @@ export default function BastanActionScreen() {
               const key = String(s.key || "").trim();
               if (!key) return null;
 
-              // ✅ فقط از سرور: اگر done/completedAt بود "انجام شده" نمایش بده
               const isDone = !!(s as any)?.done || !!(s as any)?.completedAt;
+              const isOpening = openingKey === key;
 
               return (
                 <TouchableOpacity
                   key={key}
                   activeOpacity={0.92}
                   onPress={() => openSubtask(key)}
-                  style={styles.subtaskCard}
+                  style={[styles.subtaskCard, isOpening && { opacity: 0.72 }]}
+                  disabled={isOpening} // ✅ ضد چند کلیک
                 >
                   <View style={styles.subtaskRow}>
                     <View style={styles.bullet}>
@@ -319,9 +410,7 @@ export default function BastanActionScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.subtaskTitle}>{faOnlyTitle(s.titleFa)}</Text>
 
-                      {!!s.helpFa ? (
-                        <Text style={styles.subtaskHelp}>{faOnlyTitle(s.helpFa)}</Text>
-                      ) : null}
+                      {!!s.helpFa ? <Text style={styles.subtaskHelp}>{faOnlyTitle(s.helpFa)}</Text> : null}
 
                       <View style={styles.metaRow}>
                         <View style={styles.metaPill}>
@@ -330,9 +419,7 @@ export default function BastanActionScreen() {
                             size={14}
                             color="rgba(231,238,247,.85)"
                           />
-                          <Text style={styles.metaPillText}>
-                            {s.isRequired ? "اجباری" : "اختیاری"}
-                          </Text>
+                          <Text style={styles.metaPillText}>{s.isRequired ? "اجباری" : "اختیاری"}</Text>
                         </View>
 
                         <View style={styles.metaPill}>
@@ -343,9 +430,13 @@ export default function BastanActionScreen() {
                     </View>
                   </View>
 
-                  {/* ✅ پایین کارت: فقط نمایش وضعیت (بدون دکمه انجام شد) */}
                   <View style={{ flexDirection: "row", justifyContent: "flex-start", marginTop: 12 }}>
-                    {isDone ? (
+                    {isOpening ? (
+                      <View style={styles.openingBadge}>
+                        <ActivityIndicator />
+                        <Text style={styles.openingBadgeText}>در حال باز کردن…</Text>
+                      </View>
+                    ) : isDone ? (
                       <View style={styles.doneBadge}>
                         <Ionicons name="checkmark-circle" size={18} color={palette.green} />
                         <Text style={styles.doneBadgeText}>انجام شده</Text>
@@ -361,9 +452,7 @@ export default function BastanActionScreen() {
               );
             })}
 
-            {!subtasks.length ? (
-              <Text style={styles.mutedText}>برای این اقدام ریز‌اقدامی نیامده.</Text>
-            ) : null}
+            {!subtasks.length ? <Text style={styles.mutedText}>برای این اقدام ریز‌اقدامی نیامده.</Text> : null}
           </>
         )}
       </ScrollView>
@@ -515,6 +604,19 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(34,197,94,.10)",
   },
   doneBadgeText: { fontWeight: "900", color: "rgba(231,238,247,.92)", fontSize: 12 },
+
+  openingBadge: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.14)",
+    backgroundColor: "rgba(0,0,0,.18)",
+  },
+  openingBadgeText: { fontWeight: "900", color: "rgba(231,238,247,.86)", fontSize: 12 },
 
   openHint: {
     flexDirection: "row-reverse",
