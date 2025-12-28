@@ -1355,16 +1355,34 @@ router.post("/bastan/intro/complete", authUser, async (req, res) => {
       where: { phone },
       select: { id: true },
     });
+
     // ✅ به جای 404
     if (!user) return wcdnOkError(res, "USER_NOT_FOUND");
 
     const now = new Date();
 
-    const st = await prisma.bastanState.upsert({
-      where: { userId: user.id },
-      create: { userId: user.id, introAudioCompletedAt: now },
-      update: { introAudioCompletedAt: now },
-      select: { introAudioCompletedAt: true },
+    const st = await prisma.$transaction(async (tx) => {
+      const s = await tx.bastanState.upsert({
+        where: { userId: user.id },
+        create: { userId: user.id, introAudioCompletedAt: now },
+        update: { introAudioCompletedAt: now },
+        select: { introAudioCompletedAt: true },
+      });
+
+      await tx.pelekanProgress.upsert({
+        where: { userId: user.id },
+        create: {
+          userId: user.id,
+          bastanIntroAudioStartedAt: now,
+          bastanIntroAudioCompletedAt: now,
+        },
+        update: {
+          bastanIntroAudioStartedAt: now,
+          bastanIntroAudioCompletedAt: now,
+        },
+      });
+
+      return s;
     });
 
     return res.json({ ok: true, data: { completedAt: st.introAudioCompletedAt } });
