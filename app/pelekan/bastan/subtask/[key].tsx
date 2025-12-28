@@ -802,8 +802,8 @@ export default function BastanSubtaskScreen() {
       <ThemedModal
         visible={confirmLockModal}
         kind="warn"
-        title="قبل از ثبت، این را بدان"
-        message="با زدن «ثبت و پایان»، این ریز‌اقدام قفل می‌شود و دیگر امکان تغییر انتخاب‌ها و متن‌ها را نخواهی داشت."
+        title="قبل از ثبت، این رو بدون"
+        message="با زدن «ثبت و پایان»، این ریز‌اقدام قفل میشه و دیگر امکان تغییر انتخاب‌ها و متن‌ها رو نخواهی داشت."
         primaryText="ثبت و قفل کن"
         secondaryText="فعلاً نه"
         loading={saving}
