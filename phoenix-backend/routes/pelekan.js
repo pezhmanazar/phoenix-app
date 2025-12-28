@@ -1331,20 +1331,24 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     }
 
     // XP bonus for action completion (only once, when crossing threshold)
-    let actionBonusXp = 0;
-    const shouldBeDone = afterDone >= minReq;
-    if (crossedToDone) {
+let actionBonusXp = 0;
+const shouldBeDone = afterDone >= minReq;
+
+if (crossedToDone) {
   const now = new Date();
 
-  await tx.pelekanDayProgress.update({
+  await prisma.pelekanDayProgress.update({
     where: { userId_dayId: { userId: user.id, dayId } },
     data: {
       status: "completed",
       completedAt: now,
+      lastActivityAt: now,
+      completionPercent: 100,
     },
   });
 
-  await updateStreakOnDayComplete(tx, user.id, now);
+  // این تابع فقط یک prisma-client می‌خواهد؛ tx لازم نیست
+  await updateStreakOnDayComplete(prisma, user.id, now);
 }
 
     // همیشه status را همسان کن
