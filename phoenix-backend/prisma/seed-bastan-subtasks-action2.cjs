@@ -11,7 +11,7 @@ async function main() {
     {
       key: "AR_1_own_share",
       kind: "text",
-      titleFa: "سهم من چه بود؟ (۳ مورد، بدون خودسرزنشی)",
+      titleFa: "سهم من",
       helpFa: null,
       isRequired: true,
       isFree: true,
@@ -21,8 +21,8 @@ async function main() {
     {
       key: "AR_2_pattern_link",
       kind: "choice",
-      titleFa: "بیشتر شبیه کدوم الگو بود؟",
-      helpFa: "تاییدطلبی / رهاشدگی / فداکاری / کنترل‌گری / انتخاب‌های هیجانی / نمی‌دانم",
+      titleFa: "الگوی تکرارشونده",
+      helpFa: null,
       isRequired: false,
       isFree: true,
       sortOrder: 2,
@@ -31,7 +31,7 @@ async function main() {
     {
       key: "AR_3_boundary_next_time",
       kind: "form",
-      titleFa: "۳ مرز که دفعه بعد باید داشته باشم",
+      titleFa: "مرزهای دفعه بعد",
       helpFa: null,
       isRequired: true,
       isFree: true,
@@ -41,7 +41,7 @@ async function main() {
     {
       key: "AR_4_no_blame_confirm",
       kind: "confirm",
-      titleFa: "می‌پذیرم سهم دارم، اما خودم را تحقیر نمی‌کنم",
+      titleFa: "پذیرش بدون سرزنش",
       helpFa: null,
       isRequired: true,
       isFree: true,
