@@ -1,4 +1,6 @@
+// scripts/seed_unsent_letter_subtasks.js
 const { PrismaClient } = require("@prisma/client");
+
 const prisma = new PrismaClient();
 
 async function main() {
@@ -11,8 +13,7 @@ async function main() {
     {
       key: "UL_1_letter_write_or_photo",
       kind: "form",
-      titleFa: "نامه خداحافظی: یا اینجا بنویس، یا عکس بگیر و ثبت کن",
-      helpFa: "گزینه ۱: متن (حداقل ۱۵۰ کلمه) / گزینه ۲: عکس از نامه دست‌نویس",
+      titleFa: "نامهٔ خداحافظی",
       isRequired: true,
       isFree: false,
       sortOrder: 1,
@@ -21,8 +22,7 @@ async function main() {
     {
       key: "UL_2_no_send_confirm",
       kind: "confirm",
-      titleFa: "تأیید می‌کنم این نامه ارسال نمی‌شود",
-      helpFa: null,
+      titleFa: "تعهدنامه عدم ارسال",
       isRequired: true,
       isFree: false,
       sortOrder: 2,
@@ -31,8 +31,7 @@ async function main() {
     {
       key: "UL_3_72h_lock_confirm",
       kind: "confirm",
-      titleFa: "تعهد می‌دهم تا ۷۲ ساعت هیچ پیام/تماس هیجانی نداشته باشم",
-      helpFa: "اگر نقض شد، ۷۲ ساعت از نو شروع می‌شود",
+      titleFa: "تعهدنامه 72 ساعته عدم تکانه هیجانی",
       isRequired: true,
       isFree: false,
       sortOrder: 3,
@@ -41,8 +40,7 @@ async function main() {
     {
       key: "UL_4_store_ritual",
       kind: "choice",
-      titleFa: "نامه را کجا نگه می‌داری؟",
-      helpFa: "پاک می‌کنم / داخل Notes قفل‌دار / روی کاغذ در پاکت / به درمانگرم می‌دهم",
+      titleFa: "آیین نگه‌داری یا رها کردن نامه",
       isRequired: false,
       isFree: false,
       sortOrder: 4,
@@ -53,11 +51,21 @@ async function main() {
   for (const s of subtasks) {
     await prisma.bastanSubtaskDefinition.upsert({
       where: { actionId_key: { actionId: action.id, key: s.key } },
-      create: { ...s, actionId: action.id },
+      create: {
+        actionId: action.id,
+        key: s.key,
+        kind: s.kind,
+        titleFa: s.titleFa,
+        helpFa: null, // طبق درخواست: هیچ helpFa نداشته باشیم
+        isRequired: s.isRequired,
+        isFree: s.isFree,
+        sortOrder: s.sortOrder,
+        xpReward: s.xpReward,
+      },
       update: {
         kind: s.kind,
         titleFa: s.titleFa,
-        helpFa: s.helpFa,
+        helpFa: null, // طبق درخواست: پاک/نول شود
         isRequired: s.isRequired,
         isFree: s.isFree,
         sortOrder: s.sortOrder,
@@ -69,6 +77,7 @@ async function main() {
   const n = await prisma.bastanSubtaskDefinition.count({
     where: { actionId: action.id },
   });
+
   console.log("Seeded Unsent Letter subtasks. Count =", n);
 }
 

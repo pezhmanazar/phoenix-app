@@ -5,6 +5,10 @@ import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
+import AR1OwnShareScreen from "./AR_1_own_share";
+import AR2PatternLinkScreen from "./AR_2_pattern_link";
+import AR3BoundaryNextTimeScreen from "./AR_3_boundary_next_time";
+import AR4NoBlameConfirmScreen from "./AR_4_no_blame_confirm";
 import RC1RedFlagsScreen from "./RC_1_red_flags";
 import RC2CostsScreen from "./RC_2_costs";
 import RC3RealityVsFantasyScreen from "./RC_3_reality_vs_fantasy";
@@ -37,11 +41,16 @@ export default function BastanSubtaskRouter() {
   const subtaskKey = String((params as any)?.key || "").trim();
 
   // ✅ dispatch
-  if (subtaskKey === "RC_1_red_flags") return <RC1RedFlagsScreen />;
-  if (subtaskKey === "RC_2_costs") return <RC2CostsScreen />;
-  if (subtaskKey === "RC_3_reality_vs_fantasy") return <RC3RealityVsFantasyScreen />;
-  if (subtaskKey === "RC_4_deal_breakers") return <RC4DealBreakersScreen />;
-  if (subtaskKey === "RC_5_commit_confirm") return <RC5CommitConfirmScreen />;
+if (subtaskKey === "RC_1_red_flags") return <RC1RedFlagsScreen />;
+if (subtaskKey === "RC_2_costs") return <RC2CostsScreen />;
+if (subtaskKey === "RC_3_reality_vs_fantasy") return <RC3RealityVsFantasyScreen />;
+if (subtaskKey === "RC_4_deal_breakers") return <RC4DealBreakersScreen />;
+if (subtaskKey === "RC_5_commit_confirm") return <RC5CommitConfirmScreen />;
+
+if (subtaskKey === "AR_1_own_share") return <AR1OwnShareScreen />;
+if (subtaskKey === "AR_2_pattern_link") return <AR2PatternLinkScreen />;
+if (subtaskKey === "AR_3_boundary_next_time") return <AR3BoundaryNextTimeScreen />;
+if (subtaskKey === "AR_4_no_blame_confirm") return <AR4NoBlameConfirmScreen />;
 
   // ✅ fallback (همان UI قبلی)
   return (
