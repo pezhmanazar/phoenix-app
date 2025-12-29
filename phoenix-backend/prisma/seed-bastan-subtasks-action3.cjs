@@ -1,4 +1,4 @@
-// scripts/seed_unsent_letter_subtasks.js
+// scripts/seed_unsent_letter_subtasks.cjs
 const { PrismaClient } = require("@prisma/client");
 
 const prisma = new PrismaClient();
