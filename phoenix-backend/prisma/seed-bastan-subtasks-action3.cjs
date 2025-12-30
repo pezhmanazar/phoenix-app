@@ -40,7 +40,7 @@ async function main() {
     {
       key: "UL_4_store_ritual",
       kind: "choice",
-      titleFa: "آیین نگه‌داری یا رها کردن نامه",
+      titleFa: "آیین رها کردن نامه",
       isRequired: false,
       isFree: false,
       sortOrder: 4,

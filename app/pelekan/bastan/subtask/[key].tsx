@@ -16,6 +16,7 @@ import RC4DealBreakersScreen from "./RC_4_deal_breakers";
 import RC5CommitConfirmScreen from "./RC_5_commit_confirm";
 import UL1LetterWriteOrPhotoScreen from "./UL_1_letter_write_or_photo";
 import UL2NoSendConfirmScreen from "./UL_2_no_send_confirm";
+import UL3UrgeWaveControlScreen from "./UL_3_72h_lock_confirm";
 
 /* ----------------------------- UI ----------------------------- */
 const palette = {
@@ -56,6 +57,7 @@ if (subtaskKey === "AR_4_no_blame_confirm") return <AR4NoBlameConfirmScreen />;
 
 if (subtaskKey === "UL_1_letter_write_or_photo") return <UL1LetterWriteOrPhotoScreen />;
 if (subtaskKey === "UL_2_no_send_confirm") return <UL2NoSendConfirmScreen />;
+if (subtaskKey === "UL_3_72h_lock_confirm") return <UL3UrgeWaveControlScreen />;
 
   // ✅ fallback (همان UI قبلی)
   return (
