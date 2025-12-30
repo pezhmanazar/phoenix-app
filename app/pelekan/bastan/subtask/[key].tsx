@@ -14,6 +14,8 @@ import RC2CostsScreen from "./RC_2_costs";
 import RC3RealityVsFantasyScreen from "./RC_3_reality_vs_fantasy";
 import RC4DealBreakersScreen from "./RC_4_deal_breakers";
 import RC5CommitConfirmScreen from "./RC_5_commit_confirm";
+import UL1LetterWriteOrPhotoScreen from "./UL_1_letter_write_or_photo";
+import UL2NoSendConfirmScreen from "./UL_2_no_send_confirm";
 
 /* ----------------------------- UI ----------------------------- */
 const palette = {
@@ -51,6 +53,9 @@ if (subtaskKey === "AR_1_own_share") return <AR1OwnShareScreen />;
 if (subtaskKey === "AR_2_pattern_link") return <AR2PatternLinkScreen />;
 if (subtaskKey === "AR_3_boundary_next_time") return <AR3BoundaryNextTimeScreen />;
 if (subtaskKey === "AR_4_no_blame_confirm") return <AR4NoBlameConfirmScreen />;
+
+if (subtaskKey === "UL_1_letter_write_or_photo") return <UL1LetterWriteOrPhotoScreen />;
+if (subtaskKey === "UL_2_no_send_confirm") return <UL2NoSendConfirmScreen />;
 
   // ✅ fallback (همان UI قبلی)
   return (

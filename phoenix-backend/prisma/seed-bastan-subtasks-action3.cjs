@@ -31,7 +31,7 @@ async function main() {
     {
       key: "UL_3_72h_lock_confirm",
       kind: "confirm",
-      titleFa: "تعهدنامه 72 ساعته عدم تکانه هیجانی",
+      titleFa: "کنترل موج‌های وسوسه کننده",
       isRequired: true,
       isFree: false,
       sortOrder: 3,
