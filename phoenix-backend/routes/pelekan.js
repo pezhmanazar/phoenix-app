@@ -1173,7 +1173,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       return wcdnOkError(res, "PRO_REQUIRED");
     }
 
-    // --- sequential gate (✅ now uses user-specific minReq if exists) ---
+    // --- sequential gate (✅ uses user-specific minReq if exists) ---
     const actions = await prisma.bastanActionDefinition.findMany({
       orderBy: { sortOrder: "asc" },
       select: { id: true, sortOrder: true, minRequiredSubtasks: true },
@@ -1220,27 +1220,13 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       return wcdnOkError(res, "ACTION_LOCKED", { reason: "previous_action_incomplete" });
     }
 
-    // --- already done? ---
+    // --- already done? (outside tx) ---
     const existing = await prisma.bastanSubtaskProgress.findFirst({
       where: { userId: user.id, subtaskId: subtask.id },
       select: { isDone: true },
     });
-    if (existing?.isDone) return wcdnOkError(res, "ALREADY_DONE");
 
-    const beforeDone = doneByActionId[subtask.actionId] || 0;
-
-    // ✅ minReq for THIS action for THIS user (default)
-    const minReqUserForThis = minReqByActionId[subtask.actionId];
-    const minReqDefForThis = subtask.action?.minRequiredSubtasks || 0;
-    let minReq =
-      typeof minReqUserForThis === "number" && minReqUserForThis > 0 ? minReqUserForThis : minReqDefForThis;
-
-    const dayNumber = Number(subtask.action?.sortOrder);
-    if (!dayNumber) return wcdnOkError(res, "SERVER_ERROR");
-
-    const now = new Date();
-
-    // helper: detect gate choice (from multiple possible shapes)
+    // ✅ gateChoice extractor (shape-safe)
     const rawGate =
       payload?.answer?.gateChoice ??
       payload?.gateChoice ??
@@ -1248,8 +1234,28 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       payload?.choice ??
       null;
 
-    const gateChoice = String(rawGate || "").trim(); // e.g. "not_in_group" | "role_based"
+    const gateChoice = String(rawGate || "").trim(); // "not_in_group" | "role_based" | ...
     const isGateSubtask = subtask.key === "FRL_0_contact_gate";
+
+    // اگر خود FRL_0 قبلاً done شده، ما به جای ALREADY_DONE یک "repair idempotent" انجام می‌دیم
+    // چون دقیقاً همون مشکلیه که گفتی: یک بار کاربر انتخاب می‌کنه و بعداً باید اکشن واقعاً کامل شود.
+    if (existing?.isDone && !isGateSubtask) {
+      return wcdnOkError(res, "ALREADY_DONE");
+    }
+
+    const beforeDone = doneByActionId[subtask.actionId] || 0;
+
+    // ✅ default minReq for THIS action for THIS user
+    const minReqUserForThis = minReqByActionId[subtask.actionId];
+    const minReqDefForThis = subtask.action?.minRequiredSubtasks || 0;
+
+    let minReq =
+      typeof minReqUserForThis === "number" && minReqUserForThis > 0 ? minReqUserForThis : minReqDefForThis;
+
+    const dayNumber = Number(subtask.action?.sortOrder);
+    if (!dayNumber) return wcdnOkError(res, "SERVER_ERROR");
+
+    const now = new Date();
 
     const result = await prisma.$transaction(async (tx) => {
       // --- resolve day ---
@@ -1274,37 +1280,32 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         update: { lastActivityAt: now },
       });
 
-      // --- re-check already done in tx (race-safe) ---
+      // --- re-check existing in tx (race-safe) ---
       const existingTx = await tx.bastanSubtaskProgress.findFirst({
         where: { userId: user.id, subtaskId: subtask.id },
         select: { isDone: true },
       });
-      if (existingTx?.isDone) {
-        return {
-          subtaskXp: 0,
-          crossedToDone: false,
-          afterDone: beforeDone,
-          minReq,
-          actionCode: subtask.action.code,
-          gateChoice,
-          forceDoneAll: false,
-        };
+
+      let wroteThisRow = false;
+
+      if (!existingTx?.isDone) {
+        // --- mark this subtask done ---
+        await tx.bastanSubtaskProgress.create({
+          data: {
+            userId: user.id,
+            actionId: subtask.actionId,
+            subtaskId: subtask.id,
+            isDone: true,
+            doneAt: now,
+            payloadJson: payload ?? null,
+          },
+        });
+        wroteThisRow = true;
       }
 
-      // --- mark this subtask done ---
-      await tx.bastanSubtaskProgress.create({
-        data: {
-          userId: user.id,
-          actionId: subtask.actionId,
-          subtaskId: subtask.id,
-          isDone: true,
-          doneAt: now,
-          payloadJson: payload ?? null,
-        },
-      });
+      // --- XP subtask (only if we really wrote it now) ---
+      const subtaskXp = wroteThisRow ? Number(subtask.xpReward) || 0 : 0;
 
-      // --- XP subtask ---
-      const subtaskXp = Number(subtask.xpReward) || 0;
       if (subtaskXp > 0) {
         await tx.xpLedger.create({
           data: {
@@ -1317,58 +1318,68 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         });
       }
 
-      let afterDone = beforeDone + 1;
+      // --- compute afterDone baseline ---
+      let afterDone = beforeDone + (wroteThisRow ? 1 : 0);
 
-      // ✅ Gate logic (سفت): اگر "جز این دسته نیستم" => کل اکشن auto-done
+      // ✅ Gate logic (سفت)
       const noContactLike = ["not_in_group", "no_contact", "none", "no"].includes(gateChoice);
       const roleBasedLike = ["role_based", "yes", "has"].includes(gateChoice);
 
-      const forceDoneAll = isGateSubtask && noContactLike;
+      let forceDoneAll = false;
 
-      // اگر gateChoice چیزی نفرستاد، fail-safe: هیچ force انجام نده
-      if (isGateSubtask && gateChoice && !noContactLike && !roleBasedLike) {
-        // payload نامعتبر/غیرمنتظره — دست نمی‌زنیم
-      }
+      // فقط برای FRL_0 و فقط اگر gateChoice معتبر بود دستکاری می‌کنیم
+      if (isGateSubtask && gateChoice) {
+        if (noContactLike) {
+          forceDoneAll = true;
 
-      if (forceDoneAll) {
-        // همه subtasks دیگر این action را auto-done کن
-        const others = await tx.bastanSubtaskDefinition.findMany({
-          where: { actionId: subtask.actionId, key: { not: subtask.key } },
-          select: { id: true, key: true },
-        });
+          // 1) برای این یوزر minReq = 1 (معنای درست مسیر: "من ارتباط ندارم، همینجا تمام")
+          minReq = 1;
 
-        // subtasks done قبلی برای این action
-        const existingOthers = await tx.bastanSubtaskProgress.findMany({
-          where: { userId: user.id, actionId: subtask.actionId, isDone: true },
-          select: { subtaskId: true },
-        });
-        const doneSet = new Set(existingOthers.map((x) => x.subtaskId));
-
-        const toCreate = others.filter((s) => !doneSet.has(s.id));
-        if (toCreate.length) {
-          await tx.bastanSubtaskProgress.createMany({
-            data: toCreate.map((s) => ({
-              userId: user.id,
-              actionId: subtask.actionId,
-              subtaskId: s.id,
-              isDone: true,
-              doneAt: now,
-              payloadJson: { skipped: true, by: "gate_not_in_group" },
-            })),
+          // 2) بقیه subtasks این action را auto-done کن تا UI چیزی برای انجام نبیند
+          const others = await tx.bastanSubtaskDefinition.findMany({
+            where: { actionId: subtask.actionId, key: { not: subtask.key } },
+            select: { id: true, key: true },
           });
-          afterDone += toCreate.length;
-        }
 
-        // برای این یوزر، minReq را برابر کل subtasks قرار می‌دهیم که در lock منطقی و شفاف باشد
-        const total = Number(subtask.action?.totalSubtasks) || afterDone;
-        minReq = total;
-      } else if (isGateSubtask && roleBasedLike) {
-        // مسیر نقش‌محور => minReq همان تعریف action (مثلا 5)
-        minReq = minReqDefForThis;
+          // ردیف‌های done فعلی همین action
+          const existingDone = await tx.bastanSubtaskProgress.findMany({
+            where: { userId: user.id, actionId: subtask.actionId, isDone: true },
+            select: { subtaskId: true },
+          });
+
+          const doneSet = new Set(existingDone.map((x) => x.subtaskId));
+          const toCreate = others.filter((s) => !doneSet.has(s.id));
+
+          if (toCreate.length) {
+            await tx.bastanSubtaskProgress.createMany({
+              data: toCreate.map((s) => ({
+                userId: user.id,
+                actionId: subtask.actionId,
+                subtaskId: s.id,
+                isDone: true,
+                doneAt: now,
+                payloadJson: { autoSkipped: true, reason: "gate_not_in_group" },
+              })),
+            });
+
+            afterDone += toCreate.length;
+          }
+
+          // بعد از auto-skip، afterDone باید برابر total done واقعی اکشن باشد
+          // (در صورت داشتن totalSubtasks، بهتره همخوانش کنیم)
+          const total = Number(subtask.action?.totalSubtasks) || 0;
+          if (total > 0) afterDone = total;
+        } else if (roleBasedLike) {
+          // مسیر نقش‌محور => minReq همان تعریف action
+          minReq = minReqDefForThis;
+        } else {
+          // gateChoice ناشناخته: fail-safe هیچ تغییری نده
+        }
       }
 
-      const shouldBeDone = forceDoneAll ? true : afterDone >= minReq;
-      const crossedToDone = forceDoneAll ? true : beforeDone < minReq && afterDone >= minReq;
+      // --- decide completion ---
+      const shouldBeDone = afterDone >= minReq;
+      const crossedToDone = beforeDone < minReq && afterDone >= minReq;
 
       // --- action progress (✅ stores per-user minReq) ---
       await tx.bastanActionProgress.upsert({
@@ -1416,6 +1427,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
           const exists = await tx.pelekanDayProgress.findUnique({
             where: { userId_dayId: { userId: user.id, dayId: nextDay.id } },
           });
+
           if (!exists) {
             await tx.pelekanDayProgress.create({
               data: {
@@ -1439,10 +1451,11 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         actionCode: subtask.action.code,
         gateChoice,
         forceDoneAll,
+        wroteThisRow,
       };
     });
 
-    // اگر داخل tx race-safe برگشت و done نشد اما ok بود، ما همچنان ok برمی‌گردونیم
+    // اگر FRL_0 قبلاً done بوده، ما repair کردیم و ok:true می‌دیم (نه ALREADY_DONE)
     return res.json({
       ok: true,
       data: {
@@ -1456,9 +1469,14 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
           after: result.afterDone,
           minRequired: result.minReq,
         },
-        meta: subtask.key === "FRL_0_contact_gate"
-          ? { gateChoice: result.gateChoice, forceDoneAll: !!result.forceDoneAll }
-          : undefined,
+        meta:
+          subtask.key === "FRL_0_contact_gate"
+            ? {
+                gateChoice: result.gateChoice,
+                forceDoneAll: !!result.forceDoneAll,
+                wroteThisRow: !!result.wroteThisRow,
+              }
+            : undefined,
       },
     });
   } catch (e) {
