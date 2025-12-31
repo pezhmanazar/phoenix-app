@@ -1127,8 +1127,10 @@ if (canUnlock && gosastanUnlockedAtFinal) {
 router.post("/bastan/subtask/complete", authUser, async (req, res) => {
   try {
     noStore(res);
+
     const phone = req.userPhone;
     const { subtaskKey, payload } = req.body || {};
+
     if (!subtaskKey || typeof subtaskKey !== "string") {
       return wcdnOkError(res, "SUBTASK_KEY_REQUIRED");
     }
@@ -1181,6 +1183,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       where: { userId: user.id, actionId: { in: actions.map((a) => a.id) } },
       select: { actionId: true, minRequiredSubtasks: true },
     });
+
     const minReqByActionId = {};
     for (const r of actionProgressRows) {
       minReqByActionId[r.actionId] = Number(r.minRequiredSubtasks) || 0;
@@ -1201,7 +1204,8 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     for (const a of actions) {
       const done = doneByActionId[a.id] || 0;
       const minReqUser = minReqByActionId[a.id];
-      const minReqFinal = (typeof minReqUser === "number" && minReqUser > 0) ? minReqUser : (a.minRequiredSubtasks || 0);
+      const minReqFinal =
+        typeof minReqUser === "number" && minReqUser > 0 ? minReqUser : a.minRequiredSubtasks || 0;
 
       const complete = done >= minReqFinal;
 
@@ -1225,17 +1229,18 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
 
     const beforeDone = doneByActionId[subtask.actionId] || 0;
 
-    // ✅ minReq for THIS action for THIS user
+    // ✅ minReq for THIS action for THIS user (default)
     const minReqUserForThis = minReqByActionId[subtask.actionId];
     const minReqDefForThis = subtask.action?.minRequiredSubtasks || 0;
-    let minReq = (typeof minReqUserForThis === "number" && minReqUserForThis > 0) ? minReqUserForThis : minReqDefForThis;
+    let minReq =
+      typeof minReqUserForThis === "number" && minReqUserForThis > 0 ? minReqUserForThis : minReqDefForThis;
 
     const dayNumber = Number(subtask.action?.sortOrder);
     if (!dayNumber) return wcdnOkError(res, "SERVER_ERROR");
 
     const now = new Date();
 
-    // helper: detect gate choice (so we can set dynamic minReq)
+    // helper: detect gate choice (from multiple possible shapes)
     const rawGate =
       payload?.answer?.gateChoice ??
       payload?.gateChoice ??
@@ -1269,7 +1274,24 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         update: { lastActivityAt: now },
       });
 
-      // --- mark subtask done ---
+      // --- re-check already done in tx (race-safe) ---
+      const existingTx = await tx.bastanSubtaskProgress.findFirst({
+        where: { userId: user.id, subtaskId: subtask.id },
+        select: { isDone: true },
+      });
+      if (existingTx?.isDone) {
+        return {
+          subtaskXp: 0,
+          crossedToDone: false,
+          afterDone: beforeDone,
+          minReq,
+          actionCode: subtask.action.code,
+          gateChoice,
+          forceDoneAll: false,
+        };
+      }
+
+      // --- mark this subtask done ---
       await tx.bastanSubtaskProgress.create({
         data: {
           userId: user.id,
@@ -1295,24 +1317,58 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         });
       }
 
-      const afterDone = beforeDone + 1;
+      let afterDone = beforeDone + 1;
 
-      // ✅ dynamic minReq based on gate choice
-      // مسیر "جز این دسته نیستم" => minReq باید 1 شود تا اکشن همان‌جا تمام شود
-      if (isGateSubtask) {
-        const noContactLike = ["not_in_group", "no_contact", "none", "no"].includes(gateChoice);
-        const roleBasedLike = ["role_based", "yes", "has"].includes(gateChoice);
+      // ✅ Gate logic (سفت): اگر "جز این دسته نیستم" => کل اکشن auto-done
+      const noContactLike = ["not_in_group", "no_contact", "none", "no"].includes(gateChoice);
+      const roleBasedLike = ["role_based", "yes", "has"].includes(gateChoice);
 
-        if (noContactLike) {
-          minReq = 1;
-        } else if (roleBasedLike) {
-          minReq = minReqDefForThis; // مثلا 5
-        }
-        // اگر payload چیزی نفرستاد، minReq را دست نمی‌زنیم (fail-safe)
+      const forceDoneAll = isGateSubtask && noContactLike;
+
+      // اگر gateChoice چیزی نفرستاد، fail-safe: هیچ force انجام نده
+      if (isGateSubtask && gateChoice && !noContactLike && !roleBasedLike) {
+        // payload نامعتبر/غیرمنتظره — دست نمی‌زنیم
       }
 
-      const crossedToDone = beforeDone < minReq && afterDone >= minReq;
-      const shouldBeDone = afterDone >= minReq;
+      if (forceDoneAll) {
+        // همه subtasks دیگر این action را auto-done کن
+        const others = await tx.bastanSubtaskDefinition.findMany({
+          where: { actionId: subtask.actionId, key: { not: subtask.key } },
+          select: { id: true, key: true },
+        });
+
+        // subtasks done قبلی برای این action
+        const existingOthers = await tx.bastanSubtaskProgress.findMany({
+          where: { userId: user.id, actionId: subtask.actionId, isDone: true },
+          select: { subtaskId: true },
+        });
+        const doneSet = new Set(existingOthers.map((x) => x.subtaskId));
+
+        const toCreate = others.filter((s) => !doneSet.has(s.id));
+        if (toCreate.length) {
+          await tx.bastanSubtaskProgress.createMany({
+            data: toCreate.map((s) => ({
+              userId: user.id,
+              actionId: subtask.actionId,
+              subtaskId: s.id,
+              isDone: true,
+              doneAt: now,
+              payloadJson: { skipped: true, by: "gate_not_in_group" },
+            })),
+          });
+          afterDone += toCreate.length;
+        }
+
+        // برای این یوزر، minReq را برابر کل subtasks قرار می‌دهیم که در lock منطقی و شفاف باشد
+        const total = Number(subtask.action?.totalSubtasks) || afterDone;
+        minReq = total;
+      } else if (isGateSubtask && roleBasedLike) {
+        // مسیر نقش‌محور => minReq همان تعریف action (مثلا 5)
+        minReq = minReqDefForThis;
+      }
+
+      const shouldBeDone = forceDoneAll ? true : afterDone >= minReq;
+      const crossedToDone = forceDoneAll ? true : beforeDone < minReq && afterDone >= minReq;
 
       // --- action progress (✅ stores per-user minReq) ---
       await tx.bastanActionProgress.upsert({
@@ -1324,7 +1380,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
           startedAt: now,
           completedAt: shouldBeDone ? now : null,
           doneSubtasksCount: afterDone,
-          minRequiredSubtasks: minReq, // ✅ important
+          minRequiredSubtasks: minReq, // ✅ مهم
           totalSubtasks: subtask.action?.totalSubtasks || 0,
           xpEarned: 0,
         },
@@ -1333,6 +1389,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
           ...(shouldBeDone ? { completedAt: now } : {}),
           doneSubtasksCount: afterDone,
           minRequiredSubtasks: minReq, // ✅ keep synced
+          totalSubtasks: subtask.action?.totalSubtasks || 0,
         },
       });
 
@@ -1359,7 +1416,6 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
           const exists = await tx.pelekanDayProgress.findUnique({
             where: { userId_dayId: { userId: user.id, dayId: nextDay.id } },
           });
-
           if (!exists) {
             await tx.pelekanDayProgress.create({
               data: {
@@ -1382,9 +1438,11 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         minReq,
         actionCode: subtask.action.code,
         gateChoice,
+        forceDoneAll,
       };
     });
 
+    // اگر داخل tx race-safe برگشت و done نشد اما ok بود، ما همچنان ok برمی‌گردونیم
     return res.json({
       ok: true,
       data: {
@@ -1398,8 +1456,9 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
           after: result.afterDone,
           minRequired: result.minReq,
         },
-        // برای دیباگ
-        meta: subtask.key === "FRL_0_contact_gate" ? { gateChoice: result.gateChoice } : undefined,
+        meta: subtask.key === "FRL_0_contact_gate"
+          ? { gateChoice: result.gateChoice, forceDoneAll: !!result.forceDoneAll }
+          : undefined,
       },
     });
   } catch (e) {

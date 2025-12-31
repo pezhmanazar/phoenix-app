@@ -9,6 +9,7 @@ import AR1OwnShareScreen from "./AR_1_own_share";
 import AR2PatternLinkScreen from "./AR_2_pattern_link";
 import AR3BoundaryNextTimeScreen from "./AR_3_boundary_next_time";
 import AR4NoBlameConfirmScreen from "./AR_4_no_blame_confirm";
+import FRL0ContactGateScreen from "./FRL_0_contact_gate";
 import RC1RedFlagsScreen from "./RC_1_red_flags";
 import RC2CostsScreen from "./RC_2_costs";
 import RC3RealityVsFantasyScreen from "./RC_3_reality_vs_fantasy";
@@ -72,6 +73,9 @@ if (subtaskKey === "TD_3_places_playlist") return <TD3PlacesPlaylistScreen />;
 if (subtaskKey === "TD_4_if_then_plan") return <TD4IfThenPlanScreen />;
 if (subtaskKey === "TD_5_home_object") return <TD5HomeObjectScreen />;
 if (subtaskKey === "TD_6_detox_confirm") return <TD6DetoxConfirmScreen />;
+
+
+if (subtaskKey === "FRL_0_contact_gate") return <FRL0ContactGateScreen />;
 
   // ✅ fallback (همان UI قبلی)
   return (
