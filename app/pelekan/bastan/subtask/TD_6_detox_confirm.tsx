@@ -1,19 +1,19 @@
-// app/pelekan/bastan/subtask/TD_2_gallery_cleanup.tsx
+// app/pelekan/bastan/subtask/TD_6_detox_confirm.tsx
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  InteractionManager,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    InteractionManager,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -43,56 +43,50 @@ function faOnlyTitle(raw?: string) {
 
 function subtaskNumberFa(key: string) {
   const k = String(key || "").trim();
-  if (k === "TD_2_gallery_cleanup") return "ریز اقدام دوم";
+  if (k === "TD_6_detox_confirm") return "ریز اقدام ششم";
   return "ریز اقدام";
 }
 
 /* ----------------------------- Types ----------------------------- */
 type ModalKind = "info" | "warn" | "error" | "success";
 
-type TD2Saved = {
+type StartOption = "now" | "tomorrow_morning" | "not_ready";
+
+type TD6Saved = {
   version: 1;
   savedAt: string;
+
   acceptedWhy: boolean;
-  checkedIds: string[];
-  total: number;
+  acceptedDefinition: boolean;
+  acceptedSlipRule: boolean;
+
+  startOption: StartOption | null;
+  plannedStartAtIso?: string | null;
+
+  // commitment
+  agreeFeelingNotDecision: boolean;
+  agreeNoCheck7Days: boolean;
+
   durationSec?: number | null;
 };
 
 /* ----------------------------- Storage Keys ----------------------------- */
-const SUBTASK_KEY = "TD_2_gallery_cleanup";
-const KEY_TD2_FINAL = `pelekan:bastan:subtask:${SUBTASK_KEY}:final:v1`;
+const SUBTASK_KEY = "TD_6_detox_confirm";
+const KEY_TD6_FINAL = `pelekan:bastan:subtask:${SUBTASK_KEY}:final:v1`;
 const KEY_BASTAN_DIRTY = "pelekan:bastan:dirty:v1";
 
-/* ----------------------------- Checklist (step-based) ----------------------------- */
-type CheckItem = { id: string; title: string };
-
-const CHECKS_S2_PREP: CheckItem[] = [
-  { id: "prep_intent", title: "قبول دارم هدف «حذف کردن» نیست؛ هدف « از دسترس خارج کردن » و قطع محرکه" },
-  { id: "prep_folder", title: "یک پوشه یا آلبوم به نام «آرشیو رابطه» بساز (داخل گالری یا فایل‌ها)" },
-  { id: "prep_hidden", title: "اگر گوشیت حالت پوشه قفل‌دار یا پوشه مخفی داره، فعالش کن و اگه بلد نیستی داخل اینترنت یا هوش مصنوعی سرچ کن تا یاد بگیری" },
-  { id: "prep_support", title: "اگه وسوسه شدی اکست رو چک کنی باید از این به بعد بری تب «پناه» و تکنیک ضدوسوسه رو انجام بدی" },
+/* ----------------------------- Presets ----------------------------- */
+const START_OPTIONS: { key: StartOption; title: string; desc: string }[] = [
+  { key: "now", title: "از همین لحظه شروع می‌کنم", desc: "بهونه‌های ذهنی طبیعی‌ان، اما من شروع می‌کنم." },
+  { key: "tomorrow_morning", title: "از فردا صبح شروع می‌کنم", desc: "شروع مشخص: فردا صبح (بدون عقب انداختن دوباره)." },
+  { key: "not_ready", title: "الان آماده نیستم", desc: " بعداً برای شروع برمی‌گردم." },
 ];
 
-const CHECKS_S3_CHATS: CheckItem[] = [
-  { id: "chat_archive", title: "چت‌ها و پیام‌ها (مثل تلگرام، واتس‌اپ، اینستا و اس‌ام‌اس) رو آرشیو کردم یا به یه پوشه جدا منتقل کردم" },
-  { id: "chat_pin_off", title: "پین پیام‌های اون رو برداشتم تا جلوی چشمم نباشه" },
-  { id: "chat_search_block", title: "اسم و یوزرنیمش رو از سرچ‌های اخیر پاک کردم تا با یک تایپ دوباره وارد نشم" },
-  { id: "chat_media_folder", title: "فایل‌های داخل چت (مثل ویس، ویدیو و عکس‌ها) رو هم از دسترس سریع خارج کردم" },
-  { id: "chat_alert", title: "داخل همه پیام‌رسان‌ها اعلان پیامش رو خاموش کردم که اگه پیام داد، پیامش نیاد رو گوشیم" },
-];
-
-const CHECKS_S4_GALLERY: CheckItem[] = [
-  { id: "gallery_move", title: "عکس‌ها و ویدیوهای مربوط رو از آلبوم اصلی منتقل کردم به «آرشیو رابطه»" },
-  { id: "gallery_favorites_off", title: "اثرش رو از تمام پوشه‌های گوشیم پاک کردم" },
-  { id: "gallery_recents_reduce", title: "برای اینکه دوباره جاهای مختلف گوشیم بالا نیاد، همه جای گوشیم رو چک کردم و اون رو پاکسازی کردم" },
-  { id: "gallery_cloud_memories", title: "یادآوری‌های خودکار که گالری گوشی داره رو خاموش کردم یا محتوا رو مخفی کردم" },
-];
-
-const CHECKS_ALL: CheckItem[] = [...CHECKS_S2_PREP, ...CHECKS_S3_CHATS, ...CHECKS_S4_GALLERY];
-
-function idsIn(list: CheckItem[]) {
-  return list.map((x) => x.id);
+function computeTomorrowMorningIso() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(8, 0, 0, 0);
+  return d.toISOString();
 }
 
 /* ----------------------------- Themed Modal ----------------------------- */
@@ -120,10 +114,22 @@ function ThemedModal({
   if (!visible) return null;
 
   const icon =
-    kind === "success" ? "checkmark-circle" : kind === "warn" ? "warning" : kind === "info" ? "information-circle" : "alert-circle";
+    kind === "success"
+      ? "checkmark-circle"
+      : kind === "warn"
+      ? "warning"
+      : kind === "info"
+      ? "information-circle"
+      : "alert-circle";
 
   const iconColor =
-    kind === "success" ? palette.green : kind === "warn" ? palette.orange : kind === "info" ? "rgba(231,238,247,.85)" : palette.red;
+    kind === "success"
+      ? palette.green
+      : kind === "warn"
+      ? palette.orange
+      : kind === "info"
+      ? "rgba(231,238,247,.85)"
+      : palette.red;
 
   return (
     <View style={styles.modalOverlay} pointerEvents="auto">
@@ -164,12 +170,12 @@ function ThemedModal({
 }
 
 /* ----------------------------- Screen ----------------------------- */
-export default function TD2GalleryCleanupScreen() {
+export default function TD6DetoxConfirmScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const headerNo = subtaskNumberFa(SUBTASK_KEY);
-  const title = "آرشیو عکس‌ها و چت‌ها";
+  const title = "محرک‌زدایی ۷ روزه";
 
   const { me } = useUser();
   const phone = String(me?.phone || "").trim();
@@ -191,8 +197,16 @@ export default function TD2GalleryCleanupScreen() {
   // Step 1
   const [acceptedWhy, setAcceptedWhy] = useState(false);
 
-  // Steps 2-4 checklist
-  const [checkedIds, setCheckedIds] = useState<string[]>([]);
+  // Step 2
+  const [acceptedDefinition, setAcceptedDefinition] = useState(false);
+
+  // Step 3
+  const [acceptedSlipRule, setAcceptedSlipRule] = useState(false);
+
+  // Step 4
+  const [startOption, setStartOption] = useState<StartOption | null>(null);
+  const [agreeFeelingNotDecision, setAgreeFeelingNotDecision] = useState(false);
+  const [agreeNoCheck7Days, setAgreeNoCheck7Days] = useState(false);
 
   // Modals
   const [confirmLockModal, setConfirmLockModal] = useState(false);
@@ -224,14 +238,21 @@ export default function TD2GalleryCleanupScreen() {
 
   /* ----------------------------- Load FINAL if any ----------------------------- */
   const loadFinalIfAny = useCallback(async () => {
-    const raw = await AsyncStorage.getItem(KEY_TD2_FINAL);
+    const raw = await AsyncStorage.getItem(KEY_TD6_FINAL);
     if (!raw) return { loaded: false as const };
 
-    const j = JSON.parse(raw) as TD2Saved;
+    const j = JSON.parse(raw) as TD6Saved;
     if (!j || j.version !== 1) return { loaded: false as const };
 
     setAcceptedWhy(!!j.acceptedWhy);
-    setCheckedIds(Array.isArray(j.checkedIds) ? j.checkedIds : []);
+    setAcceptedDefinition(!!j.acceptedDefinition);
+    setAcceptedSlipRule(!!j.acceptedSlipRule);
+
+    const so = (String(j.startOption || "") as StartOption) || null;
+    setStartOption(so);
+
+    setAgreeFeelingNotDecision(!!j.agreeFeelingNotDecision);
+    setAgreeNoCheck7Days(!!j.agreeNoCheck7Days);
 
     return { loaded: true as const };
   }, []);
@@ -277,31 +298,38 @@ export default function TD2GalleryCleanupScreen() {
     };
   }, [step, booting]);
 
-  /* ----------------------------- Checklist helpers ----------------------------- */
-  const toggleCheck = useCallback(
-    (id: string) => {
+  /* ----------------------------- Step helpers ----------------------------- */
+  const onPickStart = useCallback(
+    (k: StartOption) => {
       if (isReview) return;
-      setCheckedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+      setStartOption(k);
+      if (k === "not_ready") {
+        // وقتی آماده نیست، قفل/تعهد هم نباید زورکی فعال بشه
+        setAgreeFeelingNotDecision(false);
+        setAgreeNoCheck7Days(false);
+      }
     },
     [isReview]
   );
 
-  const total = CHECKS_ALL.length;
-  const doneCount = checkedIds.length;
+  /* ----------------------------- Validation ----------------------------- */
+  const defOk = useMemo(() => acceptedDefinition, [acceptedDefinition]);
+  const slipOk = useMemo(() => acceptedSlipRule, [acceptedSlipRule]);
 
-  const s2Ids = useMemo(() => idsIn(CHECKS_S2_PREP), []);
-  const s3Ids = useMemo(() => idsIn(CHECKS_S3_CHATS), []);
-  const s4Ids = useMemo(() => idsIn(CHECKS_S4_GALLERY), []);
+  const startOk = useMemo(() => {
+    if (!startOption) return false;
+    return startOption !== "not_ready";
+  }, [startOption]);
 
-  const step2Done = useMemo(() => s2Ids.every((id) => checkedIds.includes(id)), [checkedIds, s2Ids]);
-  const step3Done = useMemo(() => s3Ids.every((id) => checkedIds.includes(id)), [checkedIds, s3Ids]);
-  const step4Done = useMemo(() => s4Ids.every((id) => checkedIds.includes(id)), [checkedIds, s4Ids]);
+  const commitOk = useMemo(() => {
+    if (!startOption || startOption === "not_ready") return false;
+    return agreeFeelingNotDecision && agreeNoCheck7Days;
+  }, [agreeFeelingNotDecision, agreeNoCheck7Days, startOption]);
 
   const canGo2 = acceptedWhy;
-  const canGo3 = acceptedWhy && step2Done;
-  const canGo4 = acceptedWhy && step2Done && step3Done;
-  const canGo5 = acceptedWhy && step2Done && step3Done && step4Done;
-
+  const canGo3 = acceptedWhy && defOk;
+  const canGo4 = acceptedWhy && defOk && slipOk;
+  const canGo5 = acceptedWhy && defOk && slipOk && startOk && commitOk;
   const canFinalize = canGo5;
 
   /* ----------------------------- Persist FINAL local ----------------------------- */
@@ -309,18 +337,33 @@ export default function TD2GalleryCleanupScreen() {
     const startedAt = startedAtRef.current;
     const durationSec = startedAt ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : null;
 
-    const payload: TD2Saved = {
+    const plannedStartAtIso =
+      startOption === "now"
+        ? new Date().toISOString()
+        : startOption === "tomorrow_morning"
+        ? computeTomorrowMorningIso()
+        : null;
+
+    const payload: TD6Saved = {
       version: 1,
       savedAt: new Date().toISOString(),
+
       acceptedWhy: true,
-      checkedIds: [...checkedIds],
-      total,
+      acceptedDefinition: true,
+      acceptedSlipRule: true,
+
+      startOption: (startOption as StartOption) || "now",
+      plannedStartAtIso,
+
+      agreeFeelingNotDecision: true,
+      agreeNoCheck7Days: true,
+
       durationSec,
     };
 
-    await AsyncStorage.setItem(KEY_TD2_FINAL, JSON.stringify(payload));
+    await AsyncStorage.setItem(KEY_TD6_FINAL, JSON.stringify(payload));
     await AsyncStorage.setItem(KEY_BASTAN_DIRTY, new Date().toISOString());
-  }, [checkedIds, total]);
+  }, [startOption]);
 
   /* ----------------------------- Server submit (ONLY completion) ----------------------------- */
   const completeOnServer = useCallback(async (): Promise<"ok" | "already" | "fail"> => {
@@ -346,8 +389,11 @@ export default function TD2GalleryCleanupScreen() {
       savedAt: new Date().toISOString(),
       answer: {
         acceptedWhy: true,
-        checkedCount: doneCount,
-        totalCount: total,
+        acceptedDefinition: true,
+        acceptedSlipRule: true,
+        startOption: startOption || "now",
+        willStart: startOk,
+        committed: commitOk,
         durationSec,
       },
     };
@@ -388,7 +434,7 @@ export default function TD2GalleryCleanupScreen() {
       onPrimary: closeModal,
     });
     return "fail";
-  }, [apiBase, closeModal, doneCount, openModal, phone, token, total]);
+  }, [apiBase, closeModal, commitOk, openModal, phone, startOk, startOption, token]);
 
   const doFinalize = useCallback(async () => {
     if (!canFinalize) return;
@@ -398,11 +444,9 @@ export default function TD2GalleryCleanupScreen() {
     try {
       setSaving(true);
 
-      // 1) server
       const r = await completeOnServer();
       if (r === "fail") return;
 
-      // 2) local
       await persistFinalLocal();
 
       if (r === "already") {
@@ -449,22 +493,27 @@ export default function TD2GalleryCleanupScreen() {
   const StepPills = (
     <View style={styles.stepPills}>
       <View style={[styles.stepPill, step === 1 && styles.stepPillOn]}>
-        <Text style={styles.stepPillText}>۱) منطق</Text>
+        <Text style={styles.stepPillText}>۱) چرا</Text>
       </View>
       <View style={[styles.stepPill, step === 2 && styles.stepPillOn]}>
-        <Text style={styles.stepPillText}>۲) آماده‌سازی</Text>
+        <Text style={styles.stepPillText}>۲) قواعد</Text>
       </View>
       <View style={[styles.stepPill, step === 3 && styles.stepPillOn]}>
-        <Text style={styles.stepPillText}>۳) چت‌ها</Text>
+        <Text style={styles.stepPillText}>۳) لغزش</Text>
       </View>
       <View style={[styles.stepPill, step === 4 && styles.stepPillOn]}>
-        <Text style={styles.stepPillText}>۴) گالری</Text>
+        <Text style={styles.stepPillText}>۴) شروع</Text>
       </View>
       <View style={[styles.stepPill, step === 5 && styles.stepPillOn]}>
         <Text style={styles.stepPillText}>۵) پایان</Text>
       </View>
     </View>
   );
+
+  const selectedStartTitle = useMemo(() => {
+    const f = START_OPTIONS.find((x) => x.key === startOption);
+    return f?.title || "—";
+  }, [startOption]);
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
@@ -507,14 +556,15 @@ export default function TD2GalleryCleanupScreen() {
           {step === 1 ? (
             <>
               <View style={styles.sectionCard}>
-                <Text style={styles.h1}>چرا باید آرشیو کنی؟</Text>
+                <Text style={styles.h1}>چرا «محرک‌زدایی ۷ روزه» ضروریه؟</Text>
                 <Text style={styles.p}>
-                  این عکس‌ها و چت‌ها «یادگاری» نیستن؛ بلکه برای مغزِ داغ‌دیده‌ی بعد از جدایی، «مواد محرک» هستن.
-                  {"\n"}هر بار دیدن‌شون، یک موج دوپامین و دلتنگی می‌سازه و بعدش افت، اضطراب و وسوسه‌ی تماس.
-                  {"\n\n"}تو قرار نیست چیزی رو پاک کنی.
-                  {"\n"}فقط باید از «دسترسی سریع» خارجشون کنی تا وسوسه نتونه با یک کلیک تو رو بکشه.
-                  {"\n\n"}اگر وسط کار تحریک شدی: برو تب «پناه» و تکنیک ضدوسوسه رو انجام بده.
-                   {"\n"}
+                  تا وقتی مغزت هر روز «محرک» دریافت کنه، سیستم عصبی آروم نمی‌شه.
+                  {"\n"}این ۷ روز برای قوی شدن نیست؛ برای «ریست شدن»ه.
+                  {"\n\n"}هدف:
+                  {"\n"}• قطع چرخه‌ی چک کردن و خیال‌پردازی
+                  {"\n"}• کم شدن شدت موج‌های ناراحتی
+                  {"\n"}• زیاد شدن فاصله‌ی بین موج‌ها
+                  {"\n"}
                 </Text>
 
                 <Pressable
@@ -531,7 +581,7 @@ export default function TD2GalleryCleanupScreen() {
                       size={18}
                       color={acceptedWhy ? palette.green : "rgba(231,238,247,.55)"}
                     />
-                    <Text style={styles.choiceText}>قبول دارم «دیدن دوباره نشونه‌های رابطه»، درمان نیست؛ بلکه محرک و وسوسه‌سازِ جدیده</Text>
+                    <Text style={styles.choiceText}>قبول دارم این ۷ روز برای «آروم شدن مغز»ه ، نه برای قضاوت کردن خودم</Text>
                   </View>
                 </Pressable>
 
@@ -556,56 +606,55 @@ export default function TD2GalleryCleanupScreen() {
           {step === 2 ? (
             <>
               <View style={styles.sectionCard}>
-                <Text style={styles.h1}>آماده‌سازی</Text>
+                <Text style={styles.h1}>تعریف دقیق محرک‌زدایی</Text>
                 <Text style={styles.p}>
-                  این مرحله برای اینه که کار نصفه‌نیمه نمونه.
-                  {"\n"}اول ساختار آرشیوها رو بساز، بعد برو سراغ چت‌ها و گالری.
-                 {"\n"}
-                  {"\n"}هر کدوم از موارد پایین رو انجام دادی اون رو تیک بزن
-                  {"\n\n"}وضعیت: {doneCount}/{total}
+                  توو این ۷ روز:
+                  {"\n"}• چک کردن آنلاین شدن و ساعات بازدید ممنوع
+                  {"\n"}• دید زدن پیج (حتی با پیج فیک) ممنوع
+                  {"\n"}• پرسیدن از دیگران ممنوع
+                  {"\n"}• مرور چت‌هاو عکس‌ها ممنوع
+                  {"\n"}• خیال‌پردازی آگاهانه و عمدی ممنوع
+                  {"\n\n"}اگه هم موج ناراحتی اومد:
+                  {"\n"}تصمیم‌گیری ممنوع؛ فقط «قانون کنترل تکانه» اجرا می‌شه.
+                  {"\n"}
                 </Text>
-              </View>
 
-              <View style={{ gap: 10, marginTop: 10 }}>
-                {CHECKS_S2_PREP.map((c) => {
-                  const on = checkedIds.includes(c.id);
-                  return (
-                    <Pressable
-                      key={c.id}
-                      onPress={() => toggleCheck(c.id)}
-                      style={[styles.choiceCard, on && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
-                      disabled={isReview}
+                <Pressable
+                  onPress={() => {
+                    if (isReview) return;
+                    setAcceptedDefinition((x) => !x);
+                  }}
+                  style={[styles.choiceCard, acceptedDefinition && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
+                  disabled={isReview}
+                >
+                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+                    <Ionicons
+                      name={acceptedDefinition ? "checkmark-circle" : "ellipse-outline"}
+                      size={18}
+                      color={acceptedDefinition ? palette.green : "rgba(231,238,247,.55)"}
+                    />
+                    <Text style={styles.choiceText}>قبول دارم محرک‌زدایی یعنی «قطع چک کردن و قطع خوراک ذهنی» برای ۷ روز</Text>
+                  </View>
+                </Pressable>
+
+                <View style={{ marginTop: 14, gap: 10 }}>
+                  <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+                    <TouchableOpacity activeOpacity={0.9} onPress={() => setStep(1)} style={[styles.secondaryBtn, { flex: 1 }]} disabled={saving}>
+                      <Text style={styles.secondaryBtnText}>بازگشت</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => setStep(3)}
+                      style={[styles.primaryBtn, { flex: 1 }, (!canGo3 || saving) && { opacity: 0.45 }]}
+                      disabled={!canGo3 || saving}
                     >
-                      <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
-                        <Ionicons
-                          name={on ? "checkmark-circle" : "ellipse-outline"}
-                          size={18}
-                          color={on ? palette.green : "rgba(231,238,247,.55)"}
-                        />
-                        <Text style={styles.choiceText}>{c.title}</Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
+                      <Text style={styles.primaryBtnText}>ادامه</Text>
+                    </TouchableOpacity>
+                  </View>
 
-              <View style={{ marginTop: 14, gap: 10 }}>
-                <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-                  <TouchableOpacity activeOpacity={0.9} onPress={() => setStep(1)} style={[styles.secondaryBtn, { flex: 1 }]} disabled={saving}>
-                    <Text style={styles.secondaryBtnText}>بازگشت</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={() => setStep(3)}
-                    style={[styles.primaryBtn, { flex: 1 }, (!canGo3 || saving) && { opacity: 0.45 }]}
-                    disabled={!canGo3 || saving}
-                  >
-                    <Text style={styles.primaryBtnText}>ادامه</Text>
-                  </TouchableOpacity>
+                  {!canGo3 ? <Text style={styles.warn}>برای ادامه، باید تعریف محرک‌زدایی رو بپذیری.</Text> : null}
                 </View>
-
-                {!canGo3 ? <Text style={styles.warn}>برای رفتن به مرحله بعد، همه موارد «آماده‌سازی» باید تیک بخوره.</Text> : null}
               </View>
             </>
           ) : null}
@@ -614,55 +663,52 @@ export default function TD2GalleryCleanupScreen() {
           {step === 3 ? (
             <>
               <View style={styles.sectionCard}>
-                <Text style={styles.h1}>آرشیو چت‌ها</Text>
+                <Text style={styles.h1}>اگر لغزش شد چی؟</Text>
                 <Text style={styles.p}>
-                  چت‌ها خطرناک‌تر از عکس‌اند؛ چون «درِ تماس» رو باز میذارن.
-                  {"\n"}این مرحله باید کاری کنه که «دسترسی فوری» از بین بره.
-                  {"\n\n"}یادت نره اگه باز وسوسه شدی: بری تب «پناهگاه».
-                  {"\n\n"}وضعیت: {doneCount}/{total}
+                  لغزش یعنی «اطلاعات مهم»، نه «شکست».
+                  {"\n\n"}اگر یک بار چک کردی یا افتادی تو مرور:
+                  {"\n"}۱) خودت رو سرزنش نمی‌کنی
+                  {"\n"}۲) همون لحظه چرخه رو قطع می‌کنی
+                  {"\n"}۳) مسیر ۷ روزه رو ادامه می‌دی (نه خودت رو تنبیه، نه مسیر رو صفر کن)
+                  {"\n"}
                 </Text>
-              </View>
 
-              <View style={{ gap: 10, marginTop: 10 }}>
-                {CHECKS_S3_CHATS.map((c) => {
-                  const on = checkedIds.includes(c.id);
-                  return (
-                    <Pressable
-                      key={c.id}
-                      onPress={() => toggleCheck(c.id)}
-                      style={[styles.choiceCard, on && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
-                      disabled={isReview}
+                <Pressable
+                  onPress={() => {
+                    if (isReview) return;
+                    setAcceptedSlipRule((x) => !x);
+                  }}
+                  style={[styles.choiceCard, acceptedSlipRule && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
+                  disabled={isReview}
+                >
+                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+                    <Ionicons
+                      name={acceptedSlipRule ? "checkmark-circle" : "ellipse-outline"}
+                      size={18}
+                      color={acceptedSlipRule ? palette.green : "rgba(231,238,247,.55)"}
+                    />
+                    <Text style={styles.choiceText}>قبول دارم اگه لغزش شد، ادامه می‌دم و خودم رو نابود نمی‌کنم</Text>
+                  </View>
+                </Pressable>
+
+                <View style={{ marginTop: 14, gap: 10 }}>
+                  <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+                    <TouchableOpacity activeOpacity={0.9} onPress={() => setStep(2)} style={[styles.secondaryBtn, { flex: 1 }]} disabled={saving}>
+                      <Text style={styles.secondaryBtnText}>بازگشت</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => setStep(4)}
+                      style={[styles.primaryBtn, { flex: 1 }, (!canGo4 || saving) && { opacity: 0.45 }]}
+                      disabled={!canGo4 || saving}
                     >
-                      <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
-                        <Ionicons
-                          name={on ? "checkmark-circle" : "ellipse-outline"}
-                          size={18}
-                          color={on ? palette.green : "rgba(231,238,247,.55)"}
-                        />
-                        <Text style={styles.choiceText}>{c.title}</Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
+                      <Text style={styles.primaryBtnText}>ادامه</Text>
+                    </TouchableOpacity>
+                  </View>
 
-              <View style={{ marginTop: 14, gap: 10 }}>
-                <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-                  <TouchableOpacity activeOpacity={0.9} onPress={() => setStep(2)} style={[styles.secondaryBtn, { flex: 1 }]} disabled={saving}>
-                    <Text style={styles.secondaryBtnText}>بازگشت</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={() => setStep(4)}
-                    style={[styles.primaryBtn, { flex: 1 }, (!canGo4 || saving) && { opacity: 0.45 }]}
-                    disabled={!canGo4 || saving}
-                  >
-                    <Text style={styles.primaryBtnText}>ادامه</Text>
-                  </TouchableOpacity>
+                  {!canGo4 ? <Text style={styles.warn}>برای ادامه، باید قاعده‌ی برخورد با لغزش رو بپذیری.</Text> : null}
                 </View>
-
-                {!canGo4 ? <Text style={styles.warn}>برای رفتن مرحله بعد، همه موارد «چت‌ها» باید تیک بخوره.</Text> : null}
               </View>
             </>
           ) : null}
@@ -671,23 +717,23 @@ export default function TD2GalleryCleanupScreen() {
           {step === 4 ? (
             <>
               <View style={styles.sectionCard}>
-                <Text style={styles.h1}>آرشیو عکس‌ها و ویدیوها</Text>
+                <Text style={styles.h1}>شروع محرک‌زدایی + قفل تعهد</Text>
                 <Text style={styles.p}>
-                  عکس‌ها «سوخت احساسی» میسازن: یک لحظه دلت میلرزه بعد مغز دنبال تماس میفته.
-                  {"\n"}ما این سوخت رو باید از دسترس سریع خارج کنیم.
-                  {"\n\n"}وضعیت: {doneCount}/{total}
+                  اینجا «فکر کردن» ممنوعه.
+                  {"\n"}یا شروع می‌کنی، یا برمی‌گردی و فعلاً شروع نمی‌کنی.
+                  {"\n\n"}یک گزینه انتخاب کن:
                 </Text>
               </View>
 
               <View style={{ gap: 10, marginTop: 10 }}>
-                {CHECKS_S4_GALLERY.map((c) => {
-                  const on = checkedIds.includes(c.id);
+                {START_OPTIONS.map((s) => {
+                  const on = startOption === s.key;
                   return (
                     <Pressable
-                      key={c.id}
-                      onPress={() => toggleCheck(c.id)}
-                      style={[styles.choiceCard, on && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
+                      key={s.key}
+                      onPress={() => onPickStart(s.key)}
                       disabled={isReview}
+                      style={[styles.choiceCard, on && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
                     >
                       <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
                         <Ionicons
@@ -695,11 +741,78 @@ export default function TD2GalleryCleanupScreen() {
                           size={18}
                           color={on ? palette.green : "rgba(231,238,247,.55)"}
                         />
-                        <Text style={styles.choiceText}>{c.title}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.choiceText}>{s.title}</Text>
+                          <Text style={styles.small}>{s.desc}</Text>
+                        </View>
                       </View>
                     </Pressable>
                   );
                 })}
+              </View>
+
+              {startOption === "not_ready" ? (
+                <View style={[styles.noteCard, { marginTop: 12 }]}>
+                  <Text style={styles.noteTitle}>نکته</Text>
+                  <Text style={styles.small}>
+                    این گزینه یعنی «این زیراقدام الان انجام نمیشه».
+                    {"\n"}اینجا قرار نیست با یک تیک، از زیرش در بری.
+                    {"\n"} هر وقت آماده بودی دوباره بیا.
+                  </Text>
+                </View>
+              ) : null}
+
+              <View style={{ gap: 10, marginTop: 12 }}>
+                <Pressable
+                  onPress={() => {
+                    if (isReview) return;
+                    if (!startOption || startOption === "not_ready") return;
+                    setAgreeFeelingNotDecision((x) => !x);
+                  }}
+                  disabled={isReview || !startOption || startOption === "not_ready"}
+                  style={[
+                    styles.choiceCard,
+                    agreeFeelingNotDecision && styles.choiceCardOn,
+                    (isReview || !startOption || startOption === "not_ready") && { opacity: 0.65 },
+                  ]}
+                >
+                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+                    <Ionicons
+                      name={agreeFeelingNotDecision ? "checkmark-circle" : "ellipse-outline"}
+                      size={18}
+                      color={agreeFeelingNotDecision ? palette.green : "rgba(231,238,247,.55)"}
+                    />
+                    <Text style={styles.choiceText}>قبول دارم توو این ۷ روز «احساسم معیار تصمیم نیست»</Text>
+                  </View>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    if (isReview) return;
+                    if (!startOption || startOption === "not_ready") return;
+                    setAgreeNoCheck7Days((x) => !x);
+                  }}
+                  disabled={isReview || !startOption || startOption === "not_ready"}
+                  style={[
+                    styles.choiceCard,
+                    agreeNoCheck7Days && styles.choiceCardOn,
+                    (isReview || !startOption || startOption === "not_ready") && { opacity: 0.65 },
+                  ]}
+                >
+                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+                    <Ionicons
+                      name={agreeNoCheck7Days ? "checkmark-circle" : "ellipse-outline"}
+                      size={18}
+                      color={agreeNoCheck7Days ? palette.green : "rgba(231,238,247,.55)"}
+                    />
+                    <Text style={styles.choiceText}>تعهد می‌دم ۷ روز «چک نمی‌کنم» حتی اگه مغزم گفت "فقط یک بار"</Text>
+                  </View>
+                </Pressable>
+
+                <View style={[styles.pairCard, { marginTop: 2 }]}>
+                  <Text style={styles.pairLabel}>شروع انتخابی:</Text>
+                  <Text style={styles.pairText}>{selectedStartTitle}</Text>
+                </View>
               </View>
 
               <View style={{ marginTop: 14, gap: 10 }}>
@@ -718,7 +831,9 @@ export default function TD2GalleryCleanupScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {!canGo5 ? <Text style={styles.warn}>برای رفتن به مرحله پایان، همه موارد «گالری» باید تیک بخوره.</Text> : null}
+                {!startOption ? <Text style={styles.warn}>برای ادامه، باید نحوه شروع رو انتخاب کنی.</Text> : null}
+                {startOption === "not_ready" ? <Text style={styles.warn}>تا وقتی «الان آماده نیستم» انتخاب شده، امکان ثبت و قفل وجود نداره.</Text> : null}
+                {startOption && startOption !== "not_ready" && !commitOk ? <Text style={styles.warn}>برای ادامه، هر دو تعهد باید تیک بخوره.</Text> : null}
               </View>
             </>
           ) : null}
@@ -729,23 +844,19 @@ export default function TD2GalleryCleanupScreen() {
               <View style={styles.sectionCard}>
                 <Text style={styles.h1}>پایان</Text>
                 <Text style={styles.p}>
-                  تو الان یک کار «ضدوسوسه» انجام دادی.
-                  {"\n"}از این به بعد، مغز برای رسیدن به محرک باید زحمت بکشه… و همین زحمت، میل رو کم می‌کنه.
-                  {"\n\n"}هر وقت وسوسه شدی:
-                  {"\n"}۱) نود ثانیه نفس عمیق بکش
-                  {"\n"}۲) برو تب «پناه» و تکنیک "چک نکردن" رو انجام بده
-                  {"\n"}۳) بعد برگرد و به ادامه زنگیت برس
+                  از این لحظه، برنامه روشنه:
+                  {"\n"}• محرک‌هارو باهاشون برخورد میکنی
+                  {"\n"}• اون آدم رو چک نمی‌کنی
+                  {"\n"}• اگه موج ناراحتی اومد، هیچ تصمیمی نمی‌گیری؛ فقط قانون رو اجرا می‌کنی و از تکنیک پناهگاه هم کمک می‌گیری
+                  {"\n\n"}شروع تو:
+                  {"\n"}• {selectedStartTitle}
+                  {"\n"}
                 </Text>
               </View>
 
               <View style={{ marginTop: 14, gap: 10 }}>
                 <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={() => setStep(4)}
-                    style={[styles.secondaryBtn, { flex: 1 }]}
-                    disabled={saving}
-                  >
+                  <TouchableOpacity activeOpacity={0.9} onPress={() => setStep(4)} style={[styles.secondaryBtn, { flex: 1 }]} disabled={saving}>
                     <Text style={styles.secondaryBtnText}>بازگشت</Text>
                   </TouchableOpacity>
 
@@ -759,14 +870,9 @@ export default function TD2GalleryCleanupScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {!isReview && !canFinalize ? <Text style={styles.warn}>قبل از ثبت، همه چک‌لیست‌ها باید کامل شود.</Text> : null}
+                {!isReview && !canFinalize ? <Text style={styles.warn}>قبل از ثبت، همه مراحل باید کامل بشه.</Text> : null}
 
-                {/* در مرور: راهنمای کوچک برای دیدن مراحل */}
-                {isReview ? (
-                  <Text style={styles.small}>
-                    نکته: در حالت مرور، می‌تونی با «بازگشت» مراحل ۲ تا ۴ رو ببینی. فقط ادیت قفله.
-                  </Text>
-                ) : null}
+                {isReview ? <Text style={styles.small}>نکته: در حالت مرور، می‌تونی مراحل رو ببینی. فقط ادیت قفله.</Text> : null}
               </View>
             </>
           ) : null}
@@ -788,7 +894,7 @@ export default function TD2GalleryCleanupScreen() {
         visible={confirmLockModal}
         kind="warn"
         title="قبل از ثبت، این رو بدون"
-        message="با زدن «ثبت و پایان»، این ریز اقدام قفل میشه و دیگر امکان تغییر وجود ندارد."
+        message="با زدن «ثبت و پایان»، این ریز اقدام قفل میشه و دیگه امکان تغییر وجود نداره."
         primaryText="ثبت و قفل کن"
         secondaryText="فعلا نه"
         loading={saving}
@@ -919,6 +1025,26 @@ const styles = StyleSheet.create({
   },
   choiceCardOn: { borderColor: "rgba(34,197,94,.35)", backgroundColor: "rgba(34,197,94,.06)" },
   choiceText: { color: palette.text, fontWeight: "800", fontSize: 13, textAlign: "right", lineHeight: 18, flex: 1 },
+
+  noteCard: {
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.glass,
+    borderRadius: 16,
+    padding: 12,
+  },
+  noteTitle: { color: palette.text, fontWeight: "900", fontSize: 13, textAlign: "right", lineHeight: 18 },
+
+  pairCard: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.10)",
+    backgroundColor: "rgba(0,0,0,.14)",
+    borderRadius: 14,
+    padding: 12,
+  },
+  pairLabel: { color: "rgba(231,238,247,.72)", fontWeight: "900", fontSize: 11, textAlign: "right" },
+  pairText: { color: "rgba(231,238,247,.88)", fontWeight: "800", fontSize: 12, textAlign: "right", marginTop: 6, lineHeight: 18 },
 
   primaryBtn: {
     paddingVertical: 14,

@@ -4,16 +4,16 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    InteractionManager,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  InteractionManager,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -1055,7 +1055,7 @@ export default function TD3PlacesPlaylistScreen() {
                   {"\n"}بعد برای هر کدوم:
                   {"\n"}اول یه نقشه اضطراری بچین تا دیگه حالت رو بد نکنه
                   {"\n"}مثلا برای آهنگ بنویس اون آهنگ رو چند بار پشت سرهم گوش میدم یا توو مسیر کار یه آهنگ شاد گوش میدم
-                  {"\n\n"} بعدش یه تکنیک آرام‌بخش انجام بده مثلا 90 ثانیه تنفس عمیق یا رفتن به تب "پناه"
+                  {"\n\n"} بعدش یه تکنیک آرام‌بخش انجام بده مثلا 90 ثانیه تنفس عمیق یا رفتن به تب "پناهگاه"
                 </Text>
               </View>
 

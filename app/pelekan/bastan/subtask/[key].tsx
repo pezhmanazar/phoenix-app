@@ -17,11 +17,13 @@ import RC5CommitConfirmScreen from "./RC_5_commit_confirm";
 import TD1SocialCleanupScreen from "./TD_1_social_cleanup";
 import TD2GalleryCleanupScreen from "./TD_2_gallery_cleanup";
 import TD3PlacesPlaylistScreen from "./TD_3_places_playlist";
+import TD4IfThenPlanScreen from "./TD_4_if_then_plan";
+import TD5HomeObjectScreen from "./TD_5_home_object";
+import TD6DetoxConfirmScreen from "./TD_6_detox_confirm";
 import UL1LetterWriteOrPhotoScreen from "./UL_1_letter_write_or_photo";
 import UL2NoSendConfirmScreen from "./UL_2_no_send_confirm";
 import UL3UrgeWaveControlScreen from "./UL_3_72h_lock_confirm";
 import UL4StoreRitualScreen from "./UL_4_store_ritual";
-
 /* ----------------------------- UI ----------------------------- */
 const palette = {
   bg: "#0b0f14",
@@ -67,6 +69,9 @@ if (subtaskKey === "UL_4_store_ritual") return <UL4StoreRitualScreen />;
 if (subtaskKey === "TD_1_social_cleanup") return <TD1SocialCleanupScreen />;
 if (subtaskKey === "TD_2_gallery_cleanup") return <TD2GalleryCleanupScreen />;
 if (subtaskKey === "TD_3_places_playlist") return <TD3PlacesPlaylistScreen />;
+if (subtaskKey === "TD_4_if_then_plan") return <TD4IfThenPlanScreen />;
+if (subtaskKey === "TD_5_home_object") return <TD5HomeObjectScreen />;
+if (subtaskKey === "TD_6_detox_confirm") return <TD6DetoxConfirmScreen />;
 
   // ✅ fallback (همان UI قبلی)
   return (

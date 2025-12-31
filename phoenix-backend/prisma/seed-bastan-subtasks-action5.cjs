@@ -8,11 +8,24 @@ async function main() {
   if (!action) throw new Error("Action limited_contact not found");
 
   const subtasks = [
+    // ✅ NEW Gate (قبل از همه)
+    {
+      key: "FRL_0_contact_gate",
+      kind: "choice",
+      titleFa: "دوراهی تماس",
+      helpFa: null,
+      isRequired: true,
+      isFree: false,
+      sortOrder: 0,
+      xpReward: 5,
+    },
+
+    // ✅ Existing (with short real titles + helpFa null)
     {
       key: "FRL_1_define_roles",
       kind: "choice",
-      titleFa: "آیا تماس نقش‌محور اجتناب‌ناپذیر است؟",
-      helpFa: "اگر «هیچ‌کدام» را انتخاب کنی، یعنی باید قطع ارتباط کامل انجام بدهی.",
+      titleFa: "تعریف نقش تماس",
+      helpFa: null,
       isRequired: true,
       isFree: false,
       sortOrder: 1,
@@ -21,8 +34,8 @@ async function main() {
     {
       key: "FRL_2_contact_rules",
       kind: "form",
-      titleFa: "قوانین تماس مجاز من چیست؟ (حداکثر ۵ خط)",
-      helpFa: "اگر در گزینه ۱ «هیچ‌کدام» بود: بنویس «قطع ارتباط کامل». اگر نقش‌محور بود: موضوعات مجاز، کانال ارتباط، زمان پاسخ، ممنوعیت حرف شخصی.",
+      titleFa: "قوانین تماس مجاز",
+      helpFa: null,
       isRequired: true,
       isFree: false,
       sortOrder: 2,
@@ -31,8 +44,8 @@ async function main() {
     {
       key: "FRL_3_no_emotional_contact_confirm",
       kind: "confirm",
-      titleFa: "متعهد می‌شوم هیچ تماس هیجانی نداشته باشم",
-      helpFa: "درددل/کنایه/یادآوری/چک‌کردن شبکه‌ها = تماس هیجانی",
+      titleFa: "تعهد عدم تماس هیجانی",
+      helpFa: null,
       isRequired: true,
       isFree: false,
       sortOrder: 3,
@@ -41,8 +54,8 @@ async function main() {
     {
       key: "FRL_4_boundary_script",
       kind: "text",
-      titleFa: "یک جمله آماده برای حفظ مرز بنویس",
-      helpFa: "مثال: الان فقط درباره موضوع کاری صحبت می‌کنم.",
+      titleFa: "جمله مرزبندی",
+      helpFa: null,
       isRequired: false,
       isFree: false,
       sortOrder: 4,
@@ -51,8 +64,8 @@ async function main() {
     {
       key: "FRL_5_violation_plan",
       kind: "form",
-      titleFa: "اگر قانون را شکستم چه می‌کنم؟ (پلن جبران)",
-      helpFa: "قطع گفتگو، گزارش به خود، بازگشت به اقدام ۳ یا ۴",
+      titleFa: "پلن جبران",
+      helpFa: null,
       isRequired: true,
       isFree: false,
       sortOrder: 5,
@@ -79,6 +92,7 @@ async function main() {
   const n = await prisma.bastanSubtaskDefinition.count({
     where: { actionId: action.id },
   });
+
   console.log("Seeded Limited Contact subtasks. Count =", n);
 }
 
