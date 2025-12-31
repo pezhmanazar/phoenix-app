@@ -1127,15 +1127,12 @@ if (canUnlock && gosastanUnlockedAtFinal) {
 router.post("/bastan/subtask/complete", authUser, async (req, res) => {
   try {
     noStore(res);
-
     const phone = req.userPhone;
     const { subtaskKey, payload } = req.body || {};
-
     if (!subtaskKey || typeof subtaskKey !== "string") {
       return wcdnOkError(res, "SUBTASK_KEY_REQUIRED");
     }
 
-    /* ---------- user + plan ---------- */
     const user = await prisma.user.findUnique({
       where: { phone },
       select: { id: true, plan: true, planExpiresAt: true },
@@ -1146,7 +1143,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     const { planStatusFinal } = applyDebugPlan(req, basePlan.planStatus, basePlan.daysLeft);
     const isProLike = planStatusFinal === "pro" || planStatusFinal === "expiring";
 
-    /* ---------- find subtask + action ---------- */
+    // --- find subtask ---
     const subtask = await prisma.bastanSubtaskDefinition.findFirst({
       where: { key: subtaskKey },
       select: {
@@ -1159,7 +1156,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
           select: {
             id: true,
             code: true,
-            sortOrder: true, // dayNumber
+            sortOrder: true, // mapping مستقیم به day
             isProLocked: true,
             minRequiredSubtasks: true,
             totalSubtasks: true,
@@ -1169,16 +1166,25 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     });
     if (!subtask) return wcdnOkError(res, "SUBTASK_NOT_FOUND");
 
-    /* ---------- PRO gate ---------- */
+    // --- PRO gate ---
     if ((subtask.action?.isProLocked || subtask.isFree === false) && !isProLike) {
       return wcdnOkError(res, "PRO_REQUIRED");
     }
 
-    /* ---------- sequential gate ---------- */
+    // --- sequential gate (✅ now uses user-specific minReq if exists) ---
     const actions = await prisma.bastanActionDefinition.findMany({
       orderBy: { sortOrder: "asc" },
       select: { id: true, sortOrder: true, minRequiredSubtasks: true },
     });
+
+    const actionProgressRows = await prisma.bastanActionProgress.findMany({
+      where: { userId: user.id, actionId: { in: actions.map((a) => a.id) } },
+      select: { actionId: true, minRequiredSubtasks: true },
+    });
+    const minReqByActionId = {};
+    for (const r of actionProgressRows) {
+      minReqByActionId[r.actionId] = Number(r.minRequiredSubtasks) || 0;
+    }
 
     const doneAgg = await prisma.bastanSubtaskProgress.groupBy({
       by: ["actionId"],
@@ -1194,7 +1200,10 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
 
     for (const a of actions) {
       const done = doneByActionId[a.id] || 0;
-      const complete = done >= a.minRequiredSubtasks;
+      const minReqUser = minReqByActionId[a.id];
+      const minReqFinal = (typeof minReqUser === "number" && minReqUser > 0) ? minReqUser : (a.minRequiredSubtasks || 0);
+
+      const complete = done >= minReqFinal;
 
       if (a.id === subtask.actionId) {
         locked = !prevOk;
@@ -1207,24 +1216,38 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       return wcdnOkError(res, "ACTION_LOCKED", { reason: "previous_action_incomplete" });
     }
 
-    /* ---------- already done ---------- */
+    // --- already done? ---
     const existing = await prisma.bastanSubtaskProgress.findFirst({
       where: { userId: user.id, subtaskId: subtask.id },
       select: { isDone: true },
     });
     if (existing?.isDone) return wcdnOkError(res, "ALREADY_DONE");
 
-    /* ---------- counters ---------- */
     const beforeDone = doneByActionId[subtask.actionId] || 0;
-    const minReq = subtask.action?.minRequiredSubtasks || 0;
+
+    // ✅ minReq for THIS action for THIS user
+    const minReqUserForThis = minReqByActionId[subtask.actionId];
+    const minReqDefForThis = subtask.action?.minRequiredSubtasks || 0;
+    let minReq = (typeof minReqUserForThis === "number" && minReqUserForThis > 0) ? minReqUserForThis : minReqDefForThis;
+
     const dayNumber = Number(subtask.action?.sortOrder);
     if (!dayNumber) return wcdnOkError(res, "SERVER_ERROR");
 
     const now = new Date();
 
-    /* ---------- transaction ---------- */
+    // helper: detect gate choice (so we can set dynamic minReq)
+    const rawGate =
+      payload?.answer?.gateChoice ??
+      payload?.gateChoice ??
+      payload?.answer?.choice ??
+      payload?.choice ??
+      null;
+
+    const gateChoice = String(rawGate || "").trim(); // e.g. "not_in_group" | "role_based"
+    const isGateSubtask = subtask.key === "FRL_0_contact_gate";
+
     const result = await prisma.$transaction(async (tx) => {
-      /* --- resolve day --- */
+      // --- resolve day ---
       const dayRow = await tx.pelekanDay.findFirst({
         where: { stage: { code: "bastan" }, dayNumberInStage: dayNumber },
         select: { id: true },
@@ -1232,7 +1255,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       if (!dayRow) throw new Error("DAY_NOT_FOUND");
       const dayId = dayRow.id;
 
-      /* --- ensure day active --- */
+      // --- ensure day active ---
       await tx.pelekanDayProgress.upsert({
         where: { userId_dayId: { userId: user.id, dayId } },
         create: {
@@ -1246,7 +1269,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         update: { lastActivityAt: now },
       });
 
-      /* --- mark subtask done --- */
+      // --- mark subtask done ---
       await tx.bastanSubtaskProgress.create({
         data: {
           userId: user.id,
@@ -1258,7 +1281,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         },
       });
 
-      /* --- XP subtask --- */
+      // --- XP subtask ---
       const subtaskXp = Number(subtask.xpReward) || 0;
       if (subtaskXp > 0) {
         await tx.xpLedger.create({
@@ -1273,10 +1296,25 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       }
 
       const afterDone = beforeDone + 1;
-      const shouldBeDone = afterDone >= minReq;
-      const crossedToDone = beforeDone < minReq && shouldBeDone;
 
-      /* --- action progress (CRITICAL FIX) --- */
+      // ✅ dynamic minReq based on gate choice
+      // مسیر "جز این دسته نیستم" => minReq باید 1 شود تا اکشن همان‌جا تمام شود
+      if (isGateSubtask) {
+        const noContactLike = ["not_in_group", "no_contact", "none", "no"].includes(gateChoice);
+        const roleBasedLike = ["role_based", "yes", "has"].includes(gateChoice);
+
+        if (noContactLike) {
+          minReq = 1;
+        } else if (roleBasedLike) {
+          minReq = minReqDefForThis; // مثلا 5
+        }
+        // اگر payload چیزی نفرستاد، minReq را دست نمی‌زنیم (fail-safe)
+      }
+
+      const crossedToDone = beforeDone < minReq && afterDone >= minReq;
+      const shouldBeDone = afterDone >= minReq;
+
+      // --- action progress (✅ stores per-user minReq) ---
       await tx.bastanActionProgress.upsert({
         where: { userId_actionId: { userId: user.id, actionId: subtask.actionId } },
         create: {
@@ -1286,24 +1324,19 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
           startedAt: now,
           completedAt: shouldBeDone ? now : null,
           doneSubtasksCount: afterDone,
-          minRequiredSubtasks: minReq,
+          minRequiredSubtasks: minReq, // ✅ important
           totalSubtasks: subtask.action?.totalSubtasks || 0,
           xpEarned: 0,
         },
         update: {
           status: shouldBeDone ? "done" : "active",
+          ...(shouldBeDone ? { completedAt: now } : {}),
           doneSubtasksCount: afterDone,
-
-          // 🔒 همگام‌سازی اجباری با Definition
-          minRequiredSubtasks: minReq,
-          totalSubtasks: subtask.action?.totalSubtasks || 0,
-
-          // 🔒 اگر minReq بالا رفت، completedAt باید null شود
-          completedAt: shouldBeDone ? now : null,
+          minRequiredSubtasks: minReq, // ✅ keep synced
         },
       });
 
-      /* --- if action completed => complete day + streak + next day --- */
+      // --- if action completed => complete day + streak + next day ---
       if (crossedToDone) {
         await tx.pelekanDayProgress.update({
           where: { userId_dayId: { userId: user.id, dayId } },
@@ -1326,6 +1359,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
           const exists = await tx.pelekanDayProgress.findUnique({
             where: { userId_dayId: { userId: user.id, dayId: nextDay.id } },
           });
+
           if (!exists) {
             await tx.pelekanDayProgress.create({
               data: {
@@ -1347,10 +1381,10 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         afterDone,
         minReq,
         actionCode: subtask.action.code,
+        gateChoice,
       };
     });
 
-    /* ---------- response ---------- */
     return res.json({
       ok: true,
       data: {
@@ -1364,6 +1398,8 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
           after: result.afterDone,
           minRequired: result.minReq,
         },
+        // برای دیباگ
+        meta: subtask.key === "FRL_0_contact_gate" ? { gateChoice: result.gateChoice } : undefined,
       },
     });
   } catch (e) {
@@ -1371,6 +1407,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     return wcdnOkError(res, "SERVER_ERROR");
   }
 });
+
 /* ---------- POST /api/pelekan/bastan/intro/complete ---------- */
 router.post("/bastan/intro/complete", authUser, async (req, res) => {
   try {
