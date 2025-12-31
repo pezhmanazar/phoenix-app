@@ -31,7 +31,7 @@ async function main() {
   {
     key: "TD_3_places_playlist",
     kind: "form",
-    titleFa: "شناسایی محرک‌های اصلی",
+    titleFa: "شناسایی محرک‌های اصلی و برنامه مواجهه",
     helpFa: null,
     isRequired: true,
     isFree: false,
@@ -41,7 +41,7 @@ async function main() {
   {
     key: "TD_4_if_then_plan",
     kind: "form",
-    titleFa: "برنامه مواجهه با محرک‌ها",
+    titleFa: "قانون کنترل تکانه",
     helpFa: null,
     isRequired: true,
     isFree: false,

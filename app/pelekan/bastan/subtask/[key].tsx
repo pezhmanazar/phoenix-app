@@ -14,6 +14,9 @@ import RC2CostsScreen from "./RC_2_costs";
 import RC3RealityVsFantasyScreen from "./RC_3_reality_vs_fantasy";
 import RC4DealBreakersScreen from "./RC_4_deal_breakers";
 import RC5CommitConfirmScreen from "./RC_5_commit_confirm";
+import TD1SocialCleanupScreen from "./TD_1_social_cleanup";
+import TD2GalleryCleanupScreen from "./TD_2_gallery_cleanup";
+import TD3PlacesPlaylistScreen from "./TD_3_places_playlist";
 import UL1LetterWriteOrPhotoScreen from "./UL_1_letter_write_or_photo";
 import UL2NoSendConfirmScreen from "./UL_2_no_send_confirm";
 import UL3UrgeWaveControlScreen from "./UL_3_72h_lock_confirm";
@@ -60,6 +63,10 @@ if (subtaskKey === "UL_1_letter_write_or_photo") return <UL1LetterWriteOrPhotoSc
 if (subtaskKey === "UL_2_no_send_confirm") return <UL2NoSendConfirmScreen />;
 if (subtaskKey === "UL_3_72h_lock_confirm") return <UL3UrgeWaveControlScreen />;
 if (subtaskKey === "UL_4_store_ritual") return <UL4StoreRitualScreen />;
+
+if (subtaskKey === "TD_1_social_cleanup") return <TD1SocialCleanupScreen />;
+if (subtaskKey === "TD_2_gallery_cleanup") return <TD2GalleryCleanupScreen />;
+if (subtaskKey === "TD_3_places_playlist") return <TD3PlacesPlaylistScreen />;
 
   // ✅ fallback (همان UI قبلی)
   return (
