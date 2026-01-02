@@ -15,6 +15,11 @@ import FRL2ContactRulesScreen from "./FRL_2_contact_rules";
 import FRL3NoEmotionalContactConfirmScreen from "./FRL_3_no_emotional_contact_confirm";
 import FRL4BoundaryScriptScreen from "./FRL_4_boundary_script";
 import FRL5ViolationPlanScreen from "./FRL_5_violation_plan";
+import ML1WhatDidILearnScreen from "./ML_1_what_did_i_learn";
+import ML2PatternAwarenessScreen from "./ML_2_pattern_awareness";
+import ML3ValuesNextTimeScreen from "./ML_3_values_next_time";
+import ML4GoldenRuleScreen from "./ML_4_golden_rule";
+import ML5LearningConfirmScreen from "./ML_5_learning_confirm";
 import RC1RedFlagsScreen from "./RC_1_red_flags";
 import RC2CostsScreen from "./RC_2_costs";
 import RC3RealityVsFantasyScreen from "./RC_3_reality_vs_fantasy";
@@ -86,6 +91,12 @@ if (subtaskKey === "FRL_2_contact_rules") return <FRL2ContactRulesScreen />;
 if (subtaskKey === "FRL_3_no_emotional_contact_confirm") return <FRL3NoEmotionalContactConfirmScreen />;
 if (subtaskKey === "FRL_4_boundary_script") return <FRL4BoundaryScriptScreen />;
 if (subtaskKey === "FRL_5_violation_plan") return <FRL5ViolationPlanScreen />;
+
+if (subtaskKey === "ML_1_what_did_i_learn") return <ML1WhatDidILearnScreen />;
+if (subtaskKey === "ML_2_pattern_awareness") return <ML2PatternAwarenessScreen />;
+if (subtaskKey === "ML_3_values_next_time") return <ML3ValuesNextTimeScreen />;
+if (subtaskKey === "ML_4_golden_rule") return <ML4GoldenRuleScreen />;
+if (subtaskKey === "ML_5_learning_confirm") return <ML5LearningConfirmScreen />;
 
   // ✅ fallback (همان UI قبلی)
   return (
