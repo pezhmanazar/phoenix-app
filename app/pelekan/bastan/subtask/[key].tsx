@@ -9,6 +9,10 @@ import AR1OwnShareScreen from "./AR_1_own_share";
 import AR2PatternLinkScreen from "./AR_2_pattern_link";
 import AR3BoundaryNextTimeScreen from "./AR_3_boundary_next_time";
 import AR4NoBlameConfirmScreen from "./AR_4_no_blame_confirm";
+import CR1ChooseRitualScreen from "./CR_1_choose_ritual";
+import CR2DoRitualScreen from "./CR_2_do_ritual";
+import CR3AfterFeelingScreen from "./CR_3_after_feeling";
+import CR4CloseConfirmWithDate from "./CR_4_close_confirm_with_date";
 import FRL0ContactGateScreen from "./FRL_0_contact_gate";
 import FRL1DefineRolesScreen from "./FRL_1_define_roles";
 import FRL2ContactRulesScreen from "./FRL_2_contact_rules";
@@ -61,6 +65,9 @@ export default function BastanSubtaskRouter() {
   const params = useLocalSearchParams();
   const subtaskKey = String((params as any)?.key || "").trim();
 
+ console.log("CR3AfterFeelingScreen typeof =", typeof CR3AfterFeelingScreen);
+ console.log("CR3AfterFeelingScreen value =", CR3AfterFeelingScreen);
+
   // ✅ dispatch
 if (subtaskKey === "RC_1_red_flags") return <RC1RedFlagsScreen />;
 if (subtaskKey === "RC_2_costs") return <RC2CostsScreen />;
@@ -97,6 +104,11 @@ if (subtaskKey === "ML_2_pattern_awareness") return <ML2PatternAwarenessScreen /
 if (subtaskKey === "ML_3_values_next_time") return <ML3ValuesNextTimeScreen />;
 if (subtaskKey === "ML_4_golden_rule") return <ML4GoldenRuleScreen />;
 if (subtaskKey === "ML_5_learning_confirm") return <ML5LearningConfirmScreen />;
+
+if (subtaskKey === "CR_1_choose_ritual") return <CR1ChooseRitualScreen />;
+if (subtaskKey === "CR_2_do_ritual") return <CR2DoRitualScreen />;
+if (subtaskKey === "CR_3_after_feeling") return <CR3AfterFeelingScreen />;
+if (subtaskKey === "CR_4_close_confirm_with_date") return <CR4CloseConfirmWithDate />;
 
   // ✅ fallback (همان UI قبلی)
   return (

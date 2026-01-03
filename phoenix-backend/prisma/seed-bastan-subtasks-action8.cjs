@@ -8,36 +8,36 @@ async function main() {
   if (!action) throw new Error("Action commitment_contract not found");
 
   const subtasks = [
-    {
-      key: "CC_1_read_contract",
-      kind: "confirm",
-      titleFa: "متن تعهدنامه را خواندم",
-      helpFa: null,
-      isRequired: true,
-      isFree: false,
-      sortOrder: 1,
-      xpReward: 5,
-    },
-    {
-      key: "CC_2_signature",
-      kind: "signature",
-      titleFa: "امضا می‌کنم",
-      helpFa: "این امضا یعنی: تماس هیجانی/چک‌کردن/التماس ممنوع",
-      isRequired: true,
-      isFree: false,
-      sortOrder: 2,
-      xpReward: 15,
-    },
-    {
-      key: "CC_3_24h_safety_check",
-      kind: "choice",
-      titleFa: "در ۲۴ ساعت گذشته تماس هیجانی یا چک‌کردن داشتی؟",
-      helpFa: "بله (هیجانی) / تماس نقش‌محور / خیر",
-      isRequired: true,
-      isFree: false,
-      sortOrder: 3,
-      xpReward: 10,
-    },
+   {
+  key: "CC_1_read_contract",
+  kind: "confirm",
+  titleFa: "مطالعه تعهدنامه",
+  helpFa: null,
+  isRequired: true,
+  isFree: false,
+  sortOrder: 1,
+  xpReward: 5,
+},
+{
+  key: "CC_2_signature",
+  kind: "signature",
+  titleFa: "امضای تعهدنامه",
+  helpFa: null,
+  isRequired: true,
+  isFree: false,
+  sortOrder: 2,
+  xpReward: 15,
+},
+{
+  key: "CC_3_24h_safety_check",
+  kind: "choice",
+  titleFa: "بررسی ایمنی ۲۴ ساعته",
+  helpFa: null,
+  isRequired: true,
+  isFree: false,
+  sortOrder: 3,
+  xpReward: 10,
+},
   ];
 
   for (const s of subtasks) {
