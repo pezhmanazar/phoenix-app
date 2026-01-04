@@ -9,6 +9,8 @@ import AR1OwnShareScreen from "./AR_1_own_share";
 import AR2PatternLinkScreen from "./AR_2_pattern_link";
 import AR3BoundaryNextTimeScreen from "./AR_3_boundary_next_time";
 import AR4NoBlameConfirmScreen from "./AR_4_no_blame_confirm";
+import CC1ReadContractScreen from "./CC_1_read_contract";
+import CC2SignatureScreen from "./CC_2_signature";
 import CR1ChooseRitualScreen from "./CR_1_choose_ritual";
 import CR2DoRitualScreen from "./CR_2_do_ritual";
 import CR3AfterFeelingScreen from "./CR_3_after_feeling";
@@ -39,7 +41,6 @@ import UL1LetterWriteOrPhotoScreen from "./UL_1_letter_write_or_photo";
 import UL2NoSendConfirmScreen from "./UL_2_no_send_confirm";
 import UL3UrgeWaveControlScreen from "./UL_3_72h_lock_confirm";
 import UL4StoreRitualScreen from "./UL_4_store_ritual";
-
 /* ----------------------------- UI ----------------------------- */
 const palette = {
   bg: "#0b0f14",
@@ -109,6 +110,10 @@ if (subtaskKey === "CR_1_choose_ritual") return <CR1ChooseRitualScreen />;
 if (subtaskKey === "CR_2_do_ritual") return <CR2DoRitualScreen />;
 if (subtaskKey === "CR_3_after_feeling") return <CR3AfterFeelingScreen />;
 if (subtaskKey === "CR_4_close_confirm_with_date") return <CR4CloseConfirmWithDate />;
+
+
+if (subtaskKey === "CC_1_read_contract") return <CC1ReadContractScreen />;
+if (subtaskKey === "CC_2_signature") return <CC2SignatureScreen />;
 
   // ✅ fallback (همان UI قبلی)
   return (
