@@ -667,7 +667,7 @@ export default function CC2SignatureScreen() {
           {/* Step 1 */}
           {step === 1 ? (
             <View style={styles.sectionCard}>
-              <Text style={styles.h1}>این «ثبت» شوخی نیست</Text>
+              <Text style={styles.h1}>تعهد رفتاری</Text>
               <Text style={styles.p}>
                 اینجا از «فهمیدن» میای روی «تعهد رفتاری».
                 {"\n"}ثبت یعنی: حتی اگه دلم لرزید، رفتارم تغییر نمی‌کنه.
@@ -716,216 +716,244 @@ export default function CC2SignatureScreen() {
           ) : null}
 
           {/* Step 2 */}
-          {step === 2 ? (
-            <>
-              <View style={styles.sectionCard}>
-                <Text style={styles.h1}>ثبت تعهد</Text>
-                <Text style={styles.p}>
-                  دو راه داری:
-                  {"\n"}۱) امضا روی کاغذ + عکسش
-                  {"\n"}۲) نام + تاریخ داخل اپ
-                  {"\n"}تا وقتی شرایط کامل نشه، ادامه قفل می‌مونه.
-                </Text>
-              </View>
+{step === 2 ? (
+  <>
+    <View style={styles.sectionCard}>
+      <Text style={styles.h1}>ثبت تعهد</Text>
+      <Text style={styles.p}>
+        دو راه داری:
+        {"\n"}۱) امضا روی کاغذ + عکسش
+        {"\n"}۲) نام + تاریخ داخل اپ
+      </Text>
+    </View>
 
-              <View style={[styles.noteCard, { marginTop: 12 }]}>
-                <Text style={styles.noteTitle}>روش ثبت</Text>
+    <View style={[styles.noteCard, { marginTop: 12 }]}>
+      <Text style={styles.noteTitle}>روش ثبت</Text>
+      <View style={{ height: 10 }} />
+
+      <Pressable
+        onPress={() => (isReview ? null : setMethod("paper"))}
+        disabled={isReview}
+        style={[
+          styles.choiceCard,
+          method === "paper" && styles.choiceCardOn,
+          isReview && { opacity: 0.75 },
+        ]}
+      >
+        <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+          <Ionicons
+            name={method === "paper" ? "radio-button-on" : "radio-button-off"}
+            size={18}
+            color={method === "paper" ? palette.green : "rgba(231,238,247,.55)"}
+          />
+          <Text style={[styles.choiceText, { flexShrink: 1 }]}>امضا روی کاغذ + ثبت عکس</Text>
+        </View>
+      </Pressable>
+
+      <View style={{ height: 10 }} />
+
+      <Pressable
+        onPress={() => (isReview ? null : setMethod("typed"))}
+        disabled={isReview}
+        style={[
+          styles.choiceCard,
+          method === "typed" && styles.choiceCardOn,
+          isReview && { opacity: 0.75 },
+        ]}
+      >
+        <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+          <Ionicons
+            name={method === "typed" ? "radio-button-on" : "radio-button-off"}
+            size={18}
+            color={method === "typed" ? palette.green : "rgba(231,238,247,.55)"}
+          />
+          <Text style={[styles.choiceText, { flexShrink: 1 }]}>نوشتن نام + تاریخ داخل اپ</Text>
+        </View>
+      </Pressable>
+
+      <View style={{ height: 12 }} />
+
+      {/* Name + Persian Date */}
+      <View style={styles.noteCard}>
+        <Text style={styles.noteTitle}>نام و تاریخ</Text>
+
+        {/* ✅ تاریخ شمسی */}
+        <Text style={styles.small}>
+          تاریخ امروز:{" "}
+          {(() => {
+            try {
+              return new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+              }).format(new Date());
+            } catch {
+              // fallback
+              try {
+                return new Intl.DateTimeFormat("fa-IR", {
+                  year: "numeric",
+                  month: "2-digit",
+                  day: "2-digit",
+                }).format(new Date());
+              } catch {
+                return todayFa; // اگر توی پروژه‌ات از قبل داری
+              }
+            }
+          })()}
+        </Text>
+
+        <View style={{ height: 10 }} />
+
+        <TextInput
+          value={fullName}
+          onChangeText={(t) => (isReview ? null : setFullName(t))}
+          editable={!isReview}
+          placeholder="نام کامل"
+          placeholderTextColor="rgba(231,238,247,.35)"
+          style={[styles.textInput, isReview && { opacity: 0.7 }]}
+        />
+
+        {!fullNameOk ? <Text style={[styles.warn, { marginTop: 10 }]}>نام کامل خودت رو بنویس.</Text> : null}
+      </View>
+
+      {/* Paper method */}
+      {method === "paper" ? (
+        <>
+          <View style={{ height: 12 }} />
+
+          <View style={styles.noteCard}>
+            <Text style={styles.noteTitle}>عکس امضا روی کاغذ</Text>
+            <Text style={styles.small}>
+              روی کاغذ امضا کن و تاریخ امروز رو به شمسی بنویس، بعد عکس واضح اون رو ثبت کن.
+            </Text>
+
+            <View style={{ height: 10 }} />
+
+            <View style={styles.photoBox}>
+              {paperPhotoUri ? (
+                <Image source={{ uri: paperPhotoUri }} style={styles.photoImg} />
+              ) : (
+                <View style={styles.photoPlaceholder}>
+                  <Ionicons name="image" size={22} color="rgba(231,238,247,.45)" />
+                  <Text style={styles.photoPlaceholderText}>هنوز عکسی ثبت نشده</Text>
+                </View>
+              )}
+            </View>
+
+            <View style={{ height: 10 }} />
+
+            <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={takePaperPhoto}
+                style={[styles.primaryBtn, { flex: 1 }, isReview && { opacity: 0.45 }]}
+                disabled={isReview}
+              >
+                <Text style={styles.primaryBtnText}>گرفتن عکس</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={pickPaperPhoto}
+                style={[styles.secondaryBtn, { flex: 1 }, isReview && { opacity: 0.45 }]}
+                disabled={isReview}
+              >
+                <Text style={styles.secondaryBtnText}>آپلود از گالری</Text>
+              </TouchableOpacity>
+            </View>
+
+            {paperPhotoUri ? (
+              <>
                 <View style={{ height: 10 }} />
-
-                <Pressable
-                  onPress={() => (isReview ? null : setMethod("paper"))}
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={removePaperPhoto}
+                  style={[styles.secondaryBtn, isReview && { opacity: 0.45 }]}
                   disabled={isReview}
-                  style={[
-                    styles.choiceCard,
-                    method === "paper" && styles.choiceCardOn,
-                    isReview && { opacity: 0.75 },
-                  ]}
                 >
-                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
-                    <Ionicons
-                      name={method === "paper" ? "radio-button-on" : "radio-button-off"}
-                      size={18}
-                      color={method === "paper" ? palette.green : "rgba(231,238,247,.55)"}
-                    />
-                    <Text style={[styles.choiceText, { flexShrink: 1 }]}>
-                      امضا روی کاغذ + ثبت عکس (گرفتن/آپلود)
-                    </Text>
-                  </View>
-                </Pressable>
+                  <Text style={styles.secondaryBtnText}>حذف عکس</Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
+          </View>
+        </>
+      ) : null}
 
-                <View style={{ height: 10 }} />
+      <View style={{ height: 12 }} />
 
-                <Pressable
-                  onPress={() => (isReview ? null : setMethod("typed"))}
-                  disabled={isReview}
-                  style={[
-                    styles.choiceCard,
-                    method === "typed" && styles.choiceCardOn,
-                    isReview && { opacity: 0.75 },
-                  ]}
-                >
-                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
-                    <Ionicons
-                      name={method === "typed" ? "radio-button-on" : "radio-button-off"}
-                      size={18}
-                      color={method === "typed" ? palette.green : "rgba(231,238,247,.55)"}
-                    />
-                    <Text style={[styles.choiceText, { flexShrink: 1 }]}>
-                      نوشتن نام + تاریخ داخل اپ
-                    </Text>
-                  </View>
-                </Pressable>
+      {/* status */}
+      <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+        <Ionicons
+          name={step2Ok ? "checkmark-circle" : "ellipse-outline"}
+          size={18}
+          color={step2Ok ? palette.green : "rgba(231,238,247,.45)"}
+        />
+        <Text style={styles.small}>
+          {step2Ok
+            ? "ثبت مرحله ۲ کامل است."
+            : method === "paper"
+            ? "برای ادامه: نام کامل + عکس امضا لازم است."
+            : "برای ادامه: نام کامل لازم است."}
+        </Text>
+      </View>
 
-                <View style={{ height: 12 }} />
+      {!step2Ok ? <Text style={[styles.warn, { marginTop: 10 }]}>تا وقتی کامل نشه، ادامه باز نمی‌شه.</Text> : null}
+    </View>
 
-                <View style={styles.noteCard}>
-                  <Text style={styles.noteTitle}>نام و تاریخ</Text>
-                  <Text style={styles.small}>تاریخ امروز (قفل): {todayFa}</Text>
+    <View style={{ marginTop: 14, gap: 10 }}>
+      <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => setStep(1)}
+          style={[styles.secondaryBtn, { flex: 1 }]}
+          disabled={saving}
+        >
+          <Text style={styles.secondaryBtnText}>بازگشت</Text>
+        </TouchableOpacity>
 
-                  <View style={{ height: 10 }} />
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => setStep(3)}
+          style={[styles.primaryBtn, { flex: 1 }, (!canGo3 || saving) && { opacity: 0.45 }]}
+          disabled={!canGo3 || saving}
+        >
+          <Text style={styles.primaryBtnText}>ادامه</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </>
+) : null}
 
-                  <TextInput
-                    value={fullName}
-                    onChangeText={(t) => (isReview ? null : setFullName(t))}
-                    editable={!isReview}
-                    placeholder="نام کامل"
-                    placeholderTextColor="rgba(231,238,247,.35)"
-                    style={[styles.textInput, isReview && { opacity: 0.7 }]}
-                  />
-
-                  {!fullNameOk ? (
-                    <Text style={[styles.warn, { marginTop: 10 }]}>نام کامل باید حداقل ۳ کاراکتر باشد.</Text>
-                  ) : null}
-                </View>
-
-                {method === "paper" ? (
-                  <>
-                    <View style={{ height: 12 }} />
-
-                    <View style={styles.noteCard}>
-                      <Text style={styles.noteTitle}>عکس امضا روی کاغذ</Text>
-                      <Text style={styles.small}>
-                        روی کاغذ امضا کن + تاریخ امروز رو بنویس، بعد عکس واضح ثبت کن.
-                      </Text>
-
-                      <View style={{ height: 10 }} />
-
-                      <View style={styles.photoBox}>
-                        {paperPhotoUri ? (
-                          <Image source={{ uri: paperPhotoUri }} style={styles.photoImg} />
-                        ) : (
-                          <View style={styles.photoPlaceholder}>
-                            <Ionicons name="image" size={22} color="rgba(231,238,247,.45)" />
-                            <Text style={styles.photoPlaceholderText}>هنوز عکسی ثبت نشده</Text>
-                          </View>
-                        )}
-                      </View>
-
-                      <View style={{ height: 10 }} />
-
-                      <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-                        <TouchableOpacity
-                          activeOpacity={0.9}
-                          onPress={takePaperPhoto}
-                          style={[styles.primaryBtn, { flex: 1 }, isReview && { opacity: 0.45 }]}
-                          disabled={isReview}
-                        >
-                          <Text style={styles.primaryBtnText}>گرفتن عکس</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          activeOpacity={0.9}
-                          onPress={pickPaperPhoto}
-                          style={[styles.secondaryBtn, { flex: 1 }, isReview && { opacity: 0.45 }]}
-                          disabled={isReview}
-                        >
-                          <Text style={styles.secondaryBtnText}>آپلود از گالری</Text>
-                        </TouchableOpacity>
-                      </View>
-
-                      {paperPhotoUri ? (
-                        <>
-                          <View style={{ height: 10 }} />
-                          <TouchableOpacity
-                            activeOpacity={0.9}
-                            onPress={removePaperPhoto}
-                            style={[styles.secondaryBtn, isReview && { opacity: 0.45 }]}
-                            disabled={isReview}
-                          >
-                            <Text style={styles.secondaryBtnText}>حذف عکس</Text>
-                          </TouchableOpacity>
-                        </>
-                      ) : null}
-                    </View>
-                  </>
-                ) : null}
-
-                <View style={{ height: 12 }} />
-
-                {/* status */}
-                <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
-                  <Ionicons
-                    name={step2Ok ? "checkmark-circle" : "ellipse-outline"}
-                    size={18}
-                    color={step2Ok ? palette.green : "rgba(231,238,247,.45)"}
-                  />
-                  <Text style={styles.small}>
-                    {step2Ok
-                      ? "ثبت مرحله ۲ کامل است."
-                      : method === "paper"
-                      ? "برای ادامه: نام کامل + عکس امضا لازم است."
-                      : "برای ادامه: نام کامل لازم است."}
-                  </Text>
-                </View>
-
-                {!step2Ok ? (
-                  <Text style={[styles.warn, { marginTop: 10 }]}>تا وقتی کامل نشه، ادامه باز نمی‌شه.</Text>
-                ) : null}
-              </View>
-
-              <View style={{ marginTop: 14, gap: 10 }}>
-                <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={() => setStep(1)}
-                    style={[styles.secondaryBtn, { flex: 1 }]}
-                    disabled={saving}
-                  >
-                    <Text style={styles.secondaryBtnText}>بازگشت</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={() => setStep(3)}
-                    style={[styles.primaryBtn, { flex: 1 }, (!canGo3 || saving) && { opacity: 0.45 }]}
-                    disabled={!canGo3 || saving}
-                  >
-                    <Text style={styles.primaryBtnText}>ادامه</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </>
-          ) : null}
 
           {/* Step 3 */}
           {step === 3 ? (
-            <>
-              <View style={styles.sectionCard}>
-                <Text style={styles.h1}>قفل تعهد</Text>
-                <Text style={styles.p}>
-                  اینجا «مکث اجباری» داریم.
-                  {"\n"}دقیقاً همون جایی که مغز می‌خواد فرار کنه.
-                </Text>
+  <>
+    <View style={styles.sectionCard}>
+      <Text style={styles.h1}>قفل تعهد</Text>
+      <Text style={styles.p}>
+        اینجا «مکث اجباری» داریم.
+        {"\n"}دقیقاً همون جایی که مغز می‌خواد از واقعیت فرار کنه.
+      </Text>
 
-                <View style={{ height: 12 }} />
+      <View style={{ height: 12 }} />
 
-                <View style={styles.noteCard}>
-                  <Text style={styles.noteTitle}>مکث</Text>
-                  <Text style={styles.small}>
-                    {cooldownDone
-                      ? "حالا تصمیم رو با آگاهی کامل قفل کن."
-                      : "این تصمیم ممکنه سخت‌ترین تصمیم این مرحله باشه… چند ثانیه مکث کن."}
-                  </Text>
+      <View style={styles.noteCard}>
+        <Text style={styles.noteTitle}>مکث</Text>
+
+        {/* متن ثابت */}
+        <Text style={styles.small}>
+          این تصمیم ممکنه سخت‌ترین تصمیم این مرحله باشه.
+        </Text>
+
+        <View style={{ height: 6 }} />
+
+        {/* متن وابسته به cooldown */}
+        <Text style={styles.small}>
+          {cooldownDone
+            ? "حالا می‌تونی با آگاهی کامل این تصمیم رو قفل کنی."
+            : "چند ثانیه مکث کن و اجازه بده مغزت از حالت فرار خارج بشه."}
+        </Text>
+
 
                   <View style={{ height: 12 }} />
 
@@ -945,7 +973,7 @@ export default function CC2SignatureScreen() {
                         color={finalAcknowledge ? palette.green : "rgba(231,238,247,.55)"}
                       />
                       <Text style={[styles.choiceText, { flexShrink: 1 }]}>
-                        با آگاهی کامل این تعهد را ثبت می‌کنم و می‌دانم قابل تغییر نیست
+                        با آگاهی کامل این تعهد رو ثبت می‌کنم و می‌دونم قابل تغییر نیست
                       </Text>
                     </View>
                   </Pressable>
@@ -987,7 +1015,7 @@ export default function CC2SignatureScreen() {
 
                 {!isReview && !canFinalize ? (
                   <Text style={[styles.warn, { marginTop: 10 }]}>
-                    برای ثبت: مرحله ۲ کامل + مکث تمام + تأیید نهایی لازم است.
+                    برای ثبت: تکمیل مرحله دو + مکث هنگام ثبت + تأیید نهایی لازمه.
                   </Text>
                 ) : null}
 
