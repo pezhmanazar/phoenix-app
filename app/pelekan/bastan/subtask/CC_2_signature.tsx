@@ -1,18 +1,23 @@
 // app/pelekan/bastan/subtask/CC_2_signature.tsx
+
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    InteractionManager,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Image,
+  InteractionManager,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -33,18 +38,36 @@ const palette = {
   green: "#22C55E",
 };
 
-/* ----------------------------- Utils ----------------------------- */
+function faOnlyTitle(raw?: string) {
+  const s = String(raw || "").trim();
+  if (!s) return "—";
+  const parts = s.split("–").map((x) => x.trim());
+  if (parts.length >= 2) return parts.slice(1).join(" – ");
+  return s.replace(/[A-Za-z]/g, "").replace(/\s{2,}/g, " ").trim() || "—";
+}
 
 function subtaskNumberFa(key: string) {
-  if (key === "CC_2_signature") return "ریز اقدام دوم";
+  const k = String(key || "").trim();
+  if (k === "CC_1_read_contract") return "ریز اقدام اول";
+  if (k === "CC_2_signature") return "ریز اقدام دوم";
   return "ریز اقدام";
 }
 
-function todayFa() {
+function todayFaString() {
   try {
-    return new Intl.DateTimeFormat("fa-IR").format(new Date());
+    // بهترین حالت
+    return new Intl.DateTimeFormat("fa-IR", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
   } catch {
-    return "";
+    // fallback
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}/${m}/${day}`;
   }
 }
 
@@ -52,21 +75,27 @@ function todayFa() {
 
 type ModalKind = "info" | "warn" | "error" | "success";
 
+type SignatureMethod = "paper" | "typed";
+
 type CC2Saved = {
   version: 1;
   savedAt: string;
+  signedAt: string;
+  method: SignatureMethod;
+  todayFa: string;
   fullName: string;
-  dateFa: string;
-  confirmed: boolean;
+  paperPhotoUri?: string | null;
+  finalAcknowledged: boolean;
+  durationSec?: number | null;
 };
 
-/* ----------------------------- Keys ----------------------------- */
+/* ----------------------------- Storage Keys ----------------------------- */
 
 const SUBTASK_KEY = "CC_2_signature";
 const KEY_CC2_FINAL = `pelekan:bastan:subtask:${SUBTASK_KEY}:final:v1`;
 const KEY_BASTAN_DIRTY = "pelekan:bastan:dirty:v1";
 
-/* ----------------------------- Modal ----------------------------- */
+/* ----------------------------- Themed Modal ----------------------------- */
 
 function ThemedModal({
   visible,
@@ -106,38 +135,41 @@ function ThemedModal({
       : kind === "warn"
       ? palette.orange
       : kind === "info"
-      ? palette.muted
+      ? "rgba(231,238,247,.85)"
       : palette.red;
 
   return (
-    <View style={styles.modalOverlay}>
+    <View style={styles.modalOverlay} pointerEvents="auto">
       <View style={styles.modalCard}>
-        <View style={{ flexDirection: "row-reverse", gap: 8 }}>
+        <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
           <Ionicons name={icon as any} size={22} color={iconColor} />
           <Text style={styles.modalTitle}>{title}</Text>
         </View>
 
-        {!!message && <Text style={styles.modalMsg}>{message}</Text>}
+        {!!message ? <Text style={styles.modalMsg}>{message}</Text> : null}
 
-        <View style={{ flexDirection: "row-reverse", gap: 10, marginTop: 16 }}>
+        <View style={{ flexDirection: "row-reverse", gap: 10, marginTop: 14 }}>
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={onPrimary}
-            disabled={loading}
             style={[styles.modalPrimaryBtn, loading && { opacity: 0.6 }]}
+            disabled={!!loading}
           >
             {loading ? (
-              <ActivityIndicator />
+              <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
+                <ActivityIndicator />
+                <Text style={styles.modalPrimaryText}>در حال انجام…</Text>
+              </View>
             ) : (
               <Text style={styles.modalPrimaryText}>{primaryText}</Text>
             )}
           </TouchableOpacity>
 
-          {secondaryText && onSecondary && (
-            <TouchableOpacity onPress={onSecondary} style={styles.modalSecondaryBtn}>
+          {secondaryText && onSecondary ? (
+            <TouchableOpacity activeOpacity={0.9} onPress={onSecondary} style={styles.modalSecondaryBtn}>
               <Text style={styles.modalSecondaryText}>{secondaryText}</Text>
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
       </View>
     </View>
@@ -150,223 +182,893 @@ export default function CC2SignatureScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const headerNo = subtaskNumberFa(SUBTASK_KEY);
+  const title = "امضای تعهدنامه";
 
   const { me } = useUser();
-  const { token } = useAuth();
   const phone = String(me?.phone || "").trim();
+  const { token } = useAuth();
   const apiBase = "https://api.qoqnoos.app";
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [booting, setBooting] = useState(true);
+  const [booting, setBooting] = useState(false);
   const [isReview, setIsReview] = useState(false);
-
-  const [fullName, setFullName] = useState("");
-  const [dateFa] = useState(todayFa());
-  const [confirmed, setConfirmed] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
+  const startedAtRef = useRef<number | null>(null);
 
-  const [modal, setModal] = useState<any>({ visible: false });
+  // Step 2 states
+  const [method, setMethod] = useState<SignatureMethod>("paper");
+  const [todayFa, setTodayFa] = useState<string>(todayFaString());
+  const [fullName, setFullName] = useState<string>("");
+  const [paperPhotoUri, setPaperPhotoUri] = useState<string | null>(null);
 
-  /* ----------------------------- Load review ----------------------------- */
+  // Step 3
+  const [cooldownDone, setCooldownDone] = useState(false);
+  const cooldownTimerRef = useRef<any>(null);
+  const [finalAcknowledge, setFinalAcknowledge] = useState(false);
 
-  useEffect(() => {
-    const run = async () => {
-      const raw = await AsyncStorage.getItem(KEY_CC2_FINAL);
-      if (!raw) {
-        setBooting(false);
-        return;
-      }
+  const [confirmLockModal, setConfirmLockModal] = useState(false);
 
-      try {
-        const j = JSON.parse(raw) as CC2Saved;
-        if (j?.version === 1) {
-          setFullName(j.fullName);
-          setConfirmed(j.confirmed);
-          setIsReview(true);
-          setStep(3);
-        }
-      } catch {}
-      setBooting(false);
-    };
-    run();
+  const [modal, setModal] = useState<{
+    visible: boolean;
+    kind: ModalKind;
+    title: string;
+    message?: string;
+    primaryText: string;
+    secondaryText?: string;
+    onPrimary?: () => void;
+    onSecondary?: () => void;
+    loading?: boolean;
+  }>({
+    visible: false,
+    kind: "info",
+    title: "",
+    message: "",
+    primaryText: "باشه",
+  });
+
+  const closeModal = useCallback(() => {
+    setModal((m) => ({ ...m, visible: false, loading: false }));
   }, []);
 
-  /* ----------------------------- Scroll reset ----------------------------- */
+  const openModal = useCallback((cfg: Omit<typeof modal, "visible"> & { visible?: boolean }) => {
+    setModal({ ...cfg, visible: true } as any);
+  }, []);
+
+  /* ----------------------------- Computed ----------------------------- */
+
+  const fullNameOk = useMemo(() => String(fullName || "").trim().length >= 3, [fullName]);
+
+  const step2Ok = useMemo(() => {
+    if (!fullNameOk) return false;
+    if (method === "paper") return !!paperPhotoUri;
+    return true; // typed
+  }, [fullNameOk, method, paperPhotoUri]);
+
+  const canGo2 = true;
+  const canGo3 = step2Ok;
+  const canFinalize = step2Ok && cooldownDone && finalAcknowledge;
+
+  /* ----------------------------- Load FINAL (review) ----------------------------- */
+
+  const loadFinalIfAny = useCallback(async () => {
+    const raw = await AsyncStorage.getItem(KEY_CC2_FINAL);
+    if (!raw) return { loaded: false as const };
+
+    let j: CC2Saved | null = null;
+    try {
+      j = JSON.parse(raw) as CC2Saved;
+    } catch {
+      j = null;
+    }
+    if (!j || j.version !== 1) return { loaded: false as const };
+
+    setMethod(j.method);
+    setTodayFa(String(j.todayFa || todayFaString()));
+    setFullName(String(j.fullName || ""));
+    setPaperPhotoUri(j.paperPhotoUri ? String(j.paperPhotoUri) : null);
+
+    setCooldownDone(true);
+    setFinalAcknowledge(!!j.finalAcknowledged);
+
+    return { loaded: true as const };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+
+    const run = async () => {
+      setBooting(true);
+      try {
+        const r = await loadFinalIfAny();
+        if (!alive) return;
+
+        if (r.loaded) {
+          setIsReview(true);
+          setStep(3);
+          return;
+        }
+
+        setIsReview(false);
+        setStep(1);
+      } catch {
+        setIsReview(false);
+      } finally {
+        if (alive) setBooting(false);
+      }
+    };
+
+    run();
+
+    return () => {
+      alive = false;
+    };
+  }, [loadFinalIfAny]);
+
+  /* ----------------------------- Smooth scroll on step ----------------------------- */
 
   useEffect(() => {
     if (booting) return;
-    InteractionManager.runAfterInteractions(() => {
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
+
+    let cancelled = false;
+    const task = InteractionManager.runAfterInteractions(() => {
+      if (cancelled) return;
+      requestAnimationFrame(() => {
+        if (cancelled) return;
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
+      });
     });
+
+    return () => {
+      cancelled = true;
+      // @ts-ignore
+      if (typeof task?.cancel === "function") task.cancel();
+    };
   }, [step, booting]);
 
-  /* ----------------------------- Guards ----------------------------- */
+  /* ----------------------------- Step 3 cooldown ----------------------------- */
 
-  const step2Ok = fullName.trim().length >= 3;
-  const step3Ok = step2Ok && confirmed;
+  useEffect(() => {
+    if (isReview) return;
 
-  /* ----------------------------- Finalize ----------------------------- */
+    if (step !== 3) {
+      setCooldownDone(false);
+      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
+      cooldownTimerRef.current = null;
+      return;
+    }
 
-  const finalize = useCallback(async () => {
-    if (!step3Ok || savingRef.current) return;
+    setCooldownDone(false);
+    if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
 
-    savingRef.current = true;
-    setSaving(true);
+    cooldownTimerRef.current = setTimeout(() => {
+      setCooldownDone(true);
+      cooldownTimerRef.current = null;
+    }, 2500);
+
+    return () => {
+      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
+      cooldownTimerRef.current = null;
+    };
+  }, [step, isReview]);
+
+  /* ----------------------------- Image Picker ----------------------------- */
+
+  const takePaperPhoto = useCallback(async () => {
+    if (isReview) return;
 
     try {
-      const payload: CC2Saved = {
-        version: 1,
-        savedAt: new Date().toISOString(),
-        fullName: fullName.trim(),
-        dateFa,
-        confirmed: true,
-      };
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        openModal({
+          kind: "warn",
+          title: "دسترسی لازم است",
+          message: "برای گرفتن عکس باید دسترسی دوربین فعال باشد.",
+          primaryText: "باشه",
+          onPrimary: closeModal,
+        });
+        return;
+      }
 
-      await AsyncStorage.setItem(KEY_CC2_FINAL, JSON.stringify(payload));
-      await AsyncStorage.setItem(KEY_BASTAN_DIRTY, new Date().toISOString());
-
-      await fetch(`${apiBase}/api/pelekan/bastan/subtask/complete`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          phone,
-          subtaskKey: SUBTASK_KEY,
-          payload,
-        }),
+      const r = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.7,
+        allowsEditing: false,
       });
 
-      setModal({
-        visible: true,
+      if (r.canceled) return;
+
+      const uri = r.assets?.[0]?.uri;
+      if (uri) setPaperPhotoUri(uri);
+    } catch (e: any) {
+      openModal({
+        kind: "error",
+        title: "خطا",
+        message: faOnlyTitle(String(e?.message || "مشکلی پیش آمد")),
+        primaryText: "باشه",
+        onPrimary: closeModal,
+      });
+    }
+  }, [closeModal, isReview, openModal]);
+
+  const pickPaperPhoto = useCallback(async () => {
+    if (isReview) return;
+
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        openModal({
+          kind: "warn",
+          title: "دسترسی لازم است",
+          message: "برای انتخاب عکس باید دسترسی گالری فعال باشد.",
+          primaryText: "باشه",
+          onPrimary: closeModal,
+        });
+        return;
+      }
+
+      const r = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.7,
+        allowsEditing: false,
+      });
+
+      if (r.canceled) return;
+
+      const uri = r.assets?.[0]?.uri;
+      if (uri) setPaperPhotoUri(uri);
+    } catch (e: any) {
+      openModal({
+        kind: "error",
+        title: "خطا",
+        message: faOnlyTitle(String(e?.message || "مشکلی پیش آمد")),
+        primaryText: "باشه",
+        onPrimary: closeModal,
+      });
+    }
+  }, [closeModal, isReview, openModal]);
+
+  const removePaperPhoto = useCallback(() => {
+    if (isReview) return;
+    setPaperPhotoUri(null);
+  }, [isReview]);
+
+  /* ----------------------------- Persist FINAL local ----------------------------- */
+
+  const persistFinalLocal = useCallback(async () => {
+    const startedAt = startedAtRef.current;
+    const durationSec = startedAt ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : null;
+
+    const signedAt = new Date().toISOString();
+
+    const payload: CC2Saved = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      signedAt,
+      method,
+      todayFa,
+      fullName: String(fullName || "").trim(),
+      paperPhotoUri: method === "paper" ? paperPhotoUri : null,
+      finalAcknowledged: true,
+      durationSec,
+    };
+
+    await AsyncStorage.setItem(KEY_CC2_FINAL, JSON.stringify(payload));
+    await AsyncStorage.setItem(KEY_BASTAN_DIRTY, new Date().toISOString());
+  }, [fullName, method, paperPhotoUri, todayFa]);
+
+  /* ----------------------------- Server submit ----------------------------- */
+
+  const completeOnServer = useCallback(async (): Promise<"ok" | "already" | "fail"> => {
+    const t = String(token || "").trim();
+    const p = String(phone || "").trim();
+
+    if (!t || !p) {
+      openModal({
+        kind: "error",
+        title: "ورود لازم است",
+        message: "برای ثبت انجام شدن باید وارد حساب باشی",
+        primaryText: "باشه",
+        onPrimary: closeModal,
+      });
+      return "fail";
+    }
+
+    const startedAt = startedAtRef.current;
+    const durationSec = startedAt ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : null;
+
+    const signedAt = new Date().toISOString();
+
+    const payloadToSend = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      answer: {
+        step2: {
+          method,
+          todayFa,
+          fullName: String(fullName || "").trim(),
+          paperPhotoUri: method === "paper" ? paperPhotoUri : null,
+        },
+        step3: {
+          cooldownDone,
+          finalAcknowledge,
+          signedAt,
+        },
+        summary: {
+          signedAt,
+          method,
+        },
+        durationSec,
+      },
+    };
+
+    const url = `${apiBase}/api/pelekan/bastan/subtask/complete?phone=${encodeURIComponent(p)}`;
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+        Authorization: `Bearer ${t}`,
+      },
+      body: JSON.stringify({
+        phone: p,
+        subtaskKey: SUBTASK_KEY,
+        payload: payloadToSend,
+      }),
+    });
+
+    let json: any = null;
+    try {
+      json = await res.json();
+    } catch {
+      json = null;
+    }
+
+    if (res.ok && json?.ok) return "ok";
+
+    const err = String(json?.error || "");
+    if (err === "ALREADY_DONE") return "already";
+
+    openModal({
+      kind: "error",
+      title: "ثبت ناموفق بود",
+      message: faOnlyTitle(err || "مشکلی پیش آمد"),
+      primaryText: "باشه",
+      onPrimary: closeModal,
+    });
+    return "fail";
+  }, [
+    apiBase,
+    closeModal,
+    cooldownDone,
+    finalAcknowledge,
+    fullName,
+    method,
+    openModal,
+    paperPhotoUri,
+    phone,
+    todayFa,
+    token,
+  ]);
+
+  const doFinalize = useCallback(async () => {
+    if (!canFinalize) return;
+    if (savingRef.current) return;
+    savingRef.current = true;
+
+    try {
+      setSaving(true);
+
+      const r = await completeOnServer();
+      if (r === "fail") return;
+
+      await persistFinalLocal();
+
+      if (r === "already") {
+        openModal({
+          kind: "info",
+          title: "قبلاً ثبت شده",
+          message: "این ریز اقدام قبلاً ثبت شده و نیازی به ثبت دوباره نیست.",
+          primaryText: "خروج",
+          onPrimary: () => {
+            closeModal();
+            router.back();
+          },
+        });
+        return;
+      }
+
+      openModal({
         kind: "success",
-        title: "تعهد ثبت شد",
-        message: "این امضا قفل شد و قابل تغییر نیست.",
+        title: "ثبت شد",
+        message: "تعهد تو قفل شد و قابل تغییر نیست.",
         primaryText: "خروج",
-        onPrimary: () => router.back(),
+        onPrimary: () => {
+          closeModal();
+          router.back();
+        },
       });
     } finally {
       setSaving(false);
       savingRef.current = false;
+      setIsReview(true);
+      setStep(3);
     }
-  }, [apiBase, dateFa, fullName, phone, router, step3Ok, token]);
+  }, [canFinalize, closeModal, completeOnServer, openModal, persistFinalLocal, router]);
 
-  /* ----------------------------- UI ----------------------------- */
+  const onFinishPress = useCallback(() => {
+    if (isReview) {
+      router.back();
+      return;
+    }
+    setConfirmLockModal(true);
+  }, [isReview, router]);
 
-  if (booting) {
-    return (
-      <View style={[styles.root, { justifyContent: "center", alignItems: "center" }]}>
-        <ActivityIndicator />
+  /* ----------------------------- Step Pills ----------------------------- */
+
+  const StepPills = (
+    <View style={styles.stepPills}>
+      <View style={[styles.stepPill, step === 1 && styles.stepPillOn]}>
+        <Text style={styles.stepPillText}>۱) معنا</Text>
       </View>
-    );
-  }
+      <View style={[styles.stepPill, step === 2 && styles.stepPillOn]}>
+        <Text style={styles.stepPillText}>۲) ثبت</Text>
+      </View>
+      <View style={[styles.stepPill, step === 3 && styles.stepPillOn]}>
+        <Text style={styles.stepPillText}>۳) قفل</Text>
+      </View>
+    </View>
+  );
 
   return (
-    <SafeAreaView style={styles.root}>
+    <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
       <View pointerEvents="none" style={styles.glowTop} />
       <View pointerEvents="none" style={styles.glowBottom} />
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.8}>
           <Ionicons name="chevron-forward" size={20} color={palette.text} />
         </TouchableOpacity>
-        <View>
+
+        <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>{headerNo}</Text>
-          <Text style={styles.headerSub}>امضای تعهدنامه</Text>
+          <Text style={styles.headerSub} numberOfLines={1}>
+            {title}
+          </Text>
         </View>
+
+        <View style={{ width: 34, height: 34 }} />
       </View>
 
-      <ScrollView ref={scrollRef} contentContainerStyle={{ padding: 16 }}>
-        {/* Step 1 */}
-        {step === 1 && (
-          <View style={styles.card}>
-            <Text style={styles.h1}>معنای این امضا</Text>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={insets.top + 12}
+      >
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={{ padding: 16, paddingBottom: 18 + insets.bottom + 24 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {isReview ? (
+            <View style={styles.reviewBanner}>
+              <Ionicons name="eye" size={16} color="rgba(231,238,247,.88)" />
+              <Text style={styles.reviewBannerText}>حالت مرور فعال است: می‌تونی ببینی ولی قابل تغییر نیست.</Text>
+            </View>
+          ) : null}
 
-            {[
-              "تماس هیجانی ممنوع",
-              "چک‌کردن و سرک کشیدن ممنوع",
-              "پیام احساسی یا بهانه‌دار ممنوع",
-              "دور زدن ذهنی این تعهد ممنوع",
-            ].map((t) => (
-              <Text key={t} style={styles.bullet}>• {t}</Text>
-            ))}
+          {StepPills}
 
-            <Text style={styles.note}>
-              امضا یعنی حتی اگر دلم لرزید، رفتارم تغییر نمی‌کند.
-            </Text>
-
-            <TouchableOpacity
-              style={styles.primaryBtn}
-              onPress={() => setStep(2)}
-            >
-              <Text style={styles.primaryBtnText}>ادامه</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Step 2 */}
-        {step === 2 && (
-          <View style={styles.card}>
-            <Text style={styles.h1}>ثبت امضا</Text>
-
-            <TextInput
-              editable={!isReview}
-              value={fullName}
-              onChangeText={setFullName}
-              placeholder="نام و نام خانوادگی"
-              placeholderTextColor={palette.muted}
-              style={styles.input}
-            />
-
-            <Text style={styles.date}>تاریخ: {dateFa}</Text>
-
-            <TouchableOpacity
-              disabled={!step2Ok}
-              style={[styles.primaryBtn, !step2Ok && { opacity: 0.4 }]}
-              onPress={() => setStep(3)}
-            >
-              <Text style={styles.primaryBtnText}>ادامه</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Step 3 */}
-        {step === 3 && (
-          <View style={styles.card}>
-            <Text style={styles.h1}>تأیید نهایی</Text>
-
-            <Pressable
-              disabled={isReview}
-              onPress={() => setConfirmed((v) => !v)}
-              style={styles.choiceCard}
-            >
-              <Ionicons
-                name={confirmed ? "checkbox" : "square-outline"}
-                size={20}
-                color={confirmed ? palette.green : palette.muted}
-              />
-              <Text style={styles.choiceText}>
-                با آگاهی کامل این تعهد را امضا می‌کنم
+          {/* Step 1 */}
+          {step === 1 ? (
+            <View style={styles.sectionCard}>
+              <Text style={styles.h1}>این «ثبت» شوخی نیست</Text>
+              <Text style={styles.p}>
+                اینجا از «فهمیدن» میای روی «تعهد رفتاری».
+                {"\n"}ثبت یعنی: حتی اگه دلم لرزید، رفتارم تغییر نمی‌کنه.
               </Text>
-            </Pressable>
 
-            <TouchableOpacity
-              disabled={!step3Ok || saving}
-              style={[styles.primaryBtn, (!step3Ok || saving) && { opacity: 0.4 }]}
-              onPress={finalize}
-            >
-              <Text style={styles.primaryBtnText}>ثبت و پایان</Text>
-            </TouchableOpacity>
+              <View style={{ height: 10 }} />
+
+              <View style={styles.noteCard}>
+                <Text style={styles.noteTitle}>چیزهایی که با این تعهد قطع می‌کنی</Text>
+                <View style={{ height: 10 }} />
+                {[
+                  "تماس هیجانی (مثل پیام احساسی، التماس، کنایه و حال‌پرسیدنِ بهونه‌ای)",
+                  "چک‌کردن یا سرک کشیدن (مثل دیدن استوری، پروفایل، پرس‌وجو، دنبال‌کردن)",
+                  "شروع دوباره با «فقط یک پیام کوچیک»",
+                  "بهانه‌سازی ذهنی برای تماس (مثل دلتنگی، اضطراب و حس گناه)",
+                ].map((t, i) => (
+                  <View key={i} style={{ flexDirection: "row-reverse", gap: 10, marginTop: i ? 8 : 0 }}>
+                    <Ionicons name="close-circle" size={18} color={palette.red} />
+                    <Text style={[styles.small, { flex: 1 }]}>{t}</Text>
+                  </View>
+                ))}
+
+                <View style={{ height: 10 }} />
+                <View style={{ flexDirection: "row-reverse", gap: 10, marginTop: 2 }}>
+                  <Ionicons name="information-circle" size={18} color="rgba(231,238,247,.70)" />
+                  <Text style={[styles.small, { flex: 1 }]}>
+                    اگه ارتباط اجباری داری (یعنی بخاطر کار، فرزند یا تحصیل): فقط خشک، نقش‌محور و محدود باهاش ارتباط برقرار میکنی و هیچ مسیر هیجانی باز نمی‌کنی.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={{ height: 12 }} />
+
+              <TouchableOpacity
+                activeOpacity={0.9}
+                disabled={!canGo2}
+                onPress={() => {
+                  if (!isReview && !startedAtRef.current) startedAtRef.current = Date.now();
+                  setStep(2);
+                }}
+                style={[styles.primaryBtn, !canGo2 && { opacity: 0.45 }]}
+              >
+                <Text style={styles.primaryBtnText}>رفتن به ثبت</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {/* Step 2 */}
+          {step === 2 ? (
+            <>
+              <View style={styles.sectionCard}>
+                <Text style={styles.h1}>ثبت تعهد</Text>
+                <Text style={styles.p}>
+                  دو راه داری:
+                  {"\n"}۱) امضا روی کاغذ + عکسش
+                  {"\n"}۲) نام + تاریخ داخل اپ
+                  {"\n"}تا وقتی شرایط کامل نشه، ادامه قفل می‌مونه.
+                </Text>
+              </View>
+
+              <View style={[styles.noteCard, { marginTop: 12 }]}>
+                <Text style={styles.noteTitle}>روش ثبت</Text>
+                <View style={{ height: 10 }} />
+
+                <Pressable
+                  onPress={() => (isReview ? null : setMethod("paper"))}
+                  disabled={isReview}
+                  style={[
+                    styles.choiceCard,
+                    method === "paper" && styles.choiceCardOn,
+                    isReview && { opacity: 0.75 },
+                  ]}
+                >
+                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+                    <Ionicons
+                      name={method === "paper" ? "radio-button-on" : "radio-button-off"}
+                      size={18}
+                      color={method === "paper" ? palette.green : "rgba(231,238,247,.55)"}
+                    />
+                    <Text style={[styles.choiceText, { flexShrink: 1 }]}>
+                      امضا روی کاغذ + ثبت عکس (گرفتن/آپلود)
+                    </Text>
+                  </View>
+                </Pressable>
+
+                <View style={{ height: 10 }} />
+
+                <Pressable
+                  onPress={() => (isReview ? null : setMethod("typed"))}
+                  disabled={isReview}
+                  style={[
+                    styles.choiceCard,
+                    method === "typed" && styles.choiceCardOn,
+                    isReview && { opacity: 0.75 },
+                  ]}
+                >
+                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+                    <Ionicons
+                      name={method === "typed" ? "radio-button-on" : "radio-button-off"}
+                      size={18}
+                      color={method === "typed" ? palette.green : "rgba(231,238,247,.55)"}
+                    />
+                    <Text style={[styles.choiceText, { flexShrink: 1 }]}>
+                      نوشتن نام + تاریخ داخل اپ
+                    </Text>
+                  </View>
+                </Pressable>
+
+                <View style={{ height: 12 }} />
+
+                <View style={styles.noteCard}>
+                  <Text style={styles.noteTitle}>نام و تاریخ</Text>
+                  <Text style={styles.small}>تاریخ امروز (قفل): {todayFa}</Text>
+
+                  <View style={{ height: 10 }} />
+
+                  <TextInput
+                    value={fullName}
+                    onChangeText={(t) => (isReview ? null : setFullName(t))}
+                    editable={!isReview}
+                    placeholder="نام کامل"
+                    placeholderTextColor="rgba(231,238,247,.35)"
+                    style={[styles.textInput, isReview && { opacity: 0.7 }]}
+                  />
+
+                  {!fullNameOk ? (
+                    <Text style={[styles.warn, { marginTop: 10 }]}>نام کامل باید حداقل ۳ کاراکتر باشد.</Text>
+                  ) : null}
+                </View>
+
+                {method === "paper" ? (
+                  <>
+                    <View style={{ height: 12 }} />
+
+                    <View style={styles.noteCard}>
+                      <Text style={styles.noteTitle}>عکس امضا روی کاغذ</Text>
+                      <Text style={styles.small}>
+                        روی کاغذ امضا کن + تاریخ امروز رو بنویس، بعد عکس واضح ثبت کن.
+                      </Text>
+
+                      <View style={{ height: 10 }} />
+
+                      <View style={styles.photoBox}>
+                        {paperPhotoUri ? (
+                          <Image source={{ uri: paperPhotoUri }} style={styles.photoImg} />
+                        ) : (
+                          <View style={styles.photoPlaceholder}>
+                            <Ionicons name="image" size={22} color="rgba(231,238,247,.45)" />
+                            <Text style={styles.photoPlaceholderText}>هنوز عکسی ثبت نشده</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <View style={{ height: 10 }} />
+
+                      <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+                        <TouchableOpacity
+                          activeOpacity={0.9}
+                          onPress={takePaperPhoto}
+                          style={[styles.primaryBtn, { flex: 1 }, isReview && { opacity: 0.45 }]}
+                          disabled={isReview}
+                        >
+                          <Text style={styles.primaryBtnText}>گرفتن عکس</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          activeOpacity={0.9}
+                          onPress={pickPaperPhoto}
+                          style={[styles.secondaryBtn, { flex: 1 }, isReview && { opacity: 0.45 }]}
+                          disabled={isReview}
+                        >
+                          <Text style={styles.secondaryBtnText}>آپلود از گالری</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {paperPhotoUri ? (
+                        <>
+                          <View style={{ height: 10 }} />
+                          <TouchableOpacity
+                            activeOpacity={0.9}
+                            onPress={removePaperPhoto}
+                            style={[styles.secondaryBtn, isReview && { opacity: 0.45 }]}
+                            disabled={isReview}
+                          >
+                            <Text style={styles.secondaryBtnText}>حذف عکس</Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : null}
+                    </View>
+                  </>
+                ) : null}
+
+                <View style={{ height: 12 }} />
+
+                {/* status */}
+                <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+                  <Ionicons
+                    name={step2Ok ? "checkmark-circle" : "ellipse-outline"}
+                    size={18}
+                    color={step2Ok ? palette.green : "rgba(231,238,247,.45)"}
+                  />
+                  <Text style={styles.small}>
+                    {step2Ok
+                      ? "ثبت مرحله ۲ کامل است."
+                      : method === "paper"
+                      ? "برای ادامه: نام کامل + عکس امضا لازم است."
+                      : "برای ادامه: نام کامل لازم است."}
+                  </Text>
+                </View>
+
+                {!step2Ok ? (
+                  <Text style={[styles.warn, { marginTop: 10 }]}>تا وقتی کامل نشه، ادامه باز نمی‌شه.</Text>
+                ) : null}
+              </View>
+
+              <View style={{ marginTop: 14, gap: 10 }}>
+                <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => setStep(1)}
+                    style={[styles.secondaryBtn, { flex: 1 }]}
+                    disabled={saving}
+                  >
+                    <Text style={styles.secondaryBtnText}>بازگشت</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => setStep(3)}
+                    style={[styles.primaryBtn, { flex: 1 }, (!canGo3 || saving) && { opacity: 0.45 }]}
+                    disabled={!canGo3 || saving}
+                  >
+                    <Text style={styles.primaryBtnText}>ادامه</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </>
+          ) : null}
+
+          {/* Step 3 */}
+          {step === 3 ? (
+            <>
+              <View style={styles.sectionCard}>
+                <Text style={styles.h1}>قفل تعهد</Text>
+                <Text style={styles.p}>
+                  اینجا «مکث اجباری» داریم.
+                  {"\n"}دقیقاً همون جایی که مغز می‌خواد فرار کنه.
+                </Text>
+
+                <View style={{ height: 12 }} />
+
+                <View style={styles.noteCard}>
+                  <Text style={styles.noteTitle}>مکث</Text>
+                  <Text style={styles.small}>
+                    {cooldownDone
+                      ? "حالا تصمیم رو با آگاهی کامل قفل کن."
+                      : "این تصمیم ممکنه سخت‌ترین تصمیم این مرحله باشه… چند ثانیه مکث کن."}
+                  </Text>
+
+                  <View style={{ height: 12 }} />
+
+                  <Pressable
+                    onPress={() => (isReview ? null : setFinalAcknowledge((v) => !v))}
+                    disabled={isReview || !cooldownDone}
+                    style={[
+                      styles.choiceCard,
+                      finalAcknowledge && styles.choiceCardOn,
+                      (isReview || !cooldownDone) && { opacity: 0.7 },
+                    ]}
+                  >
+                    <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+                      <Ionicons
+                        name={finalAcknowledge ? "checkbox" : "square-outline"}
+                        size={18}
+                        color={finalAcknowledge ? palette.green : "rgba(231,238,247,.55)"}
+                      />
+                      <Text style={[styles.choiceText, { flexShrink: 1 }]}>
+                        با آگاهی کامل این تعهد را ثبت می‌کنم و می‌دانم قابل تغییر نیست
+                      </Text>
+                    </View>
+                  </Pressable>
+
+                  {!isReview && !cooldownDone ? <Text style={[styles.small, { marginTop: 10 }]}>چند ثانیه…</Text> : null}
+
+                  {!isReview && cooldownDone && !finalAcknowledge ? (
+                    <Text style={[styles.warn, { marginTop: 10 }]}>بدون تأیید نهایی، ثبت فعال نمی‌شه.</Text>
+                  ) : null}
+                </View>
+
+                <View style={{ height: 12 }} />
+
+                <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => setStep(2)}
+                    style={[styles.secondaryBtn, { flex: 1 }]}
+                    disabled={saving}
+                  >
+                    <Text style={styles.secondaryBtnText}>بازگشت</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    disabled={saving || (!isReview && !canFinalize)}
+                    onPress={onFinishPress}
+                    style={[
+                      styles.primaryBtn,
+                      { flex: 1 },
+                      (saving || (!isReview && !canFinalize)) && { opacity: 0.45 },
+                    ]}
+                  >
+                    <Text style={styles.primaryBtnText}>
+                      {saving ? "در حال انجام…" : isReview ? "خروج" : "ثبت و قفل کن"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {!isReview && !canFinalize ? (
+                  <Text style={[styles.warn, { marginTop: 10 }]}>
+                    برای ثبت: مرحله ۲ کامل + مکث تمام + تأیید نهایی لازم است.
+                  </Text>
+                ) : null}
+
+                {isReview ? <Text style={[styles.small, { marginTop: 8 }]}>در حالت مرور، فقط نمایش است.</Text> : null}
+              </View>
+
+              {/* preview */}
+              <View style={[styles.noteCard, { marginTop: 12 }]}>
+                <Text style={styles.noteTitle}>خلاصه ثبت</Text>
+                <View style={{ height: 10 }} />
+                <Text style={styles.small}>روش: {method === "paper" ? "کاغذ + عکس" : "نام + تاریخ داخل اپ"}</Text>
+                <Text style={styles.small}>نام: {String(fullName || "").trim() || "—"}</Text>
+                <Text style={styles.small}>تاریخ: {todayFa}</Text>
+
+                {method === "paper" ? (
+                  <>
+                    <View style={{ height: 10 }} />
+                    <View style={[styles.photoBox, { height: 180 }]}>
+                      {paperPhotoUri ? (
+                        <Image source={{ uri: paperPhotoUri }} style={styles.photoImg} />
+                      ) : (
+                        <View style={styles.photoPlaceholder}>
+                          <Ionicons name="image" size={22} color="rgba(231,238,247,.45)" />
+                          <Text style={styles.photoPlaceholderText}>عکسی ثبت نشده</Text>
+                        </View>
+                      )}
+                    </View>
+                  </>
+                ) : null}
+              </View>
+            </>
+          ) : null}
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Booting */}
+      {booting ? (
+        <View style={styles.bootOverlay} pointerEvents="auto">
+          <View style={styles.bootCard}>
+            <ActivityIndicator />
+            <Text style={styles.bootText}>در حال بارگذاری اطلاعات ذخیره‌شده…</Text>
           </View>
-        )}
-      </ScrollView>
+        </View>
+      ) : null}
 
-      <ThemedModal {...modal} />
+      {/* Confirm lock */}
+      <ThemedModal
+        visible={confirmLockModal}
+        kind="warn"
+        title="قبل از ثبت، این رو بدون"
+        message="با زدن «ثبت و قفل کن»، این تعهد ثبت میشه و دیگه امکان تغییر وجود نداره."
+        primaryText="ثبت و قفل کن"
+        secondaryText="فعلاً نه"
+        loading={saving}
+        onPrimary={() => {
+          setConfirmLockModal(false);
+          doFinalize();
+        }}
+        onSecondary={() => setConfirmLockModal(false)}
+      />
+
+      {/* Result modal */}
+      <ThemedModal
+        visible={modal.visible}
+        kind={modal.kind}
+        title={modal.title}
+        message={modal.message}
+        primaryText={modal.primaryText}
+        secondaryText={modal.secondaryText}
+        loading={modal.loading}
+        onPrimary={() => {
+          const fn = modal.onPrimary;
+          if (fn) fn();
+          else closeModal();
+        }}
+        onSecondary={() => {
+          const fn = modal.onSecondary;
+          if (fn) fn();
+          else closeModal();
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -375,101 +1077,263 @@ export default function CC2SignatureScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: palette.bg },
+
   glowTop: {
     position: "absolute",
-    top: -120,
+    top: 0,
     left: -80,
-    right: -80,
+    width: 220,
     height: 220,
-    backgroundColor: palette.gold,
-    opacity: 0.08,
-    borderRadius: 200,
+    borderRadius: 999,
+    backgroundColor: "rgba(212,175,55,.14)",
+    transform: [{ rotate: "12deg" }],
   },
+
   glowBottom: {
     position: "absolute",
-    bottom: -120,
-    left: -80,
+    bottom: -30,
     right: -80,
-    height: 220,
-    backgroundColor: palette.orange,
-    opacity: 0.08,
-    borderRadius: 200,
+    width: 260,
+    height: 260,
+    borderRadius: 999,
+    backgroundColor: "rgba(233,138,21,.10)",
+    transform: [{ rotate: "-10deg" }],
   },
+
   header: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
     paddingHorizontal: 16,
-    paddingBottom: 10,
-  },
-  backBtn: { padding: 6 },
-  headerTitle: { color: palette.gold, fontSize: 12 },
-  headerSub: { color: palette.text, fontSize: 16, fontWeight: "600" },
-  card: {
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border,
     backgroundColor: palette.glass2,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
-  },
-  h1: { color: palette.text, fontSize: 18, marginBottom: 12 },
-  bullet: { color: palette.muted, marginBottom: 6 },
-  note: { color: palette.orange, marginTop: 10 },
-  input: {
-    borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: 10,
-    padding: 12,
-    color: palette.text,
-    marginBottom: 10,
-  },
-  date: { color: palette.muted, marginBottom: 16 },
-  primaryBtn: {
-    backgroundColor: palette.gold,
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  primaryBtnText: { color: "#000", fontWeight: "600" },
-  choiceCard: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    gap: 10,
-    padding: 12,
+    gap: 12,
+  },
+
+  backBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,.06)",
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 12,
-    marginBottom: 16,
   },
-  choiceText: { color: palette.text, flexShrink: 1 },
+
+  headerTitle: { color: palette.text, fontWeight: "900", fontSize: 16, textAlign: "center" },
+  headerSub: { color: "rgba(231,238,247,.85)", marginTop: 4, fontSize: 12, textAlign: "center" },
+
+  reviewBanner: {
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.12)",
+    backgroundColor: "rgba(0,0,0,.18)",
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 12,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  reviewBannerText: {
+    color: "rgba(231,238,247,.88)",
+    fontWeight: "800",
+    fontSize: 12,
+    textAlign: "right",
+    flex: 1,
+  },
+
+  sectionCard: {
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.glass,
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 6,
+  },
+
+  stepPills: { flexDirection: "row-reverse", gap: 8, justifyContent: "center", marginBottom: 12, flexWrap: "wrap" },
+
+  stepPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,.03)",
+  },
+
+  stepPillOn: { backgroundColor: "rgba(212,175,55,.12)", borderColor: "rgba(212,175,55,.28)" },
+  stepPillText: { color: "rgba(231,238,247,.85)", fontWeight: "800", fontSize: 11, textAlign: "center" },
+
+  h1: { color: palette.text, fontWeight: "900", fontSize: 16, textAlign: "center", lineHeight: 22 },
+  p: { color: "rgba(231,238,247,.78)", marginTop: 8, textAlign: "right", lineHeight: 20, fontSize: 12 },
+  small: { color: "rgba(231,238,247,.70)", fontSize: 11, textAlign: "right", lineHeight: 18 },
+  warn: { color: "rgba(252,165,165,.95)", fontWeight: "800", fontSize: 11, textAlign: "right" },
+
+  noteTitle: { color: palette.text, fontWeight: "900", fontSize: 13, textAlign: "right", lineHeight: 18 },
+
+  noteCard: {
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.glass,
+    borderRadius: 16,
+    padding: 12,
+  },
+
+  choiceCard: {
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,.03)",
+    borderRadius: 16,
+    padding: 12,
+  },
+
+  choiceCardOn: { borderColor: "rgba(34,197,94,.35)", backgroundColor: "rgba(34,197,94,.06)" },
+
+  choiceText: {
+    color: palette.text,
+    fontWeight: "800",
+    fontSize: 13,
+    textAlign: "right",
+    lineHeight: 18,
+    flex: 1,
+  },
+
+  textInput: {
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.12)",
+    backgroundColor: "rgba(0,0,0,.14)",
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === "ios" ? 12 : 10,
+    color: palette.text,
+    fontWeight: "800",
+    textAlign: "right",
+  },
+
+  photoBox: {
+    height: 210,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.10)",
+    backgroundColor: "rgba(0,0,0,.14)",
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+
+  photoImg: { width: "100%", height: "100%", resizeMode: "cover" },
+
+  photoPlaceholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 16,
+  },
+
+  photoPlaceholderText: {
+    color: "rgba(231,238,247,.55)",
+    fontWeight: "900",
+    fontSize: 12,
+    textAlign: "center",
+  },
+
+  primaryBtn: {
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: "center",
+    backgroundColor: "rgba(212,175,55,.92)",
+    borderWidth: 1,
+    borderColor: "rgba(212,175,55,.35)",
+  },
+
+  primaryBtnText: { color: palette.bg, fontWeight: "900" },
+
+  secondaryBtn: {
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,.06)",
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+
+  secondaryBtnText: { color: palette.text, fontWeight: "900" },
+
+  bootOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,.35)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 18,
+  },
+
+  bootCard: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(3,7,18,.94)",
+    padding: 16,
+    gap: 10,
+    alignItems: "center",
+  },
+
+  bootText: { color: "rgba(231,238,247,.88)", fontWeight: "800", fontSize: 12, textAlign: "center" },
 
   modalOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,.55)",
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,.42)",
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
+    padding: 18,
   },
+
   modalCard: {
-    width: "85%",
-    backgroundColor: palette.glass2,
-    borderRadius: 14,
-    padding: 16,
-  },
-  modalTitle: { color: palette.text, fontSize: 16 },
-  modalMsg: { color: palette.muted, marginTop: 8 },
-  modalPrimaryBtn: {
-    backgroundColor: palette.gold,
-    padding: 10,
-    borderRadius: 10,
-    flex: 1,
-    alignItems: "center",
-  },
-  modalPrimaryText: { color: "#000", fontWeight: "600" },
-  modalSecondaryBtn: {
-    padding: 10,
-    borderRadius: 10,
+    width: "100%",
+    maxWidth: 380,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: palette.border,
-    flex: 1,
-    alignItems: "center",
+    backgroundColor: "rgba(3,7,18,.96)",
+    padding: 16,
   },
-  modalSecondaryText: { color: palette.text },
+
+  modalTitle: { color: palette.text, fontWeight: "900", fontSize: 14, textAlign: "right", flex: 1 },
+  modalMsg: { color: "rgba(231,238,247,.82)", marginTop: 10, fontSize: 12, lineHeight: 18, textAlign: "right" },
+
+  modalPrimaryBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: "center",
+    backgroundColor: "rgba(212,175,55,.92)",
+    borderWidth: 1,
+    borderColor: "rgba(212,175,55,.35)",
+  },
+
+  modalPrimaryText: { color: palette.bg, fontWeight: "900" },
+
+  modalSecondaryBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,.06)",
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+
+  modalSecondaryText: { color: palette.text, fontWeight: "900" },
 });
