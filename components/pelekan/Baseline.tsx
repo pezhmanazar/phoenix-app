@@ -36,6 +36,42 @@ type Nav = {
   canSubmit?: boolean;
 };
 
+const API_PRIMARY = "https://api.qoqnoos.app/api/pelekan/baseline";
+const API_FALLBACK = "https://qoqnoos.app/api/pelekan/baseline";
+
+async function fetchJsonWithFallback(urlPrimary: string, urlFallback: string) {
+  try {
+    const r1 = await fetch(urlPrimary, { headers: { "Cache-Control": "no-store" } });
+    const j1 = await r1.json().catch(() => null);
+    if (j1 && j1.ok) return j1;
+    // اگر ok نبود هم برگردون تا error reason معلوم بشه
+    if (j1) return j1;
+  } catch {}
+  const r2 = await fetch(urlFallback, { headers: { "Cache-Control": "no-store" } });
+  const j2 = await r2.json().catch(() => null);
+  return j2;
+}
+
+async function postJsonWithFallback(urlPrimary: string, urlFallback: string, body: any) {
+  try {
+    const r1 = await fetch(urlPrimary, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      body: JSON.stringify(body),
+    });
+    const j1 = await r1.json().catch(() => null);
+    if (j1 && j1.ok) return j1;
+    if (j1) return j1;
+  } catch {}
+  const r2 = await fetch(urlFallback, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    body: JSON.stringify(body),
+  });
+  const j2 = await r2.json().catch(() => null);
+  return j2;
+}
+
 export default function Baseline({ me, state, onRefresh }: Props) {
   const phone = me?.phone as string | undefined;
 
@@ -58,7 +94,6 @@ export default function Baseline({ me, state, onRefresh }: Props) {
     []
   );
 
-  // meta از state
   const baselineMeta = state?.baseline?.content?.meta || {};
   const baselineTitle = String(baselineMeta?.titleFa || "سنجش وضعیت");
   const baselineMaxScore = Number(baselineMeta?.maxScore || 31);
@@ -75,6 +110,7 @@ export default function Baseline({ me, state, onRefresh }: Props) {
   });
 
   const [status, setStatus] = useState<string>("in_progress");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [completedResult, setCompletedResult] = useState<{
     totalScore: number;
@@ -111,26 +147,26 @@ export default function Baseline({ me, state, onRefresh }: Props) {
       setLoading(false);
       setStep(null);
       setCompletedResult(null);
+      setStatus("error");
+      setErrorMsg("PHONE_MISSING");
       return;
     }
 
     try {
       setLoading(true);
+      setErrorMsg(null);
 
-      const res = await fetch(
-        `https://qoqnoos.app/api/pelekan/baseline/state?phone=${encodeURIComponent(
-          phone
-        )}`,
-        { headers: { "Cache-Control": "no-store" } }
+      const json = await fetchJsonWithFallback(
+        `${API_PRIMARY}/state?phone=${encodeURIComponent(phone)}`,
+        `${API_FALLBACK}/state?phone=${encodeURIComponent(phone)}`
       );
-
-      const json = await res.json();
 
       if (!json?.ok) {
         setStep(null);
         setCompletedResult(null);
         setNav({ index: 0, total: 0, canNext: false, canSubmit: false });
         setStatus("error");
+        setErrorMsg(String(json?.error || "BASELINE_STATE_FAILED"));
         return;
       }
 
@@ -153,24 +189,26 @@ export default function Baseline({ me, state, onRefresh }: Props) {
 
       setCompletedResult(null);
 
-      setNav(
-        data.nav || { index: 0, total: 0, canNext: false, canSubmit: false }
-      );
+      setNav(data.nav || { index: 0, total: 0, canNext: false, canSubmit: false });
 
       const s: UiStep = data.step || null;
       setStep(s);
 
       if (s?.type === "question") {
-        setLocalSelected(
-          typeof s.selectedIndex === "number" ? s.selectedIndex : null
-        );
+        setLocalSelected(typeof s.selectedIndex === "number" ? s.selectedIndex : null);
       } else {
         setLocalSelected(null);
       }
-    } catch {
+
+      // ✅ اگر in_progress هست ولی step نیومده، این دیگه "نامشخص" نیست => sync issue
+      if (st !== "completed" && !s) {
+        setErrorMsg("STEP_MISSING");
+      }
+    } catch (e: any) {
       setStatus("error");
       setStep(null);
       setCompletedResult(null);
+      setErrorMsg(String(e?.message || "NETWORK_ERROR"));
     } finally {
       setLoading(false);
     }
@@ -185,14 +223,14 @@ export default function Baseline({ me, state, onRefresh }: Props) {
       if (!phone) return false;
       try {
         setBusy(true);
-        const res = await fetch(`https://qoqnoos.app/api/pelekan/baseline/answer`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phone, ...payload }),
-        });
-        const json = await res.json();
+        const json = await postJsonWithFallback(
+          `${API_PRIMARY}/answer`,
+          `${API_FALLBACK}/answer`,
+          { phone, ...payload }
+        );
+
         if (!json?.ok) {
-          Alert.alert("خطا", "ثبت پاسخ ناموفق بود.");
+          Alert.alert("خطا", String(json?.error || "ثبت پاسخ ناموفق بود."));
           return false;
         }
         return true;
@@ -210,16 +248,18 @@ export default function Baseline({ me, state, onRefresh }: Props) {
     if (!phone) return;
     try {
       setBusy(true);
-      const res = await fetch(`https://qoqnoos.app/api/pelekan/baseline/submit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
-      });
-      const json = await res.json();
+
+      const json = await postJsonWithFallback(
+        `${API_PRIMARY}/submit`,
+        `${API_FALLBACK}/submit`,
+        { phone }
+      );
+
       if (!json?.ok) {
-        Alert.alert("خطا", "ثبت نهایی سنجش ناموفق بود.");
+        Alert.alert("خطا", String(json?.error || "ثبت نهایی سنجش ناموفق بود."));
         return;
       }
+
       await onRefresh?.();
       await fetchBaselineState();
     } catch {
@@ -287,7 +327,6 @@ export default function Baseline({ me, state, onRefresh }: Props) {
     }
   }, [step, localSelected, postAnswer, fetchBaselineState, isLastQuestion, submit]);
 
-  // ----------- Donut -----------
   const Donut = ({ valuePercent }: { valuePercent: number }) => {
     const size = 132;
     const stroke = 12;
@@ -298,14 +337,7 @@ export default function Baseline({ me, state, onRefresh }: Props) {
     return (
       <View style={{ alignItems: "center", justifyContent: "center", marginTop: 6 }}>
         <Svg width={size} height={size}>
-          <Circle
-            cx={size / 2}
-            cy={size / 2}
-            r={r}
-            stroke={palette.track}
-            strokeWidth={stroke}
-            fill="none"
-          />
+          <Circle cx={size / 2} cy={size / 2} r={r} stroke={palette.track} strokeWidth={stroke} fill="none" />
           <Circle
             cx={size / 2}
             cy={size / 2}
@@ -333,7 +365,6 @@ export default function Baseline({ me, state, onRefresh }: Props) {
     );
   };
 
-  // ---------------- UI ----------------
   if (loading) {
     return (
       <View style={[styles.root, { backgroundColor: palette.bg }]}>
@@ -345,17 +376,13 @@ export default function Baseline({ me, state, onRefresh }: Props) {
     );
   }
 
-  // Accent برای هماهنگی با Review
-const accent =
-  status === "completed" && completedResult ? levelColor : palette.gold;
+  const accent = status === "completed" && completedResult ? levelColor : palette.gold;
+  const header = baselineTitle;
 
-const header = baselineTitle;
-
-// ✅ ADD THIS — منبع ضدگلوله تفسیر
-const interpretationText =
-  completedResult?.interpretationText ||
-  state?.baseline?.session?.scalesJson?.interpretationTextSafe ||
-  null;
+  const interpretationText =
+    completedResult?.interpretationText ||
+    state?.baseline?.session?.scalesJson?.interpretationTextSafe ||
+    null;
 
   return (
     <View style={[styles.container, { backgroundColor: palette.bg }]}>
@@ -364,20 +391,35 @@ const interpretationText =
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <View
-          style={[
-            styles.card,
-            styles.cardFancy,
-            { backgroundColor: palette.glass, borderColor: palette.border },
-          ]}
-        >
+        <View style={[styles.card, styles.cardFancy, { backgroundColor: palette.glass, borderColor: palette.border }]}>
           <View style={[styles.accentBarTop, { backgroundColor: accent }]} />
 
-          {/* عنوان */}
           <Text style={[styles.title, { color: accent, textAlign: "center" }]}>{header}</Text>
 
-          {/* حالت completed */}
-          {status === "completed" && completedResult ? (
+          {/* ✅ error state */}
+          {status === "error" ? (
+            <>
+              <Text style={[styles.centerText, { color: palette.red, marginTop: 12, lineHeight: 20 }]}>
+                خطا در دریافت سنجش.
+              </Text>
+              {!!errorMsg && (
+                <Text style={[styles.centerText, { color: palette.sub2, marginTop: 8, fontSize: 12 }]}>
+                  {errorMsg}
+                </Text>
+              )}
+              <View style={{ height: 14 }} />
+              <Pressable
+                disabled={busy}
+                onPress={fetchBaselineState}
+                style={[
+                  styles.btnPrimary,
+                  { borderColor: palette.border, backgroundColor: "rgba(255,255,255,.04)", opacity: busy ? 0.7 : 1 },
+                ]}
+              >
+                <Text style={[styles.btnText, { color: palette.text }]}>تلاش دوباره</Text>
+              </Pressable>
+            </>
+          ) : status === "completed" && completedResult ? (
             <>
               <View style={{ height: 6 }} />
               <Donut valuePercent={percent} />
@@ -386,56 +428,36 @@ const interpretationText =
               </Text>
 
               {interpretationText ? (
-  <Text
-    style={[
-      styles.rtlText,
-      {
-        color: palette.sub,
-        marginTop: 12,
-        lineHeight: 20,
-        textAlign: "right",
-      },
-    ]}
-  >
-    {interpretationText}
-  </Text>
-) : (
-  <Text
-    style={[
-      styles.rtlText,
-      {
-        color: palette.sub2,
-        marginTop: 12,
-        fontSize: 12,
-        textAlign: "right",
-      },
-    ]}
-  >
-    تفسیر در حال آماده‌سازی است…
-  </Text>
-)}
+                <Text style={[styles.rtlText, { color: palette.sub, marginTop: 12, lineHeight: 20, textAlign: "right" }]}>
+                  {interpretationText}
+                </Text>
+              ) : (
+                <Text style={[styles.rtlText, { color: palette.sub2, marginTop: 12, fontSize: 12, textAlign: "right" }]}>
+                  تفسیر در حال آماده‌سازی است…
+                </Text>
+              )}
 
               <View style={{ height: 14 }} />
 
               <Pressable
                 disabled={busy}
                 onPress={async () => {
-  if (!phone) return;
-  try {
-    setBusy(true);
-    await fetch(`https://qoqnoos.app/api/pelekan/baseline/seen`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone }),
-    }).then(r => r.json()).catch(() => null);
-  } finally {
-    setBusy(false);
-  }
-  await onRefresh?.();
-}}
+                  if (!phone) return;
+                  try {
+                    setBusy(true);
+                    await postJsonWithFallback(`${API_PRIMARY}/seen`, `${API_FALLBACK}/seen`, { phone }).catch(() => null);
+                  } finally {
+                    setBusy(false);
+                  }
+                  await onRefresh?.();
+                }}
                 style={[
                   styles.btnPrimary,
-                  { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)", opacity: busy ? 0.7 : 1 },
+                  {
+                    borderColor: "rgba(212,175,55,.35)",
+                    backgroundColor: "rgba(212,175,55,.10)",
+                    opacity: busy ? 0.7 : 1,
+                  },
                 ]}
               >
                 <Text style={[styles.btnText, { color: palette.text }]}>رفتن به ادامه مسیر</Text>
@@ -470,14 +492,12 @@ const interpretationText =
           ) : step?.type === "question" ? (
             <>
               <Text style={[styles.centerText, { color: palette.sub, marginTop: 6, fontSize: 12 }]}>
-  سوال {(questionIndex ?? 0) + 1} از {questionTotal ?? 0}
-</Text>
+                سوال {(questionIndex ?? 0) + 1} از {questionTotal ?? 0}
+              </Text>
 
-<Text style={[styles.centerText, { color: palette.sub2, marginTop: 4, fontSize: 11 }]}>
-  برای دیدن همه گزینه‌ها صفحه رو به بالا بکش
-</Text>
-
-<View style={styles.hr} />
+              <Text style={[styles.centerText, { color: palette.sub2, marginTop: 4, fontSize: 11 }]}>
+                برای دیدن همه گزینه‌ها صفحه رو به بالا بکش
+              </Text>
 
               <View style={styles.hr} />
 
@@ -542,9 +562,28 @@ const interpretationText =
               {step.message || "چند پاسخ ثبت نشده. لطفاً سنجش را ریست کن."}
             </Text>
           ) : (
-            <Text style={[styles.centerText, { color: palette.sub2, marginTop: 10, lineHeight: 20 }]}>
-              وضعیت مشخص نیست. یک بار دوباره وارد شو.
-            </Text>
+            // ✅ به‌جای «نامشخص»، یک پیام دقیق‌تر + دکمه sync
+            <>
+              <Text style={[styles.centerText, { color: palette.sub2, marginTop: 12, lineHeight: 20 }]}>
+                سنجش در حال همگام‌سازی است…
+              </Text>
+              {!!errorMsg && (
+                <Text style={[styles.centerText, { color: palette.sub2, marginTop: 8, fontSize: 12 }]}>
+                  {errorMsg}
+                </Text>
+              )}
+              <View style={{ height: 14 }} />
+              <Pressable
+                disabled={busy}
+                onPress={fetchBaselineState}
+                style={[
+                  styles.btnPrimary,
+                  { borderColor: palette.border, backgroundColor: "rgba(255,255,255,.04)", opacity: busy ? 0.7 : 1 },
+                ]}
+              >
+                <Text style={[styles.btnText, { color: palette.text }]}>تازه‌سازی</Text>
+              </Pressable>
+            </>
           )}
         </View>
       </ScrollView>

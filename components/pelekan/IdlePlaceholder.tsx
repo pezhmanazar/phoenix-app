@@ -1,4 +1,6 @@
 // components/pelekan/IdlePlaceholder.tsx
+
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -17,12 +19,19 @@ type Props = {
   onRefresh?: () => Promise<void> | void;
 };
 
+// ✅ کلید گیت: تا وقتی کاربر دایره "شروع" رو نزده، وارد معرفی/آزمون نشیم
+const KEY_START_GATE = "pelekan:idle:start_gate:v1";
+
 export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
   const [busy, setBusy] = useState(false);
 
   // ✅ مرحله‌ی اول: فقط دکمه "شروع"
   // ✅ مرحله‌ی دوم: توضیحات + دکمه "شروع آزمون"
   const [mode, setMode] = useState<"start" | "intro">("start");
+
+  // ✅ گیت
+  const [gateBoot, setGateBoot] = useState(true);
+  const [gateReady, setGateReady] = useState(false);
 
   // ✅ انیمیشن انتقال
   const anim = useRef(new Animated.Value(0)).current; // 0 => start, 1 => intro
@@ -45,11 +54,9 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
       border: "rgba(255,255,255,.10)",
       border2: "rgba(255,255,255,.14)",
 
-      // شیشه برای دکمه‌ها
       btnBg: "rgba(255,255,255,.06)",
       btnBorder: "rgba(255,255,255,.14)",
 
-      // ✅ سبز متناسب با تم (نه جیغ)
       startGreen: "#86efac",
       startGreenBg: "rgba(134,239,172,.14)",
       startGreenBorder: "rgba(134,239,172,.42)",
@@ -58,7 +65,8 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
   );
 
   const consentSteps =
-    state?.baseline?.content?.consentSteps && Array.isArray(state.baseline.content.consentSteps)
+    state?.baseline?.content?.consentSteps &&
+    Array.isArray(state.baseline.content.consentSteps)
       ? state.baseline.content.consentSteps
       : [];
 
@@ -74,52 +82,128 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
     }).start(() => done?.());
   };
 
-  const goIntro = () => {
+  // ✅ گیت را از AsyncStorage بخوان
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      try {
+        const v = await AsyncStorage.getItem(KEY_START_GATE);
+        if (!alive) return;
+        const ok = v === "1";
+        setGateReady(ok);
+
+        // اگر قبلاً گیت زده شده، مستقیم برو intro
+        if (ok) {
+          setMode("intro");
+          anim.setValue(1);
+        } else {
+          setMode("start");
+          anim.setValue(0);
+        }
+      } catch {
+        if (!alive) return;
+        setGateReady(false);
+        setMode("start");
+        anim.setValue(0);
+      } finally {
+        if (!alive) return;
+        setGateBoot(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const goIntro = async () => {
+    // ✅ اینجا گیت را ست می‌کنیم تا از این به بعد مستقیم intro بیاد
+    try {
+      await AsyncStorage.setItem(KEY_START_GATE, "1");
+      setGateReady(true);
+    } catch {}
+
     setMode("intro");
     requestAnimationFrame(() => animateTo(1));
   };
 
-  const goStart = () => {
+  const goStart = async () => {
+    // ⚠️ این دکمه «بازگشت» فقط به حالت start برمی‌گرده
+    // گیت رو ریست نمی‌کنیم (چون تجربه‌ت می‌گه نباید هر بار برگرده)
     animateTo(0, () => setMode("start"));
   };
+
+  // ✅ اگر می‌خوای بازگشت، گیت رو هم ریست کنه (فعلاً خاموش)
+  // const goStartAndResetGate = async () => {
+  //   try {
+  //     await AsyncStorage.removeItem(KEY_START_GATE);
+  //   } catch {}
+  //   setGateReady(false);
+  //   animateTo(0, () => setMode("start"));
+  // };
 
   const startBaseline = async () => {
     if (!phone) {
       Alert.alert("خطا", "شماره کاربر پیدا نشد.");
       return;
     }
+
     try {
       setBusy(true);
+
+      // ✅ ضدگلوله: تا وقتی کاربر «شروع» نزده، حق نداره startBaseline بزنه
+      if (!gateReady) {
+        Alert.alert("توجه", "اول روی دکمه «شروع» بزن.");
+        return;
+      }
+
       const res = await fetch(`https://qoqnoos.app/api/pelekan/baseline/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone }),
       });
+
       const json = await res.json();
       if (!json?.ok) {
         Alert.alert("خطا", "شروع آزمون ناموفق بود.");
         return;
       }
-      await onRefresh?.(); // tabState -> baseline_assessment
-    } catch (e) {
+
+      await onRefresh?.(); // tabState -> baseline_assessment (یا هرچی سرور می‌گه)
+    } catch {
       Alert.alert("خطا", "ارتباط با سرور برقرار نشد.");
     } finally {
       setBusy(false);
     }
   };
 
-  // اگر حالت اولیه است، anim باید 0 باشد (برای hot reload / رفرش)
-  useEffect(() => {
-    if (mode === "start") anim.setValue(0);
-    if (mode === "intro") anim.setValue(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // ✅ Loader هنگام خواندن گیت
+  if (gateBoot) {
+    return (
+      <View style={[styles.full, { backgroundColor: palette.bg }]}>
+        <View style={[styles.centerWrap, { paddingHorizontal: 18 }]}>
+          <ActivityIndicator color={palette.gold} />
+          <Text style={{ color: palette.faint, marginTop: 10, fontSize: 12 }}>
+            در حال آماده‌سازی…
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   // ------------------------- UI -------------------------
   // ✅ حالت ۱: دکمه دایره بزرگ سبز وسط صفحه
   if (mode === "start") {
-    const startOpacity = anim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
-    const startTranslate = anim.interpolate({ inputRange: [0, 1], outputRange: [0, -12] });
+    const startOpacity = anim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [1, 0],
+    });
+    const startTranslate = anim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, -12],
+    });
 
     return (
       <View style={[styles.full, { backgroundColor: palette.bg }]}>
@@ -152,8 +236,11 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
                 },
               ]}
             >
-              <Text style={[styles.startCircleText, { color: palette.startGreen }]}>شروع</Text>
-            
+              <Text
+                style={[styles.startCircleText, { color: palette.startGreen }]}
+              >
+                شروع
+              </Text>
             </View>
           </TouchableOpacity>
         </Animated.View>
@@ -162,8 +249,14 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
   }
 
   // ✅ حالت ۲: کارت وسط صفحه + توضیحات + دکمه شروع آزمون
-  const introOpacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
-  const introTranslate = anim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] });
+  const introOpacity = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+  const introTranslate = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [14, 0],
+  });
 
   return (
     <View style={[styles.full, { backgroundColor: palette.bg }]}>
@@ -176,11 +269,22 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
           },
         ]}
       >
-        <View style={[styles.card, { backgroundColor: palette.glass, borderColor: palette.border }]}>
-          {/* ✅ accent شبیه کارت‌های آزمون */}
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: palette.glass, borderColor: palette.border },
+          ]}
+        >
           <View style={[styles.accentBarTop, { backgroundColor: palette.gold }]} />
 
-          <Text style={[styles.introBody, { color: palette.sub, textAlign: "center" }]}>{introText}</Text>
+          <Text
+            style={[
+              styles.introBody,
+              { color: palette.sub, textAlign: "center" },
+            ]}
+          >
+            {introText}
+          </Text>
 
           <View style={{ marginTop: 14, gap: 10 }}>
             {consentSteps.map((s: any, idx: number) => (
@@ -204,7 +308,14 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
                       },
                     ]}
                   />
-                  <Text style={[styles.bulletText, { color: palette.sub, textAlign: "center" }]}>{s?.text}</Text>
+                  <Text
+                    style={[
+                      styles.bulletText,
+                      { color: palette.sub, textAlign: "center" },
+                    ]}
+                  >
+                    {s?.text}
+                  </Text>
                 </View>
               </View>
             ))}
@@ -226,14 +337,17 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
             {busy ? (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <ActivityIndicator />
-                <Text style={[styles.primaryBtnText, { color: palette.text }]}>در حال شروع…</Text>
+                <Text style={[styles.primaryBtnText, { color: palette.text }]}>
+                  در حال شروع…
+                </Text>
               </View>
             ) : (
-              <Text style={[styles.primaryBtnText, { color: palette.text }]}>شروع آزمون</Text>
+              <Text style={[styles.primaryBtnText, { color: palette.text }]}>
+                شروع آزمون
+              </Text>
             )}
           </TouchableOpacity>
 
-          {/* ✅ بازگشت زیر کارت، وسط، با فلش */}
           <TouchableOpacity
             activeOpacity={0.85}
             onPress={goStart}
@@ -247,7 +361,9 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
               },
             ]}
           >
-            <Text style={[styles.backBtnText, { color: palette.faint }]}>→ بازگشت</Text>
+            <Text style={[styles.backBtnText, { color: palette.faint }]}>
+              → بازگشت
+            </Text>
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -258,7 +374,6 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
 const styles = StyleSheet.create({
   full: { flex: 1 },
 
-  // ----- start mode -----
   centerWrap: {
     flex: 1,
     alignItems: "center",
@@ -266,7 +381,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
 
-  // ✅ دایره شروع
   startCircle: {
     width: 220,
     height: 220,
@@ -274,7 +388,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-    // کمی عمق
     shadowColor: "#000",
     shadowOpacity: 0.35,
     shadowRadius: 20,
@@ -295,16 +408,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     writingDirection: "rtl" as any,
   },
-  startCircleSub: {
-    marginTop: 10,
-    fontSize: 12,
-    fontWeight: "800",
-    writingDirection: "rtl" as any,
-    textAlign: "center" as any,
-    opacity: 0.9,
-  },
 
-  // ----- intro mode (center card) -----
   introCenterWrap: {
     flex: 1,
     alignItems: "center",
@@ -321,7 +425,6 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     paddingHorizontal: 16,
     overflow: "hidden",
-    // عمق شیشه‌ای مثل کارت‌های آزمون
     shadowColor: "#000",
     shadowOpacity: 0.35,
     shadowRadius: 20,
@@ -347,7 +450,6 @@ const styles = StyleSheet.create({
     writingDirection: "rtl" as any,
   },
 
-  // ✅ کارت‌های آیتم‌ها شبیه سوالات آزمون
   stepCard: {
     borderWidth: 1,
     borderRadius: 14,
@@ -389,7 +491,6 @@ const styles = StyleSheet.create({
     writingDirection: "rtl" as any,
   },
 
-  // ✅ back button centered under card content
   backBtn: {
     marginTop: 12,
     alignSelf: "center",

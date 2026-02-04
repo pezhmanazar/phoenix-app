@@ -1,4 +1,4 @@
-// app/pelekan/bastan/stage-intro.tsx
+// app/pelekan/gosastan/stage-intro.tsx
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio } from "expo-av";
@@ -6,7 +6,6 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useUser } from "../../../hooks/useUser";
 
 function fmt(ms: number) {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -15,65 +14,49 @@ function fmt(ms: number) {
   return `${mm}:${ss}`;
 }
 
-export default function BastanStageIntroScreen() {
+// ✅ لوکال: تیک معرفی گسستن
+const KEY_GOSASTAN_STAGE_AUDIO_V1 = "pelekan:stage_intro:gosastan:heard:v1";
+
+export default function GosastanStageIntroScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { me } = useUser();
-  const phone = String(me?.phone || "").trim();
 
-  // ✅ فعلاً همین فایل اینترو (بعداً عوض می‌کنیم)
+  // ✅ فعلاً همان فایل بستن
   const AUDIO_URL = useMemo(() => "https://api.qoqnoos.app/static/audio/bastan-intro.mp3", []);
-
-  // ✅ معیار: فقط وقتی کاربر «بازگشت» زد
-  const HEARD_MIN_MS = 5000;
-
-  // ✅ لوکال keys
-  const STORAGE_DONE_KEY = useMemo(() => `pelekan:bastan:stage_intro_done:v1:${phone || "no_phone"}`, [phone]);
-  const STORAGE_POS_KEY = useMemo(() => `pelekan:bastan:stage_intro_pos_ms:v1:${phone || "no_phone"}`, [phone]);
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
   // player
   const soundRef = useRef<Audio.Sound | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+
   const [posMs, setPosMs] = useState(0);
   const [durMs, setDurMs] = useState(1);
 
   const [trackW, setTrackW] = useState(0);
 
-  // restore position
-  const restorePosRef = useRef<number | null>(null);
+  // ✅ برای اینکه فقط موقع بازگشت ثبت کنیم
+  const maxPosRef = useRef(0);
+  const SAVED_MIN_MS = 5000;
 
-  // prevent double unload/mark
-  const leavingRef = useRef(false);
-
-  const readLocal = useCallback(async () => {
+  const unload = useCallback(async () => {
     try {
-      setErr(null);
-      setLoading(true);
-
-      if (!phone) {
-        restorePosRef.current = null;
-        return;
+      const s = soundRef.current;
+      if (s) {
+        await s.stopAsync().catch(() => {});
+        await s.unloadAsync().catch(() => {});
       }
+    } catch {}
+    soundRef.current = null;
+    setIsLoaded(false);
+    setIsPlaying(false);
+  }, []);
 
-      // فقط restore position (done بودن اینجا تاثیری روی UI نداره)
-      try {
-        const posRaw = await AsyncStorage.getItem(STORAGE_POS_KEY);
-        const n = posRaw ? Number(posRaw) : 0;
-        if (Number.isFinite(n) && n > 0) restorePosRef.current = n;
-      } catch {
-        restorePosRef.current = null;
-      }
-    } catch (e: any) {
-      setErr(String(e?.message || e));
-    } finally {
-      setLoading(false);
-    }
-  }, [phone, STORAGE_POS_KEY]);
+  const loadIfNeeded = useCallback(async () => {
+    if (soundRef.current) return;
 
-  const ensureAudioMode = useCallback(async () => {
     await Audio.setAudioModeAsync({
       allowsRecordingIOS: false,
       playsInSilentModeIOS: true,
@@ -81,12 +64,6 @@ export default function BastanStageIntroScreen() {
       shouldDuckAndroid: true,
       playThroughEarpieceAndroid: false,
     });
-  }, []);
-
-  const loadIfNeeded = useCallback(async () => {
-    if (soundRef.current) return;
-
-    await ensureAudioMode();
 
     const { sound } = await Audio.Sound.createAsync(
       { uri: AUDIO_URL },
@@ -94,41 +71,21 @@ export default function BastanStageIntroScreen() {
       async (st) => {
         if (!st.isLoaded) return;
 
-        setIsPlaying(!!st.isPlaying);
-        setPosMs(Number(st.positionMillis ?? 0));
-        setDurMs(Number(st.durationMillis ?? 1));
+        setIsLoaded(true);
+        setIsPlaying(st.isPlaying);
+        setPosMs(st.positionMillis ?? 0);
+        setDurMs(st.durationMillis ?? 1);
 
-        // ✅ هیچ “auto-complete” اینجا نداریم.
-        // فقط پوزیشن سبک ذخیره می‌کنیم (برای تجربه بهتر)
-        const position = Number(st.positionMillis ?? 0);
-        const duration = Number(st.durationMillis ?? 0);
-        if (duration > 0 && position > 0) {
-          try {
-            if (position % 3000 < 250) {
-              await AsyncStorage.setItem(STORAGE_POS_KEY, String(position));
-            }
-          } catch {}
-        }
+        const p = Number(st.positionMillis ?? 0);
+        if (p > maxPosRef.current) maxPosRef.current = p;
       }
     );
 
     soundRef.current = sound;
-
-    // restore pos
-    try {
-      const restore = restorePosRef.current;
-      if (restore && restore > 0) {
-        const st: any = await sound.getStatusAsync();
-        const duration = Number(st?.durationMillis ?? 0);
-        const safeRestore = duration > 0 ? Math.min(restore, Math.max(0, duration - 1200)) : restore;
-        await sound.setPositionAsync(safeRestore);
-      }
-    } catch {}
-  }, [AUDIO_URL, ensureAudioMode, STORAGE_POS_KEY]);
+  }, [AUDIO_URL]);
 
   const togglePlay = useCallback(async () => {
     try {
-      setErr(null);
       await loadIfNeeded();
       const s = soundRef.current;
       if (!s) return;
@@ -146,7 +103,6 @@ export default function BastanStageIntroScreen() {
   const seekTo = useCallback(
     async (ms: number) => {
       try {
-        setErr(null);
         await loadIfNeeded();
         const s = soundRef.current;
         if (!s) return;
@@ -157,6 +113,7 @@ export default function BastanStageIntroScreen() {
         const d = Number(st.durationMillis ?? durMs);
         const clamped = Math.max(0, Math.min(ms, Math.max(1, d)));
         await s.setPositionAsync(clamped);
+        if (clamped > maxPosRef.current) maxPosRef.current = clamped;
       } catch (e: any) {
         setErr(String(e?.message || e));
       }
@@ -164,68 +121,41 @@ export default function BastanStageIntroScreen() {
     [durMs, loadIfNeeded]
   );
 
-  const stopAndUnload = useCallback(async () => {
+  const onBack = useCallback(async () => {
     try {
-      const s = soundRef.current;
-      if (!s) return;
-
-      // ذخیره‌ی پوزیشن قبل از خروج (فقط اگر بالاتر از 0)
-      try {
-        const st: any = await s.getStatusAsync();
-        if (st?.isLoaded) {
-          const p = Number(st.positionMillis ?? 0);
-          if (p > 0) {
-            await AsyncStorage.setItem(STORAGE_POS_KEY, String(p));
-          }
-        }
-      } catch {}
-
-      await s.pauseAsync().catch(() => {});
-      await s.stopAsync().catch(() => {});
-      await s.unloadAsync().catch(() => {});
-    } catch {}
-
-    soundRef.current = null;
-    setIsPlaying(false);
-  }, [STORAGE_POS_KEY]);
-
-  const onBackPress = useCallback(async () => {
-    if (leavingRef.current) return;
-    leavingRef.current = true;
-
-    try {
-      // ✅ 1) پوزیشن واقعی لحظه خروج را بگیریم
-      let listenedMs = posMs;
-
-      try {
-        const s = soundRef.current;
-        if (s) {
-          const st: any = await s.getStatusAsync();
-          if (st?.isLoaded) listenedMs = Number(st.positionMillis ?? listenedMs);
-        }
-      } catch {}
-
-      // ✅ 2) فقط اگر >= 5 ثانیه بود، DONE ثبت شود
-      if (phone && listenedMs >= HEARD_MIN_MS) {
-        try {
-          await AsyncStorage.setItem(STORAGE_DONE_KEY, "1");
-        } catch {}
+      // ✅ فقط وقتی برگشت می‌زند، اگر >= ۵ ثانیه گوش کرده بود تیک بزن
+      const listenedMs = Math.max(maxPosRef.current, posMs);
+      if (listenedMs >= SAVED_MIN_MS) {
+        await AsyncStorage.setItem(KEY_GOSASTAN_STAGE_AUDIO_V1, "1");
       }
-
-      // ✅ 3) بعدش player را unload کنیم
-      await stopAndUnload();
-    } finally {
-      router.back();
-    }
-  }, [HEARD_MIN_MS, phone, posMs, router, STORAGE_DONE_KEY, stopAndUnload]);
+    } catch {}
+    await unload();
+    router.back();
+  }, [posMs, unload, router]);
 
   useEffect(() => {
-    readLocal();
+    let alive = true;
+    (async () => {
+      try {
+        setErr(null);
+        setLoading(true);
+        // ✅ فقط تست دسترسی فایل (تا 404 را سریع بفهمیم)
+        // اگر خواستی حذفش می‌کنیم، ولی برای لانچ بهتره همین باشه.
+        await loadIfNeeded();
+      } catch (e: any) {
+        if (!alive) return;
+        setErr(String(e?.message || e));
+      } finally {
+        if (!alive) return;
+        setLoading(false);
+      }
+    })();
+
     return () => {
-      // خروج ناگهانی/فورس: فقط unload
-      stopAndUnload();
+      alive = false;
+      unload();
     };
-  }, [readLocal, stopAndUnload]);
+  }, [loadIfNeeded, unload]);
 
   const progressPct = Math.min(1, posMs / Math.max(1, durMs));
 
@@ -247,8 +177,8 @@ export default function BastanStageIntroScreen() {
 
       {err ? (
         <View style={styles.errBox}>
-          <Text style={styles.errText}>خطا: {err}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={readLocal} activeOpacity={0.9}>
+          <Text style={styles.errText}>{String(err)}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => router.replace("/pelekan/gosastan/stage-intro" as any)}>
             <Text style={styles.retryText}>تلاش مجدد</Text>
           </TouchableOpacity>
         </View>
@@ -259,8 +189,8 @@ export default function BastanStageIntroScreen() {
           <Ionicons name={isPlaying ? "pause" : "play"} size={72} color="#0b0f14" style={{ marginLeft: isPlaying ? 0 : 6 }} />
         </TouchableOpacity>
 
-        <Text style={styles.title}>معرفی مرحله بستن</Text>
-        <Text style={styles.desc}>این ویس کوتاه، مرحله «بستن» رو معرفی می‌کنه.</Text>
+        <Text style={styles.title}>معرفی مرحله گسستن</Text>
+        <Text style={styles.desc}>کافیه چند ثانیه گوش بدی و برگردی.</Text>
 
         <View style={styles.progressTrack} onLayout={(e) => setTrackW(e?.nativeEvent?.layout?.width ?? 0)}>
           <TouchableOpacity
@@ -281,7 +211,7 @@ export default function BastanStageIntroScreen() {
           {fmt(posMs)} / {fmt(durMs)}
         </Text>
 
-        <TouchableOpacity activeOpacity={0.9} style={styles.backBtn} onPress={onBackPress}>
+        <TouchableOpacity activeOpacity={0.9} style={styles.backBtn} onPress={onBack}>
           <Text style={styles.backText}>بازگشت</Text>
         </TouchableOpacity>
       </View>
@@ -314,7 +244,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(233,138,21,.10)",
   },
 
-  errBox: { paddingHorizontal: 16, paddingBottom: 6 },
+  errBox: { padding: 16 },
   errText: { color: "#FCA5A5", fontWeight: "800", textAlign: "right" },
   retryBtn: {
     marginTop: 10,
@@ -325,7 +255,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,.16)",
   },
-  retryText: { color: "#F9FAFB", fontWeight: "800" },
+  retryText: { color: "#F9FAFB", fontWeight: "900" },
 
   content: {
     flex: 1,

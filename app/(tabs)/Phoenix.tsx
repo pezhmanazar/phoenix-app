@@ -1,33 +1,29 @@
 // app/(tabs)/Phoenix.tsx
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme, useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useTheme } from "@react-navigation/native";
 import Constants from "expo-constants";
+import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   I18nManager,
   Image,
+  Linking,
+  Modal,
+  Pressable,
+  StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  Linking,
-  StyleSheet,
-  Modal,
-  Pressable,
-  Platform,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import EditProfileModal from "../../components/EditProfileModal";
 import Screen from "../../components/Screen";
 import { usePhoenix } from "../../hooks/PhoenixContext";
-import { useRouter } from "expo-router";
 import { useUser } from "../../hooks/useUser";
-import EditProfileModal from "../../components/EditProfileModal";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-// ✅ اضافه شد: منبع واحد وضعیت پلن
-import { getPlanStatus } from "../../lib/plan";
-
-// اگر PlanStatusBadge تو پروژه‌ات named export بود، این رو به { PlanStatusBadge } تغییر بده.
 import PlanStatusBadge from "../../components/PlanStatusBadge";
+import { getPlanStatus } from "../../lib/plan";
 
 /* ---------- avatar helpers ---------- */
 const PRESET_AVATARS: { id: string; src: any }[] = [
@@ -84,7 +80,9 @@ function PrimarySplitButton({
         onPress={onRightPress}
         style={[
           styles.splitBtn,
-          rightVariant === "danger" ? styles.splitBtnRightDanger : styles.splitBtnRight,
+          rightVariant === "danger"
+            ? styles.splitBtnRightDanger
+            : styles.splitBtnRight,
         ]}
       >
         <Ionicons
@@ -113,14 +111,14 @@ function FullWidthStatCard({
   value,
   valueSuffix,
   iconColor = "#D4AF37",
-  rightIconOverlay,
+  hintText,
 }: {
   title: string;
   icon: keyof typeof Ionicons.glyphMap;
   value: number | string;
   valueSuffix?: string;
   iconColor?: string;
-  rightIconOverlay?: React.ReactNode;
+  hintText?: string;
 }) {
   return (
     <GlassCard style={styles.fullCard}>
@@ -128,9 +126,6 @@ function FullWidthStatCard({
         <View style={styles.fullCardTitleRow}>
           <View style={styles.fullCardIconWrap}>
             <Ionicons name={icon as any} size={18} color={iconColor} />
-            {!!rightIconOverlay && (
-              <View style={styles.iconOverlay}>{rightIconOverlay}</View>
-            )}
           </View>
           <Text style={styles.fullCardTitle}>{title}</Text>
         </View>
@@ -140,6 +135,44 @@ function FullWidthStatCard({
         {toPersianDigits(value)}
         {!!valueSuffix ? (
           <Text style={styles.fullCardValueUnit}> {valueSuffix}</Text>
+        ) : null}
+      </Text>
+
+      {!!hintText ? <Text style={styles.fullCardHint}>{hintText}</Text> : null}
+    </GlassCard>
+  );
+}
+
+function HalfStatCard({
+  title,
+  icon,
+  value,
+  valueSuffix,
+  iconColor = "#D4AF37",
+  style,
+}: {
+  title: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  value: number | string;
+  valueSuffix?: string;
+  iconColor?: string;
+  style?: any;
+}) {
+  return (
+    <GlassCard style={[styles.halfCard, style]}>
+      <View style={styles.halfTopRow}>
+        <View style={styles.halfTitleRow}>
+          <View style={styles.halfIconWrap}>
+            <Ionicons name={icon as any} size={16} color={iconColor} />
+          </View>
+          <Text style={styles.halfTitle}>{title}</Text>
+        </View>
+      </View>
+
+      <Text style={styles.halfValue}>
+        {toPersianDigits(value)}
+        {!!valueSuffix ? (
+          <Text style={styles.halfValueUnit}> {valueSuffix}</Text>
         ) : null}
       </Text>
     </GlassCard>
@@ -154,27 +187,85 @@ export default function Phoenix() {
   const router = useRouter();
   const { me, refresh } = useUser() as any;
 
-  const {
-    profileName,
-    avatarUrl,
-    points,
-    isDark,
-    setProfileName,
-    setAvatarUrl,
-  } = usePhoenix();
+  const { profileName, avatarUrl, setProfileName, setAvatarUrl } = usePhoenix();
 
   const [editVisible, setEditVisible] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
 
+  // ✅ from pelekan/state
+  const [streakDays, setStreakDays] = useState<number>(0);
+  const [completedDays, setCompletedDays] = useState<number>(0);
+  const [xpTotal, setXpTotal] = useState<number>(0);
+  const [statsLoading, setStatsLoading] = useState<boolean>(false);
+
+  const apiBase = "https://api.qoqnoos.app";
+
+  const fetchProgressStats = useCallback(async () => {
+    const phone = String(me?.phone || "").trim();
+    if (!phone) {
+      setStreakDays(0);
+      setCompletedDays(0);
+      setXpTotal(0);
+      return;
+    }
+
+    setStatsLoading(true);
+    try {
+      const url = `${apiBase}/api/pelekan/state?phone=${encodeURIComponent(
+        phone
+      )}`;
+      const res = await fetch(url, {
+        headers: { "Cache-Control": "no-store" },
+      });
+
+      let json: any = null;
+      try {
+        json = await res.json();
+      } catch {
+        json = null;
+      }
+
+      if (!res.ok || !json?.ok) {
+        setStreakDays(0);
+        setCompletedDays(0);
+        setXpTotal(0);
+        return;
+      }
+
+      const data = json?.data || {};
+
+      const s = Number(data?.progress?.streak?.currentDays ?? 0);
+      setStreakDays(Number.isFinite(s) ? s : 0);
+
+      const dp = Array.isArray(data?.progress?.dayProgress)
+        ? data.progress.dayProgress
+        : [];
+      const doneCount = dp.filter((d: any) => String(d?.status) === "completed")
+        .length;
+      setCompletedDays(Number.isFinite(doneCount) ? doneCount : 0);
+
+      const xp = Number(data?.progress?.xpTotal ?? 0);
+      setXpTotal(Number.isFinite(xp) ? xp : 0);
+    } catch {
+      setStreakDays(0);
+      setCompletedDays(0);
+      setXpTotal(0);
+    } finally {
+      setStatsLoading(false);
+    }
+  }, [apiBase, me?.phone]);
+
   useEffect(() => {
     refresh?.().catch(() => {});
-  }, [refresh]);
+    fetchProgressStats().catch(() => {});
+  }, [refresh, fetchProgressStats]);
 
   useFocusEffect(
     useCallback(() => {
       refresh?.().catch(() => {});
+      fetchProgressStats().catch(() => {});
       return () => {};
-    }, [refresh])
+    }, [refresh, fetchProgressStats])
   );
 
   // سینک نام/آواتار با سرور
@@ -194,11 +285,10 @@ export default function Phoenix() {
 
     if (current.startsWith("avatar:")) {
       const src = getPresetAvatarSource(current);
-      if (src) {
+      if (src)
         return (
           <Image source={src} style={styles.avatarImg} resizeMode="cover" />
         );
-      }
     }
 
     if (typeof current === "string" && current.startsWith("icon:")) {
@@ -219,12 +309,11 @@ export default function Phoenix() {
 
     const isValidUri =
       typeof current === "string" && /^(file:|content:|https?:)/.test(current);
-    if (isValidUri) {
+    if (isValidUri)
       return <Image source={{ uri: current }} style={styles.avatarImg} />;
-    }
 
     const phoenixSrc = getPresetAvatarSource("avatar:phoenix");
-    if (phoenixSrc) {
+    if (phoenixSrc)
       return (
         <Image
           source={phoenixSrc}
@@ -232,7 +321,6 @@ export default function Phoenix() {
           resizeMode="cover"
         />
       );
-    }
 
     return (
       <View
@@ -261,10 +349,6 @@ export default function Phoenix() {
   const status = getPlanStatus(me);
   const isProActive = status.isPro;
 
-  // فعلاً طبق درخواست: صفر
-  const techniqueStreakDays = 0;
-  const noContactDays = 0;
-
   return (
     <View style={{ flex: 1, backgroundColor: "#0b0f14" }}>
       <StatusBar style="light" backgroundColor="#0b0f14" animated />
@@ -283,16 +367,13 @@ export default function Phoenix() {
       >
         {/* کارت پروفایل */}
         <View style={styles.profileCard}>
-          {/* ✅ بج دقیقاً سمت چپ کارت و هم‌تراز با اسم */}
           <View style={styles.planBadgeLeftAligned}>
             <PlanStatusBadge me={me} showExpiringText={false} />
           </View>
 
           <View style={styles.profileRow}>
-            {/* آواتار راست */}
             {renderProfileAvatar()}
 
-            {/* اسم */}
             <View style={styles.profileNameWrap}>
               <Text style={styles.profileName} numberOfLines={1}>
                 {profileName || "کاربر"}
@@ -317,71 +398,33 @@ export default function Phoenix() {
           title="استمرار روزها"
           icon="flame"
           iconColor="#E98A15"
-          value={techniqueStreakDays}
-          valueSuffix="روز"
+          value={statsLoading ? "…" : streakDays}
+          valueSuffix={statsLoading ? "" : "روز "}
+          hintText="اگه یک روز رو از دست بدی، این عدد صفر می‌شه."
         />
 
-        {/* رکورد قطع تماس */}
-        <FullWidthStatCard
-          title="رکورد قطع تماس"
-          icon="call-outline"
-          iconColor="#FBBF24"
-          value={noContactDays}
-          valueSuffix="روز"
-          rightIconOverlay={<Ionicons name="close" size={16} color="#FBBF24" />}
-        />
+        {/* ✅ Row: (Right) روزهای تکمیل‌شده  |  (Left) امتیازها */}
+        <View style={styles.halfRow}>
+          {/* RIGHT: روزهای تکمیل‌شده */}
+          <HalfStatCard
+            title="روزهای تکمیل‌شده"
+            icon="checkmark-done-circle"
+            iconColor="#34D399"
+            value={statsLoading ? "…" : completedDays}
+            valueSuffix={statsLoading ? "" : "روز "}
+            style={styles.halfRight}
+          />
 
-        {/* امتیازها و مدال‌ها */}
-        <GlassCard style={styles.fullCard}>
-          <View style={styles.fullCardTopRow}>
-            <View style={styles.fullCardTitleRow}>
-              <View style={styles.fullCardIconWrap}>
-                <Ionicons name="trophy" size={18} color="#D4AF37" />
-              </View>
-              <Text style={styles.fullCardTitle}>امتیازها و مدال‌ها</Text>
-            </View>
-
-            <Text style={styles.pointsLeft}>{toPersianDigits(points ?? 0)}</Text>
-          </View>
-
-          <View style={styles.medalsRow}>
-            <View style={styles.medalItem}>
-              <View
-                style={[
-                  styles.medalCircle,
-                  { borderColor: "rgba(205,127,50,.55)" },
-                ]}
-              >
-                <Ionicons name="medal" size={18} color="#CD7F32" />
-              </View>
-              <Text style={styles.medalText}>برنز</Text>
-            </View>
-
-            <View style={styles.medalItem}>
-              <View
-                style={[
-                  styles.medalCircle,
-                  { borderColor: "rgba(192,192,192,.55)" },
-                ]}
-              >
-                <Ionicons name="medal" size={18} color="#C0C0C0" />
-              </View>
-              <Text style={styles.medalText}>نقره</Text>
-            </View>
-
-            <View style={styles.medalItem}>
-              <View
-                style={[
-                  styles.medalCircle,
-                  { borderColor: "rgba(212,175,55,.55)" },
-                ]}
-              >
-                <Ionicons name="medal" size={18} color="#D4AF37" />
-              </View>
-              <Text style={styles.medalText}>طلا</Text>
-            </View>
-          </View>
-        </GlassCard>
+          {/* LEFT: امتیازها (XP) */}
+          <HalfStatCard
+            title="امتیازها"
+            icon="flash"
+            iconColor="#D4AF37"
+            value={statsLoading ? "…" : xpTotal}
+            valueSuffix={statsLoading ? "" : " XP"}
+            style={styles.halfLeft}
+          />
+        </View>
 
         {/* قوانین و مقررات */}
         <TouchableOpacity activeOpacity={0.9} onPress={openTerms}>
@@ -402,7 +445,10 @@ export default function Phoenix() {
         </TouchableOpacity>
 
         {/* درباره ققنوس */}
-        <TouchableOpacity activeOpacity={0.9} onPress={() => setAboutOpen(true)}>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => setAboutOpen(true)}
+        >
           <GlassCard>
             <View style={styles.linkRow}>
               <View style={styles.linkRight}>
@@ -558,8 +604,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
 
-  // ✅ بج در سمت چپ و هم‌تراز با اسم
-  // اگر 44 دقیق نبود فقط همین top را 2-3 تا بالا/پایین کن.
   planBadgeLeftAligned: {
     position: "absolute",
     left: 12,
@@ -576,8 +620,7 @@ const styles = StyleSheet.create({
   profileNameWrap: {
     flex: 1,
     justifyContent: "center",
-    // برای اینکه اسم وسط کارت خوب بنشینه
-    paddingLeft: 72, // فضای سمت چپ برای بج (تا زیرش نره)
+    paddingLeft: 72,
   },
 
   profileName: {
@@ -587,11 +630,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
 
-  avatarImg: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-  },
+  avatarImg: { width: 72, height: 72, borderRadius: 36 },
   avatarFallback: {
     width: 72,
     height: 72,
@@ -602,10 +641,7 @@ const styles = StyleSheet.create({
   },
 
   /* split buttons under profile */
-  splitRow: {
-    flexDirection: "row-reverse",
-    gap: 10,
-  },
+  splitRow: { flexDirection: "row-reverse", gap: 10 },
   splitBtn: {
     flex: 1,
     borderRadius: 16,
@@ -620,7 +656,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(212,175,55,.18)",
     borderColor: "rgba(212,175,55,.30)",
   },
-  // ✅ اضافه شد: حالت قرمز برای ارتقا به پرو
   splitBtnRightDanger: {
     backgroundColor: "rgba(239,68,68,.18)",
     borderColor: "rgba(239,68,68,.35)",
@@ -629,17 +664,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(96,165,250,.14)",
     borderColor: "rgba(96,165,250,.28)",
   },
-  splitBtnText: {
-    color: "#F9FAFB",
-    fontWeight: "900",
-    fontSize: 13,
-  },
+  splitBtnText: { color: "#F9FAFB", fontWeight: "900", fontSize: 13 },
 
   /* full width cards */
-  fullCard: {
-    borderRadius: 20,
-    padding: 16,
-  },
+  fullCard: { borderRadius: 20, padding: 16 },
   fullCardTopRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
@@ -661,19 +689,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,.10)",
     backgroundColor: "rgba(255,255,255,.04)",
   },
-  iconOverlay: {
-    position: "absolute",
-    right: -6,
-    top: -6,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(3,7,18,.92)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,.10)",
-  },
   fullCardTitle: {
     color: "#F9FAFB",
     fontWeight: "900",
@@ -692,38 +707,69 @@ const styles = StyleSheet.create({
     color: "rgba(231,238,247,.80)",
     fontWeight: "900",
   },
+  fullCardHint: {
+    marginTop: 8,
+    color: "rgba(231,238,247,.70)",
+    fontWeight: "800",
+    fontSize: 12,
+    textAlign: "right",
+    lineHeight: 18,
+  },
 
-  /* points */
-  pointsLeft: {
-    color: "#F9FAFB",
-    fontWeight: "900",
-    fontSize: 22,
-    textAlign: "left",
-  },
-  medalsRow: {
-    marginTop: 14,
+  /* NEW: half row */
+  halfRow: {
     flexDirection: "row-reverse",
-    justifyContent: "flex-start",
-    gap: 12,
+    gap: 10,
   },
-  medalItem: {
+  halfCard: {
+    flex: 1,
+    borderRadius: 20,
+    padding: 12, // کوچیک‌تر از full
+  },
+  halfRight: {
+    flex: 1,
+  },
+  halfLeft: {
+    flex: 1,
+  },
+  halfTopRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  halfTitleRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
     gap: 8,
+    flex: 1,
   },
-  medalCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
+  halfIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    backgroundColor: "rgba(255,255,255,.03)",
+    borderColor: "rgba(255,255,255,.10)",
+    backgroundColor: "rgba(255,255,255,.04)",
   },
-  medalText: {
-    color: "rgba(231,238,247,.85)",
+  halfTitle: {
+    color: "#F9FAFB",
     fontWeight: "900",
-    fontSize: 12,
+    fontSize: 13,
+    textAlign: "right",
+  },
+  halfValue: {
+    marginTop: 10,
+    color: "#F9FAFB",
+    fontWeight: "900",
+    fontSize: 22, // نصف-ish نسبت به 34
+    textAlign: "left",
+  },
+  halfValueUnit: {
+    fontSize: 14,
+    color: "rgba(231,238,247,.80)",
+    fontWeight: "900",
   },
 
   /* links */
@@ -746,10 +792,7 @@ const styles = StyleSheet.create({
   },
 
   /* bottom sheet */
-  sheetBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
-  },
+  sheetBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)" },
   sheet: {
     position: "absolute",
     left: 0,

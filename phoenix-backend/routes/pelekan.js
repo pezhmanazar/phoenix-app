@@ -519,6 +519,7 @@ async function syncBastanActionsToPelekanDays(prismaClient, userId) {
 }
 
 /* ---------- GET /api/pelekan/state ---------- */
+
 router.get("/state", authUser, async (req, res) => {
   try {
     noStore(res);
@@ -563,10 +564,16 @@ router.get("/state", authUser, async (req, res) => {
     });
 
     // 3) review object safely
-    const review = reviewSession ? { hasSession: true, session: reviewSession } : { hasSession: false, session: null };
+    const review = reviewSession
+      ? { hasSession: true, session: reviewSession }
+      : { hasSession: false, session: null };
 
     const basePlan = getPlanStatus(user.plan, user.planExpiresAt);
-    const { planStatusFinal, daysLeftFinal } = applyDebugPlan(req, basePlan.planStatus, basePlan.daysLeft);
+    const { planStatusFinal, daysLeftFinal } = applyDebugPlan(
+      req,
+      basePlan.planStatus,
+      basePlan.daysLeft
+    );
 
     // baseline session (hb_baseline)
     const baselineSession = await prisma.assessmentSession.findUnique({
@@ -588,7 +595,8 @@ router.get("/state", authUser, async (req, res) => {
     const isBaselineCompleted = baselineSession?.status === "completed";
     const seenAt = baselineSession?.scalesJson?.baselineResultSeenAt || null;
 
-    const baselineNeedsResultScreen = isBaselineCompleted && !!baselineSession?.totalScore && !seenAt;
+    const baselineNeedsResultScreen =
+      isBaselineCompleted && !!baselineSession?.totalScore && !seenAt;
 
     // content
     const stages = await prisma.pelekanStage.findMany({
@@ -600,6 +608,44 @@ router.get("/state", authUser, async (req, res) => {
         },
       },
     });
+
+    /* ===========================
+       🔽 ADDED: AWARDS (medals/badges)
+       =========================== */
+
+    // ⚠️ orderBy نذاشتم چون معلوم نیست createdAt روی UserMedal/UserIdentityBadge دارید یا نه
+    const userMedals = await prisma.userMedal.findMany({
+      where: { userId: user.id },
+      select: {
+        medal: {
+          select: {
+            code: true,
+            titleFa: true,
+            description: true,
+            iconKey: true,
+          },
+        },
+      },
+    });
+
+    const userBadges = await prisma.userIdentityBadge.findMany({
+      where: { userId: user.id },
+      select: {
+        badge: {
+          select: {
+            code: true,
+            titleFa: true,
+            description: true,
+            iconKey: true,
+          },
+        },
+      },
+    });
+
+    const awards = {
+      medals: (userMedals || []).map((m) => m.medal).filter(Boolean),
+      badges: (userBadges || []).map((b) => b.badge).filter(Boolean),
+    };
 
     // no content
     if (!stages.length) {
@@ -615,7 +661,10 @@ router.get("/state", authUser, async (req, res) => {
         tabState = "choose_path";
       }
 
-      const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasAnyProgressFinal);
+      const treatmentAccess = computeTreatmentAccess(
+        planStatusFinal,
+        hasAnyProgressFinal
+      );
 
       const suppressPaywall = tabState === "baseline_assessment";
       const paywall = suppressPaywall
@@ -628,7 +677,10 @@ router.get("/state", authUser, async (req, res) => {
           tabState,
           user: { planStatus: planStatusFinal, daysLeft: daysLeftFinal },
           treatmentAccess,
-          ui: { paywall, flags: { suppressPaywall, isBaselineInProgress, isBaselineCompleted } },
+          ui: {
+            paywall,
+            flags: { suppressPaywall, isBaselineInProgress, isBaselineCompleted },
+          },
           baseline: baselineSession
             ? {
                 session: {
@@ -636,7 +688,8 @@ router.get("/state", authUser, async (req, res) => {
                   status: baselineSession.status,
                   totalScore: baselineSession.totalScore,
                   level: baselineSession.scalesJson?.level || null,
-                  interpretationText: baselineSession.scalesJson?.interpretationTextSafe || null,
+                  interpretationText:
+                    baselineSession.scalesJson?.interpretationTextSafe || null,
                   completedAt: baselineSession.completedAt,
                 },
                 content: toBaselineUiContent(),
@@ -650,6 +703,9 @@ router.get("/state", authUser, async (req, res) => {
           message: "pelekan_content_empty",
           stages: [],
           progress: null,
+
+          // ✅ ADDED
+          awards,
         },
       });
     }
@@ -676,7 +732,12 @@ router.get("/state", authUser, async (req, res) => {
 
     const streak = await prisma.pelekanStreak.findUnique({
       where: { userId: user.id },
-      select: { currentDays: true, bestDays: true, lastCompletedAt: true, yellowCardAt: true },
+      select: {
+        currentDays: true,
+        bestDays: true,
+        lastCompletedAt: true,
+        yellowCardAt: true,
+      },
     });
 
     const xpAgg = await prisma.xpLedger.aggregate({
@@ -689,32 +750,38 @@ router.get("/state", authUser, async (req, res) => {
 
     const hasAnyProgress = Array.isArray(dayProgress) && dayProgress.length > 0;
     const hasAnyProgressFinal = applyDebugProgress(req, hasAnyProgress);
-
-    // اگر بازسنجی کامل یا اسکیپ شده باشد، باید بتواند وارد پلکان شود حتی بدون dayProgress
-    const reviewDoneOrSkipped = !!reviewSession?.completedAt || !!reviewSession?.test2SkippedAt;
-
-    // معیار واقعی "شروع درمان" برای تب پلکان
-    const hasStartedTreatment = hasAnyProgressFinal || reviewDoneOrSkipped;
+// معیار واقعی "شروع درمان" برای تب پلکان: فقط پیشرفت واقعی درمان
+const hasStartedTreatment = hasAnyProgressFinal;
 
     let tabState = "idle";
 
-    if (hasStartedTreatment) tabState = "treating";
-    else if (isBaselineInProgress) tabState = "baseline_assessment";
-    else if (baselineNeedsResultScreen) tabState = "baseline_result";
-    else if (reviewSession?.chosenPath === "review") tabState = "review";
-    else if (isBaselineCompleted) tabState = "choose_path";
+if (isBaselineInProgress) tabState = "baseline_assessment";
+else if (baselineNeedsResultScreen) tabState = "baseline_result";
+else if (isBaselineCompleted && !reviewSession?.chosenPath) tabState = "choose_path";
+else if (reviewSession?.chosenPath === "review") tabState = "review";
+else if (hasStartedTreatment) tabState = "treating";
+else tabState = "idle";
 
-    const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasStartedTreatment);
+    const treatmentAccess = computeTreatmentAccess(
+      planStatusFinal,
+      hasStartedTreatment
+    );
 
     // do NOT show paywall while baseline is in progress
     const suppressPaywall = tabState === "baseline_assessment";
-    const paywall = suppressPaywall ? { needed: false, reason: null } : computePaywall(planStatusFinal, hasStartedTreatment);
+    const paywall = suppressPaywall
+      ? { needed: false, reason: null }
+      : computePaywall(planStatusFinal, hasStartedTreatment);
 
     let treatment = null;
     if (tabState === "treating") {
       const allDays = stages.flatMap((s) => s.days);
-      const activeDay = activeDayId ? allDays.find((d) => d.id === activeDayId) : null;
-      const activeStage = activeDay ? stages.find((s) => s.id === activeDay.stageId) : null;
+      const activeDay = activeDayId
+        ? allDays.find((d) => d.id === activeDayId)
+        : null;
+      const activeStage = activeDay
+        ? stages.find((s) => s.id === activeDay.stageId)
+        : null;
 
       treatment = {
         activeStage: activeStage?.code || null,
@@ -729,7 +796,9 @@ router.get("/state", authUser, async (req, res) => {
               number: activeDay.dayNumberInStage,
               status: "active",
               minPercent: 70,
-              percentDone: dayProgress.find((dp) => dp.dayId === activeDayId)?.completionPercent ?? 0,
+              percentDone:
+                dayProgress.find((dp) => dp.dayId === activeDayId)
+                  ?.completionPercent ?? 0,
               timing: { unlockedNextAt: null, minDoneAt: null, fullDoneAt: null },
             }
           : null,
@@ -742,8 +811,13 @@ router.get("/state", authUser, async (req, res) => {
         tabState,
         user: { planStatus: planStatusFinal, daysLeft: daysLeftFinal },
         treatmentAccess,
-        ui: { paywall, flags: { suppressPaywall, isBaselineInProgress, isBaselineCompleted } },
-        baseline: baselineSession ? { session: baselineSession, content: toBaselineUiContent() } : null,
+        ui: {
+          paywall,
+          flags: { suppressPaywall, isBaselineInProgress, isBaselineCompleted },
+        },
+        baseline: baselineSession
+          ? { session: baselineSession, content: toBaselineUiContent() }
+          : null,
         path: null,
         review,
         bastanIntro: null,
@@ -755,8 +829,17 @@ router.get("/state", authUser, async (req, res) => {
           dayProgress,
           taskProgress,
           xpTotal,
-          streak: streak || { currentDays: 0, bestDays: 0, lastCompletedAt: null, yellowCardAt: null },
+          streak:
+            streak || {
+              currentDays: 0,
+              bestDays: 0,
+              lastCompletedAt: null,
+              yellowCardAt: null,
+            },
         },
+
+        // ✅ ADDED
+        awards,
       },
     });
   } catch (e) {
@@ -1142,13 +1225,8 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     if (!user) return wcdnOkError(res, "USER_NOT_FOUND");
 
     const basePlan = getPlanStatus(user.plan, user.planExpiresAt);
-    const { planStatusFinal } = applyDebugPlan(
-      req,
-      basePlan.planStatus,
-      basePlan.daysLeft
-    );
-    const isProLike =
-      planStatusFinal === "pro" || planStatusFinal === "expiring";
+    const { planStatusFinal } = applyDebugPlan(req, basePlan.planStatus, basePlan.daysLeft);
+    const isProLike = planStatusFinal === "pro" || planStatusFinal === "expiring";
 
     // --- find subtask ---
     const subtask = await prisma.bastanSubtaskDefinition.findFirst({
@@ -1174,10 +1252,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     if (!subtask) return wcdnOkError(res, "SUBTASK_NOT_FOUND");
 
     // --- PRO gate ---
-    if (
-      (subtask.action?.isProLocked || subtask.isFree === false) &&
-      !isProLike
-    ) {
+    if ((subtask.action?.isProLocked || subtask.isFree === false) && !isProLike) {
       return wcdnOkError(res, "PRO_REQUIRED");
     }
 
@@ -1188,10 +1263,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     });
 
     const actionProgressRows = await prisma.bastanActionProgress.findMany({
-      where: {
-        userId: user.id,
-        actionId: { in: actions.map((a) => a.id) },
-      },
+      where: { userId: user.id, actionId: { in: actions.map((a) => a.id) } },
       select: { actionId: true, minRequiredSubtasks: true },
     });
 
@@ -1218,9 +1290,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       const done = doneByActionId[a.id] || 0;
       const minReqUser = minReqByActionId[a.id];
       const minReqFinal =
-        typeof minReqUser === "number" && minReqUser > 0
-          ? minReqUser
-          : a.minRequiredSubtasks || 0;
+        typeof minReqUser === "number" && minReqUser > 0 ? minReqUser : a.minRequiredSubtasks || 0;
 
       const complete = done >= minReqFinal;
 
@@ -1232,9 +1302,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     }
 
     if (locked) {
-      return wcdnOkError(res, "ACTION_LOCKED", {
-        reason: "previous_action_incomplete",
-      });
+      return wcdnOkError(res, "ACTION_LOCKED", { reason: "previous_action_incomplete" });
     }
 
     // --- already done? ---
@@ -1242,6 +1310,10 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       where: { userId: user.id, subtaskId: subtask.id },
       select: { isDone: true },
     });
+
+    if (existing?.isDone) {
+      return wcdnOkError(res, "ALREADY_DONE");
+    }
 
     // --- gateChoice extractor ---
     const rawGate =
@@ -1251,36 +1323,117 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       payload?.choice ??
       null;
 
-    /* ===========================
-       🔽 ADDED: CC_3 SAFETY LOGIC
-       =========================== */
-
+    // ✅ اگر این زیر اقدام CC_3 است، قبل از هر کاری validate کن
     if (subtask.key === "CC_3_24h_safety_check") {
-      const safetyResult = rawGate; // "none" | "role_based" | "emotional"
-
-      if (!safetyResult) {
+      if (!rawGate) return wcdnOkError(res, "SAFETY_RESULT_REQUIRED");
+      if (!["none", "role_based", "emotional"].includes(String(rawGate))) {
         return wcdnOkError(res, "SAFETY_RESULT_REQUIRED");
       }
-
-      const now = new Date();
-
-      await prisma.bastanState.update({
-        where: { userId: user.id },
-        data: {
-          lastSafetyCheckAt: now,
-          lastSafetyCheckResult: safetyResult,
-          ...(safetyResult === "none"
-            ? {
-                gosastanUnlockedAt: now,
-              }
-            : {}),
-        },
-      });
     }
 
-    /* ===========================
-       response (unchanged shape)
-       =========================== */
+    const now = new Date();
+    const xp = Math.max(0, Number(subtask.xpReward) || 0);
+
+    let xpAwarded = 0;
+    let medalAwarded = null;
+
+    await prisma.$transaction(async (tx) => {
+      // 1) mark subtask progress done (persist payload)
+      await tx.bastanSubtaskProgress.upsert({
+        where: { userId_subtaskId: { userId: user.id, subtaskId: subtask.id } },
+        create: {
+          userId: user.id,
+          subtaskId: subtask.id,
+          actionId: subtask.actionId,
+          isDone: true,
+          doneAt: now,
+          payloadJson: payload ?? null,
+        },
+        update: {
+          isDone: true,
+          doneAt: now,
+          payloadJson: payload ?? null,
+        },
+      });
+
+      // 2) ensure action progress exists (minRequiredSubtasks snapshot)
+      await tx.bastanActionProgress.upsert({
+        where: { userId_actionId: { userId: user.id, actionId: subtask.actionId } },
+        create: {
+          userId: user.id,
+          actionId: subtask.actionId,
+          status: "active",
+          minRequiredSubtasks: subtask.action?.minRequiredSubtasks || 0,
+        },
+        update: {
+          minRequiredSubtasks: subtask.action?.minRequiredSubtasks || 0,
+        },
+      });
+
+      // 3) XP ledger (only if xpReward > 0)
+      if (xp > 0) {
+        await tx.xpLedger.create({
+          data: {
+            userId: user.id,
+            amount: xp,
+            reason: "bastan_subtask_complete",
+            refType: "bastan_subtask",
+            refId: String(subtask.key || ""),
+          },
+        });
+        xpAwarded = xp;
+      }
+
+      // 4) CC_3 safety logic + medal award
+      if (subtask.key === "CC_3_24h_safety_check") {
+        const safetyResult = String(rawGate);
+
+        await tx.bastanState.upsert({
+          where: { userId: user.id },
+          create: {
+            userId: user.id,
+            lastSafetyCheckAt: now,
+            lastSafetyCheckResult: safetyResult,
+            ...(safetyResult === "none" ? { gosastanUnlockedAt: now } : {}),
+          },
+          update: {
+            lastSafetyCheckAt: now,
+            lastSafetyCheckResult: safetyResult,
+            ...(safetyResult === "none" ? { gosastanUnlockedAt: now } : {}),
+          },
+        });
+
+        if (safetyResult === "none") {
+          const MEDAL_CODE = "BASTAN_COMPLETE";
+
+          const medal = await tx.medal.upsert({
+            where: { code: MEDAL_CODE },
+            create: {
+              code: MEDAL_CODE,
+              titleFa: "پایان مرحله بستن",
+              description: "تو مرحله بستن رو کامل کردی",
+              iconKey: "bastan_complete",
+            },
+            update: {},
+            select: { id: true, code: true, titleFa: true },
+          });
+
+          // اگر قبلاً گرفته، دوباره create نکن
+          const alreadyHas = await tx.userMedal.findUnique({
+            where: { userId_medalId: { userId: user.id, medalId: medal.id } },
+            select: { userId: true },
+          });
+
+          if (!alreadyHas) {
+            await tx.userMedal.create({
+              data: { userId: user.id, medalId: medal.id },
+            });
+
+            medalAwarded = { code: medal.code, titleFa: medal.titleFa };
+          }
+        }
+      }
+    });
 
     return res.json({
       ok: true,
@@ -1291,9 +1444,14 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
           subtask.key === "CC_3_24h_safety_check"
             ? {
                 safetyResult: rawGate,
-                gosastanUnlocked: rawGate === "none",
+                gosastanUnlocked: String(rawGate) === "none",
+                xpAwarded,
+                medalAwarded,
               }
-            : undefined,
+            : {
+                xpAwarded,
+                medalAwarded: null,
+              },
       },
     });
   } catch (e) {
@@ -1576,11 +1734,31 @@ router.get("/baseline/state", authUser, async (req, res) => {
     noStore(res);
 
     const phone = req.userPhone;
-    const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true },
+    });
     if (!user) return baselineError(res, "USER_NOT_FOUND");
 
-    const session = await prisma.assessmentSession.findUnique({
+    const steps = buildBaselineStepsLinear();
+    const total = steps.length;
+
+    // ✅ get or create session (برای کاربر جدید هم step بده، نه started:false)
+    const session = await prisma.assessmentSession.upsert({
       where: { userId_kind: { userId: user.id, kind: HB_BASELINE.kind } },
+      create: {
+        userId: user.id,
+        kind: HB_BASELINE.kind,
+        status: "in_progress",
+        currentIndex: 0,
+        totalItems: total,
+        answersJson: { consent: {}, answers: {} },
+        startedAt: new Date(),
+      },
+      update: {
+        // اگر تعداد steps تغییر کرد، sync شود
+        totalItems: total,
+      },
       select: {
         id: true,
         status: true,
@@ -1594,16 +1772,7 @@ router.get("/baseline/state", authUser, async (req, res) => {
       },
     });
 
-    const steps = buildBaselineStepsLinear();
-    const total = steps.length;
-
-    if (!session) {
-      return res.json({
-        ok: true,
-        data: { started: false, kind: HB_BASELINE.kind, totalItems: total },
-      });
-    }
-
+    // ✅ اگر completed است مثل قبل
     if (session.status === "completed") {
       return res.json({
         ok: true,

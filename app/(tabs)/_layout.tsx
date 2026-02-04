@@ -256,6 +256,7 @@ export default function TabsLayout() {
         name="Mashaal"
         options={{
           title: "مشعل",
+           href: null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="flame-outline" color={color} size={size} />
           ),

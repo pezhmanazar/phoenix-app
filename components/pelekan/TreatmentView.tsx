@@ -1,8 +1,8 @@
 // components/pelekan/TreatmentView.tsx
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Dimensions, Easing, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
@@ -139,11 +139,12 @@ const palette = {
   },
 };
 
-// ✅ لوکال: تیکِ «ویس معرفی مرحله بستن»
+// ✅ لوکال: ویس‌های استیج
 const KEY_BASTAN_STAGE_AUDIO_V1 = "pelekan:stage_intro:bastan:heard:v1";
+const KEY_GOSASTAN_STAGE_AUDIO_V1 = "pelekan:stage_intro:gosastan:heard:v1";
 
 function stageIconName(code: string): keyof typeof Ionicons.glyphMap {
-  if (code === "bastan") return "flame";
+  if (code === "bastan") return "folder";
   if (code === "gosastan") return "link";
   if (code === "sookhtan") return "bonfire";
   if (code === "sarashtan") return "person";
@@ -197,30 +198,30 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
     return m;
   }, [state.progress?.dayProgress]);
 
-  // ✅ startDone منبع حقیقت: همون چیزی که خودت قبلاً گذاشتی
-  const remindStartDone = useMemo(() => {
-    return (
-      !!(state as any)?.bastanIntro?.completedAt ||
-      !!(state as any)?.bastanIntro?.introCompletedAt ||
-      !!(state as any)?.treatment?.bastanIntro?.completedAt
-    );
-  }, [state]);
-
-  // ✅ تیکِ معرفی بستن (لوکال)
+  // ✅ stage-intro ها (لوکال)
   const [bastanHeard, setBastanHeard] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const v = await AsyncStorage.getItem(KEY_BASTAN_STAGE_AUDIO_V1);
-        if (!alive) return;
-        setBastanHeard(v === "1");
-      } catch {}
-    })();
-    return () => {
-      alive = false;
-    };
+  const [gosastanHeard, setGosastanHeard] = useState(false);
+
+  const refreshLocalHeards = useCallback(async () => {
+    try {
+      const [b, g] = await Promise.all([
+        AsyncStorage.getItem(KEY_BASTAN_STAGE_AUDIO_V1),
+        AsyncStorage.getItem(KEY_GOSASTAN_STAGE_AUDIO_V1),
+      ]);
+      setBastanHeard(b === "1");
+      setGosastanHeard(g === "1");
+    } catch {}
   }, []);
+
+  useEffect(() => {
+    refreshLocalHeards();
+  }, [refreshLocalHeards]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshLocalHeards();
+    }, [refreshLocalHeards])
+  );
 
   if (item.kind === "spacer") return <View style={{ height: 10 }} />;
 
@@ -256,10 +257,18 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
     );
   }
 
-  // ✅ start (دایره شروع درمان) — خط صاف عمودی مثل سنجش
+  // ✅ start — برگشت به حالت قبلی: پررنگ، بدون سبز شدن/فید شدن
   if (item.kind === "start") {
     const nodeX = MID_X;
-    const lineColor = remindStartDone ? palette.pathDone : palette.pathIdle;
+
+    // خط عمودی: همون تصمیم قبلی (سبز ثابت). اگر نمی‌خوای، اینو بذار palette.pathIdle
+    const lineColor = palette.pathDone;
+
+    // دایره همیشه available (نه done, نه فید)
+    const bg = palette.node.availableBg;
+    const border = palette.node.availableBorder;
+    const iconCol = palette.node.availableIcon;
+    const labelCol = palette.node.availableLabel;
 
     return (
       <View style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}>
@@ -275,40 +284,39 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
             {
               left: nodeX - NODE_R,
               top: CELL_H / 2 - NODE_R,
-              backgroundColor: remindStartDone ? palette.node.doneBg : palette.node.availableBg,
-              borderColor: remindStartDone ? palette.node.doneBorder : palette.node.availableBorder,
+              backgroundColor: bg,
+              borderColor: border,
             },
           ]}
         >
-          <Ionicons
-            name={remindStartDone ? "checkmark-circle" : "play"}
-            size={22}
-            color={remindStartDone ? palette.node.doneIcon : palette.node.availableIcon}
-          />
-          <Text style={[styles.nodeText, { color: remindStartDone ? palette.node.doneLabel : palette.node.availableLabel }]}>{item.titleFa}</Text>
+          <Ionicons name={"play"} size={22} color={iconCol} style={{ marginLeft: 2 }} />
+          <Text style={[styles.nodeText, { color: labelCol }]}>{item.titleFa}</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  // ✅ stage_node (اسم مرحله، زیگزاگی) + لمس بستن => صفحه ویس مرحله بستن
+  // ✅ stage_node: خود دایره سبز شود (نه بج) + گسستن مسیر سبز بعد از شنیدن
   if (item.kind === "stage_node") {
     const { zig, stage } = item;
     const nodeX = zig === "L" ? NODE_X_LEFT : NODE_X_RIGHT;
 
+    const stageCode = String(stage?.code || "");
+    const isBastanStage = stageCode === "bastan";
+    const isGosastanStage = stageCode === "gosastan";
+
+    const heard = isBastanStage ? bastanHeard : isGosastanStage ? gosastanHeard : false;
+
     const done = !!item.done;
     const active = !!item.active;
 
-    const bg = done ? palette.node.doneBg : active ? palette.node.availableBg : palette.node.lockedBg;
-    const border = done ? palette.node.doneBorder : active ? palette.node.availableBorder : palette.node.lockedBorder;
-    const iconCol = done ? palette.node.doneIcon : active ? palette.node.availableIcon : palette.node.lockedIcon;
-    const labelCol = done ? palette.node.doneLabel : active ? palette.node.availableLabel : palette.node.lockedLabel;
+    const bg = done || heard ? palette.node.doneBg : active ? palette.node.availableBg : palette.node.lockedBg;
+    const border = done || heard ? palette.node.doneBorder : active ? palette.node.availableBorder : palette.node.lockedBorder;
+    const iconCol = done || heard ? palette.node.doneIcon : active ? palette.node.availableIcon : palette.node.lockedIcon;
+    const labelCol = done || heard ? palette.node.doneLabel : active ? palette.node.availableLabel : palette.node.lockedLabel;
 
-    const isBastanStage = String(stage?.code || "") === "bastan";
-
-    // ✅ FIX: خط بین «شروع» و «بستن» باید با startDone سبز شود
-    const strokeCol =
-      done ? palette.pathDone : isBastanStage && remindStartDone ? palette.pathDone : palette.pathIdle;
+    // ✅ گسستن: بعد از شنیدن ویس، مسیر ورودی سبز شود
+    const strokeCol = done ? palette.pathDone : isGosastanStage && heard ? palette.pathDone : palette.pathIdle;
 
     const bottomY = CELL_H;
     const topY = 0;
@@ -319,13 +327,14 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
       C ${nodeX} ${CELL_H * 0.35}, ${MID_X} ${topY + 30}, ${MID_X} ${topY}
     `;
 
-    const NodeWrap: any = isBastanStage ? TouchableOpacity : View;
-    const wrapProps = isBastanStage
-      ? {
-          activeOpacity: 0.9,
-          onPress: () => router.push("/pelekan/bastan/stage-intro" as any),
-        }
-      : {};
+    const NodeWrap: any = isBastanStage || isGosastanStage ? TouchableOpacity : View;
+
+    const wrapProps =
+      isBastanStage
+        ? { activeOpacity: 0.9, onPress: () => router.push("/pelekan/bastan/stage-intro" as any) }
+        : isGosastanStage
+          ? { activeOpacity: 0.9, onPress: () => router.push("/pelekan/gosastan/stage-intro" as any) }
+          : {};
 
     return (
       <View style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}>
@@ -345,29 +354,7 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
             },
           ]}
         >
-          <Ionicons name={stageIconName(String(stage?.code || "")) as any} size={22} color={iconCol} />
-
-          {/* ✅ تیکِ لوکالِ معرفی مرحله بستن */}
-          {isBastanStage && bastanHeard ? (
-            <View
-              style={{
-                position: "absolute",
-                top: -6,
-                left: -6,
-                width: 18,
-                height: 18,
-                borderRadius: 999,
-                backgroundColor: "#22C55E",
-                alignItems: "center",
-                justifyContent: "center",
-                borderWidth: 2,
-                borderColor: palette.bg,
-              }}
-            >
-              <Ionicons name="checkmark" size={12} color="#fff" />
-            </View>
-          ) : null}
-
+          <Ionicons name={stageIconName(stageCode) as any} size={22} color={iconCol} />
           <Text style={[styles.nodeText, { color: labelCol }]}>{stage.titleFa}</Text>
         </NodeWrap>
       </View>
