@@ -519,11 +519,9 @@ async function syncBastanActionsToPelekanDays(prismaClient, userId) {
 }
 
 /* ---------- GET /api/pelekan/state ---------- */
-
 router.get("/state", authUser, async (req, res) => {
   try {
     noStore(res);
-
     const phone = req.userPhone;
 
     // 1) user first
@@ -750,36 +748,38 @@ router.get("/state", authUser, async (req, res) => {
 
     const hasAnyProgress = Array.isArray(dayProgress) && dayProgress.length > 0;
     const hasAnyProgressFinal = applyDebugProgress(req, hasAnyProgress);
-// معیار واقعی "شروع درمان" برای تب پلکان: فقط پیشرفت واقعی درمان
-const chosenPath = String(reviewSession?.chosenPath || ""); // "" | "skip_review" | "review"
 
-const reviewDoneOrSkipped =
-  chosenPath === "review" &&
-  (!!reviewSession?.completedAt || !!reviewSession?.test2SkippedAt);
+    // ✅ ✅ ✅ FIXED LOGIC
+    // معیار نمایش پلکان: اگر کاربر مسیر درمان را انتخاب کرده باشد، حتی بدون dayProgress باید treating را ببیند
+    const chosenPath = String(reviewSession?.chosenPath || "").trim(); // "" | "skip_review" | "review"
 
-const hasStartedTreatment =
-  (chosenPath === "skip_review" && hasAnyProgressFinal) ||
-  reviewDoneOrSkipped;
+    const hasChosenTreatmentPath = chosenPath === "skip_review";
+
+    const reviewDoneOrSkipped =
+      chosenPath === "review" &&
+      (!!reviewSession?.completedAt || !!reviewSession?.test2SkippedAt);
+
+    // ✅ برای VIEW (نمایش treating)
+    const shouldShowTreating = hasAnyProgressFinal || hasChosenTreatmentPath || reviewDoneOrSkipped;
 
     let tabState = "idle";
-
-if (isBaselineInProgress) tabState = "baseline_assessment";
-else if (baselineNeedsResultScreen) tabState = "baseline_result";
-else if (isBaselineCompleted && !reviewSession?.chosenPath) tabState = "choose_path";
-else if (reviewSession?.chosenPath === "review") tabState = "review";
-else if (hasStartedTreatment) tabState = "treating";
-else tabState = "idle";
+    if (isBaselineInProgress) tabState = "baseline_assessment";
+    else if (baselineNeedsResultScreen) tabState = "baseline_result";
+    else if (isBaselineCompleted && !reviewSession?.chosenPath) tabState = "choose_path";
+    else if (reviewSession?.chosenPath === "review") tabState = "review";
+    else if (shouldShowTreating) tabState = "treating";
+    else tabState = "idle";
 
     const treatmentAccess = computeTreatmentAccess(
       planStatusFinal,
-      hasStartedTreatment
+      shouldShowTreating
     );
 
     // do NOT show paywall while baseline is in progress
     const suppressPaywall = tabState === "baseline_assessment";
     const paywall = suppressPaywall
       ? { needed: false, reason: null }
-      : computePaywall(planStatusFinal, hasStartedTreatment);
+      : computePaywall(planStatusFinal, hasAnyProgressFinal);
 
     let treatment = null;
     if (tabState === "treating") {
@@ -855,6 +855,7 @@ else tabState = "idle";
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
+
 
 // -------------------- Review Choose Path --------------------
 // POST /api/pelekan/review/choose  body: { phone, choice: "skip_review" | "review" }
