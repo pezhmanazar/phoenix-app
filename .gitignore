@@ -47,3 +47,4 @@ phoenix-backend\uploads\
 phoenix-backend\prisma\dev.db
 phoenix-backend/uploads/
 phoenix-backend/prisma/dev.db
+*.bundle

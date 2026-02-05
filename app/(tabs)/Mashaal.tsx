@@ -1,25 +1,25 @@
 // app/(tabs)/Mashaal.tsx
-import React, { useEffect, useRef, useState } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Image,
-  StyleSheet,
-  ActivityIndicator,
-  ScrollView,
-} from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Video, ResizeMode, AVPlaybackStatusSuccess } from "expo-av";
 import Slider from "@react-native-community/slider";
+import { useFocusEffect } from "@react-navigation/native";
+import { AVPlaybackStatusSuccess, ResizeMode, Video } from "expo-av";
 import { LinearGradient } from "expo-linear-gradient";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import PlanStatusBadge from "../../components/PlanStatusBadge";
 import { useAudio } from "../../hooks/useAudio";
 import { useUser } from "../../hooks/useUser";
 import { getPlanStatus, PRO_FLAG_KEY } from "../../lib/plan";
-import PlanStatusBadge from "../../components/PlanStatusBadge";
 
 const keyFor = (id: string) => `Mashaal.progress.${id}`;
 
