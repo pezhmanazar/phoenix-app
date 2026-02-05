@@ -899,26 +899,6 @@ router.post("/review/choose", authUser, async (req, res) => {
 
     // 2) اگر کاربر skip_review زد -> روز 1 bastan را active کن + نتایج دو آزمون آخر را ریست کن
     if (choice === "skip_review") {
-      // A) ورود به treating با ساختن progress واقعی
-      const firstDay = await prisma.pelekanDay.findFirst({
-        where: { stage: { code: "bastan" }, dayNumberInStage: 1 },
-        select: { id: true },
-      });
-
-      if (firstDay?.id) {
-        await prisma.pelekanDayProgress.upsert({
-          where: { userId_dayId: { userId: user.id, dayId: firstDay.id } },
-          create: {
-            userId: user.id,
-            dayId: firstDay.id,
-            status: "active",
-            completionPercent: 0,
-            startedAt: now,
-            lastActivityAt: now,
-          },
-          update: { lastActivityAt: now, status: "active" },
-        });
-      }
 
       // B) ریست دو آزمون آخر
       const RESET_KINDS = ["relationship_rescan", "ex_returns"];
