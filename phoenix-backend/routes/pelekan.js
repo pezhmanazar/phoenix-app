@@ -541,6 +541,13 @@ router.get("/state", authUser, async (req, res) => {
     // ✅ engine signature: (prisma, userId)
     await pelekanEngine.refresh(prisma, user.id);
 
+    // ✅ ADDED: bastan intro state (برای اینکه قبل از intro، روز 1 فعال نشه)
+    const bastanState = await prisma.bastanState.findUnique({
+      where: { userId: user.id },
+      select: { introAudioCompletedAt: true },
+    });
+    const introDone = !!bastanState?.introAudioCompletedAt;
+
     // 2) reviewSession AFTER user
     const reviewSession = await prisma.pelekanReviewSession.findUnique({
       where: { userId: user.id },
@@ -572,6 +579,8 @@ router.get("/state", authUser, async (req, res) => {
       basePlan.planStatus,
       basePlan.daysLeft
     );
+
+    const isProLike = planStatusFinal === "pro" || planStatusFinal === "expiring";
 
     // baseline session (hb_baseline)
     const baselineSession = await prisma.assessmentSession.findUnique({
@@ -744,56 +753,74 @@ router.get("/state", authUser, async (req, res) => {
     });
     const xpTotal = xpAgg?._sum?.amount || 0;
 
-    const activeDayId = computeActiveDayId({ stages, dayProgress });
+    const activeDayIdRaw = computeActiveDayId({ stages, dayProgress });
 
     const hasAnyProgress = Array.isArray(dayProgress) && dayProgress.length > 0;
     const hasAnyProgressFinal = applyDebugProgress(req, hasAnyProgress);
 
-    // ✅ ✅ ✅ FIXED LOGIC
-    // معیار نمایش پلکان: اگر کاربر مسیر درمان را انتخاب کرده باشد، حتی بدون dayProgress باید treating را ببیند
-    const chosenPath = String(reviewSession?.chosenPath || "").trim(); // "" | "skip_review" | "review"
-
-    const hasChosenTreatmentPath = chosenPath === "skip_review";
-
+    // معیار واقعی "شروع درمان" برای تب پلکان: فقط پیشرفت واقعی درمان
+    const chosenPath = String(reviewSession?.chosenPath || ""); // "" | "skip_review" | "review"
     const reviewDoneOrSkipped =
       chosenPath === "review" &&
       (!!reviewSession?.completedAt || !!reviewSession?.test2SkippedAt);
 
-    // ✅ برای VIEW (نمایش treating)
-    const shouldShowTreating = hasAnyProgressFinal || hasChosenTreatmentPath || reviewDoneOrSkipped;
+    // ✅ اگر کاربر مسیر درمان را انتخاب کرده ولی intro را هنوز انجام نداده:
+    // باید وارد پلکان شود اما "شروع" فعال باشد، نه Day1
+    const isTreatmentEntry =
+      chosenPath === "skip_review" || reviewDoneOrSkipped || hasAnyProgressFinal;
+
+    // ✅ شروع واقعی درمان فقط بعد از intro + داشتن progress معنی‌دار است
+    const hasStartedTreatment = introDone && hasAnyProgressFinal;
+
+    // ✅ activeDayId نهایی: قبل از intro، null
+    const activeDayId = !introDone ? null : activeDayIdRaw;
 
     let tabState = "idle";
+
+    // 1) baseline flows
     if (isBaselineInProgress) tabState = "baseline_assessment";
     else if (baselineNeedsResultScreen) tabState = "baseline_result";
     else if (isBaselineCompleted && !reviewSession?.chosenPath) tabState = "choose_path";
-    else if (reviewSession?.chosenPath === "review") tabState = "review";
-    else if (shouldShowTreating) tabState = "treating";
+    else if (reviewSession?.chosenPath === "review") {
+      // ✅ اگر دو آزمون آخر تمام شده و کاربر پرو نیست و هنوز unlock نشده => باید paywall نشان داده شود
+      const reviewNeedsPaywall =
+        !!reviewSession?.test2CompletedAt && !isProLike && !reviewSession?.unlockedAt;
+      tabState = reviewNeedsPaywall ? "review_paywall" : "review";
+    }
+    // 2) treatment entry
+    else if (isTreatmentEntry) tabState = "treating";
     else tabState = "idle";
 
     const treatmentAccess = computeTreatmentAccess(
       planStatusFinal,
-      shouldShowTreating
+      hasStartedTreatment
     );
 
     // do NOT show paywall while baseline is in progress
-    const suppressPaywall = tabState === "baseline_assessment";
+    // ✅ همچنین قبل از intro هم paywall نشان نده (تا کاربر اول ویس شروع را کامل کند)
+    const suppressPaywall = tabState === "baseline_assessment" || (tabState === "treating" && !introDone);
+
     const paywall = suppressPaywall
       ? { needed: false, reason: null }
-      : computePaywall(planStatusFinal, hasAnyProgressFinal);
+      : computePaywall(planStatusFinal, hasStartedTreatment);
 
     let treatment = null;
     if (tabState === "treating") {
       const allDays = stages.flatMap((s) => s.days);
+
+      // ✅ قبل از intro: activeDay را null کن و stage را bastan بگذار
       const activeDay = activeDayId
         ? allDays.find((d) => d.id === activeDayId)
         : null;
-      const activeStage = activeDay
-        ? stages.find((s) => s.id === activeDay.stageId)
-        : null;
+
+      const activeStage =
+        activeDay
+          ? stages.find((s) => s.id === activeDay.stageId)
+          : stages.find((s) => s.code === "bastan") || null;
 
       treatment = {
         activeStage: activeStage?.code || null,
-        activeDay: activeDay?.dayNumberInStage || null,
+        activeDay: activeDay ? activeDay.dayNumberInStage : null,
         stages: stages.map((s) => ({
           code: s.code,
           title: s.titleFa,
@@ -810,6 +837,12 @@ router.get("/state", authUser, async (req, res) => {
               timing: { unlockedNextAt: null, minDoneAt: null, fullDoneAt: null },
             }
           : null,
+
+        // ✅ ADDED: برای UI که دایره "شروع" را چشمک‌زن کند
+        start: {
+          required: !introDone,
+          completedAt: bastanState?.introAudioCompletedAt || null,
+        },
       };
     }
 
@@ -828,7 +861,14 @@ router.get("/state", authUser, async (req, res) => {
           : null,
         path: null,
         review,
-        bastanIntro: null,
+
+        // ✅ ADDED: intro وضعیتش را هم همینجا بده (برای قفل اقدام اول)
+        bastanIntro: {
+          completedAt: bastanState?.introAudioCompletedAt || null,
+          required: true,
+          lockedActionsUntilDone: !introDone,
+        },
+
         treatment,
         hasContent: true,
         stages,
