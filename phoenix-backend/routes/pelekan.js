@@ -751,7 +751,15 @@ router.get("/state", authUser, async (req, res) => {
     const hasAnyProgress = Array.isArray(dayProgress) && dayProgress.length > 0;
     const hasAnyProgressFinal = applyDebugProgress(req, hasAnyProgress);
 // معیار واقعی "شروع درمان" برای تب پلکان: فقط پیشرفت واقعی درمان
-const hasStartedTreatment = hasAnyProgressFinal;
+const chosenPath = String(reviewSession?.chosenPath || ""); // "" | "skip_review" | "review"
+
+const reviewDoneOrSkipped =
+  chosenPath === "review" &&
+  (!!reviewSession?.completedAt || !!reviewSession?.test2SkippedAt);
+
+const hasStartedTreatment =
+  (chosenPath === "skip_review" && hasAnyProgressFinal) ||
+  reviewDoneOrSkipped;
 
     let tabState = "idle";
 
