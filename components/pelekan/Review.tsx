@@ -213,25 +213,44 @@ export default function Review({ me, state, onRefresh }: Props) {
     router.replace(`/(tabs)/ReviewResult?phone=${encodeURIComponent(phone)}` as any);
   }, [router, phone]);
 
+  // ✅ FIX: فقط وقتی unlocked شد یا Pro است برو نتیجه؛ اگر completed_locked و Pro نیست همینجا بمان (Paywall همین کامپوننت)
   const openResultScreen = useCallback(async () => {
-    // ✅ صفحه نتیجه جداست
-    goToResultPage();
-  }, [goToResultPage]);
+    const st = await fetchReviewState();
+    onRefresh?.();
 
-  // ✅ NEW: اگر وضعیت از in_progress خارج شد، حق نداری کاربر را داخل سوال‌ها نگه داری.
+    const sessStatus = String(st?.session?.status || "");
+    const isProNow = !!st?.user?.isPro;
+
+    if (sessStatus === "completed_locked" && !isProNow) {
+      return;
+    }
+
+    if (sessStatus === "unlocked" || isProNow) {
+      goToResultPage();
+      return;
+    }
+  }, [fetchReviewState, onRefresh, goToResultPage]);
+
+  // ✅ FIX: اگر از in_progress خارج شد:
+  // - unlocked / pro => برو نتیجه
+  // - completed_locked و free => ریدایرکت نکن (Paywall همین صفحه)
   const syncAndMaybeGoResult = useCallback(
     async () => {
       const st = await fetchReviewState();
       onRefresh?.();
 
       const sessStatus = String(st?.session?.status || "");
+      const isProNow = !!st?.user?.isPro;
+
       if (sessStatus && sessStatus !== "in_progress") {
-        await openResultScreen();
+        if (sessStatus === "unlocked" || isProNow) {
+          goToResultPage();
+        }
         return true;
       }
       return false;
     },
-    [fetchReviewState, onRefresh, openResultScreen]
+    [fetchReviewState, onRefresh, goToResultPage]
   );
 
   const ensureStarted = useCallback(
@@ -498,9 +517,8 @@ export default function Review({ me, state, onRefresh }: Props) {
         return;
       }
 
-      // ✅ بعد از finish: حتما برو نتیجه (قفل یا آنلاک)
+      // ✅ FIX: بعد از finish فقط sync کافیست (دیگه ریدایرکت دوم نزن)
       await syncAndMaybeGoResult();
-      await openResultScreen();
     } finally {
       setLoading(false);
       submitLockRef.current = false;
@@ -542,8 +560,8 @@ export default function Review({ me, state, onRefresh }: Props) {
         return;
       }
 
+      // ✅ FIX: فقط sync
       await syncAndMaybeGoResult();
-      await openResultScreen();
     } finally {
       setLoading(false);
       submitLockRef.current = false;
@@ -585,8 +603,8 @@ export default function Review({ me, state, onRefresh }: Props) {
         return;
       }
 
+      // ✅ FIX: فقط sync
       await syncAndMaybeGoResult();
-      await openResultScreen();
     } finally {
       setLoading(false);
       submitLockRef.current = false;
@@ -735,9 +753,9 @@ export default function Review({ me, state, onRefresh }: Props) {
 
     const opts = currentQuestion.options || [];
     const rawLayout = String(currentQuestion.ui?.layout || "").trim();
-const layout =
-  rawLayout ||
-  (opts.length === 4 ? "grid2x2" : opts.length === 5 ? "grid3x2_last2" : "stack");
+    const layout =
+      rawLayout ||
+      (opts.length === 4 ? "grid2x2" : opts.length === 5 ? "grid3x2_last2" : "stack");
 
     const renderBtn = (op: ReviewOption) => {
       const isSelected = selectedValue === op.value;
@@ -772,39 +790,39 @@ const layout =
     }
 
     // ✅ 4 گزینه: 2 بالا + 2 پایین
-if (layout === "grid2x2" && opts.length === 4) {
-  return (
-    <View>
-      <View style={styles.gridRow}>
-        <View style={styles.gridCol}>{renderBtn(opts[0])}</View>
-        <View style={styles.gridCol}>{renderBtn(opts[1])}</View>
-      </View>
-      <View style={styles.gridRow}>
-        <View style={styles.gridCol}>{renderBtn(opts[2])}</View>
-        <View style={styles.gridCol}>{renderBtn(opts[3])}</View>
-      </View>
-    </View>
-  );
-}
+    if (layout === "grid2x2" && opts.length === 4) {
+      return (
+        <View>
+          <View style={styles.gridRow}>
+            <View style={styles.gridCol}>{renderBtn(opts[0])}</View>
+            <View style={styles.gridCol}>{renderBtn(opts[1])}</View>
+          </View>
+          <View style={styles.gridRow}>
+            <View style={styles.gridCol}>{renderBtn(opts[2])}</View>
+            <View style={styles.gridCol}>{renderBtn(opts[3])}</View>
+          </View>
+        </View>
+      );
+    }
 
     // ✅ 5 گزینه: 3 بالا + 2 پایین
     if (layout === "grid3x2_last2" && opts.length === 5) {
-  return (
-    <View>
-      <View style={styles.gridRow}>
-        <View style={styles.gridCol}>{renderBtn(opts[0])}</View>
-        <View style={styles.gridCol}>{renderBtn(opts[1])}</View>
-        <View style={styles.gridCol}>{renderBtn(opts[2])}</View>
-      </View>
+      return (
+        <View>
+          <View style={styles.gridRow}>
+            <View style={styles.gridCol}>{renderBtn(opts[0])}</View>
+            <View style={styles.gridCol}>{renderBtn(opts[1])}</View>
+            <View style={styles.gridCol}>{renderBtn(opts[2])}</View>
+          </View>
 
-      {/* ✅ ردیف دوم: دو آیتم وسط‌چین با عرض 1.5 ستون */}
-      <View style={[styles.gridRow, styles.centerRow]}>
-        <View style={styles.gridColWide}>{renderBtn(opts[3])}</View>
-        <View style={styles.gridColWide}>{renderBtn(opts[4])}</View>
-      </View>
-    </View>
-  );
-}
+          {/* ✅ ردیف دوم: دو آیتم وسط‌چین با عرض 1.5 ستون */}
+          <View style={[styles.gridRow, styles.centerRow]}>
+            <View style={styles.gridColWide}>{renderBtn(opts[3])}</View>
+            <View style={styles.gridColWide}>{renderBtn(opts[4])}</View>
+          </View>
+        </View>
+      );
+    }
 
     // ✅ 6 گزینه: 3 بالا + 3 پایین
     if (layout === "grid3x2" && opts.length === 6) {
@@ -950,7 +968,7 @@ if (layout === "grid2x2" && opts.length === 4) {
           <Text style={[styles.rtlText, { color: palette.sub, marginTop: 10, lineHeight: 22, textAlign: "right" }]}>
             آزمون بازسنجی به پایان رسید و پاسخ‌های تو ثبت شد.
             {"\n"}
-           اگر «ادامه» رو بزنی، وارد آزمون دوم یعنی آزمون («آیا برمی‌گرده؟») میشی و در پایان، نتیجه‌ی کامل هر دو نمایش داده میشه.
+            اگر «ادامه» رو بزنی، وارد آزمون دوم یعنی آزمون («آیا برمی‌گرده؟») میشی و در پایان، نتیجه‌ی کامل هر دو نمایش داده میشه.
           </Text>
 
           <View style={{ height: 14 }} />
@@ -1190,13 +1208,13 @@ const styles = StyleSheet.create({
   },
 
   centerRow: {
-  justifyContent: "center",
-},
+    justifyContent: "center",
+  },
 
-gridColWide: {
-  flexGrow: 0,
-  flexBasis: "47%", // دو تا کنار هم، وسط‌چین (با gap)
-},
+  gridColWide: {
+    flexGrow: 0,
+    flexBasis: "47%", // دو تا کنار هم، وسط‌چین (با gap)
+  },
 
   btnPrimary: {
     borderWidth: 1,

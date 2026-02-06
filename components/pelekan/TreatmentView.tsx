@@ -3,7 +3,17 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Dimensions, Easing, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Animated,
+  Dimensions,
+  Easing,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import Svg, { Path } from "react-native-svg";
 
 /* ----------------------------- Types ----------------------------- */
@@ -64,6 +74,7 @@ export type PelekanState = {
     | null;
   ui?: any;
   treatment?: any;
+  bastanIntro?: any; // ✅ مهم: از سرور میاد
 };
 
 export type HeaderItem = { kind: "header"; id: string; stage: PelekanStage };
@@ -223,6 +234,48 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
     }, [refreshLocalHeards])
   );
 
+  // ✅ NEW: گیت واقعی از سرور (نه AsyncStorage)
+  const bastanIntroCompletedAt =
+    state?.bastanIntro?.completedAt ??
+    state?.treatment?.bastanIntro?.completedAt ??
+    state?.treatment?.start?.completedAt ??
+    null;
+
+  const bastanIntroDone = !!bastanIntroCompletedAt;
+
+  // ✅ NEW: مودال تم‌دار برای هشدار
+  const [guardOpen, setGuardOpen] = useState(false);
+  const [guardText, setGuardText] = useState("ابتدا روی دکمه شروع کلیک کن");
+
+  const openGuard = useCallback((txt?: string) => {
+    setGuardText(txt || "ابتدا روی دکمه شروع کلیک کن");
+    setGuardOpen(true);
+  }, []);
+
+  // ✅ فقط برای دیباگ، بفهمیم واقعاً state چی میگه
+  useEffect(() => {
+    // حواست باشه اسپم نشه؛ ولی همین الان برای تست خوبه
+    // اگر دیدی زیاد لاگ میده، پاکش کن.
+    console.log("[TreatmentView] bastanIntroDone=", bastanIntroDone, "completedAt=", bastanIntroCompletedAt);
+  }, [bastanIntroDone, bastanIntroCompletedAt]);
+
+  // ✅ یک مودال برای همه آیتم‌ها (نه تکراری)
+  const GuardModal = (
+    <Modal transparent visible={guardOpen} animationType="fade" onRequestClose={() => setGuardOpen(false)}>
+      <View style={g.modalBackdrop}>
+        <View style={g.modalCard}>
+          <Text style={g.modalTitle}>توجه</Text>
+          <Text style={g.modalBody}>{guardText}</Text>
+          <View style={g.modalActions}>
+            <Pressable onPress={() => setGuardOpen(false)} style={g.modalBtn}>
+              <Text style={g.modalBtnText}>باشه</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   if (item.kind === "spacer") return <View style={{ height: 10 }} />;
 
   // ✅ results (دایره سنجش) — خط صاف عمودی
@@ -233,6 +286,8 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
 
     return (
       <View style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}>
+        {GuardModal}
+
         <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
           <Path d={`M ${MID_X} ${CELL_H / 2} L ${MID_X} 0`} stroke={lineColor} strokeWidth={6} fill="none" strokeLinecap="round" />
         </Svg>
@@ -257,14 +312,11 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
     );
   }
 
-  // ✅ start — برگشت به حالت قبلی: پررنگ، بدون سبز شدن/فید شدن
+  // ✅ start — همان قبلی
   if (item.kind === "start") {
     const nodeX = MID_X;
-
-    // خط عمودی: همون تصمیم قبلی (سبز ثابت). اگر نمی‌خوای، اینو بذار palette.pathIdle
     const lineColor = palette.pathDone;
 
-    // دایره همیشه available (نه done, نه فید)
     const bg = palette.node.availableBg;
     const border = palette.node.availableBorder;
     const iconCol = palette.node.availableIcon;
@@ -272,6 +324,8 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
 
     return (
       <View style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}>
+        {GuardModal}
+
         <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
           <Path d={`M ${MID_X} ${CELL_H} L ${MID_X} 0`} stroke={lineColor} strokeWidth={6} fill="none" strokeLinecap="round" />
         </Svg>
@@ -296,7 +350,7 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
     );
   }
 
-  // ✅ stage_node: خود دایره سبز شود (نه بج) + گسستن مسیر سبز بعد از شنیدن
+  // ✅ stage_node: اینجا گیت درست اعمال میشه
   if (item.kind === "stage_node") {
     const { zig, stage } = item;
     const nodeX = zig === "L" ? NODE_X_LEFT : NODE_X_RIGHT;
@@ -315,7 +369,6 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
     const iconCol = done || heard ? palette.node.doneIcon : active ? palette.node.availableIcon : palette.node.lockedIcon;
     const labelCol = done || heard ? palette.node.doneLabel : active ? palette.node.availableLabel : palette.node.lockedLabel;
 
-    // ✅ گسستن: بعد از شنیدن ویس، مسیر ورودی سبز شود
     const strokeCol = done ? palette.pathDone : isGosastanStage && heard ? palette.pathDone : palette.pathIdle;
 
     const bottomY = CELL_H;
@@ -331,13 +384,25 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
 
     const wrapProps =
       isBastanStage
-        ? { activeOpacity: 0.9, onPress: () => router.push("/pelekan/bastan/stage-intro" as any) }
+        ? {
+            activeOpacity: 0.9,
+            onPress: () => {
+              // ✅ گیت اصلی همین است: تا intro تمام نشده، stage-intro باز نشود
+              if (!bastanIntroDone) {
+                openGuard("ابتدا روی دکمه شروع کلیک کن");
+                return;
+              }
+              router.push("/pelekan/bastan/stage-intro" as any);
+            },
+          }
         : isGosastanStage
           ? { activeOpacity: 0.9, onPress: () => router.push("/pelekan/gosastan/stage-intro" as any) }
           : {};
 
     return (
       <View style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}>
+        {GuardModal}
+
         <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
           <Path d={pathD} stroke={strokeCol} strokeWidth={6} fill="none" strokeLinecap="round" />
         </Svg>
@@ -422,6 +487,8 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
 
   return (
     <View style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}>
+      {GuardModal}
+
       <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
         <Path d={pathD} stroke={done ? palette.pathDone : palette.pathIdle} strokeWidth={6} fill="none" strokeLinecap="round" />
       </Svg>
@@ -452,5 +519,53 @@ const styles = StyleSheet.create({
     bottom: -30,
     fontSize: 12,
     fontWeight: "900",
+  },
+});
+
+const g = StyleSheet.create({
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 18,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.10)",
+    backgroundColor: "rgba(3,7,18,.92)",
+    padding: 16,
+  },
+  modalTitle: {
+    color: "#F9FAFB",
+    fontSize: 16,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  modalBody: {
+    marginTop: 10,
+    color: "rgba(231,238,247,.75)",
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "right",
+  },
+  modalActions: {
+    marginTop: 14,
+    flexDirection: "row",
+    justifyContent: "flex-start",
+  },
+  modalBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "#E98A15",
+  },
+  modalBtnText: {
+    color: "#0b0f14",
+    fontWeight: "900",
+    fontSize: 13,
   },
 });
