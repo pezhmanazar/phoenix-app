@@ -582,19 +582,29 @@ export default function PelekanTab() {
   }, [view, activeDayId, activeIndex, pathItems.length]);
 
   useEffect(() => {
-    if (view !== "treating") {
-      setTreatingBoot(false);
-      return;
-    }
+  if (view !== "treating") {
+    setTreatingBoot(false);
+    return;
+  }
 
-    if (!activeDayId || activeIndex < 0 || !pathItems.length) {
-      setTreatingBoot(true);
-      return;
-    }
+  // ✅ حالت شروع درمان (قبل از روز ۱)
+  if (
+    !activeDayId &&
+    state?.treatment?.start?.required === true
+  ) {
+    setTreatingBoot(false);
+    return;
+  }
 
-    const t = setTimeout(() => setTreatingBoot(false), 60);
-    return () => clearTimeout(t);
-  }, [view, activeDayId, activeIndex, pathItems.length]);
+  // ❌ فقط اگر واقعاً داده ناقص است لودینگ
+  if (!activeDayId || activeIndex < 0 || !pathItems.length) {
+    setTreatingBoot(true);
+    return;
+  }
+
+  const t = setTimeout(() => setTreatingBoot(false), 60);
+  return () => clearTimeout(t);
+}, [view, activeDayId, activeIndex, pathItems.length, state?.treatment?.start]);
 
   /* ----------------------------- Handlers ----------------------------- */
   const onTapStart = useCallback(() => {

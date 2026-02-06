@@ -654,6 +654,15 @@ router.get("/state", authUser, async (req, res) => {
       badges: (userBadges || []).map((b) => b.badge).filter(Boolean),
     };
 
+    // ✅ NEW: review state helpers (برای جلوگیری از loop ReviewResult -> Pelekan -> Review)
+    const chosenPath = String(reviewSession?.chosenPath || ""); // "" | "skip_review" | "review"
+    const reviewFinished =
+      chosenPath === "review" &&
+      (!!reviewSession?.test2CompletedAt ||
+        !!reviewSession?.test2SkippedAt ||
+        !!reviewSession?.completedAt);
+    const reviewInProgress = chosenPath === "review" && !reviewFinished;
+
     // no content
     if (!stages.length) {
       const hasAnyProgressFinal = applyDebugProgress(req, false);
@@ -661,8 +670,8 @@ router.get("/state", authUser, async (req, res) => {
       let tabState = "idle";
       if (isBaselineInProgress) tabState = "baseline_assessment";
 
-      // اگر مسیر بازسنجی انتخاب شده، از choose_path عبور کن
-      if (!isBaselineInProgress && reviewSession?.chosenPath === "review") {
+      // ✅ FIX: وقتی review تمام شده، دیگه tabState را review نکن (نباید برگردد به سوالات)
+      if (!isBaselineInProgress && reviewInProgress) {
         tabState = "review";
       } else if (isBaselineCompleted) {
         tabState = "choose_path";
@@ -759,10 +768,12 @@ router.get("/state", authUser, async (req, res) => {
     const hasAnyProgressFinal = applyDebugProgress(req, hasAnyProgress);
 
     // معیار واقعی "شروع درمان" برای تب پلکان: فقط پیشرفت واقعی درمان
-    const chosenPath = String(reviewSession?.chosenPath || ""); // "" | "skip_review" | "review"
+    // ✅ FIX: reviewDoneOrSkipped باید شامل test2CompletedAt هم باشد (نه فقط completedAt/test2SkippedAt)
     const reviewDoneOrSkipped =
       chosenPath === "review" &&
-      (!!reviewSession?.completedAt || !!reviewSession?.test2SkippedAt);
+      (!!reviewSession?.test2CompletedAt ||
+        !!reviewSession?.test2SkippedAt ||
+        !!reviewSession?.completedAt);
 
     // ✅ اگر کاربر مسیر درمان را انتخاب کرده ولی intro را هنوز انجام نداده:
     // باید وارد پلکان شود اما "شروع" فعال باشد، نه Day1
@@ -781,12 +792,8 @@ router.get("/state", authUser, async (req, res) => {
     if (isBaselineInProgress) tabState = "baseline_assessment";
     else if (baselineNeedsResultScreen) tabState = "baseline_result";
     else if (isBaselineCompleted && !reviewSession?.chosenPath) tabState = "choose_path";
-    else if (reviewSession?.chosenPath === "review") {
-      // ✅ اگر دو آزمون آخر تمام شده و کاربر پرو نیست و هنوز unlock نشده => باید paywall نشان داده شود
-      const reviewNeedsPaywall =
-        !!reviewSession?.test2CompletedAt && !isProLike && !reviewSession?.unlockedAt;
-      tabState = reviewNeedsPaywall ? "review_paywall" : "review";
-    }
+    // ✅ FIX: فقط وقتی review واقعا در جریان است، tabState را review کن
+    else if (reviewInProgress) tabState = "review";
     // 2) treatment entry
     else if (isTreatmentEntry) tabState = "treating";
     else tabState = "idle";
@@ -798,7 +805,8 @@ router.get("/state", authUser, async (req, res) => {
 
     // do NOT show paywall while baseline is in progress
     // ✅ همچنین قبل از intro هم paywall نشان نده (تا کاربر اول ویس شروع را کامل کند)
-    const suppressPaywall = tabState === "baseline_assessment" || (tabState === "treating" && !introDone);
+    const suppressPaywall =
+      tabState === "baseline_assessment" || (tabState === "treating" && !introDone);
 
     const paywall = suppressPaywall
       ? { needed: false, reason: null }
@@ -1234,6 +1242,7 @@ if (canUnlock && gosastanUnlockedAtFinal) {
     return wcdnOkError(res, "SERVER_ERROR");
   }
 });
+
 
 /* ---------- POST /api/pelekan/bastan/subtask/complete ---------- */
 router.post("/bastan/subtask/complete", authUser, async (req, res) => {
