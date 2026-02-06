@@ -673,6 +673,9 @@ router.get("/state", authUser, async (req, res) => {
       // ✅ FIX: وقتی review تمام شده، دیگه tabState را review نکن (نباید برگردد به سوالات)
       if (!isBaselineInProgress && reviewInProgress) {
         tabState = "review";
+      } else if (!isBaselineInProgress && reviewFinished) {
+        // ✅ NEW: بعد از اتمام review، باید روی صفحه نتایج بماند (نه ورود خودکار به پلکان)
+        tabState = "review_result";
       } else if (isBaselineCompleted) {
         tabState = "choose_path";
       }
@@ -682,7 +685,8 @@ router.get("/state", authUser, async (req, res) => {
         hasAnyProgressFinal
       );
 
-      const suppressPaywall = tabState === "baseline_assessment";
+      // ✅ اینجا هم paywall را مثل قبل نگه می‌داریم (مسیر paywall بعداً در review.js حذف می‌شود)
+      const suppressPaywall = tabState !== "treating";
       const paywall = suppressPaywall
         ? { needed: false, reason: null }
         : computePaywall(planStatusFinal, hasAnyProgressFinal);
@@ -767,18 +771,11 @@ router.get("/state", authUser, async (req, res) => {
     const hasAnyProgress = Array.isArray(dayProgress) && dayProgress.length > 0;
     const hasAnyProgressFinal = applyDebugProgress(req, hasAnyProgress);
 
-    // معیار واقعی "شروع درمان" برای تب پلکان: فقط پیشرفت واقعی درمان
-    // ✅ FIX: reviewDoneOrSkipped باید شامل test2CompletedAt هم باشد (نه فقط completedAt/test2SkippedAt)
-    const reviewDoneOrSkipped =
-      chosenPath === "review" &&
-      (!!reviewSession?.test2CompletedAt ||
-        !!reviewSession?.test2SkippedAt ||
-        !!reviewSession?.completedAt);
-
-    // ✅ اگر کاربر مسیر درمان را انتخاب کرده ولی intro را هنوز انجام نداده:
-    // باید وارد پلکان شود اما "شروع" فعال باشد، نه Day1
-    const isTreatmentEntry =
-      chosenPath === "skip_review" || reviewDoneOrSkipped || hasAnyProgressFinal;
+    // ✅ حذف پرش خودکار به پلکان بعد از اتمام review:
+    // ورود به treating فقط اگر:
+    // - کاربر skip_review کرده باشد (شروع درمان)
+    // - یا واقعاً progress درمانی دارد
+    const isTreatmentEntry = chosenPath === "skip_review" || hasAnyProgressFinal;
 
     // ✅ شروع واقعی درمان فقط بعد از intro + داشتن progress معنی‌دار است
     const hasStartedTreatment = introDone && hasAnyProgressFinal;
@@ -792,8 +789,10 @@ router.get("/state", authUser, async (req, res) => {
     if (isBaselineInProgress) tabState = "baseline_assessment";
     else if (baselineNeedsResultScreen) tabState = "baseline_result";
     else if (isBaselineCompleted && !reviewSession?.chosenPath) tabState = "choose_path";
-    // ✅ FIX: فقط وقتی review واقعا در جریان است، tabState را review کن
+    // ✅ review in progress
     else if (reviewInProgress) tabState = "review";
+    // ✅ NEW: review finished => stay on review_result (no auto jump to treating)
+    else if (reviewFinished) tabState = "review_result";
     // 2) treatment entry
     else if (isTreatmentEntry) tabState = "treating";
     else tabState = "idle";
@@ -803,10 +802,10 @@ router.get("/state", authUser, async (req, res) => {
       hasStartedTreatment
     );
 
-    // do NOT show paywall while baseline is in progress
-    // ✅ همچنین قبل از intro هم paywall نشان نده (تا کاربر اول ویس شروع را کامل کند)
+    // ✅ paywall فقط و فقط وقتی treating هستیم و introDone شده مطرح است
+    // (مسیر paywall از مسیر آزمون‌ها جدا می‌ماند)
     const suppressPaywall =
-      tabState === "baseline_assessment" || (tabState === "treating" && !introDone);
+      tabState !== "treating" || !introDone || tabState === "baseline_assessment";
 
     const paywall = suppressPaywall
       ? { needed: false, reason: null }

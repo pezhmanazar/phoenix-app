@@ -45,6 +45,8 @@ type QuestionSetResponse = {
   };
 };
 
+type SessStatus = "in_progress" | "completed_locked" | "unlocked"; // completed_locked فقط برای backward-compat
+
 type ReviewStateResponse = {
   ok: boolean;
   error?: string;
@@ -54,7 +56,7 @@ type ReviewStateResponse = {
     paywallRequired?: boolean;
     session: {
       id: string;
-      status: "in_progress" | "completed_locked" | "unlocked";
+      status: SessStatus;
       chosenPath: "skip_review" | "review" | null;
       currentTest: number;
       currentIndex: number;
@@ -73,7 +75,7 @@ type ResultResponse = {
   ok: boolean;
   error?: string;
   data?: {
-    status: "in_progress" | "completed_locked" | "unlocked";
+    status: SessStatus;
     canEnterPelekan?: boolean;
     result: any | null;
   };
@@ -213,39 +215,26 @@ export default function Review({ me, state, onRefresh }: Props) {
     router.replace(`/(tabs)/ReviewResult?phone=${encodeURIComponent(phone)}` as any);
   }, [router, phone]);
 
-  // ✅ FIX: فقط وقتی unlocked شد یا Pro است برو نتیجه؛ اگر completed_locked و Pro نیست همینجا بمان (Paywall همین کامپوننت)
+  // ✅ NEW LOGIC: هر وقت از in_progress خارج شد، برو نتیجه (دیگه paywall نداریم)
   const openResultScreen = useCallback(async () => {
     const st = await fetchReviewState();
     onRefresh?.();
 
     const sessStatus = String(st?.session?.status || "");
-    const isProNow = !!st?.user?.isPro;
-
-    if (sessStatus === "completed_locked" && !isProNow) {
-      return;
-    }
-
-    if (sessStatus === "unlocked" || isProNow) {
+    if (sessStatus && sessStatus !== "in_progress") {
       goToResultPage();
-      return;
     }
   }, [fetchReviewState, onRefresh, goToResultPage]);
 
-  // ✅ FIX: اگر از in_progress خارج شد:
-  // - unlocked / pro => برو نتیجه
-  // - completed_locked و free => ریدایرکت نکن (Paywall همین صفحه)
+  // ✅ NEW LOGIC: اگر از in_progress خارج شد، مستقیم ریدایرکت کن
   const syncAndMaybeGoResult = useCallback(
     async () => {
       const st = await fetchReviewState();
       onRefresh?.();
 
       const sessStatus = String(st?.session?.status || "");
-      const isProNow = !!st?.user?.isPro;
-
       if (sessStatus && sessStatus !== "in_progress") {
-        if (sessStatus === "unlocked" || isProNow) {
-          goToResultPage();
-        }
+        goToResultPage();
         return true;
       }
       return false;
@@ -340,19 +329,16 @@ export default function Review({ me, state, onRefresh }: Props) {
   const questions = currentTest === 1 ? test1 : test2;
   const currentQuestion = questions[currentIndex] || null;
 
-  const isPro = !!reviewState?.user?.isPro;
   const sessStatus = String(session?.status || "");
-  const showLockedPaywall = sessStatus === "completed_locked" && !isPro;
-  const showUnlocked = sessStatus === "unlocked";
+  const showUnlocked = sessStatus === "unlocked" || sessStatus === "completed_locked"; // completed_locked => treat as unlocked (compat)
 
-  // ✅ وقتی وضعیت قفل/آنلاک است، اصلاً وارد سوالات نشو
+  // ✅ وقتی از in_progress خارج شد، سوال نده و برو نتیجه
   useEffect(() => {
     if (!session) return;
-    if (sessStatus === "completed_locked" || sessStatus === "unlocked") {
-      // اینجا اگر خواستی می‌تونی فقط ریدایرکت کنی
-      // ولی مهم اینه که UI دیگه سوال نده
+    if (sessStatus && sessStatus !== "in_progress") {
+      goToResultPage();
     }
-  }, [session, sessStatus]);
+  }, [session, sessStatus, goToResultPage]);
 
   useEffect(() => {
     setSelectedValue(null);
@@ -425,7 +411,7 @@ export default function Review({ me, state, onRefresh }: Props) {
           return;
         }
 
-        // ✅ بعد از هر جواب: اگر وضعیت قفل/آنلاک شد، مستقیم برو نتیجه
+        // ✅ بعد از هر جواب: اگر از in_progress خارج شد، برو نتیجه
         const finished = await syncAndMaybeGoResult();
         if (finished) return;
       } catch (e: any) {
@@ -471,6 +457,7 @@ export default function Review({ me, state, onRefresh }: Props) {
     }
   }, [phone, session?.status, fetchReviewState, onRefresh, openResultScreen]);
 
+  // ✅ FIX: حذف finish اضافه (skip-test2 خودش نتیجه را می‌سازد/وضعیت را تغییر می‌دهد)
   const passTest2FromEndOfTest1 = useCallback(async () => {
     if (!phone) return;
 
@@ -506,18 +493,7 @@ export default function Review({ me, state, onRefresh }: Props) {
         return;
       }
 
-      const f = await fetch(`${API_BASE}/finish`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
-      }).then((r) => r.json());
-
-      if (!f?.ok) {
-        setError(f?.error || "SERVER_ERROR");
-        return;
-      }
-
-      // ✅ FIX: بعد از finish فقط sync کافیست (دیگه ریدایرکت دوم نزن)
+      // ✅ فقط sync
       await syncAndMaybeGoResult();
     } finally {
       setLoading(false);
@@ -560,7 +536,7 @@ export default function Review({ me, state, onRefresh }: Props) {
         return;
       }
 
-      // ✅ FIX: فقط sync
+      // ✅ فقط sync
       await syncAndMaybeGoResult();
     } finally {
       setLoading(false);
@@ -568,6 +544,7 @@ export default function Review({ me, state, onRefresh }: Props) {
     }
   }, [phone, session?.status, syncAndMaybeGoResult, openResultScreen]);
 
+  // ✅ FIX: حذف finish اضافه
   const passTest2 = useCallback(async () => {
     if (!phone) return;
 
@@ -592,18 +569,7 @@ export default function Review({ me, state, onRefresh }: Props) {
         return;
       }
 
-      const f = await fetch(`${API_BASE}/finish`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
-      }).then((r) => r.json());
-
-      if (!f?.ok) {
-        setError(f?.error || "SERVER_ERROR");
-        return;
-      }
-
-      // ✅ FIX: فقط sync
+      // ✅ فقط sync
       await syncAndMaybeGoResult();
     } finally {
       setLoading(false);
@@ -668,14 +634,12 @@ export default function Review({ me, state, onRefresh }: Props) {
   const ResultScreen = useMemo(() => {
     if (!resultOpen) return null;
 
-    const locked = !!resultData?.locked;
+    // ✅ paywall removed: locked is always false (even if old backend returns it, we ignore in UI)
+    const locked = false;
     const didSkipTest2 = !!resultData?.meta?.didSkipTest2;
 
     const resultTitle = didSkipTest2 ? "نتیجه آزمون بازسنجی" : "نتیجه دو آزمون";
-    const msg = String(
-      resultData?.message ||
-        (locked ? "برای دیدن تحلیل کامل باید PRO را فعال کنی." : "نتیجه آماده است.")
-    );
+    const msg = String(resultData?.message || "نتیجه آماده است.");
 
     return (
       <View style={[styles.container, { backgroundColor: palette.bg, justifyContent: "center" }]}>
@@ -705,22 +669,6 @@ export default function Review({ me, state, onRefresh }: Props) {
             </View>
           ) : (
             <>
-              {locked && (
-                <>
-                  <Pressable
-                    style={[
-                      styles.btnPrimary,
-                      { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)" },
-                    ]}
-                    onPress={() => router.push("/(tabs)/Subscription")}
-                  >
-                    <Text style={[styles.btnText, { color: palette.text }]}>فعال‌سازی اشتراک پرو برای دیدن تحلیل</Text>
-                  </Pressable>
-
-                  <View style={{ height: 10 }} />
-                </>
-              )}
-
               <Pressable
                 style={[styles.btn, { borderColor: palette.border }]}
                 onPress={async () => {
@@ -885,55 +833,7 @@ export default function Review({ me, state, onRefresh }: Props) {
     return <View style={{ flex: 1, backgroundColor: palette.bg }}>{ResultScreen}</View>;
   }
 
-  // ✅ NEW: اگر completed_locked و Pro نیست → CTA پرو + نتیجه + برگشت به پلکان
-  if (session && showLockedPaywall) {
-    return (
-      <View style={[styles.container, { backgroundColor: palette.bg, justifyContent: "center" }]}>
-        <View style={[styles.card, styles.cardFancy, { backgroundColor: palette.glass, borderColor: palette.border }]}>
-          <View style={[styles.accentBarTop, { backgroundColor: palette.red }]} />
-
-          <Text style={[styles.title, { color: palette.red, textAlign: "center" }]}>آزمون‌ها کامل شد</Text>
-
-          <Text style={[styles.rtlText, { color: palette.sub, marginTop: 10, lineHeight: 22, textAlign: "right" }]}>
-            پاسخ‌ها ثبت شده‌اند. برای دیدن تحلیل نهایی باید اشتراک پرو رو فعال کنی.
-          </Text>
-
-          <View style={{ height: 14 }} />
-
-          <Pressable
-            style={[
-              styles.btnPrimary,
-              { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)" },
-            ]}
-            onPress={() => router.push("/(tabs)/Subscription")}
-          >
-            <Text style={[styles.btnText, { color: palette.text }]}>فعال‌سازی اشتراک پرو</Text>
-          </Pressable>
-
-          <View style={{ height: 10 }} />
-
-          <Pressable style={[styles.btn, { borderColor: palette.border }]} onPress={goToResultPage}>
-            <Text style={[styles.btnText, { color: palette.text }]}>دیدن صفحه نتیجه</Text>
-          </Pressable>
-
-          {/* ✅ دکمه جدید: برگشتن به پلکان */}
-          <View style={{ height: 10 }} />
-
-          <Pressable
-            style={[styles.btnGhost, { borderColor: palette.border, backgroundColor: "rgba(255,255,255,.04)" }]}
-            onPress={() => {
-              router.replace("/(tabs)/Pelekan");
-              setTimeout(() => onRefresh?.(), 50);
-            }}
-          >
-            <Text style={[styles.btnText, { color: palette.sub }]}>برگشتن به پلکان</Text>
-          </Pressable>
-        </View>
-      </View>
-    );
-  }
-
-  // ✅ اگر unlocked است هم بهتره مستقیم نتیجه رو نشان بدی
+  // ✅ اگر unlocked است (یا حالت قدیمی completed_locked)، نتیجه را نشان بده
   if (session && showUnlocked) {
     return (
       <View style={[styles.container, { backgroundColor: palette.bg, justifyContent: "center" }]}>
@@ -985,7 +885,7 @@ export default function Review({ me, state, onRefresh }: Props) {
             onPress={() =>
               openConfirm(
                 "عبور از آزمون دوم",
-                "اگر عبور کنی، آزمون دوم انجام نمی‌شود.\nبا عبور از این مرحله نتیجه آزمون اول به شکل رایگان و نتیجه آزمون دوم با فعال کردن اشتراک  پرو به نمایش درمی‌آید",
+                "اگر عبور کنی، آزمون دوم انجام نمی‌شود.\nنتیجه بر اساس آزمون اول نمایش داده می‌شود.",
                 passTest2FromEndOfTest1
               )
             }

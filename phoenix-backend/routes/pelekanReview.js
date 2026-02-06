@@ -55,14 +55,9 @@ function computeCanEnterPelekan(session) {
   return false;
 }
 
+// ✅ PAYWALL REMOVED FROM REVIEW FLOW
 function computePaywallRequired(user, session) {
-  // اگر نتیجه کامل قفل باشد => paywall لازم است
-  // (ولی این به معنی "بلاک شدن" ورود به پلکان نیست)
-  if (!session) return false;
-  const pro = isUserPro(user);
-  if (pro) return false;
-  // اگر کاربر به پایان مسیر review رسیده باشد (test1 done و test2 done/skip)
-  return computeCanEnterPelekan(session);
+  return false;
 }
 
 /* ------------------------- Result building (NEW) ------------------------- */
@@ -110,9 +105,9 @@ function uiHintForOptions(options) {
   if (n === 2) {
     return { layout: "row2", columns: 2, rows: 1 };
   }
- if (n === 4) {
-  return { layout: "grid2x2", columns: 2, rows: 2 };
-}
+  if (n === 4) {
+    return { layout: "grid2x2", columns: 2, rows: 2 };
+  }
   if (n === 5) {
     return { layout: "grid3x2_last2", columns: 3, rows: 2 };
   }
@@ -267,13 +262,13 @@ function buildDiagramsAndSummary(answersJson, didSkipTest2) {
 }
 
 function buildResultSkeleton({ user, session }) {
-  const locked = !isUserPro(user);
   const didSkipTest2 = !!session.test2SkippedAt;
 
   const { diagrams, summary } = buildDiagramsAndSummary(session.answersJson, didSkipTest2);
 
+  // ✅ PAYWALL REMOVED: always unlocked in review
   return {
-    locked,
+    locked: false,
     meta: {
       didSkipTest2,
       note: didSkipTest2
@@ -282,10 +277,7 @@ function buildResultSkeleton({ user, session }) {
     },
     diagrams,
     summary,
-    // ✅ ساده‌تر
-    message: locked
-      ? "برای دیدن نتیجه کامل و پیشنهادهای بعدی، اشتراک پرو را فعال کن."
-      : "نتیجه آماده است.",
+    message: "نتیجه آماده است.",
   };
 }
 
@@ -417,6 +409,11 @@ async function getActiveQuestionSet() {
   });
 }
 
+/**
+ * ✅ FIX: جلوگیری از race و ساخت نسخه‌های متعدد (با unique روی (code,isActive) بهتر میشه)
+ * اگر دو درخواست همزمان بیاد، ممکنه هر دو تصمیم به ساخت بگیرن.
+ * اینجا با try/catch و re-fetch حلش می‌کنیم.
+ */
 async function ensureQuestionSetSeeded() {
   const existing = await getActiveQuestionSet();
 
@@ -426,46 +423,54 @@ async function ensureQuestionSetSeeded() {
   const version = 3;
   const { test1_q, test2_q } = buildDefaultQuestions();
 
-  // ✅ نسخه قبلی را غیرفعال کن (اگر بود)
-  if (existing) {
-    await prisma.reviewQuestionSet.update({
-      where: { id: existing.id },
-      data: { isActive: false, updatedAt: now() },
-    });
-  }
+  try {
+    // ✅ نسخه قبلی را غیرفعال کن (اگر بود)
+    if (existing) {
+      await prisma.reviewQuestionSet.update({
+        where: { id: existing.id },
+        data: { isActive: false, updatedAt: now() },
+      });
+    }
 
-  const created = await prisma.reviewQuestionSet.create({
-    data: {
-      code: "review",
-      version,
-      titleFa: "بازسنجی رابطه + منطقی بودن انتظار",
-      description: "Question bank v2 (TEST1/TEST2)",
-      isActive: true,
-      questions: {
-        create: [
-          ...test1_q.map((q, idx) => ({
-            testNo: "TEST1",
-            order: idx,
-            key: `t1_${idx}`,
-            textFa: q.textFa,
-            helpFa: q.helpFa,
-            options: { create: q.options.map((op, j) => ({ order: j, labelFa: op.labelFa, value: op.value })) },
-          })),
-          ...test2_q.map((q, idx) => ({
-            testNo: "TEST2",
-            order: idx,
-            key: `t2_${idx}`,
-            textFa: q.textFa,
-            helpFa: q.helpFa,
-            options: { create: q.options.map((op, j) => ({ order: j, labelFa: op.labelFa, value: op.value })) },
-          })),
-        ],
+    const created = await prisma.reviewQuestionSet.create({
+      data: {
+        code: "review",
+        version,
+        titleFa: "بازسنجی رابطه + منطقی بودن انتظار",
+        description: "Question bank v2 (TEST1/TEST2)",
+        isActive: true,
+        questions: {
+          create: [
+            ...test1_q.map((q, idx) => ({
+              testNo: "TEST1",
+              order: idx,
+              key: `t1_${idx}`,
+              textFa: q.textFa,
+              helpFa: q.helpFa,
+              options: { create: q.options.map((op, j) => ({ order: j, labelFa: op.labelFa, value: op.value })) },
+            })),
+            ...test2_q.map((q, idx) => ({
+              testNo: "TEST2",
+              order: idx,
+              key: `t2_${idx}`,
+              textFa: q.textFa,
+              helpFa: q.helpFa,
+              options: { create: q.options.map((op, j) => ({ order: j, labelFa: op.labelFa, value: op.value })) },
+            })),
+          ],
+        },
       },
-    },
-  });
+    });
 
-  return created;
+    return created;
+  } catch (e) {
+    // اگر همزمان یکی دیگه ساخت، دوباره fetch کن و همون رو برگردون
+    const fresh = await getActiveQuestionSet();
+    if (fresh) return fresh;
+    throw e;
+  }
 }
+
 async function loadQuestionsForSet(questionSetId) {
   const set = await prisma.reviewQuestionSet.findUnique({
     where: { id: questionSetId },
@@ -490,12 +495,36 @@ async function findQuestionInSet(questionSetId, testNoInt, index) {
 /* ------------------------------ routes ------------------------------ */
 
 /**
+ * ✅ PERF FIX: question-set cache (in-memory)
+ * چون سوال‌ها ثابت‌اند، هر بار DB رو نکش.
+ */
+let QS_CACHE = {
+  at: 0,
+  ttlMs: 10 * 60 * 1000, // 10 min
+  setId: null,
+  version: null,
+  payload: null,
+};
+
+function isQsCacheValid() {
+  return !!QS_CACHE.payload && Date.now() - QS_CACHE.at < QS_CACHE.ttlMs;
+}
+
+/**
  * GET /question-set?phone=...  (اختیاری phone فقط برای ست کردن questionSetId روی session در صورت وجود)
  * خروجی: سوالات + گزینه‌ها
  */
 router.get("/question-set", async (req, res) => {
   try {
     const phone = String(req.query.phone || "").trim();
+
+    // ✅ cache headers (این endpoint عملاً ثابت است)
+    res.setHeader("Cache-Control", "public, max-age=600");
+
+    // ✅ fast path: cached payload
+    if (isQsCacheValid()) {
+      return res.json(QS_CACHE.payload);
+    }
 
     const activeSet = await ensureQuestionSetSeeded();
 
@@ -514,8 +543,9 @@ router.get("/question-set", async (req, res) => {
     }
 
     const full = await loadQuestionsForSet(activeSet.id);
+    if (!full) return res.status(500).json({ ok: false, error: "QUESTION_SET_NOT_FOUND" });
 
-    return res.json({
+    const payload = {
       ok: true,
       data: {
         questionSet: {
@@ -556,7 +586,18 @@ router.get("/question-set", async (req, res) => {
             }),
         },
       },
-    });
+    };
+
+    // ✅ set cache
+    QS_CACHE = {
+      ...QS_CACHE,
+      at: Date.now(),
+      setId: full.id,
+      version: full.version,
+      payload,
+    };
+
+    return res.json(payload);
   } catch (e) {
     console.log("[pelekanReview/question-set] error", e);
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
@@ -575,7 +616,7 @@ router.get("/state", async (req, res) => {
     });
 
     const canEnterPelekan = computeCanEnterPelekan(session);
-    const paywallRequired = computePaywallRequired(user, session);
+    const paywallRequired = false;
 
     return res.json({
       ok: true,
@@ -627,14 +668,15 @@ router.post("/choose", async (req, res) => {
 
     const activeSet = await ensureQuestionSetSeeded();
 
+    // ✅ FIX: حذف query اضافه داخل upsert (دو بار findUnique می‌زد)
+    const existing = await prisma.pelekanReviewSession.findUnique({ where: { userId: user.id } });
+
     const session = await prisma.pelekanReviewSession.upsert({
       where: { userId: user.id },
       update: {
         chosenPath: normalized,
         // اگر قبلاً set نشده، ستش کن
-        questionSetId: (await prisma.pelekanReviewSession.findUnique({ where: { userId: user.id } }))?.questionSetId
-          ? undefined
-          : activeSet.id,
+        questionSetId: existing?.questionSetId ? undefined : activeSet.id,
         updatedAt: now(),
       },
       create: {
@@ -647,6 +689,38 @@ router.post("/choose", async (req, res) => {
         answersJson: ensureAnswersShape(null),
       },
     });
+
+    // ✅ اگر کاربر بعد از آزمون ۱، skip_review زد: همان‌جا test2 را skip کن و نتیجه را آماده کن
+    if (normalized === "skip_review" && (existing?.test1CompletedAt || session.test1CompletedAt)) {
+      const updated1 = await prisma.pelekanReviewSession.update({
+        where: { userId: user.id },
+        data: {
+          test2SkippedAt: (existing?.test2SkippedAt || session.test2SkippedAt) ?? now(),
+          currentTest: 2,
+          currentIndex: 0,
+          updatedAt: now(),
+        },
+      });
+
+      const resultJson = buildResultSkeleton({ user, session: updated1 });
+
+      const updated2 = await prisma.pelekanReviewSession.update({
+        where: { userId: user.id },
+        data: {
+          status: "unlocked",
+          completedAt: now(),
+          unlockedAt: now(),
+          paywallShownAt: null,
+          resultJson,
+          updatedAt: now(),
+        },
+      });
+
+      return res.json({
+        ok: true,
+        data: { sessionId: updated2.id, chosenPath: updated2.chosenPath, status: updated2.status },
+      });
+    }
 
     return res.json({ ok: true, data: { sessionId: session.id, chosenPath: session.chosenPath } });
   } catch (e) {
@@ -719,7 +793,7 @@ router.post("/start", async (req, res) => {
  * POST skip-test2
  * - فقط وقتی test1CompletedAt وجود دارد و test2 هنوز completed نشده
  * - test2SkippedAt ست می‌شود
- * - سپس finish انجام می‌شود (نتیجه قفل/باز می‌شود)
+ * - سپس finish انجام می‌شود (نتیجه آماده می‌شود)
  */
 router.post("/skip-test2", async (req, res) => {
   try {
@@ -743,19 +817,16 @@ router.post("/skip-test2", async (req, res) => {
       },
     });
 
-    // finish (با شرط جدید)
-    const locked = !isUserPro(user);
     const resultJson = buildResultSkeleton({ user, session: updated1 });
-    const status = locked ? "completed_locked" : "unlocked";
 
     const updated2 = await prisma.pelekanReviewSession.update({
       where: { userId: user.id },
       data: {
-        status,
+        status: "unlocked",
         completedAt: now(),
+        unlockedAt: now(),
+        paywallShownAt: null,
         resultJson,
-        paywallShownAt: locked ? (updated1.paywallShownAt ?? now()) : null,
-        unlockedAt: locked ? null : now(),
         updatedAt: now(),
       },
     });
@@ -764,7 +835,7 @@ router.post("/skip-test2", async (req, res) => {
       ok: true,
       data: {
         status: updated2.status,
-        locked,
+        locked: false,
         canEnterPelekan: computeCanEnterPelekan(updated2),
       },
     });
@@ -790,36 +861,38 @@ router.post("/answer", async (req, res) => {
     if (!Number.isFinite(v) || v < 0) return res.json({ ok: false, error: "INVALID_VALUE" });
 
     let session = await prisma.pelekanReviewSession.findUnique({ where: { userId: user.id } });
-if (!session) return res.json({ ok: false, error: "NO_SESSION" });
+    if (!session) return res.json({ ok: false, error: "NO_SESSION" });
 
-// ✅ self-heal: اگر کاربر وارد پاسخ‌دهی شد ولی سشن in_progress نبود، سشن را شروع کن
-if (session.status !== "in_progress") {
-  // فقط این حالت‌ها را اجازه بده خودکار وارد in_progress شوند
-  const canAutoResume = session.status === "unlocked" || session.status === "completed_locked";
+    // ✅ self-heal: اگر کاربر وارد پاسخ‌دهی شد ولی سشن in_progress نبود، سشن را شروع کن
+    if (session.status !== "in_progress") {
+      // فقط این حالت‌ها را اجازه بده خودکار وارد in_progress شوند
+      const canAutoResume =
+        session.status === "unlocked" ||
+        session.status === "completed_locked";
 
-  if (!canAutoResume) {
-    return res.json({ ok: false, error: "NOT_IN_PROGRESS" });
-  }
+      if (!canAutoResume) {
+        return res.json({ ok: false, error: "NOT_IN_PROGRESS" });
+      }
 
-  // اگر questionSetId نداشت، بساز
-  const qSetIdFallback = (await ensureQuestionSetSeeded()).id;
-  const qSetId = session.questionSetId || qSetIdFallback;
+      // اگر questionSetId نداشت، بساز
+      const qSetIdFallback = (await ensureQuestionSetSeeded()).id;
+      const qSetId = session.questionSetId || qSetIdFallback;
 
-  session = await prisma.pelekanReviewSession.update({
-    where: { userId: user.id },
-    data: {
-      status: "in_progress",
-      startedAt: session.startedAt ?? now(),
-      completedAt: null,
-      // اگر قبلاً مسیر skip بوده ولی الان کاربر عملاً تست می‌دهد
-      chosenPath: session.chosenPath === "skip_review" ? "review" : session.chosenPath,
-      currentTest: Number.isFinite(Number(session.currentTest)) ? session.currentTest : 1,
-      currentIndex: Number.isFinite(Number(session.currentIndex)) ? session.currentIndex : 0,
-      questionSetId: session.questionSetId ?? qSetId,
-      updatedAt: now(),
-    },
-  });
-}
+      session = await prisma.pelekanReviewSession.update({
+        where: { userId: user.id },
+        data: {
+          status: "in_progress",
+          startedAt: session.startedAt ?? now(),
+          completedAt: null,
+          // اگر قبلاً مسیر skip بوده ولی الان کاربر عملاً تست می‌دهد
+          chosenPath: session.chosenPath === "skip_review" ? "review" : session.chosenPath,
+          currentTest: Number.isFinite(Number(session.currentTest)) ? session.currentTest : 1,
+          currentIndex: Number.isFinite(Number(session.currentIndex)) ? session.currentIndex : 0,
+          questionSetId: session.questionSetId ?? qSetId,
+          updatedAt: now(),
+        },
+      });
+    }
 
     const qSetId = session.questionSetId || (await ensureQuestionSetSeeded()).id;
 
@@ -875,7 +948,37 @@ router.post("/complete-test", async (req, res) => {
 
     const session = await prisma.pelekanReviewSession.findUnique({ where: { userId: user.id } });
     if (!session) return res.json({ ok: false, error: "NO_SESSION" });
-    if (session.status !== "in_progress") return res.json({ ok: false, error: "NOT_IN_PROGRESS" });
+
+    // ✅ self-heal: اگر اپ اشتباهی complete-test را بعد از finish صدا زد، بن‌بست نکن
+    if (session.status !== "in_progress") {
+      // اگر testNo=2 و قبلاً test2CompletedAt یا test2SkippedAt داریم، ok بده
+      if (t === 2 && (session.test2CompletedAt || session.test2SkippedAt)) {
+        return res.json({
+          ok: true,
+          data: {
+            test1CompletedAt: session.test1CompletedAt,
+            test2CompletedAt: session.test2CompletedAt,
+            test2SkippedAt: session.test2SkippedAt,
+            currentTest: session.currentTest,
+            currentIndex: session.currentIndex,
+          },
+        });
+      }
+      // اگر testNo=1 و test1CompletedAt داریم، ok بده
+      if (t === 1 && session.test1CompletedAt) {
+        return res.json({
+          ok: true,
+          data: {
+            test1CompletedAt: session.test1CompletedAt,
+            test2CompletedAt: session.test2CompletedAt,
+            test2SkippedAt: session.test2SkippedAt,
+            currentTest: session.currentTest,
+            currentIndex: session.currentIndex,
+          },
+        });
+      }
+      return res.json({ ok: false, error: "NOT_IN_PROGRESS" });
+    }
 
     const data = {};
     if (t === 1) {
@@ -930,19 +1033,16 @@ router.post("/finish", async (req, res) => {
       return res.json({ ok: false, error: "TEST2_NOT_COMPLETED_OR_SKIPPED" });
     }
 
-    const locked = !isUserPro(user);
     const resultJson = buildResultSkeleton({ user, session });
-
-    const status = locked ? "completed_locked" : "unlocked";
 
     const updated = await prisma.pelekanReviewSession.update({
       where: { userId: user.id },
       data: {
-        status,
+        status: "unlocked",
         completedAt: now(),
         resultJson,
-        paywallShownAt: locked ? (session.paywallShownAt ?? now()) : null,
-        unlockedAt: locked ? null : now(),
+        paywallShownAt: null,
+        unlockedAt: now(),
         updatedAt: now(),
       },
     });
@@ -951,7 +1051,7 @@ router.post("/finish", async (req, res) => {
       ok: true,
       data: {
         status: updated.status,
-        locked,
+        locked: false,
         canEnterPelekan: computeCanEnterPelekan(updated),
       },
     });
@@ -961,11 +1061,11 @@ router.post("/finish", async (req, res) => {
   }
 });
 
-// GET result (اگر قفل بود فقط پیام paywall بده)
+// GET result (✅ PAYWALL REMOVED: always return full result)
 router.get("/result", async (req, res) => {
   try {
     console.log("[pelekanReview/result] BUILD = 2025-12-23-REV2");
-    
+
     const phone = String(req.query.phone || "").trim();
     const user = await getUserByPhone(phone);
     if (!user) return res.json({ ok: false, error: "USER_NOT_FOUND" });
@@ -973,20 +1073,18 @@ router.get("/result", async (req, res) => {
     const session = await prisma.pelekanReviewSession.findUnique({ where: { userId: user.id } });
     if (!session) return res.json({ ok: false, error: "NO_SESSION" });
 
-    const pro = isUserPro(user);
+    const rj = session.resultJson || null;
+    const lacks = !rj || !rj.summary || !rj.diagrams;
 
-    // ✅ اگر session قفل است ولی کاربر پرو شده: بازش کن + نتیجه کامل بساز (self-heal)
-    if (session.status === "completed_locked" && pro) {
-      const fresh = buildResultSkeleton({ user, session: { ...session, status: "unlocked" } });
+    if (lacks) {
+      const fresh = buildResultSkeleton({ user, session });
 
       const updated = await prisma.pelekanReviewSession.update({
         where: { userId: user.id },
         data: {
-          status: "unlocked",
-          unlockedAt: now(),
-          paywallShownAt: session.paywallShownAt ?? now(),
-          updatedAt: now(),
+          status: session.status === "in_progress" ? session.status : "unlocked",
           resultJson: { ...fresh, locked: false, message: "نتیجه آماده است." },
+          updatedAt: now(),
         },
       });
 
@@ -995,67 +1093,17 @@ router.get("/result", async (req, res) => {
         data: {
           status: updated.status,
           canEnterPelekan: computeCanEnterPelekan(updated),
-          result: updated.resultJson,
+          result: updated.resultJson || null,
         },
       });
     }
 
-    // ✅ حالت قفل (FREE) -> فقط پیام paywall برگردان (ولی ورود به پلکان آزاد)
-    if (session.status === "completed_locked" && !pro) {
-      // ثبت اینکه paywall دیده شد
-      if (!session.paywallShownAt) {
-        await prisma.pelekanReviewSession.update({
-          where: { userId: user.id },
-          data: { paywallShownAt: now(), updatedAt: now() },
-        });
-      }
-
-      return res.json({
-        ok: true,
-        data: {
-          status: session.status,
-          canEnterPelekan: computeCanEnterPelekan(session), // ✅ مهم: قفل ≠ بن‌بست
-          result: {
-            locked: true,
-            message: "برای دیدن نتیجه‌ی کامل و کارهایی که در ادامه باید انجام بدی، اشتراک پرو رو فعال کن.",
-          },
-        },
-      });
-    }
-
-    // ✅ اگر unlocked است و pro است ولی نتیجه ناقص/خالی است => self-heal
-    if (pro && session.status === "unlocked") {
-      const rj = session.resultJson || null;
-      const lacks = !rj || !rj.summary || !rj.diagrams;
-      if (lacks) {
-        const fresh = buildResultSkeleton({ user, session });
-
-        const updated = await prisma.pelekanReviewSession.update({
-          where: { userId: user.id },
-          data: {
-            resultJson: { ...fresh, locked: false, message: "نتیجه آماده است." },
-            updatedAt: now(),
-          },
-        });
-
-        return res.json({
-          ok: true,
-          data: {
-            status: updated.status,
-            canEnterPelekan: computeCanEnterPelekan(updated),
-            result: updated.resultJson || null,
-          },
-        });
-      }
-    }
-
-    // unlocked یا in_progress
     return res.json({
       ok: true,
       data: {
         status: session.status,
         canEnterPelekan: computeCanEnterPelekan(session),
-        result: session.resultJson || null,
+        result: { ...session.resultJson, locked: false, message: "نتیجه آماده است." },
       },
     });
   } catch (e) {
