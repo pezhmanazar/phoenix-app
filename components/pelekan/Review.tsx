@@ -101,6 +101,9 @@ export default function Review({ me, state, onRefresh }: Props) {
   const mountedRef = useRef(true);
   const submitLockRef = useRef(false);
 
+  // ✅ NEW: ضد-ریدایرکت چندباره (برای جلوگیری از باگ‌های "برگشت به شروع")
+  const redirectedRef = useRef(false);
+
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState("");
   const [confirmMsg, setConfirmMsg] = useState("");
@@ -211,8 +214,12 @@ export default function Review({ me, state, onRefresh }: Props) {
     }
   }, [phone]);
 
+  // ✅ FIX: ناوبری ضد-باگ (pathname + params) به جای query string
   const goToResultPage = useCallback(() => {
-    router.replace(`/(tabs)/ReviewResult?phone=${encodeURIComponent(phone)}` as any);
+    router.replace({
+      pathname: "/(tabs)/ReviewResult",
+      params: { phone },
+    } as any);
   }, [router, phone]);
 
   // ✅ NEW LOGIC: هر وقت از in_progress خارج شد، برو نتیجه (دیگه paywall نداریم)
@@ -304,6 +311,9 @@ export default function Review({ me, state, onRefresh }: Props) {
       startLockRef.current = false;
       submitLockRef.current = false;
 
+      // ✅ ریست ضد-ریدایرکت
+      redirectedRef.current = false;
+
       setResultOpen(false);
       setResultData(null);
       setResultError(null);
@@ -332,10 +342,13 @@ export default function Review({ me, state, onRefresh }: Props) {
   const sessStatus = String(session?.status || "");
   const showUnlocked = sessStatus === "unlocked" || sessStatus === "completed_locked"; // completed_locked => treat as unlocked (compat)
 
-  // ✅ وقتی از in_progress خارج شد، سوال نده و برو نتیجه
+  // ✅ وقتی از in_progress خارج شد، سوال نده و برو نتیجه (فقط یک‌بار)
   useEffect(() => {
     if (!session) return;
+    if (redirectedRef.current) return;
+
     if (sessStatus && sessStatus !== "in_progress") {
+      redirectedRef.current = true;
       goToResultPage();
     }
   }, [session, sessStatus, goToResultPage]);
@@ -581,6 +594,10 @@ export default function Review({ me, state, onRefresh }: Props) {
     bootRef.current.done = false;
     startLockRef.current = false;
     submitLockRef.current = false;
+
+    // ✅ ریست ضد-ریدایرکت
+    redirectedRef.current = false;
+
     bootstrap();
   }, [bootstrap]);
 
@@ -673,7 +690,10 @@ export default function Review({ me, state, onRefresh }: Props) {
                 style={[styles.btn, { borderColor: palette.border }]}
                 onPress={async () => {
                   setResultOpen(false);
-                  router.replace("/(tabs)/Pelekan");
+                  router.replace({
+                    pathname: "/(tabs)/Pelekan",
+                    params: { phone },
+                  } as any);
                   setTimeout(() => onRefresh?.(), 50);
                 }}
               >
@@ -693,7 +713,7 @@ export default function Review({ me, state, onRefresh }: Props) {
         </View>
       </View>
     );
-  }, [resultOpen, resultData, resultLoading, resultError, palette, router, onRefresh]);
+  }, [resultOpen, resultData, resultLoading, resultError, palette, router, onRefresh, phone]);
 
   // ✅ NEW: option renderer with layouts
   const OptionsBlock = useMemo(() => {
