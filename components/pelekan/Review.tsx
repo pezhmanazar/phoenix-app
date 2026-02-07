@@ -216,13 +216,13 @@ export default function Review({ me, state, onRefresh }: Props) {
 
   // ✅ FIX (1): ناوبری نتیجه بدون query-string (رفع TS2872 و گیرهای محیطی)
   const goToResultPage = useCallback(() => {
-    router.replace(
-      {
-        pathname: "/(tabs)/ReviewResult",
-        params: { phone },
-      } as any
-    );
-  }, [router, phone]);
+  if (!phone) return;
+
+  router.push({
+    pathname: "/(tabs)/ReviewResult",
+    params: { phone },
+  } as any);
+}, [router, phone]);
 
   // ✅ NEW LOGIC: هر وقت از in_progress خارج شد، برو نتیجه (دیگه paywall نداریم)
   const openResultScreen = useCallback(async () => {
