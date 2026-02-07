@@ -95,6 +95,7 @@ export default function PelekanTab() {
 
   const focus = String((params as any)?.focus || "").trim();
   const autoStart = String((params as any)?.autoStart || "").trim(); // ✅ NEW
+  const enterTreatment = String((params as any)?.enterTreatment || "").trim(); // ✅ NEW
 
   const insets = useSafeAreaInsets();
   const tabBarH = useBottomTabBarHeight();
@@ -181,6 +182,7 @@ export default function PelekanTab() {
         phone: phone || null,
         focus,
         autoStart,
+        enterTreatment, // ✅ NEW
         forceView,
         forceTab,
         startGateReady,
@@ -197,9 +199,11 @@ export default function PelekanTab() {
           return;
         }
 
-        const url = `https://api.qoqnoos.app/api/pelekan/state?phone=${encodeURIComponent(
-          phone
-        )}`;
+        // ✅ NEW: build qs properly + pass enterTreatment to backend (one-shot)
+        const qs = new URLSearchParams({ phone: String(phone) });
+        if (enterTreatment) qs.set("enterTreatment", enterTreatment);
+
+        const url = `https://api.qoqnoos.app/api/pelekan/state?${qs.toString()}`;
         console.log("🌐 [PelekanTab] GET", { seq, url });
 
         const res = await fetch(url, {
@@ -311,7 +315,10 @@ export default function PelekanTab() {
         if (seq === fetchSeqRef.current) setState(merged);
       } catch (e: any) {
         const msg = String(e?.message || e);
-        if (msg.toLowerCase().includes("aborted") || msg.toLowerCase().includes("abort")) {
+        if (
+          msg.toLowerCase().includes("aborted") ||
+          msg.toLowerCase().includes("abort")
+        ) {
           console.log("🧯 [PelekanTab] fetch aborted (caught)");
           return;
         }
@@ -325,7 +332,16 @@ export default function PelekanTab() {
         }
       }
     },
-    [me?.phone, focus, autoStart, forceView, forceTab, startGateReady, gateBoot]
+    [
+      me?.phone,
+      focus,
+      autoStart,
+      enterTreatment, // ✅ NEW
+      forceView,
+      forceTab,
+      startGateReady,
+      gateBoot,
+    ]
   );
 
   useEffect(() => {
@@ -346,6 +362,17 @@ export default function PelekanTab() {
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fetchState, initialLoading])
   );
+
+  // ✅ NEW: one-shot param cleanup (enterTreatment should not stick)
+  useEffect(() => {
+    if (!enterTreatment) return;
+
+    const t = setTimeout(() => {
+      router.replace("/(tabs)/Pelekan");
+    }, 0);
+
+    return () => clearTimeout(t);
+  }, [enterTreatment, router]);
 
   // ✅ وضعیت baseline (گیت سخت)
   const baselineStatus = String(state?.baseline?.session?.status || "");
@@ -401,8 +428,8 @@ export default function PelekanTab() {
   let view: TabState = ((forceTab as any) ||
     (keepReview ? "review" : state.tabState)) as TabState;
 
-  // ✅ FIX: review_result نباید redirect شود؛ باید همان مسیر درمان را نشان بدهد
-  //if (view === "review_result") view = "treating";
+  // ✅ FIX: review_result باید همان مسیر درمان را نشان بدهد (وگرنه می‌افتد تو IdlePlaceholder)
+  if (view === "review_result") view = "treating";
 
   /**
    * ✅ NEW: gate start (دایره شروع)
@@ -594,27 +621,27 @@ export default function PelekanTab() {
   }, [view, activeDayId, activeIndex, pathItems.length]);
 
   useEffect(() => {
-  if (view !== "treating") {
-    setTreatingBoot(false);
-    return;
-  }
+    if (view !== "treating") {
+      setTreatingBoot(false);
+      return;
+    }
 
-  // ✅ اگر هنوز activeDayId نداریم (قبل از روز ۱ / هنوز درمان شروع نشده)
-  // نباید لودینگ بی‌نهایت بگیریم؛ لیست باید نمایش داده شود.
-  if (!activeDayId) {
-    setTreatingBoot(false);
-    return;
-  }
+    // ✅ اگر هنوز activeDayId نداریم (قبل از روز ۱ / هنوز درمان شروع نشده)
+    // نباید لودینگ بی‌نهایت بگیریم؛ لیست باید نمایش داده شود.
+    if (!activeDayId) {
+      setTreatingBoot(false);
+      return;
+    }
 
-  // ✅ اگر activeDayId داریم ولی هنوز ایندکسش پیدا نشده/لیست خالی است، آنوقت لودینگ منطقی است
-  if (activeIndex < 0 || !pathItems.length) {
-    setTreatingBoot(true);
-    return;
-  }
+    // ✅ اگر activeDayId داریم ولی هنوز ایندکسش پیدا نشده/لیست خالی است، آنوقت لودینگ منطقی است
+    if (activeIndex < 0 || !pathItems.length) {
+      setTreatingBoot(true);
+      return;
+    }
 
-  const t = setTimeout(() => setTreatingBoot(false), 60);
-  return () => clearTimeout(t);
-}, [view, activeDayId, activeIndex, pathItems.length]);
+    const t = setTimeout(() => setTreatingBoot(false), 60);
+    return () => clearTimeout(t);
+  }, [view, activeDayId, activeIndex, pathItems.length]);
 
   /* ----------------------------- Handlers ----------------------------- */
   const onTapStart = useCallback(() => {
@@ -682,7 +709,10 @@ export default function PelekanTab() {
         return;
       }
 
-      router.push({ pathname: "/pelekan/day/[id]", params: { id: day.id } } as any);
+      router.push({
+        pathname: "/pelekan/day/[id]",
+        params: { id: day.id },
+      } as any);
     },
     [router, state?.ui?.paywall?.needed, state?.treatmentAccess, state?.stages]
   );
@@ -862,7 +892,9 @@ export default function PelekanTab() {
             <IdlePlaceholder
               me={me}
               state={stateForView}
-              onRefresh={() => fetchState({ initial: false, reason: "idle_refresh" })}
+              onRefresh={() =>
+                fetchState({ initial: false, reason: "idle_refresh" })
+              }
             />
           </View>
         )}

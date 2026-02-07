@@ -186,26 +186,22 @@ export default function ReviewResult() {
   // ✅ FIX: always pass phone to Pelekan so it doesn't reset state
   // ✅ FIX (only change here): force focus="" to land on main zigzag (circles)
   const goPelekan = useCallback(() => {
-    if (!phone) return;
-    router.push({ pathname: "/(tabs)/Pelekan", params: { phone } } as any);
-  }, [router, phone]);
+  if (!phone) return;
+  router.replace({
+    pathname: "/(tabs)/Pelekan",
+    params: { phone, enterTreatment: "1" },
+  } as any);
+}, [router, phone]);
 
-  const goPelekanReviewTests = useCallback(() => {
-    if (!phone) return;
-    router.push({
-  pathname: "/(tabs)/Pelekan",
-  params: { phone, focus: "review_tests" },
-} as any);
-  }, [router, phone]);
+const goPelekanReviewTests = useCallback(() => {
+  if (!phone) return;
+  router.replace(`/(tabs)/Pelekan?phone=${encodeURIComponent(phone)}&focus=review_tests`);
+}, [router, phone]);
 
-  // ✅ NEW: baseline focus (برای جلوگیری از ارسال اشتباه به review_tests)
-  const goPelekanBaselineTests = useCallback(() => {
-    if (!phone) return;
-    router.push({
-  pathname: "/(tabs)/Pelekan",
-  params: { phone, focus: "baseline_tests" },
-} as any);
-  }, [router, phone]);
+const goPelekanBaselineTests = useCallback(() => {
+  if (!phone) return;
+  router.replace(`/(tabs)/Pelekan?phone=${encodeURIComponent(phone)}&focus=baseline_tests`);
+}, [router, phone]);
 
   const fetchAll = useCallback(async () => {
     if (!phone) {

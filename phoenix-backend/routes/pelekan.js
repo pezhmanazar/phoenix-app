@@ -524,6 +524,9 @@ router.get("/state", authUser, async (req, res) => {
     noStore(res);
     const phone = req.userPhone;
 
+    // ✅ NEW: explicit treatment entry from UI (e.g. ReviewResult "Go to Pelekan")
+    const enterTreatment = String(req.query?.enterTreatment || "") === "1";
+
     // 1) user first
     const user = await prisma.user.findUnique({
       where: { phone },
@@ -620,7 +623,6 @@ router.get("/state", authUser, async (req, res) => {
        🔽 ADDED: AWARDS (medals/badges)
        =========================== */
 
-    // ⚠️ orderBy نذاشتم چون معلوم نیست createdAt روی UserMedal/UserIdentityBadge دارید یا نه
     const userMedals = await prisma.userMedal.findMany({
       where: { userId: user.id },
       select: {
@@ -654,7 +656,7 @@ router.get("/state", authUser, async (req, res) => {
       badges: (userBadges || []).map((b) => b.badge).filter(Boolean),
     };
 
-    // ✅ NEW: review state helpers (برای جلوگیری از loop ReviewResult -> Pelekan -> Review)
+    // ✅ review state helpers
     const chosenPath = String(reviewSession?.chosenPath || ""); // "" | "skip_review" | "review"
     const reviewFinished =
       chosenPath === "review" &&
@@ -670,22 +672,24 @@ router.get("/state", authUser, async (req, res) => {
       let tabState = "idle";
       if (isBaselineInProgress) tabState = "baseline_assessment";
 
-      // ✅ FIX: وقتی review تمام شده، دیگه tabState را review نکن (نباید برگردد به سوالات)
+      // ✅ FIX: وقتی review تمام شده، دیگه tabState را review نکن
       if (!isBaselineInProgress && reviewInProgress) {
         tabState = "review";
-      } else if (!isBaselineInProgress && reviewFinished) {
-        // ✅ NEW: بعد از اتمام review، باید روی صفحه نتایج بماند (نه ورود خودکار به پلکان)
+      } else if (!isBaselineInProgress && reviewFinished && !enterTreatment) {
+        // ✅ NEW: فقط اگر enterTreatment نیومده، روی review_result بمان
         tabState = "review_result";
       } else if (isBaselineCompleted) {
         tabState = "choose_path";
       }
+
+      // ✅ اگر UI صراحتاً گفته برو درمان، treating شو (حتی بدون content)
+      if (enterTreatment) tabState = "treating";
 
       const treatmentAccess = computeTreatmentAccess(
         planStatusFinal,
         hasAnyProgressFinal
       );
 
-      // ✅ اینجا هم paywall را مثل قبل نگه می‌داریم (مسیر paywall بعداً در review.js حذف می‌شود)
       const suppressPaywall = tabState !== "treating";
       const paywall = suppressPaywall
         ? { needed: false, reason: null }
@@ -723,8 +727,6 @@ router.get("/state", authUser, async (req, res) => {
           message: "pelekan_content_empty",
           stages: [],
           progress: null,
-
-          // ✅ ADDED
           awards,
         },
       });
@@ -771,9 +773,8 @@ router.get("/state", authUser, async (req, res) => {
     const hasAnyProgress = Array.isArray(dayProgress) && dayProgress.length > 0;
     const hasAnyProgressFinal = applyDebugProgress(req, hasAnyProgress);
 
-    // ✅ حذف پرش خودکار به پلکان بعد از اتمام review:
-    // ورود به treating فقط اگر:
-    // - کاربر skip_review کرده باشد (شروع درمان)
+    // ✅ ورود به treating فقط اگر:
+    // - کاربر skip_review کرده باشد
     // - یا واقعاً progress درمانی دارد
     const isTreatmentEntry = chosenPath === "skip_review" || hasAnyProgressFinal;
 
@@ -791,10 +792,10 @@ router.get("/state", authUser, async (req, res) => {
     else if (isBaselineCompleted && !reviewSession?.chosenPath) tabState = "choose_path";
     // ✅ review in progress
     else if (reviewInProgress) tabState = "review";
-    // ✅ NEW: review finished => stay on review_result (no auto jump to treating)
-    else if (reviewFinished) tabState = "review_result";
-    // 2) treatment entry
-    else if (isTreatmentEntry) tabState = "treating";
+    // ✅ review finished => stay on review_result (ONLY if UI didn't request enterTreatment)
+    else if (reviewFinished && !enterTreatment) tabState = "review_result";
+    // 2) treatment entry (OR explicit enterTreatment)
+    else if (enterTreatment || isTreatmentEntry) tabState = "treating";
     else tabState = "idle";
 
     const treatmentAccess = computeTreatmentAccess(
@@ -802,8 +803,7 @@ router.get("/state", authUser, async (req, res) => {
       hasStartedTreatment
     );
 
-    // ✅ paywall فقط و فقط وقتی treating هستیم و introDone شده مطرح است
-    // (مسیر paywall از مسیر آزمون‌ها جدا می‌ماند)
+    // ✅ paywall فقط وقتی treating هستیم و introDone شده مطرح است
     const suppressPaywall =
       tabState !== "treating" || !introDone || tabState === "baseline_assessment";
 
@@ -815,7 +815,6 @@ router.get("/state", authUser, async (req, res) => {
     if (tabState === "treating") {
       const allDays = stages.flatMap((s) => s.days);
 
-      // ✅ قبل از intro: activeDay را null کن و stage را bastan بگذار
       const activeDay = activeDayId
         ? allDays.find((d) => d.id === activeDayId)
         : null;
@@ -845,7 +844,6 @@ router.get("/state", authUser, async (req, res) => {
             }
           : null,
 
-        // ✅ ADDED: برای UI که دایره "شروع" را چشمک‌زن کند
         start: {
           required: !introDone,
           completedAt: bastanState?.introAudioCompletedAt || null,
@@ -868,14 +866,11 @@ router.get("/state", authUser, async (req, res) => {
           : null,
         path: null,
         review,
-
-        // ✅ ADDED: intro وضعیتش را هم همینجا بده (برای قفل اقدام اول)
         bastanIntro: {
           completedAt: bastanState?.introAudioCompletedAt || null,
           required: true,
           lockedActionsUntilDone: !introDone,
         },
-
         treatment,
         hasContent: true,
         stages,
@@ -892,8 +887,6 @@ router.get("/state", authUser, async (req, res) => {
               yellowCardAt: null,
             },
         },
-
-        // ✅ ADDED
         awards,
       },
     });
@@ -902,7 +895,6 @@ router.get("/state", authUser, async (req, res) => {
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
-
 
 // -------------------- Review Choose Path --------------------
 // POST /api/pelekan/review/choose  body: { phone, choice: "skip_review" | "review" }
