@@ -184,9 +184,10 @@ export default function ReviewResult() {
   }, []);
 
   // ✅ FIX: always pass phone to Pelekan so it doesn't reset state
+  // ✅ FIX (only change here): force focus="" to land on main zigzag (circles)
   const goPelekan = useCallback(() => {
     if (!phone) return;
-    router.replace({ pathname: "/(tabs)/Pelekan", params: { phone } } as any);
+    router.replace({ pathname: "/(tabs)/Pelekan", params: { phone, focus: "" } } as any);
   }, [router, phone]);
 
   const goPelekanReviewTests = useCallback(() => {

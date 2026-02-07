@@ -214,12 +214,14 @@ export default function Review({ me, state, onRefresh }: Props) {
     }
   }, [phone]);
 
-  // ✅ FIX: ناوبری ضد-باگ (pathname + params) به جای query string
+  // ✅ FIX (1): ناوبری نتیجه بدون query-string (رفع TS2872 و گیرهای محیطی)
   const goToResultPage = useCallback(() => {
-    router.replace({
-      pathname: "/(tabs)/ReviewResult",
-      params: { phone },
-    } as any);
+    router.replace(
+      {
+        pathname: "/(tabs)/ReviewResult",
+        params: { phone },
+      } as any
+    );
   }, [router, phone]);
 
   // ✅ NEW LOGIC: هر وقت از in_progress خارج شد، برو نتیجه (دیگه paywall نداریم)
@@ -690,10 +692,15 @@ export default function Review({ me, state, onRefresh }: Props) {
                 style={[styles.btn, { borderColor: palette.border }]}
                 onPress={async () => {
                   setResultOpen(false);
-                  router.replace({
-                    pathname: "/(tabs)/Pelekan",
-                    params: { phone },
-                  } as any);
+
+                  // ✅ FIX (2): رفتن به پلکان زیگزاگ (دایره‌ها) => focus را صراحتاً خالی کن
+                  router.replace(
+                    {
+                      pathname: "/(tabs)/Pelekan",
+                      params: { phone, focus: "" },
+                    } as any
+                  );
+
                   setTimeout(() => onRefresh?.(), 50);
                 }}
               >
