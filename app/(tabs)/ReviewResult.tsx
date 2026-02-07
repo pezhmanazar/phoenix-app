@@ -187,24 +187,24 @@ export default function ReviewResult() {
   // ✅ FIX (only change here): force focus="" to land on main zigzag (circles)
   const goPelekan = useCallback(() => {
     if (!phone) return;
-    router.replace({ pathname: "/(tabs)/Pelekan", params: { phone, focus: "" } } as any);
+    router.push({ pathname: "/(tabs)/Pelekan", params: { phone } } as any);
   }, [router, phone]);
 
   const goPelekanReviewTests = useCallback(() => {
     if (!phone) return;
-    router.replace({
-      pathname: "/(tabs)/Pelekan",
-      params: { phone, focus: "review_tests" },
-    } as any);
+    router.push({
+  pathname: "/(tabs)/Pelekan",
+  params: { phone, focus: "review_tests" },
+} as any);
   }, [router, phone]);
 
   // ✅ NEW: baseline focus (برای جلوگیری از ارسال اشتباه به review_tests)
   const goPelekanBaselineTests = useCallback(() => {
     if (!phone) return;
-    router.replace({
-      pathname: "/(tabs)/Pelekan",
-      params: { phone, focus: "baseline_tests" },
-    } as any);
+    router.push({
+  pathname: "/(tabs)/Pelekan",
+  params: { phone, focus: "baseline_tests" },
+} as any);
   }, [router, phone]);
 
   const fetchAll = useCallback(async () => {
@@ -338,10 +338,10 @@ export default function ReviewResult() {
       }
 
       // ✅ FIX: pass phone
-      router.replace({
-        pathname: "/(tabs)/Pelekan",
-        params: { phone, focus: "review_tests" },
-      } as any);
+      router.push({
+  pathname: "/(tabs)/Pelekan",
+  params: { phone, focus: "review_tests" },
+} as any);
     } catch (e: any) {
       if (mountedRef.current) setErr(String(e?.message || "FAILED"));
     } finally {
