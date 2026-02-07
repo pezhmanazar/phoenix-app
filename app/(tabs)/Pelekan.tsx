@@ -36,6 +36,7 @@ type TabState =
   | "baseline_result"
   | "choose_path"
   | "review"
+  | "review_result" // ✅ NEW: سرور می‌فرستد
   | "treating";
 type Paywall = {
   needed: boolean;
@@ -400,13 +401,20 @@ export default function PelekanTab() {
   let view: TabState = ((forceTab as any) ||
     (keepReview ? "review" : state.tabState)) as TabState;
 
+  // ✅ FIX: review_result نباید redirect شود؛ باید همان مسیر درمان را نشان بدهد
+  //if (view === "review_result") view = "treating";
+
   /**
    * ✅ NEW: gate start (دایره شروع)
    * - تا وقتی کاربر "شروع" نزده و baseline هم شروع نشده => view باید idle بماند
    * - اگر baseline واقعاً شروع شده (session ساخته شده) یا autoStart=baseline => گیت بی‌اثر
    */
   const baselineHasSession = !!state?.baseline?.session;
-  const gateAllowsBaseline = startGateReady || baselineHasSession || autoStart === "baseline" || forceTab === "baseline_assessment";
+  const gateAllowsBaseline =
+    startGateReady ||
+    baselineHasSession ||
+    autoStart === "baseline" ||
+    forceTab === "baseline_assessment";
 
   // ✅ گیت baseline/treating
   if (!baselineCompleted) {
@@ -526,7 +534,8 @@ export default function PelekanTab() {
   const SPACER_H = 10;
 
   const heights = useMemo(
-    () => pathItems.map((it: any) => (it?.kind === "spacer" ? SPACER_H : ITEM_H)),
+    () =>
+      pathItems.map((it: any) => (it?.kind === "spacer" ? SPACER_H : ITEM_H)),
     [pathItems]
   );
 
@@ -573,7 +582,10 @@ export default function PelekanTab() {
             viewPosition: 0.35,
           });
         } catch (e: any) {
-          console.log("🧯 [PelekanTab] scrollToIndex threw", String(e?.message || e));
+          console.log(
+            "🧯 [PelekanTab] scrollToIndex threw",
+            String(e?.message || e)
+          );
         }
       });
     });
@@ -587,24 +599,22 @@ export default function PelekanTab() {
     return;
   }
 
-  // ✅ حالت شروع درمان (قبل از روز ۱)
-  if (
-    !activeDayId &&
-    state?.treatment?.start?.required === true
-  ) {
+  // ✅ اگر هنوز activeDayId نداریم (قبل از روز ۱ / هنوز درمان شروع نشده)
+  // نباید لودینگ بی‌نهایت بگیریم؛ لیست باید نمایش داده شود.
+  if (!activeDayId) {
     setTreatingBoot(false);
     return;
   }
 
-  // ❌ فقط اگر واقعاً داده ناقص است لودینگ
-  if (!activeDayId || activeIndex < 0 || !pathItems.length) {
+  // ✅ اگر activeDayId داریم ولی هنوز ایندکسش پیدا نشده/لیست خالی است، آنوقت لودینگ منطقی است
+  if (activeIndex < 0 || !pathItems.length) {
     setTreatingBoot(true);
     return;
   }
 
   const t = setTimeout(() => setTreatingBoot(false), 60);
   return () => clearTimeout(t);
-}, [view, activeDayId, activeIndex, pathItems.length, state?.treatment?.start]);
+}, [view, activeDayId, activeIndex, pathItems.length]);
 
   /* ----------------------------- Handlers ----------------------------- */
   const onTapStart = useCallback(() => {
@@ -615,7 +625,9 @@ export default function PelekanTab() {
   const onTapActiveDay = useCallback(
     (day: PelekanDay, opts?: { mode: "active" | "preview" }) => {
       const stageId = String((day as any)?.stageId || "");
-      const st = (state?.stages || []).find((x: any) => String(x?.id) === stageId);
+      const st = (state?.stages || []).find(
+        (x: any) => String(x?.id) === stageId
+      );
       const stageCode = String(st?.code || "").trim();
       const n = Number((day as any)?.dayNumberInStage || 0);
 
@@ -651,12 +663,16 @@ export default function PelekanTab() {
         console.log("🧭 [PelekanTab] bastan -> action route", { n, actionCode });
 
         if (!actionCode) {
-          console.log("⚠️ [PelekanTab] bastan actionCode missing -> go to bastan list");
+          console.log(
+            "⚠️ [PelekanTab] bastan actionCode missing -> go to bastan list"
+          );
           router.push("/pelekan/bastan" as any);
           return;
         }
 
-        router.push(`/pelekan/bastan/action/${encodeURIComponent(actionCode)}` as any);
+        router.push(
+          `/pelekan/bastan/action/${encodeURIComponent(actionCode)}` as any
+        );
         return;
       }
 
@@ -747,7 +763,9 @@ export default function PelekanTab() {
             <Baseline
               me={me}
               state={stateForView}
-              onRefresh={() => fetchState({ initial: false, reason: "baseline_refresh" })}
+              onRefresh={() =>
+                fetchState({ initial: false, reason: "baseline_refresh" })
+              }
             />
           </View>
         ) : view === "choose_path" ? (
@@ -755,7 +773,9 @@ export default function PelekanTab() {
             <ChoosePath
               me={me}
               state={stateForView}
-              onRefresh={() => fetchState({ initial: false, reason: "choose_path_refresh" })}
+              onRefresh={() =>
+                fetchState({ initial: false, reason: "choose_path_refresh" })
+              }
             />
           </View>
         ) : view === "review" ? (
@@ -806,7 +826,9 @@ export default function PelekanTab() {
               }}
               getItemLayout={getItemLayout}
               initialScrollIndex={
-                activeIndex >= 0 && activeIndex < pathItems.length ? activeIndex : undefined
+                activeIndex >= 0 && activeIndex < pathItems.length
+                  ? activeIndex
+                  : undefined
               }
               onScrollToIndexFailed={(info) => {
                 console.log("🧯 [PelekanTab] onScrollToIndexFailed", {
@@ -817,7 +839,8 @@ export default function PelekanTab() {
 
                 requestAnimationFrame(() => {
                   try {
-                    const approxOffset = (info.averageItemLength || ITEM_H) * info.index;
+                    const approxOffset =
+                      (info.averageItemLength || ITEM_H) * info.index;
                     listRef.current?.scrollToOffset({
                       offset: Math.max(0, approxOffset),
                       animated: false,
