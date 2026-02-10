@@ -446,7 +446,7 @@ async function ensureQuestionSetSeeded() {
         code: "review",
         version,
         titleFa: "بازسنجی رابطه + منطقی بودن انتظار",
-        description: "Question bank v2 (TEST1/TEST2)",
+        description: "Question bank v4 (TEST1/TEST2)",
         isActive: true,
         questions: {
           create: [
