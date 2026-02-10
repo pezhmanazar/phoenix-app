@@ -245,21 +245,6 @@ export default function ChoosePath({ me, state, onRefresh }: Props) {
   بازسنجی رابطه با دو آزمون علمی
 </Text>
 
-<Text
-  style={[
-    styles.choiceDesc,
-    {
-      color: palette.sub2,
-      textAlign: "center",
-      fontSize: 11,
-      marginTop: 4,
-      opacity: 0.85,
-    },
-  ]}
->
-  (نتیجه نهایی بعد از خرید اشتراک پرو نمایش داده می‌شود)
-</Text>
-
               <View style={{ height: 12 }} />
 
               <View

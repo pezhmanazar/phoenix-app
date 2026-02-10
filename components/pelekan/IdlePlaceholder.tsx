@@ -71,7 +71,7 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
       : [];
 
   const introText =
-    "برای اینکه یک برنامه‌ی دقیق، اثرگذار و کاملاً متناسب با وضعیت تو ارائه بشه، اول یک آزمون کوتاه می‌گیریم تا نقطه‌ی شروع مشخص بشه.";
+    "برای اینکه یک برنامه‌ی دقیق، اثرگذار و کاملاً متناسب با وضعیت تو ارائه بشه، اول یک آزمون کوتاه بده تا وضعیتت مشخص بشه.";
 
   const animateTo = (to: 0 | 1, done?: () => void) => {
     Animated.timing(anim, {
