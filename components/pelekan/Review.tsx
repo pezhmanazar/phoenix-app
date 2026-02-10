@@ -83,6 +83,9 @@ type ResultResponse = {
 
 const API_BASE = "https://qoqnoos.app/api/pelekan/review";
 
+// ✅ NEW: timing helper (برای لاگ‌های پرفورمنس)
+const now = () => ((global as any)?.performance?.now ? performance.now() : Date.now());
+
 export default function Review({ me, state, onRefresh }: Props) {
   const router = useRouter();
   const phone = String(me?.phone || "").trim();
@@ -100,6 +103,8 @@ export default function Review({ me, state, onRefresh }: Props) {
   const startLockRef = useRef(false);
   const mountedRef = useRef(true);
   const submitLockRef = useRef(false);
+  const bootingRef = useRef(false);
+  const bootSeqRef = useRef(0);
 
   // ✅ NEW: ضد-ریدایرکت چندباره (برای جلوگیری از باگ‌های "برگشت به شروع")
   const redirectedRef = useRef(false);
@@ -157,11 +162,29 @@ export default function Review({ me, state, onRefresh }: Props) {
   const fetchReviewState = useCallback(async () => {
     if (!phone) return null;
 
+    const t0 = now();
+    console.log("🟦 [Review] fetchReviewState:start", { t0 });
+
     const res = await fetch(`${API_BASE}/state?phone=${encodeURIComponent(phone)}`, {
       headers: { "Cache-Control": "no-store" },
     });
 
+    console.log("🟩 [Review] fetchReviewState:after_fetch", {
+      dt: now() - t0,
+      http: res.status,
+    });
+
     const json: ReviewStateResponse = await res.json().catch(() => ({ ok: false } as any));
+
+    console.log("🟩 [Review] fetchReviewState:after_json", {
+      dt: now() - t0,
+      ok: json?.ok,
+      err: json?.error,
+      status: json?.data?.session?.status,
+      test: json?.data?.session?.currentTest,
+      idx: json?.data?.session?.currentIndex,
+    });
+
     if (!json?.ok) throw new Error(json?.error || "STATE_FAILED");
 
     if (mountedRef.current) setReviewState(json.data || null);
@@ -216,13 +239,13 @@ export default function Review({ me, state, onRefresh }: Props) {
 
   // ✅ FIX (1): ناوبری نتیجه بدون query-string (رفع TS2872 و گیرهای محیطی)
   const goToResultPage = useCallback(() => {
-  if (!phone) return;
+    if (!phone) return;
 
-  router.push({
-    pathname: "/(tabs)/ReviewResult",
-    params: { phone },
-  } as any);
-}, [router, phone]);
+    router.push({
+      pathname: "/(tabs)/ReviewResult",
+      params: { phone },
+    } as any);
+  }, [router, phone]);
 
   // ✅ NEW LOGIC: هر وقت از in_progress خارج شد، برو نتیجه (دیگه paywall نداریم)
   const openResultScreen = useCallback(async () => {
@@ -236,20 +259,20 @@ export default function Review({ me, state, onRefresh }: Props) {
   }, [fetchReviewState, onRefresh, goToResultPage]);
 
   // ✅ NEW LOGIC: اگر از in_progress خارج شد، مستقیم ریدایرکت کن
+  // 🔧 PERF FIX: onRefresh رو از اینجا حذف کردیم تا بعد هر سوال PelekanTab بی‌خودی fetch نکند
   const syncAndMaybeGoResult = useCallback(
-    async () => {
-      const st = await fetchReviewState();
-      onRefresh?.();
+  async () => {
+    const st = await fetchReviewState();
 
-      const sessStatus = String(st?.session?.status || "");
-      if (sessStatus && sessStatus !== "in_progress") {
-        goToResultPage();
-        return true;
-      }
-      return false;
-    },
-    [fetchReviewState, onRefresh, goToResultPage]
-  );
+    const sessStatus = String(st?.session?.status || "");
+    if (sessStatus && sessStatus !== "in_progress") {
+      goToResultPage();
+      return true;
+    }
+    return false;
+  },
+  [fetchReviewState, goToResultPage]
+);
 
   const ensureStarted = useCallback(
     async (stData: ReviewStateResponse["data"] | null) => {
@@ -282,29 +305,48 @@ export default function Review({ me, state, onRefresh }: Props) {
   );
 
   const bootstrap = useCallback(async () => {
-    if (!phone) return;
+  if (!phone) return;
 
-    setError(null);
-    setQsLoading(true);
+  // ✅ single-flight: دوبار همزمان اجرا نشه
+  if (bootingRef.current) return;
+  bootingRef.current = true;
 
-    try {
-      console.log("[Review] bootstrap begin", { phone });
+  // ✅ seq: اگر بوت جدید شروع شد، نتایج بوت قبلی اعمال نشه
+  const seq = ++bootSeqRef.current;
 
-      const st = await fetchReviewState();
-      console.log("[Review] state", st);
+  setError(null);
+  setQsLoading(true);
 
-      const qsid = await fetchQuestionSet();
-      console.log("[Review] question-set loaded", { qsid });
+  try {
+    console.log("[Review] bootstrap begin", { phone, seq });
 
-      await ensureStarted(st);
-      console.log("[Review] ensureStarted done");
-    } catch (e: any) {
-      console.log("[Review] bootstrap error", e?.message || e);
-      if (mountedRef.current) setError(String(e?.message || "UNKNOWN_ERROR"));
-    } finally {
-      if (mountedRef.current) setQsLoading(false);
+    // ✅ اول سوال‌ها (تا از qsLoading سریع خارج بشیم)
+    const qsid = await fetchQuestionSet();
+    console.log("[Review] question-set loaded", { qsid, seq });
+
+    // ✅ بعد state
+    const st = await fetchReviewState();
+    console.log("[Review] state", st);
+
+    // ✅ اگر session questionSetId ندارد، start کن
+    await ensureStarted(st);
+
+    // ✅ بعد از start یکبار دوباره state بگیر تا questionSetId قطعاً sync شود
+    await fetchReviewState();
+
+    console.log("[Review] ensureStarted done");
+  } catch (e: any) {
+    console.log("[Review] bootstrap error", e?.message || e);
+    if (mountedRef.current && bootSeqRef.current === seq) {
+      setError(String(e?.message || "UNKNOWN_ERROR"));
     }
-  }, [phone, fetchReviewState, fetchQuestionSet, ensureStarted]);
+  } finally {
+    if (mountedRef.current && bootSeqRef.current === seq) {
+      setQsLoading(false);
+    }
+    bootingRef.current = false;
+  }
+}, [phone, fetchQuestionSet, fetchReviewState, ensureStarted]);
 
   useEffect(() => {
     if (bootRef.current.phone !== phone) {
@@ -397,6 +439,30 @@ export default function Review({ me, state, onRefresh }: Props) {
     return (session.currentIndex ?? 0) >= questions.length;
   }, [session, questions]);
 
+  // ✅ PERF FIX: UI رو بعد از جواب، لوکال جلو می‌بریم تا برای سوال بعد منتظر GET /state نمانیم
+  const optimisticAdvance = useCallback((idx: number) => {
+    setReviewState((prev) => {
+      if (!prev?.session) return prev;
+      return {
+        ...prev,
+        session: {
+          ...prev.session,
+          currentIndex: idx + 1,
+        },
+      };
+    });
+  }, []);
+
+  const InlineLoading = useCallback(
+    ({ label }: { label: string }) => (
+      <View style={styles.inlineLoading}>
+        <ActivityIndicator color={palette.gold} size="small" />
+        <Text style={[styles.inlineLoadingText, { color: palette.sub }]}>{label}</Text>
+      </View>
+    ),
+    [palette.gold, palette.sub]
+  );
+
   const submitAnswer = useCallback(
     async (value: number) => {
       if (!phone || !session) return;
@@ -412,31 +478,88 @@ export default function Review({ me, state, onRefresh }: Props) {
 
       const idx = session.currentIndex ?? 0;
 
+      const t0 = now();
+      console.log("🟦 [Review] NEXT tap", { testNo: currentTest, idx, t0 });
+
       setLoading(true);
       try {
+        console.log("🟨 [Review] before POST /answer", { dt: now() - t0 });
+
         const res = await fetch(`${API_BASE}/answer`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ phone, testNo: currentTest, index: idx, value }),
         });
 
+        console.log("🟩 [Review] after fetch() /answer", {
+          dt: now() - t0,
+          http: res.status,
+        });
+
         const json = await res.json().catch(() => null);
+
+        console.log("🟩 [Review] after json() /answer", {
+          dt: now() - t0,
+          ok: json?.ok,
+          error: json?.error,
+        });
+
         if (!json?.ok) {
           setError(json?.error || "SERVER_ERROR");
           return;
         }
 
-        // ✅ بعد از هر جواب: اگر از in_progress خارج شد، برو نتیجه
-        const finished = await syncAndMaybeGoResult();
-        if (finished) return;
+        // ✅ فوراً برو سوال بعدی (بدون sync شبکه)
+        optimisticAdvance(idx);
+
+        // ✅ SAFETY: هر ۵ سوال یک بار sync کن + آخر تست حتماً sync
+        const nextIdx = idx + 1;
+        const len = questions?.length || 0;
+        const isLast = nextIdx >= len;
+        const shouldPeriodicSync = nextIdx % 5 === 0;
+
+        if (isLast || shouldPeriodicSync) {
+          console.log("🟨 [Review] before syncAndMaybeGoResult", {
+            dt: now() - t0,
+            reason: isLast ? "last" : "periodic",
+            nextIdx,
+          });
+
+          const finished = await syncAndMaybeGoResult();
+
+          console.log("🟩 [Review] after syncAndMaybeGoResult", {
+            dt: now() - t0,
+            finished,
+          });
+
+          requestAnimationFrame(() => {
+            console.log("🟪 [Review] raf after sync", { dt: now() - t0 });
+          });
+
+          if (finished) return;
+        } else {
+          requestAnimationFrame(() => {
+            console.log("🟪 [Review] raf after optimistic advance", { dt: now() - t0 });
+          });
+        }
       } catch (e: any) {
+        console.log("🟥 [Review] submitAnswer error", String(e?.message || e));
         setError(e?.message || "SERVER_ERROR");
       } finally {
+        console.log("⬛ [Review] submitAnswer finally", { dt: now() - t0 });
         setLoading(false);
         submitLockRef.current = false;
       }
     },
-    [phone, session, currentTest, syncAndMaybeGoResult, openResultScreen]
+    [
+      phone,
+      session,
+      currentTest,
+      openResultScreen,
+      syncAndMaybeGoResult,
+      optimisticAdvance,
+      questions?.length,
+    ]
   );
 
   const goToTest2 = useCallback(async () => {
@@ -630,7 +753,11 @@ export default function Review({ me, state, onRefresh }: Props) {
               if (fn) await fn();
             }}
           >
-            <Text style={[styles.btnText, { color: palette.text }]}>{loading ? "..." : "بله، ادامه"}</Text>
+            {loading ? (
+              <InlineLoading label="در حال ثبت…" />
+            ) : (
+              <Text style={[styles.btnText, { color: palette.text }]}>بله، ادامه</Text>
+            )}
           </Pressable>
 
           <View style={{ height: 10 }} />
@@ -643,12 +770,16 @@ export default function Review({ me, state, onRefresh }: Props) {
             ]}
             onPress={closeConfirm}
           >
-            <Text style={[styles.btnText, { color: palette.sub }]}>{loading ? "..." : "نه"}</Text>
+            {loading ? (
+              <InlineLoading label="در حال پردازش…" />
+            ) : (
+              <Text style={[styles.btnText, { color: palette.sub }]}>نه</Text>
+            )}
           </Pressable>
         </View>
       </View>
     );
-  }, [confirmOpen, confirmTitle, confirmMsg, palette, loading, closeConfirm]);
+  }, [confirmOpen, confirmTitle, confirmMsg, palette, loading, closeConfirm, InlineLoading]);
 
   const ResultScreen = useMemo(() => {
     if (!resultOpen) return null;
@@ -901,7 +1032,11 @@ export default function Review({ me, state, onRefresh }: Props) {
           <View style={{ height: 14 }} />
 
           <Pressable style={[styles.btnPrimary, { borderColor: palette.border }]} onPress={goToTest2} disabled={loading}>
-            <Text style={[styles.btnText, { color: palette.text }]}>{loading ? "..." : "ادامه: رفتن به آزمون دوم"}</Text>
+            {loading ? (
+              <InlineLoading label="در حال انتقال به آزمون دوم…" />
+            ) : (
+              <Text style={[styles.btnText, { color: palette.text }]}>ادامه: رفتن به آزمون دوم</Text>
+            )}
           </Pressable>
 
           <View style={{ height: 10 }} />
@@ -917,7 +1052,11 @@ export default function Review({ me, state, onRefresh }: Props) {
               )
             }
           >
-            <Text style={[styles.btnText, { color: palette.red }]}>{loading ? "..." : "عبور از آزمون دوم"}</Text>
+            {loading ? (
+              <InlineLoading label="در حال پردازش…" />
+            ) : (
+              <Text style={[styles.btnText, { color: palette.red }]}>عبور از آزمون دوم</Text>
+            )}
           </Pressable>
         </View>
 
@@ -954,7 +1093,11 @@ export default function Review({ me, state, onRefresh }: Props) {
             }}
             disabled={loading}
           >
-            <Text style={[styles.btnText, { color: palette.text }]}>{loading ? "..." : "ثبت نهایی و رفتن به نتیجه"}</Text>
+            {loading ? (
+              <InlineLoading label="در حال ثبت نهایی…" />
+            ) : (
+              <Text style={[styles.btnText, { color: palette.text }]}>ثبت نهایی و رفتن به نتیجه</Text>
+            )}
           </Pressable>
 
           <View style={{ height: 10 }} />
@@ -1039,9 +1182,13 @@ export default function Review({ me, state, onRefresh }: Props) {
               },
             ]}
           >
-            <Text style={[styles.btnText, { color: selectedValue === null ? palette.sub : palette.text }]}>
-              {loading ? "..." : "ادامه"}
-            </Text>
+            {loading ? (
+              <InlineLoading label="در حال ثبت پاسخ…" />
+            ) : (
+              <Text style={[styles.btnText, { color: selectedValue === null ? palette.sub : palette.text }]}>
+                ادامه
+              </Text>
+            )}
           </Pressable>
         </Animated.View>
       </ScrollView>
@@ -1175,5 +1322,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 18,
     padding: 16,
+  },
+
+  inlineLoading: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8 as any,
+  },
+  inlineLoadingText: {
+    fontSize: 12,
+    fontWeight: "900",
+    writingDirection: "rtl" as any,
   },
 });

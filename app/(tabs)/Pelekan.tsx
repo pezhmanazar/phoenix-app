@@ -36,12 +36,14 @@ type TabState =
   | "baseline_result"
   | "choose_path"
   | "review"
-  | "review_result" // ✅ NEW: سرور می‌فرستد
+  | "review_result"
   | "treating";
+
 type Paywall = {
   needed: boolean;
   reason: "start_treatment" | "continue_treatment" | null;
 };
+
 type PelekanFlags = {
   suppressPaywall?: boolean;
   isBaselineInProgress?: boolean;
@@ -86,7 +88,6 @@ const initialState: PelekanState = {
   progress: null,
 };
 
-// ✅ همان کلیدی که در IdlePlaceholder گذاشتی
 const KEY_START_GATE = "pelekan:idle:start_gate:v1";
 
 export default function PelekanTab() {
@@ -94,8 +95,8 @@ export default function PelekanTab() {
   const params = useLocalSearchParams();
 
   const focus = String((params as any)?.focus || "").trim();
-  const autoStart = String((params as any)?.autoStart || "").trim(); // ✅ NEW
-  const enterTreatment = String((params as any)?.enterTreatment || "").trim(); // ✅ NEW
+  const autoStart = String((params as any)?.autoStart || "").trim();
+  const enterTreatment = String((params as any)?.enterTreatment || "").trim();
 
   const insets = useSafeAreaInsets();
   const tabBarH = useBottomTabBarHeight();
@@ -107,23 +108,20 @@ export default function PelekanTab() {
   const [headerHeight, setHeaderHeight] = useState(0);
 
   const [forceView, setForceView] = useState<null | "review">(null);
-
-  // ✅ اگر لازم شد tabState را به زور override کنیم (autoStart / gate)
   const [forceTab, setForceTab] = useState<null | TabState>(null);
 
   const mountedRef = useRef(false);
   const lastFocusRef = useRef<string>("__init__");
-  const fetchSeqRef = useRef(0);
-  const abortRef = useRef<AbortController | null>(null);
+
+  // ✅ مهم: جلوگیری از چند fetch همزمان (ریشه‌ی گیر کردن روی لودینگ)
+  const inFlightRef = useRef(false);
 
   // ✅ FlatList ref برای اسکرول خودکار به روز فعال
   const listRef = useRef<FlatList<ListItem>>(null);
   const lastAutoScrolledDayIdRef = useRef<string | null>(null);
 
-  // ✅ جلوگیری از دیده شدن “لیست نصفه” قبل از آماده شدن activeIndex
   const [treatingBoot, setTreatingBoot] = useState(false);
 
-  // ✅ NEW: Gate boot + ready
   const [gateBoot, setGateBoot] = useState(true);
   const [startGateReady, setStartGateReady] = useState(false);
 
@@ -139,7 +137,6 @@ export default function PelekanTab() {
     []
   );
 
-  // ✅ NEW: read start gate (persisted)
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -167,22 +164,23 @@ export default function PelekanTab() {
       const reason = opts?.reason || (isInitial ? "initial" : "refresh");
       const phone = me?.phone;
 
-      const seq = ++fetchSeqRef.current;
-
-      try {
-        abortRef.current?.abort();
-      } catch {}
-      const controller = new AbortController();
-      abortRef.current = controller;
+      // ✅ اگر یک fetch در جریان است، یکی دیگه راه ننداز
+      if (inFlightRef.current) {
+        console.log("⏭️ [PelekanTab] fetch skipped (inFlight)", {
+          reason,
+          isInitial,
+        });
+        return;
+      }
+      inFlightRef.current = true;
 
       console.log("🧭 [PelekanTab] fetchState:start", {
-        seq,
         reason,
         isInitial,
         phone: phone || null,
         focus,
         autoStart,
-        enterTreatment, // ✅ NEW
+        enterTreatment,
         forceView,
         forceTab,
         startGateReady,
@@ -194,27 +192,20 @@ export default function PelekanTab() {
         else setRefreshing(true);
 
         if (!phone) {
-          console.log("⚠️ [PelekanTab] no phone -> initialState", { seq });
-          if (seq === fetchSeqRef.current) setState(initialState);
+          console.log("⚠️ [PelekanTab] no phone -> initialState");
+          setState(initialState);
           return;
         }
 
-        // ✅ NEW: build qs properly + pass enterTreatment to backend (one-shot)
         const qs = new URLSearchParams({ phone: String(phone) });
         if (enterTreatment) qs.set("enterTreatment", enterTreatment);
 
         const url = `https://api.qoqnoos.app/api/pelekan/state?${qs.toString()}`;
-        console.log("🌐 [PelekanTab] GET", { seq, url });
+        console.log("🌐 [PelekanTab] GET", { url });
 
         const res = await fetch(url, {
           headers: { "Cache-Control": "no-store" },
-          signal: controller.signal,
         });
-
-        if (controller.signal.aborted) {
-          console.log("🧯 [PelekanTab] aborted after fetch()", { seq });
-          return;
-        }
 
         let json: any = null;
         try {
@@ -223,19 +214,8 @@ export default function PelekanTab() {
           json = null;
         }
 
-        if (seq !== fetchSeqRef.current) {
-          console.log("🧯 [PelekanTab] stale response ignored", {
-            seq,
-            latest: fetchSeqRef.current,
-            http: res.status,
-            ok: json?.ok,
-          });
-          return;
-        }
-
         if (!res.ok || !json?.ok) {
           console.log("❌ [PelekanTab] state not ok", {
-            seq,
             http: res.status,
             ok: json?.ok,
             error: json?.error,
@@ -246,7 +226,6 @@ export default function PelekanTab() {
 
         const data = json.data || {};
 
-        // merge stage meta
         const stagesWithDays = Array.isArray(data?.stages) ? data.stages : [];
         const tStages = Array.isArray(data?.treatment?.stages)
           ? data.treatment.stages
@@ -269,7 +248,6 @@ export default function PelekanTab() {
           };
         });
 
-        // derive activeDayId
         const t = data?.treatment;
         const activeStageCode = String(t?.activeStage || "").trim();
         const activeDayNumber = Number(t?.activeDay || 0);
@@ -312,31 +290,24 @@ export default function PelekanTab() {
           progress: safeProgress,
         };
 
-        if (seq === fetchSeqRef.current) setState(merged);
+        setState(merged);
       } catch (e: any) {
         const msg = String(e?.message || e);
-        if (
-          msg.toLowerCase().includes("aborted") ||
-          msg.toLowerCase().includes("abort")
-        ) {
-          console.log("🧯 [PelekanTab] fetch aborted (caught)");
-          return;
-        }
         console.log("💥 [PelekanTab] fetchState:error", { msg });
-        if (seq === fetchSeqRef.current) setState(initialState);
+        setState(initialState);
       } finally {
-        if (seq === fetchSeqRef.current) {
-          if (isInitial) setInitialLoading(false);
-          else setRefreshing(false);
-          console.log("🧭 [PelekanTab] fetchState:end", { seq, reason, isInitial });
-        }
+        // ✅ مهم: لودینگ باید همیشه جمع شود
+        inFlightRef.current = false;
+        if (isInitial) setInitialLoading(false);
+        else setRefreshing(false);
+        console.log("🧭 [PelekanTab] fetchState:end", { reason, isInitial });
       }
     },
     [
       me?.phone,
       focus,
       autoStart,
-      enterTreatment, // ✅ NEW
+      enterTreatment,
       forceView,
       forceTab,
       startGateReady,
@@ -359,22 +330,21 @@ export default function PelekanTab() {
         return;
       }
       fetchState({ initial: false, reason: "focus" });
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fetchState, initialLoading])
   );
 
-  // ✅ NEW: one-shot param cleanup (enterTreatment should not stick)
+  // ✅ one-shot param cleanup
   useEffect(() => {
     if (!enterTreatment) return;
-
     const t = setTimeout(() => {
+      // ✅ مهم: اگر با enterTreatment برگشتی، force ها رو خنثی کن که دوباره پرتت نکنه به review
+      setForceView(null);
+      setForceTab(null);
       router.replace("/(tabs)/Pelekan");
     }, 0);
-
     return () => clearTimeout(t);
   }, [enterTreatment, router]);
 
-  // ✅ وضعیت baseline (گیت سخت)
   const baselineStatus = String(state?.baseline?.session?.status || "");
   const baselineDone = baselineStatus === "completed";
   const baselineInProgress =
@@ -384,9 +354,6 @@ export default function PelekanTab() {
   const baselineCompletedFlag = state?.ui?.flags?.isBaselineCompleted;
   const baselineCompleted = baselineCompletedFlag === true || baselineDone;
 
-  /**
-   * ✅ focus/autoStart handler
-   */
   useEffect(() => {
     const key = `${focus}__${autoStart}`;
     if (lastFocusRef.current === key) return;
@@ -419,23 +386,18 @@ export default function PelekanTab() {
   }, [focus, autoStart, router]);
 
   const reviewSessStatus = String(state?.review?.session?.status || "");
+  const reviewChosenPath = String(state?.review?.session?.chosenPath || "").trim();
+
+  // ✅ اگر کاربر مسیر درمان را انتخاب کرده (skip_review)، دیگر او را به Review برنگردان
   const keepReview =
     forceView === "review" ||
-    state.tabState === "review" ||
-    reviewSessStatus === "in_progress";
+    (reviewChosenPath !== "skip_review" &&
+      (state.tabState === "review" || reviewSessStatus === "in_progress"));
 
-  // ✅ VIEW: اول forceTab، بعد keepReview، بعد tabState
   let view: TabState = ((forceTab as any) ||
     (keepReview ? "review" : state.tabState)) as TabState;
-
-  // ✅ FIX: review_result باید همان مسیر درمان را نشان بدهد (وگرنه می‌افتد تو IdlePlaceholder)
   if (view === "review_result") view = "treating";
 
-  /**
-   * ✅ NEW: gate start (دایره شروع)
-   * - تا وقتی کاربر "شروع" نزده و baseline هم شروع نشده => view باید idle بماند
-   * - اگر baseline واقعاً شروع شده (session ساخته شده) یا autoStart=baseline => گیت بی‌اثر
-   */
   const baselineHasSession = !!state?.baseline?.session;
   const gateAllowsBaseline =
     startGateReady ||
@@ -443,24 +405,19 @@ export default function PelekanTab() {
     autoStart === "baseline" ||
     forceTab === "baseline_assessment";
 
-  // ✅ گیت baseline/treating
   if (!baselineCompleted) {
     if (!gateAllowsBaseline) {
-      // هنوز اجازه ندادی آزمون شروع بشه => فقط Idle (دایره شروع)
       view = "idle";
     } else {
-      // اجازه داده شده/شروع شده => رفتار قبلی تو
       if (!baselineDone || baselineInProgress) view = "baseline_assessment";
       else view = "baseline_result";
     }
   }
 
-  // ✅ NEW: stateForView تا کامپوننت‌ها با view همگام باشند
   const stateForView = useMemo(() => {
     return { ...state, tabState: view };
   }, [state, view]);
 
-  // ✅ XP for header (right side)
   const xpTotal = Number(state?.progress?.xpTotal ?? 0);
   const xpText = String(xpTotal);
 
@@ -553,7 +510,8 @@ export default function PelekanTab() {
     if (!activeDayId) return -1;
     return pathItems.findIndex(
       (it: any) =>
-        it?.kind === "day" && String(it?.day?.id || "") === String(activeDayId)
+        it?.kind === "day" &&
+        String(it?.day?.id || "") === String(activeDayId)
     );
   }, [pathItems, activeDayId]);
 
@@ -596,24 +554,13 @@ export default function PelekanTab() {
 
     const task = InteractionManager.runAfterInteractions(() => {
       requestAnimationFrame(() => {
-        console.log("🎯 [PelekanTab] scrollToActive", {
-          activeDayId,
-          activeIndex,
-          total: pathItems.length,
-          inverted: true,
-        });
         try {
           listRef.current?.scrollToIndex({
             index: activeIndex,
             animated: false,
             viewPosition: 0.35,
           });
-        } catch (e: any) {
-          console.log(
-            "🧯 [PelekanTab] scrollToIndex threw",
-            String(e?.message || e)
-          );
-        }
+        } catch {}
       });
     });
 
@@ -625,27 +572,20 @@ export default function PelekanTab() {
       setTreatingBoot(false);
       return;
     }
-
-    // ✅ اگر هنوز activeDayId نداریم (قبل از روز ۱ / هنوز درمان شروع نشده)
-    // نباید لودینگ بی‌نهایت بگیریم؛ لیست باید نمایش داده شود.
     if (!activeDayId) {
       setTreatingBoot(false);
       return;
     }
-
-    // ✅ اگر activeDayId داریم ولی هنوز ایندکسش پیدا نشده/لیست خالی است، آنوقت لودینگ منطقی است
     if (activeIndex < 0 || !pathItems.length) {
       setTreatingBoot(true);
       return;
     }
-
     const t = setTimeout(() => setTreatingBoot(false), 60);
     return () => clearTimeout(t);
   }, [view, activeDayId, activeIndex, pathItems.length]);
 
   /* ----------------------------- Handlers ----------------------------- */
   const onTapStart = useCallback(() => {
-    console.log("👆 [PelekanTab] onTapStart -> /pelekan/bastan");
     router.push("/pelekan/bastan" as any);
   }, [router]);
 
@@ -658,17 +598,7 @@ export default function PelekanTab() {
       const stageCode = String(st?.code || "").trim();
       const n = Number((day as any)?.dayNumberInStage || 0);
 
-      console.log("👆 [PelekanTab] onTapActiveDay", {
-        dayId: day?.id,
-        stageCode,
-        mode: opts?.mode,
-        dayNumberInStage: n,
-        paywallNeeded: state?.ui?.paywall?.needed,
-        treatmentAccess: state?.treatmentAccess,
-      });
-
       if (state?.ui?.paywall?.needed || state?.treatmentAccess !== "full") {
-        console.log("🔒 [PelekanTab] blocked by paywall/access -> Subscription");
         router.push("/(tabs)/Subscription");
         return;
       }
@@ -686,13 +616,7 @@ export default function PelekanTab() {
         ] as const;
 
         const actionCode = BASTAN_ACTION_CODES[n - 1];
-
-        console.log("🧭 [PelekanTab] bastan -> action route", { n, actionCode });
-
         if (!actionCode) {
-          console.log(
-            "⚠️ [PelekanTab] bastan actionCode missing -> go to bastan list"
-          );
           router.push("/pelekan/bastan" as any);
           return;
         }
@@ -704,7 +628,6 @@ export default function PelekanTab() {
       }
 
       if (stageCode === "gosastan") {
-        console.log("🧭 [PelekanTab] gosastan -> day route", { n });
         router.push("/pelekan/gosastan/day1" as any);
         return;
       }
@@ -719,9 +642,10 @@ export default function PelekanTab() {
 
   const onTapResults = useCallback(() => {
     const phone = String(me?.phone || "").trim();
-    console.log("👆 [PelekanTab] onTapResults", { phone });
     if (!phone) return;
-    router.push(`/(tabs)/ReviewResult?phone=${encodeURIComponent(phone)}` as any);
+    router.push(
+      `/(tabs)/ReviewResult?phone=${encodeURIComponent(phone)}` as any
+    );
   }, [router, me?.phone]);
 
   /* ----------------------------- Layout ----------------------------- */
@@ -729,7 +653,6 @@ export default function PelekanTab() {
   const listPaddingBottom = 24;
   const listPaddingTop = Math.max(16, bottomSafe + 16);
 
-  // ✅ ضد فلیکر: اگر گیت هنوز لود نشده و baseline هم کامل نیست، نمایش را نگه دار
   if (initialLoading || (gateBoot && !baselineCompleted)) {
     return (
       <SafeAreaView
@@ -751,7 +674,6 @@ export default function PelekanTab() {
       style={[styles.root, { backgroundColor: palette.bg }]}
       edges={["top", "left", "right", "bottom"]}
     >
-      {/* Header */}
       <View
         onLayout={(e) => {
           const h = e?.nativeEvent?.layout?.height ?? 0;
@@ -861,12 +783,6 @@ export default function PelekanTab() {
                   : undefined
               }
               onScrollToIndexFailed={(info) => {
-                console.log("🧯 [PelekanTab] onScrollToIndexFailed", {
-                  index: info.index,
-                  highestMeasuredFrameIndex: info.highestMeasuredFrameIndex,
-                  averageItemLength: info.averageItemLength,
-                });
-
                 requestAnimationFrame(() => {
                   try {
                     const approxOffset =

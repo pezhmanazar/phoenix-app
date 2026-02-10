@@ -302,7 +302,7 @@ export default function Baseline({ me, state, onRefresh }: Props) {
 
     if (step.type === "question") {
       if (typeof localSelected !== "number") {
-        Alert.alert("یک گزینه را انتخاب کن", "برای ادامه باید یکی از گزینه‌ها را انتخاب کنی.");
+        Alert.alert("یک گزینه رو انتخاب کن", "برای ادامه باید یکی از گزینه‌ها رو انتخاب کنی.");
         return;
       }
 
@@ -323,7 +323,7 @@ export default function Baseline({ me, state, onRefresh }: Props) {
     }
 
     if (step.type === "review_missing") {
-      Alert.alert("نیاز به ریست", step.message || "چند پاسخ ثبت نشده. لطفاً سنجش را ریست کن.");
+      Alert.alert("نیاز به ریست", step.message || "چند پاسخ ثبت نشده. لطفاً سنجش رو ریست کن.");
     }
   }, [step, localSelected, postAnswer, fetchBaselineState, isLastQuestion, submit]);
 
@@ -496,7 +496,7 @@ export default function Baseline({ me, state, onRefresh }: Props) {
               </Text>
 
               <Text style={[styles.centerText, { color: palette.sub2, marginTop: 4, fontSize: 11 }]}>
-                برای دیدن همه گزینه‌ها صفحه رو به بالا بکش
+                برای دیدن همه گزینه‌ها، صفحه رو به بالا بکش
               </Text>
 
               <View style={styles.hr} />
@@ -559,7 +559,7 @@ export default function Baseline({ me, state, onRefresh }: Props) {
             </>
           ) : step?.type === "review_missing" ? (
             <Text style={[styles.rtlText, { color: palette.red, marginTop: 10, lineHeight: 22, textAlign: "right" }]}>
-              {step.message || "چند پاسخ ثبت نشده. لطفاً سنجش را ریست کن."}
+              {step.message || "چند پاسخ ثبت نشده. لطفاً سنجش رو ریست کن."}
             </Text>
           ) : (
             // ✅ به‌جای «نامشخص»، یک پیام دقیق‌تر + دکمه sync

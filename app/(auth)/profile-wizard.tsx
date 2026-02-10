@@ -1,7 +1,15 @@
 // app/(auth)/profile-wizard.tsx
-import React, { useRef, useState, useEffect, useCallback } from "react";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
+import * as SecureStore from "expo-secure-store";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
+  Animated,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,24 +18,16 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  Keyboard,
-  ActivityIndicator,
-  Animated,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import * as ImagePicker from "expo-image-picker";
-import * as SecureStore from "expo-secure-store";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import { useAuth } from "../../hooks/useAuth";
-import { upsertUserByPhone, getMeByPhone } from "../../api/user";
+import { SECURE_KEYS } from "@/constants/storage";
+import type { UserRecord } from "../../api/user";
+import { getMeByPhone, upsertUserByPhone } from "../../api/user";
 import JalaliSelect from "../../components/JalaliSelect";
 import { usePhoenix } from "../../hooks/PhoenixContext";
-import type { UserRecord } from "../../api/user";
+import { useAuth } from "../../hooks/useAuth";
 import { useUser } from "../../hooks/useUser";
-import { SECURE_KEYS } from "@/constants/storage";
 
 type Gender = "male" | "female" | "other";
 
@@ -887,7 +887,7 @@ export default function ProfileWizard() {
                 {/* Birthdate */}
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-start", marginTop: 14, marginBottom: 6, gap: 6 }}>
                   <Ionicons name="calendar-outline" size={14} color={P.muted} />
-                  <Text style={{ color: P.muted, fontSize: 12, fontWeight: "800", textAlign: "right" }}>تاریخ تولد (اختیاری)</Text>
+                  <Text style={{ color: P.muted, fontSize: 12, fontWeight: "800", textAlign: "right" }}>تاریخ تولد</Text>
                 </View>
 
                 <JalaliSelect
