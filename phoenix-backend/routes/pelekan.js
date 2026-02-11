@@ -1393,13 +1393,14 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
           actionId: subtask.actionId,
           status: "active",
           minRequiredSubtasks: subtask.action?.minRequiredSubtasks || 0,
+          doneSubtasksCount: 0,
         },
         update: {
           minRequiredSubtasks: subtask.action?.minRequiredSubtasks || 0,
         },
       });
 
-      // ✅ 2.5) update action progress counters/status (so bastan day sync can unlock next day)
+      // ✅ 2.5) update action progress counters/status (CRITICAL)
       const doneCount = await tx.bastanSubtaskProgress.count({
         where: { userId: user.id, actionId: subtask.actionId, isDone: true },
       });
@@ -1411,7 +1412,6 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         data: {
           doneSubtasksCount: doneCount,
           status: doneCount >= minReqFinal ? "done" : "active",
-          // minRequiredSubtasks already updated above
         },
       });
 
@@ -1480,6 +1480,17 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       }
     });
 
+    // ✅ 5) optional: sync bastan days so /api/pelekan/state unlocks next day immediately
+    // اگر این فانکشن/منطق را داری، فعالش کن. اگر ندارى، همین بلوک را کامنت کن.
+    try {
+      if (typeof syncBastanDaysForUser === "function") {
+        await syncBastanDaysForUser(user.id);
+      }
+    } catch (e) {
+      console.warn("[pelekan.bastan.subtask.complete] syncBastanDaysForUser failed:", e);
+      // sync failure نباید باعث fail شدن ثبت subtask شود
+    }
+
     return res.json({
       ok: true,
       data: {
@@ -1504,7 +1515,6 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     return wcdnOkError(res, "SERVER_ERROR");
   }
 });
-
 
 /* ---------- POST /api/pelekan/bastan/intro/complete ---------- */
 router.post("/bastan/intro/complete", authUser, async (req, res) => {
