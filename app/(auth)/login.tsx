@@ -1,21 +1,22 @@
 // app/(auth)/login.tsx
-import React, { useMemo, useRef, useState } from "react";
-import {
-  View,
-  Text,
-  Pressable,
-  ActivityIndicator,
-  TextInput,
-  Modal,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useTheme } from "@react-navigation/native";
-import { Ionicons } from "@expo/vector-icons";
+import React, { useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Linking, // ✅ NEW
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { sendCode } from "../../api/otp";
 import { APP_API_URL } from "../../constants/env";
 
@@ -48,68 +49,107 @@ const TERMS_SECTIONS = [
     icon: "heart-dislike-outline",
     title: "این اپلیکیشن تشویق به جدایی نمی‌کند",
     body:
-      "در ققنوس هیچ فردی به جدایی از همسر یا شریک عاطفی ترغیب نمی‌شود. تصمیم برای ادامه یا پایان رابطه کاملاً تصمیم و مسئولیت شخصی خود کاربر است و ققنوس فقط راهکارهایی برای مدیریت پیامدها و اثرات مخرب شکست عاطفی ارائه می‌کند.",
+      "ققنوس هیچ کاربری را به جدایی از همسر یا شریک عاطفی ترغیب نمی‌کند. تصمیم برای ادامه یا پایان رابطه کاملاً شخصی و بر عهده کاربر است. ققنوس صرفاً ابزارها و آموزش‌هایی برای مدیریت پیامدهای عاطفی و روانی رابطه یا جدایی ارائه می‌دهد.",
   },
+
+  {
+    icon: "chatbox-ellipses-outline",
+    title: "کاربرد واژه «درمان» در اپلیکیشن",
+    body:
+      "در برخی بخش‌های اپلیکیشن از واژه «درمان» یا اصطلاحات مشابه استفاده شده است. این واژه صرفاً برای ساده‌سازی فهم مسیر رشد، بازسازی روانی و بهبود فردی به کار رفته و به هیچ عنوان به معنای ارائه خدمات درمانی، روان‌درمانی، تشخیص، مداخله بالینی یا جایگزینی درمان حضوری توسط متخصص سلامت روان نیست.\n\n" +
+      "استفاده از این واژه هیچ تعهد حرفه‌ای، پزشکی یا درمانی برای ققنوس ایجاد نمی‌کند و مسئولیت تصمیم‌گیری و نحوه استفاده از محتوا کاملاً بر عهده کاربر است.",
+  },
+
   {
     icon: "medkit-outline",
-    title: "این محصول درمان روان‌شناختی نیست",
+    title: "ماهیت خدمات ققنوس",
     body:
-      "اپلیکیشن و محتوای ققنوس تشخیص، درمان، مشاوره روان‌شناسی فردی یا مداخله بالینی محسوب نمی‌شود و جایگزین جلسات حضوری یا آنلاین با روان‌شناس دارای مجوز نیست.",
+      "ققنوس یک ابزار آموزشی و کمک‌درمانی در حوزه روان‌شناسی و به‌ویژه ترمیم شکست عاطفی است. این خدمات جایگزین مشاوره تخصصی، روان‌درمانی یا درمان پزشکی نیستند و برای مدیریت شرایط بالینی شدید یا بحران‌های حاد طراحی نشده‌اند.",
   },
+
   {
     icon: "people-circle-outline",
-    title: "محتوا عمومی است و برای افراد خاص تنظیم نشده",
+    title: "محتوا عمومی است و نسخه اختصاصی محسوب نمی‌شود",
     body:
-      "تمام اطلاعات، آموزش‌ها و تکنیک‌ها بر اساس داده‌های آماری، پژوهش‌های علمی و الگوهای رفتاری رایج افراد دچار شکست عشقی ارائه شده‌اند و برای هر فرد نسخه‌ی اختصاصی محسوب نمی‌شوند.",
+      "تمام آموزش‌ها، تکنیک‌ها و ارزیابی‌ها بر اساس پژوهش‌های علمی و الگوهای رایج رفتاری ارائه شده‌اند و برای هر فرد، نسخه درمانی اختصاصی محسوب نمی‌شوند. در صورت نیاز به ارزیابی دقیق یا مداخله تخصصی، مراجعه به متخصص سلامت روان ضروری است.",
   },
+
   {
     icon: "alert-circle-outline",
-    title: "مسئولیت وضعیت روانی کاربر خارج از تعهد ماست",
+    title: "مسئولیت کاربر و حدود مسئولیت ققنوس",
     body:
-      "این محصول پرونده درمانی باز نمی‌کند، تشخیص بالینی نمی‌دهد و بر اساس اطلاعات کاربر نسخه درمانی صادر نمی‌کند و جایگزین روان‌درمانگر نیست. مسئولیت استفاده صحیح از تکنیک‌ها و تصمیم‌گیری درباره رجوع به متخصص بر عهده‌ی خود کاربر است.",
+      "کاربر متعهد است اطلاعات صحیح و واقعی (به‌ویژه شماره موبایل) ثبت کند. حفاظت از اطلاعات ورود، کدهای پیامکی و حساب کاربری بر عهده خود کاربر است.\n\n" +
+      "ققنوس پرونده درمانی تشکیل نمی‌دهد، تشخیص بالینی صادر نمی‌کند و نسخه درمانی ارائه نمی‌دهد. مسئولیت استفاده از محتوا، تصمیم‌گیری‌های شخصی و مراجعه به متخصص کاملاً بر عهده کاربر است.",
   },
+
   {
     icon: "bandage-outline",
     title: "خدمات فوریت‌های روانی ارائه نمی‌شود",
     body:
-      "در صورت افکار خودآسیبی یا دیگرآسیبی، احساس بی‌ثباتی شدید، علائم شدید اضطراب یا افسردگی، تجربه خشونت خانگی یا ترومای فعال، یا نشانه‌های اختلالات شدید روانی، کاربر باید فوراً با اورژانس یا متخصص سلامت روان تماس بگیرد.",
+      "در صورت وجود افکار خودآسیبی یا دیگرآسیبی، علائم شدید افسردگی یا اضطراب، تجربه خشونت یا بی‌ثباتی شدید روانی، کاربر باید فوراً با اورژانس یا متخصص سلامت روان تماس بگیرد. ققنوس خدمات بحران یا مداخله فوری ارائه نمی‌دهد.",
   },
+
   {
     icon: "trending-up-outline",
     title: "نتیجه قطعی وعده داده نمی‌شود",
     body:
-      "بهبود روندی فردی و پیچیده است و این محصول هیچ نتیجه‌ی قطعی و یکسانی برای همه‌ی افراد تضمین نمی‌کند.",
+      "بهبود روانی، فرآیندی فردی، تدریجی و وابسته به شرایط هر شخص است. ققنوس هیچ نتیجه قطعی یا یکسانی برای همه کاربران تضمین نمی‌کند.",
   },
+
+  {
+    icon: "card-outline",
+    title: "اشتراک‌ها و پرداخت",
+    body:
+      "دسترسی به بخش‌های پریمیوم ققنوس از طریق خرید اشتراک زمان‌دار انجام می‌شود. مدت، مبلغ و شرایط هر اشتراک در صفحه جزئیات اشتراک‌، به‌طور شفاف اعلام شده است.\n\n" +
+      "پرداخت‌ها از طریق درگاه‌های پرداخت معتبر، انجام می‌شود و مسئولیت صحت اطلاعات پرداخت بر عهده کاربر است.",
+  },
+
+  {
+    icon: "return-down-back-outline",
+    title: "انصراف و بازگشت وجه",
+    body:
+      "به دلیل ماهیت دیجیتال خدمات و فعال‌سازی فوری پس از خرید، بازگشت وجه صرفاً در شرایط مشخص امکان‌پذیر است.\n\n" +
+      "بازگشت وجه فقط در صورتی بررسی می‌شود که: \n" +
+      "۱) اشتراک خریداری‌شده ظرف حداکثر ۲۴ ساعت فعال نشده باشد.\n" +
+      "۲) اختلال فنی جدی و قابل‌اثباتی در دسترسی به خدمات وجود داشته باشد که توسط پشتیبانی تأیید شود.\n\n" +
+      "در سایر موارد، پس از فعال‌سازی اشتراک و امکان استفاده از محتوا، بازگشت وجه امکان‌پذیر نخواهد بود.",
+  },
+
   {
     icon: "lock-closed-outline",
-    title: "حریم خصوصی و داده‌ها",
+    title: "حریم خصوصی و محرمانگی داده‌ها",
     body:
-      "اطلاعات کاربران برای اهداف تبلیغاتی به شخص ثالث فروخته نمی‌شود، فقط برای تحلیل آماری ناشناس و بهبود تجربه کاربری استفاده می‌شود و کاربر می‌تواند درخواست حذف کامل داده‌های خود را ثبت کند. اطلاعات حساس با استانداردهای امنیتی ذخیره می‌شود.",
+      "اطلاعات کاربران با رعایت اصول محرمانگی و استانداردهای امنیتی نگهداری می‌شود و بدون حکم مراجع قانونی در اختیار شخص یا سازمان دیگری قرار نخواهد گرفت.\n\n" +
+      "داده‌ها صرفاً برای بهبود تجربه کاربری، تحلیل آماری ناشناس و پشتیبانی استفاده می‌شوند و به اشخاص ثالث فروخته نمی‌شوند.\n\n" +
+      "کاربر می‌تواند درخواست حذف کامل داده‌های خود را ثبت کند. دسترسی به اطلاعات کاربران محدود به تیم فنی و پشتیبانی مجاز است و فقط در چارچوب وظایف حرفه‌ای انجام می‌شود.",
   },
+
   {
     icon: "document-text-outline",
     title: "مالکیت معنوی",
     body:
-      "تمام محتوا، ساختار، آموزش‌ها و تکنیک‌ها متعلق به برند ققنوس است و هرگونه تکثیر، انتشار یا استفاده‌ی تجاری بدون مجوز ممنوع است.",
+      "تمام محتوا، ساختار، آزمون‌ها، آموزش‌ها و طراحی‌های اپلیکیشن متعلق به برند ققنوس است و مالیکت مادی و معنوی آن در اختیار آقای مسعود احمدی آذر به عنوان موسس و صاحب اثر است و هرگونه تکثیر، انتشار یا استفاده تجاری بدون مجوز کتبی ممنوع است.",
   },
+
   {
     icon: "shield-checkmark-outline",
-    title: "حد و مرزهای اخلاقی و حرفه‌ای",
+    title: "حد و مرزهای اخلاقی و قانونی",
     body:
-      "کاربر تعهد می‌دهد اطلاعات نادرست وارد نکند، از محتوا به‌صورت ایمن و اخلاقی استفاده کند، از تکنیک‌ها برای آسیب زدن به خود یا دیگران استفاده نکند و قوانین کشور محل اقامت خود را رعایت کند.",
+      "کاربر متعهد می‌شود از اپلیکیشن به‌صورت اخلاقی و قانونی استفاده کند، از تکنیک‌ها برای آسیب به خود یا دیگران بهره نگیرد و قوانین کشور محل اقامت خود را رعایت کند. هرگونه استفاده غیرقانونی از محتوا یا تلاش برای سوءاستفاده از سیستم ممنوع است.",
   },
+
   {
     icon: "refresh-circle-outline",
-    title: "امکان تغییر این بیانیه",
+    title: "تغییر قوانین و دسترسی به نسخه رسمی",
     body:
-      "این بیانیه ممکن است به‌روزرسانی شود و نسخه‌ی جدید از طریق اپلیکیشن یا سایت به اطلاع کاربران خواهد رسید.",
+      "ققنوس این حق را دارد که قوانین و شرایط استفاده را در هر زمان، به‌روزرسانی کند. نسخه به‌روز و رسمی این قوانین همواره از طریق این لینک در دسترس است:\n\n" +
+      "https://qoqnoos.app/terms.html\n\n" +
+      "ادامه استفاده از اپلیکیشن به معنای پذیرش نسخه جاری قوانین است.",
   },
 ] as const;
 
 type NoticeType = "error" | "warn" | "info" | "success";
-type NoticeState =
-  | null
-  | { type: NoticeType; title: string; message?: string };
+type NoticeState = null | { type: NoticeType; title: string; message?: string };
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -172,8 +212,7 @@ export default function LoginScreen() {
       showNotice({
         type: "error",
         title: "تأیید قوانین لازم است",
-        message:
-          "برای ادامه، باید شرایط استفاده و حریم خصوصی را بپذیری.",
+        message: "برای ادامه، باید شرایط استفاده و حریم خصوصی را بپذیری.",
       });
       return;
     }
@@ -203,8 +242,7 @@ export default function LoginScreen() {
         showNotice({
           type: "warn",
           title: "لطفاً کمی صبر کن",
-          message:
-            "تعداد درخواست‌ها زیاد بوده. کمی بعد دوباره تلاش کن.",
+          message: "تعداد درخواست‌ها زیاد بوده. کمی بعد دوباره تلاش کن.",
         });
       } else if (msg === "SERVER_MISCONFIGURED") {
         showNotice({
@@ -216,8 +254,7 @@ export default function LoginScreen() {
         showNotice({
           type: "warn",
           title: "کندی شبکه",
-          message:
-            "پاسخی دریافت نشد. اینترنت را چک کن و دوباره امتحان کن.",
+          message: "پاسخی دریافت نشد. اینترنت را چک کن و دوباره امتحان کن.",
         });
       } else {
         showNotice({
@@ -280,6 +317,9 @@ export default function LoginScreen() {
   // ✅ این متن همیشه قابل دیدن باشد؛ فقط وقتی خطاست قرمز شود
   const helperColor =
     rawPhone.length === 0 || isValid ? "rgba(231,238,247,.65)" : "rgba(248,113,113,.95)";
+
+  // ✅ NEW: لینک رسمی قوانین
+  const TERMS_URL = "https://qoqnoos.app/terms.html";
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: BG }}>
@@ -661,45 +701,87 @@ export default function LoginScreen() {
           </View>
 
           <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
-            {TERMS_SECTIONS.map((item, idx) => (
-              <View
-                key={item.title}
-                style={{
-                  flexDirection: "row-reverse",
-                  alignItems: "flex-start",
-                  gap: 10,
-                  marginBottom: idx === TERMS_SECTIONS.length - 1 ? 0 : 18,
-                }}
-              >
-                <View style={{ marginTop: 3 }}>
-                  <Ionicons name={item.icon as any} size={20} color={GOLD} />
-                </View>
+            {TERMS_SECTIONS.map((item, idx) => {
+              const isTermsLinkSection = item.title === "تغییر قوانین و دسترسی به نسخه رسمی";
+              const bodyWithoutUrl = isTermsLinkSection
+                ? String(item.body || "").replace(TERMS_URL, "").replace(/\n{3,}/g, "\n\n").trim()
+                : item.body;
 
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      color: TEXT,
-                      fontSize: 13,
-                      fontWeight: "900",
-                      textAlign: "right",
-                      marginBottom: 4,
-                    }}
-                  >
-                    {`${idx + 1}) ${item.title}`}
-                  </Text>
-                  <Text
-                    style={{
-                      color: MUTED,
-                      fontSize: 12.5,
-                      lineHeight: 21,
-                      textAlign: "right",
-                    }}
-                  >
-                    {item.body}
-                  </Text>
+              return (
+                <View
+                  key={item.title}
+                  style={{
+                    flexDirection: "row-reverse",
+                    alignItems: "flex-start",
+                    gap: 10,
+                    marginBottom: idx === TERMS_SECTIONS.length - 1 ? 0 : 18,
+                  }}
+                >
+                  <View style={{ marginTop: 3 }}>
+                    <Ionicons name={item.icon as any} size={20} color={GOLD} />
+                  </View>
+
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        color: TEXT,
+                        fontSize: 13,
+                        fontWeight: "900",
+                        textAlign: "right",
+                        marginBottom: 4,
+                      }}
+                    >
+                      {`${idx + 1}) ${item.title}`}
+                    </Text>
+
+                    <Text
+                      style={{
+                        color: MUTED,
+                        fontSize: 12.5,
+                        lineHeight: 21,
+                        textAlign: "right",
+                      }}
+                    >
+                      {bodyWithoutUrl}
+                    </Text>
+
+                    {isTermsLinkSection && (
+                      <Pressable
+                        onPress={() => Linking.openURL(TERMS_URL)}
+                        hitSlop={10}
+                        style={({ pressed }) => ({
+                          marginTop: 10,
+                          borderRadius: 14,
+                          borderWidth: 1,
+                          borderColor: "rgba(212,175,55,.35)",
+                          backgroundColor: pressed ? "rgba(212,175,55,.14)" : "rgba(212,175,55,.10)",
+                          paddingVertical: 10,
+                          paddingHorizontal: 12,
+                          flexDirection: "row-reverse",
+                          alignItems: "center",
+                          gap: 8,
+                          alignSelf: "center",
+                          minWidth: 220,
+                          justifyContent: "center",
+                        })}
+                      >
+                        <Ionicons name="link-outline" size={18} color={GOLD} />
+                        <Text
+                          style={{
+                            color: GOLD,
+                            fontSize: 12.5,
+                            fontWeight: "900",
+                            textAlign: "center",
+                          }}
+                        >
+                          مشاهده نسخه رسمی قوانین
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </ScrollView>
 
           <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>

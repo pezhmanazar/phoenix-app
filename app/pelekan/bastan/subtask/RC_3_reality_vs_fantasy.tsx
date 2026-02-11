@@ -905,7 +905,7 @@ export default function RC3RealityVsFantasyScreen() {
         visible={confirmLockModal}
         kind="warn"
         title="قبل از ثبت، این رو بدون"
-        message="با زدن «ثبت و پایان»، این ریز‌اقدام قفل میشه و دیگر امکان تغییر متن‌ها رو نخواهی داشت."
+        message="با زدن «ثبت و پایان»، این ریز‌اقدام قفل میشه و دیگه امکان تغییر متن‌ها رو نخواهی داشت."
         primaryText="ثبت و قفل کن"
         secondaryText="فعلاً نه"
         loading={saving}

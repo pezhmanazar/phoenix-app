@@ -37,6 +37,9 @@ export default function GosastanStageIntroScreen() {
 
   const [trackW, setTrackW] = useState(0);
 
+  // ✅ NEW: buffering state (UX)
+  const [isBuffering, setIsBuffering] = useState(false);
+
   // ✅ برای اینکه فقط موقع بازگشت ثبت کنیم
   const maxPosRef = useRef(0);
   const SAVED_MIN_MS = 5000;
@@ -52,6 +55,7 @@ export default function GosastanStageIntroScreen() {
     soundRef.current = null;
     setIsLoaded(false);
     setIsPlaying(false);
+    setIsBuffering(false);
   }, []);
 
   const loadIfNeeded = useCallback(async () => {
@@ -76,6 +80,9 @@ export default function GosastanStageIntroScreen() {
         setPosMs(st.positionMillis ?? 0);
         setDurMs(st.durationMillis ?? 1);
 
+        // ✅ وقتی واقعاً لود شد/استاتوس رسید، بافرینگ خاموش
+        setIsBuffering(false);
+
         const p = Number(st.positionMillis ?? 0);
         if (p > maxPosRef.current) maxPosRef.current = p;
       }
@@ -85,20 +92,34 @@ export default function GosastanStageIntroScreen() {
   }, [AUDIO_URL]);
 
   const togglePlay = useCallback(async () => {
+    if (isBuffering) return;
+
     try {
+      // ✅ اگر هنوز لود نشده، همون لحظه بافرینگ روشن شود
+      if (!soundRef.current) setIsBuffering(true);
+
       await loadIfNeeded();
       const s = soundRef.current;
-      if (!s) return;
+      if (!s) {
+        setIsBuffering(false);
+        return;
+      }
 
       const st: any = await s.getStatusAsync();
-      if (!st.isLoaded) return;
+      if (!st.isLoaded) {
+        setIsBuffering(false);
+        return;
+      }
+
+      setIsBuffering(false);
 
       if (st.isPlaying) await s.pauseAsync();
       else await s.playAsync();
     } catch (e: any) {
+      setIsBuffering(false);
       setErr(String(e?.message || e));
     }
-  }, [loadIfNeeded]);
+  }, [loadIfNeeded, isBuffering]);
 
   const seekTo = useCallback(
     async (ms: number) => {
@@ -186,7 +207,16 @@ export default function GosastanStageIntroScreen() {
 
       <View style={styles.content}>
         <TouchableOpacity activeOpacity={0.9} onPress={togglePlay} style={styles.bigPlayWrap}>
-          <Ionicons name={isPlaying ? "pause" : "play"} size={72} color="#0b0f14" style={{ marginLeft: isPlaying ? 0 : 6 }} />
+          {isBuffering ? (
+            <ActivityIndicator color="#0b0f14" />
+          ) : (
+            <Ionicons
+              name={isPlaying ? "pause" : "play"}
+              size={72}
+              color="#0b0f14"
+              style={{ marginLeft: isPlaying ? 0 : 6 }}
+            />
+          )}
         </TouchableOpacity>
 
         <Text style={styles.title}>معرفی مرحله گسستن</Text>
