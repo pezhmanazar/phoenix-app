@@ -494,9 +494,9 @@ async function ensureQuestionSetSeeded() {
   const existing = await getActiveQuestionSet();
 
   // ✅ اگر نسخه فعال، قدیمی بود => نسخه جدید بساز
-  if (existing && Number(existing.version) >= 4) return existing;
+  if (existing && Number(existing.version) >= 5) return existing;
 
-  const version = 4;
+  const version = 5;
   const { test1_q, test2_q } = buildDefaultQuestions();
 
   try {
@@ -513,7 +513,7 @@ async function ensureQuestionSetSeeded() {
         code: "review",
         version,
         titleFa: "بازسنجی رابطه + منطقی بودن انتظار",
-        description: "Question bank v4 (TEST1/TEST2)",
+        description: "Question bank v5 (TEST1/TEST2)",
         isActive: true,
         questions: {
           create: [
