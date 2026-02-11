@@ -4,19 +4,20 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    InteractionManager,
-    Keyboard,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    findNodeHandle,
+  ActivityIndicator,
+  findNodeHandle,
+  InteractionManager,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  UIManager,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -55,8 +56,8 @@ type DealAnswer = "continue" | "stop" | "unsure";
 type Confidence = 25 | 50 | 75 | 100;
 
 type RC4Reason = {
-  seen: string;   // چی دیدی
-  wound: string;  // کجای تو زخمی شد
+  seen: string; // چی دیدی
+  wound: string; // کجای تو زخمی شد
   future: string; // اگر ادامه بده چه میشه
 };
 
@@ -281,17 +282,41 @@ export default function RC4DealBreakersScreen() {
   }, [step, booting]);
 
   /* ----------------------------- Scroll to input (keyboard safe) ----------------------------- */
-  const scrollToInput = useCallback((id: string, extraOffset = 22) => {
-    const input = inputRefs.current[id] as any;
-    const scroll = scrollRef.current as any;
-    if (!input || !scroll) return;
+const scrollToInput = useCallback((id: string, extraOffset = 22) => {
+  const input = inputRefs.current[id] as any;
+  const scroll = scrollRef.current as any;
+  if (!input || !scroll) return;
 
-    const node = findNodeHandle(input);
-    if (!node) return;
-
+  const doScroll = () => {
     const responder = scroll.getScrollResponder?.();
-    responder?.scrollResponderScrollNativeHandleToKeyboard?.(node, extraOffset, true);
-  }, []);
+
+    const innerMaybe =
+      responder?.getInnerViewNode?.() ??
+      responder?.getScrollableNode?.() ??
+      findNodeHandle(scroll);
+
+    const innerNode = typeof innerMaybe === "number" ? innerMaybe : findNodeHandle(innerMaybe);
+    const inputNode = findNodeHandle(input);
+
+    if (!innerNode || !inputNode) return;
+
+    UIManager.measureLayout(
+      inputNode,
+      innerNode,
+      () => {},
+      (_x, y) => {
+        const targetY = Math.max(0, y - extraOffset);
+        scroll.scrollTo?.({ y: targetY, animated: true });
+      }
+    );
+  };
+
+  // 1) همین الان (برای وقتی کیبورد از قبل بازه)
+  requestAnimationFrame(doScroll);
+
+  // 2) دوباره کمی بعد (برای وقتی کیبورد تازه داره میاد بالا و y تغییر می‌کنه)
+  setTimeout(doScroll, 220);
+}, []);
 
   /* ----------------------------- Validation ----------------------------- */
   const reasonsOk = useMemo(() => {
@@ -465,8 +490,7 @@ export default function RC4DealBreakersScreen() {
 
   const title = "اگه دوست صمیمیت جای تو بود بهش چی می گفتی؟";
 
-  const stepLabel =
-    step === 0 ? "۰) شروع" : step === 1 ? "۱) انتخاب" : step === 2 ? "۲) دلیل ها" : "۳) حرف آخر";
+  const stepLabel = step === 0 ? "۰) شروع" : step === 1 ? "۱) انتخاب" : step === 2 ? "۲) دلیل ها" : "۳) حرف آخر";
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
@@ -604,9 +628,7 @@ export default function RC4DealBreakersScreen() {
 
               <View style={[styles.sectionCard, { marginTop: 12 }]}>
                 <Text style={styles.h1}>چقدر به جوابت مطمئنی؟</Text>
-                <Text style={styles.p}>
-                  این فقط کمک میکنه بفهمی هنوز توو حالت دودلی هستی یا نه!
-                </Text>
+                <Text style={styles.p}>این فقط کمک میکنه بفهمی هنوز توو حالت دودلی هستی یا نه!</Text>
 
                 <View style={{ flexDirection: "row-reverse", gap: 10, marginTop: 10 }}>
                   {[
@@ -635,7 +657,11 @@ export default function RC4DealBreakersScreen() {
 
               <View style={{ marginTop: 14, gap: 10 }}>
                 <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-                  <TouchableOpacity activeOpacity={0.9} onPress={() => setStep(0)} style={[styles.secondaryBtn, { flex: 1 }]}>
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => setStep(0)}
+                    style={[styles.secondaryBtn, { flex: 1 }]}
+                  >
                     <Text style={styles.secondaryBtnText}>بازگشت</Text>
                   </TouchableOpacity>
 
@@ -690,7 +716,6 @@ export default function RC4DealBreakersScreen() {
                         value={r.seen}
                         onChangeText={(t) => setReasonField(i, "seen", t)}
                         onFocus={() => setTimeout(() => scrollToInput(`${base}:seen`, 22), 60)}
-                        
                         placeholderTextColor="rgba(231,238,247,.35)"
                         multiline
                         style={[styles.input, isReview && styles.inputReadOnly]}
@@ -784,11 +809,11 @@ export default function RC4DealBreakersScreen() {
                 <Text style={styles.p}>
                   یک پیام کوتاه و روشن بهش بگو که بتونه تصمیم بگیره
                   {"\n"}
-                 نصیحتش نکن
+                  نصیحتش نکن
                   {"\n"}
-                 سرزنشش نکن
+                  سرزنشش نکن
                   {"\n"}
-                 فقط بهش بگو دقیقا چیکار کنه
+                  فقط بهش بگو دقیقا چیکار کنه
                 </Text>
               </View>
 
@@ -815,7 +840,12 @@ export default function RC4DealBreakersScreen() {
                   selectTextOnFocus={!isReview}
                 />
 
-                <Text style={[styles.small, !isReview && String(finalMessage || "").trim().length < 140 ? { color: palette.red } : null]}>
+                <Text
+                  style={[
+                    styles.small,
+                    !isReview && String(finalMessage || "").trim().length < 140 ? { color: palette.red } : null,
+                  ]}
+                >
                   {isReview ? "ثبت شده" : `${String(finalMessage || "").trim().length}/140`}
                 </Text>
               </View>
@@ -844,7 +874,9 @@ export default function RC4DealBreakersScreen() {
                       ((!isReview && (!answer || !reasonsOk || !finalOk)) || saving) && { opacity: 0.45 },
                     ]}
                   >
-                    <Text style={styles.primaryBtnText}>{saving ? "در حال انجام…" : isReview ? "خروج" : "ثبت و پایان"}</Text>
+                    <Text style={styles.primaryBtnText}>
+                      {saving ? "در حال انجام…" : isReview ? "خروج" : "ثبت و پایان"}
+                    </Text>
                   </TouchableOpacity>
                 </View>
 
@@ -869,8 +901,8 @@ export default function RC4DealBreakersScreen() {
       <ThemedModal
         visible={confirmLockModal}
         kind="warn"
-        title="قبل از ثبت این را بدان"
-        message="با زدن ثبت و پایان این ریز اقدام قفل می شود و دیگر امکان تغییر پاسخ ها و متن ها را نداری."
+        title="قبل از ثبت این رو بدون"
+        message="با زدن ثبت و پایان این ریز اقدام قفل میشه و دیگه امکان تغییر پاسخ ها و متن ها رو نداری."
         primaryText="ثبت و قفل کن"
         secondaryText="فعلا نه"
         loading={saving}

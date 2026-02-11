@@ -1,18 +1,18 @@
 // app/onboarding.tsx
-import React, { useMemo, useRef, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  Dimensions,
-  Pressable,
-  StatusBar,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import React, { useMemo, useRef, useState } from "react";
+import {
+  Dimensions,
+  FlatList,
+  Pressable,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const KEY = "hasOnboarded_v1";
 const { width } = Dimensions.get("window");
@@ -28,26 +28,26 @@ export default function Onboarding() {
   const slides = useMemo<Slide[]>(
     () => [
       {
-        t: "پلکان ققنوس: مسیر روزانه برای عبور از جدایی  و شكست عشقی",
-        d: "هر روز یک قدم کوچک و مشخص؛ بدون سردرگمی، بدون ول کردن وسط راه.",
+        t: "پلکان درمان: مسیر روزانه برای عبور از جدایی  و شكست عشقی",
+        d: "هر روز یک قدم کوچیک و مشخص اون هم بدون سردرگمی و بدون ول کردن وسط راه.",
         icon: "flame-outline",
         accent: "gold",
       },
       {
-        t: "پناهگاه: وقتی ناگهانی حالت بد شد",
-        d: "اگر یهو «اکست رو دیدی» یا موج اضطراب اومد، سریع میای پناهگاه؛ یک سناریوی آماده اجرا می‌کنی تا بدنت آروم بشه و ذهنت از هم نپاشه.",
+        t: "پناهگاه برای زمان‌هایی که یهویی حالت بد میشه",
+        d: "اگه یهو «اکست رو دیدی» یا موج اضطراب و ناراحتی سراغت اومد و هر مشکل دیگه‌ای، زود میای پناهگاه؛ چون پناهگاه برای هر مشکل ناگهانی تو راهکار سریع و ساده داره تا در عرض چند دقیقه دردت آروم بشه و ذهنت از هم نپاشه.",
         icon: "shield-checkmark-outline",
         accent: "orange",
       },
       {
         t: "ارتباط مستقیم با درمانگر",
-        d: "وقتی گیر می‌کنی یا نیاز به راهنمایی داری، می‌تونی مستقیم با درمانگر ارتباط بگیری و مسیرت رو دقیق‌تر تنظیم کنی.",
+        d: "وقتی گیر می‌کنی یا نیاز به راهنمایی داری یا میخوای با یک متخصص صحبت کنی، می‌تونی مستقیم با درمانگرت ارتباط بگیری و مسیرت رو دقیق‌تر تنظیم کنی.",
         icon: "chatbubbles-outline",
         accent: "blue",
       },
       {
         t: "تمرین‌های کوتاه با توضیح علمی",
-        d: "شفاف، کاربردی، قابل انجام حتی وقتی بی‌انرژی هستی. تکنیک‌ها با زبان ساده و پشتوانه علمی.",
+        d: "شفاف، کاربردی، قابل انجام حتی وقتی بی‌انرژی هستی؛ چون تکنیک‌ها با زبان ساده و پشتوانه علمی هستن که در هر حالتی بهت کمک می‌کنن.",
         icon: "pulse-outline",
         accent: "green",
       },

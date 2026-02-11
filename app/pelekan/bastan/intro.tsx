@@ -53,6 +53,9 @@ export default function BastanIntroScreen() {
   const [posMs, setPosMs] = useState(0);
   const [durMs, setDurMs] = useState(1);
 
+  // ✅ NEW: show buffering icon to prevent repeated taps UX-wise
+  const [isBuffering, setIsBuffering] = useState(false);
+
   // ✅ NEW: width of progress track (for tap-to-seek)
   const [trackW, setTrackW] = useState(0);
 
@@ -170,6 +173,7 @@ export default function BastanIntroScreen() {
     soundRef.current = null;
     setIsLoaded(false);
     setIsPlaying(false);
+    setIsBuffering(false);
   }, [introDone, STORAGE_POS_KEY]);
 
   const loadIfNeeded = useCallback(async () => {
@@ -204,6 +208,9 @@ export default function BastanIntroScreen() {
         setIsPlaying(st.isPlaying);
         setPosMs(st.positionMillis ?? 0);
         setDurMs(st.durationMillis ?? 1);
+
+        // ✅ به محض اینکه واقعاً load شد، از حالت بافرینگ خارج شو
+        setIsBuffering(false);
 
         // ✅ اگر کاربر نزدیک پایان برد (seek) ولی didJustFinish نخورد
         const position = Number(st.positionMillis ?? 0);
@@ -249,13 +256,28 @@ export default function BastanIntroScreen() {
   }, [AUDIO_URL, introDone, phone, STORAGE_POS_KEY, markIntroComplete]);
 
   const togglePlay = useCallback(async () => {
+    // ✅ اگر در حال بافرینگ هستیم، UX: دوباره کلیک نکن
+    if (isBuffering) return;
+
     try {
+      // ✅ اگر هنوز لود نشده، بافرینگ را روشن کن تا آیکن تغییر کند
+      if (!soundRef.current) setIsBuffering(true);
+
       await loadIfNeeded();
       const s = soundRef.current;
-      if (!s) return;
+      if (!s) {
+        setIsBuffering(false);
+        return;
+      }
 
       const st: any = await s.getStatusAsync();
-      if (!st.isLoaded) return;
+      if (!st.isLoaded) {
+        setIsBuffering(false);
+        return;
+      }
+
+      // ✅ وقتی به اینجا رسیدیم یعنی آماده‌ایم
+      setIsBuffering(false);
 
       if (st.isPlaying) {
         await s.pauseAsync();
@@ -263,9 +285,10 @@ export default function BastanIntroScreen() {
         await s.playAsync();
       }
     } catch (e: any) {
+      setIsBuffering(false);
       setErr(String(e?.message || e));
     }
-  }, [loadIfNeeded]);
+  }, [loadIfNeeded, isBuffering]);
 
   // ✅ NEW: tap-to-seek on progress bar
   const seekTo = useCallback(
@@ -335,17 +358,21 @@ export default function BastanIntroScreen() {
       <View style={styles.content}>
         {/* ✅ پلی بزرگ */}
         <TouchableOpacity activeOpacity={0.9} onPress={togglePlay} style={styles.bigPlayWrap}>
-          <Ionicons
-            name={isPlaying ? "pause" : "play"}
-            size={72}
-            color="#0b0f14"
-            style={{ marginLeft: isPlaying ? 0 : 6 }}
-          />
+          {isBuffering ? (
+            <ActivityIndicator color="#0b0f14" />
+          ) : (
+            <Ionicons
+              name={isPlaying ? "stop" : "play"}
+              size={72}
+              color="#0b0f14"
+              style={{ marginLeft: isPlaying ? 0 : 6 }}
+            />
+          )}
         </TouchableOpacity>
 
         <Text style={styles.title}>شروع درمان</Text>
         <Text style={styles.desc}>
-          {introDone ? "این ویس کامل شده. هر وقت خواستی دوباره گوش کن." : "ویس را کامل گوش کن تا دکمه «ادامه» فعال شود."}
+          {introDone ? "این ویس کامل شده. هر وقت خواستی دوباره گوش کن." : "ویس رو کامل گوش کن تا دکمه «ادامه» فعال بشه."}
         </Text>
 
         {/* ✅ Progress (Tap-to-seek) */}

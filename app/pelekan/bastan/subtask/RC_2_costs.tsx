@@ -6,6 +6,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   InteractionManager,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -347,12 +349,9 @@ export default function RC2CostsScreen() {
     (k: CategoryKey) => {
       if (isReview) return;
 
-      const next = selectedSet.has(k)
-        ? selectedCategories.filter((x) => x !== k)
-        : [...selectedCategories, k];
+      const next = selectedSet.has(k) ? selectedCategories.filter((x) => x !== k) : [...selectedCategories, k];
 
       setSelectedCategories(next);
-      // ❌ هیچ ذخیره‌ای تا مرحله آخر
     },
     [isReview, selectedCategories, selectedSet]
   );
@@ -368,7 +367,6 @@ export default function RC2CostsScreen() {
         fixed[idx] = txt;
         return { ...prev, [cat]: fixed };
       });
-      // ❌ هیچ ذخیره‌ای تا مرحله آخر
     },
     [isReview]
   );
@@ -402,7 +400,6 @@ export default function RC2CostsScreen() {
 
     const url = `${apiBase}/api/pelekan/bastan/subtask/complete?phone=${encodeURIComponent(p)}`;
 
-    // ✅ فقط هنگام ثبت نهایی، هم لوکال می‌سازیم هم سرور می‌زنیم
     const payloadToSend: RC2Saved = {
       version: 1,
       savedAt: new Date().toISOString(),
@@ -465,14 +462,10 @@ export default function RC2CostsScreen() {
     try {
       setSaving(true);
 
-      // 1) سرور
       const r = await completeOnServer();
       if (r === "fail") return;
 
-      // 2) لوکال (فقط بعد از ok/already)
       await persistFinalLocal();
-
-      // ✅ چه ok چه already: نتیجه نهایی یکیه (ثبت شده)
       await AsyncStorage.setItem(KEY_BASTAN_DIRTY, new Date().toISOString());
 
       if (r === "already") {
@@ -492,7 +485,7 @@ export default function RC2CostsScreen() {
       openModal({
         kind: "success",
         title: "ثبت شد",
-        message: "ثبت انجام شد. از این به بعد امکان تغییر این ریز‌اقدام وجود ندارد.",
+        message: "ثبت انجام شد. از این به بعد امکان تغییر این ریز‌اقدام وجود نداره.",
         primaryText: "خروج",
         onPrimary: () => {
           closeModal();
@@ -503,7 +496,7 @@ export default function RC2CostsScreen() {
       setSaving(false);
       savingRef.current = false;
       setIsReview(true);
-      setStep(3); // ✅ بعد از ثبت هم مستقیم روی مرور بماند
+      setStep(3);
     }
   }, [canGoReview, closeModal, completeOnServer, openModal, persistFinalLocal, router]);
 
@@ -513,7 +506,6 @@ export default function RC2CostsScreen() {
       return;
     }
     if (!canGoReview) return;
-
     setConfirmLockModal(true);
   }, [canGoReview, isReview, router]);
 
@@ -538,266 +530,284 @@ export default function RC2CostsScreen() {
         <View style={{ width: 34, height: 34 }} />
       </View>
 
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={{ padding: 16, paddingBottom: 18 + insets.bottom }}
-        showsVerticalScrollIndicator={false}
+      {/* ✅ مثل RC_3 */}
+      <KeyboardAvoidingView
+        style={{ flex: 1, backgroundColor: palette.bg }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={insets.top + 12}
       >
-        {/* Review Banner */}
-        {isReview ? (
-          <View style={styles.reviewBanner}>
-            <Ionicons name="eye" size={16} color="rgba(231,238,247,.88)" />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.reviewBannerText}>حالت مرور: این ریز‌اقدام قبلاً ثبت شده و قابل تغییر نیست.</Text>
+        <ScrollView
+          ref={scrollRef}
+          style={{ backgroundColor: palette.bg }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 18 + insets.bottom + 24 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Review Banner */}
+          {isReview ? (
+            <View style={styles.reviewBanner}>
+              <Ionicons name="eye" size={16} color="rgba(231,238,247,.88)" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.reviewBannerText}>حالت مرور: این ریز‌اقدام قبلاً ثبت شده و قابل تغییر نیست.</Text>
+              </View>
+            </View>
+          ) : null}
+
+          {/* Step indicator */}
+          <View style={styles.stepPills}>
+            <View style={[styles.stepPill, step === 0 && styles.stepPillOn]}>
+              <Text style={styles.stepPillText}>۰) شروع</Text>
+            </View>
+            <View style={[styles.stepPill, step === 1 && styles.stepPillOn]}>
+              <Text style={styles.stepPillText}>۱) دسته‌ها</Text>
+            </View>
+            <View style={[styles.stepPill, step === 2 && styles.stepPillOn]}>
+              <Text style={styles.stepPillText}>۲) نوشتن</Text>
+            </View>
+            <View style={[styles.stepPill, step === 3 && styles.stepPillOn]}>
+              <Text style={styles.stepPillText}>۳) مرور</Text>
             </View>
           </View>
-        ) : null}
 
-        {/* Step indicator */}
-        <View style={styles.stepPills}>
-          <View style={[styles.stepPill, step === 0 && styles.stepPillOn]}>
-            <Text style={styles.stepPillText}>۰) شروع</Text>
-          </View>
-          <View style={[styles.stepPill, step === 1 && styles.stepPillOn]}>
-            <Text style={styles.stepPillText}>۱) دسته‌ها</Text>
-          </View>
-          <View style={[styles.stepPill, step === 2 && styles.stepPillOn]}>
-            <Text style={styles.stepPillText}>۲) نوشتن</Text>
-          </View>
-          <View style={[styles.stepPill, step === 3 && styles.stepPillOn]}>
-            <Text style={styles.stepPillText}>۳) مرور</Text>
-          </View>
-        </View>
+          {/* Step 0 */}
+          {step === 0 ? (
+            <>
+              <View style={styles.sectionCard}>
+                <Text style={styles.h1}>این تمرین برای نفرت نیست</Text>
+                <Text style={styles.p}>
+                  قرار نیست قضاوت کنی یا خودت رو تحقیر کنی.{"\n"}
+                  فقط هزینه‌های واقعی این رابطه رو می‌نویسی تا مغزت «واقعیت کامل» رو ببینه.
+                </Text>
+                <Text style={[styles.small, { marginTop: 8 }]}>
+                  قانون: واقعی، ملموس و کوتاه بنویس و دچار شعار و بزرگ‌نمایی نشو.
+                </Text>
+              </View>
 
-        {/* Step 0 */}
-        {step === 0 ? (
-          <>
-            <View style={styles.sectionCard}>
-              <Text style={styles.h1}>این تمرین برای نفرت نیست</Text>
-              <Text style={styles.p}>
-                قرار نیست قضاوت کنی یا خودت رو تحقیر کنی.{"\n"}
-                فقط هزینه‌های واقعی این رابطه رو می‌نویسی تا مغزت «واقعیت کامل» رو ببینه.
-              </Text>
-              <Text style={[styles.small, { marginTop: 8 }]}>
-                قانون: واقعی، ملموس و کوتاه بنویس و دچار شعار و بزرگ‌نمایی نشو.
-              </Text>
-            </View>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => setStep(isReview ? 3 : 1)}
+                style={[styles.primaryBtn, isReview && { opacity: 0.85 }]}
+              >
+                <Text style={styles.primaryBtnText}>{isReview ? "مشاهده مرور" : "شروع"}</Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
 
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() => setStep(isReview ? 3 : 1)}
-              style={[styles.primaryBtn, isReview && { opacity: 0.85 }]}
-            >
-              <Text style={styles.primaryBtnText}>{isReview ? "مشاهده مرور" : "شروع"}</Text>
-            </TouchableOpacity>
-          </>
-        ) : null}
+          {/* Step 1 */}
+          {step === 1 ? (
+            <>
+              <View style={styles.sectionCard}>
+                <Text style={styles.h1}> در چه زمینه‌هایی این رابطه برای تو مشکل ایجاد کرد؟</Text>
+                <Text style={styles.p}>حداقل ۲ دسته رو انتخاب کن.</Text>
+              </View>
 
-        {/* Step 1 */}
-        {step === 1 ? (
-          <>
-            <View style={styles.sectionCard}>
-              <Text style={styles.h1}> در چه زمینه‌هایی این رابطه برای تو مشکل ایجاد کرد؟</Text>
-              <Text style={styles.p}>
-               حداقل ۲ دسته رو انتخاب کن.
-              
-              </Text>
-            </View>
+              <View style={{ gap: 10, marginTop: 10 }}>
+                {CATEGORIES.map((c) => {
+                  const on = selectedSet.has(c.key);
+                  return (
+                    <Pressable
+                      key={c.key}
+                      onPress={() => toggleCategory(c.key)}
+                      style={[styles.choiceCard, on && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
+                      disabled={isReview}
+                    >
+                      <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+                        <Ionicons
+                          name={on ? "checkmark-circle" : "ellipse-outline"}
+                          size={18}
+                          color={on ? palette.green : "rgba(231,238,247,.55)"}
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.choiceText}>{c.title}</Text>
+                          <Text style={styles.choiceSub}>{c.examples}</Text>
+                        </View>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
 
-            <View style={{ gap: 10, marginTop: 10 }}>
-              {CATEGORIES.map((c) => {
-                const on = selectedSet.has(c.key);
-                return (
-                  <Pressable
-                    key={c.key}
-                    onPress={() => toggleCategory(c.key)}
-                    style={[styles.choiceCard, on && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
-                    disabled={isReview}
+              <View style={{ marginTop: 14, gap: 10 }}>
+                <Text style={styles.small}>انتخاب‌شده: {selectedCategories.length} دسته</Text>
+
+                <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+                  <TouchableOpacity activeOpacity={0.9} onPress={() => setStep(0)} style={[styles.secondaryBtn, { flex: 1 }]}>
+                    <Text style={styles.secondaryBtnText}>بازگشت</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    disabled={!canGoStep2}
+                    onPress={() => setStep(2)}
+                    style={[styles.primaryBtn, { flex: 1 }, !canGoStep2 && { opacity: 0.45 }]}
                   >
-                    <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
-                      <Ionicons
-                        name={on ? "checkmark-circle" : "ellipse-outline"}
-                        size={18}
-                        color={on ? palette.green : "rgba(231,238,247,.55)"}
+                    <Text style={styles.primaryBtnText}>ادامه</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {!canGoStep2 ? <Text style={styles.warn}>حداقل ۲ دسته انتخاب کن.</Text> : null}
+              </View>
+            </>
+          ) : null}
+
+          {/* Step 2 */}
+          {step === 2 ? (
+            <>
+              <View style={styles.sectionCard}>
+                <Text style={styles.h1}>کوتاه و واقعی بنویس</Text>
+                <Text style={styles.p}>
+                  در هر دسته حداکثر سه مورد بنویس.{"\n"}
+                  هر مورد یک جمله کوتاه و ملموس.
+                </Text>
+                <Text style={[styles.small, { marginTop: 8 }]}>حداقل پنج مورد در مجموع لازمه تا بتونی به مرحله بعد بری.</Text>
+              </View>
+
+              <View style={{ gap: 12, marginTop: 10 }}>
+                {selectedCategories.map((cat) => {
+                  const meta = CATEGORIES.find((x) => x.key === cat)!;
+                  const arr = itemsByCat[cat] || ["", "", ""];
+                  const a0 = String(arr[0] || "");
+                  const a1 = String(arr[1] || "");
+                  const a2 = String(arr[2] || "");
+
+                  return (
+                    <View key={cat} style={[styles.noteCard, isReview && { opacity: 0.9 }]}>
+                      <Text style={styles.noteTitle}>{meta.title}</Text>
+                      <Text style={styles.noteHint}>{meta.examples}</Text>
+
+                      <TextInput
+                        value={a0}
+                        onChangeText={(t) => setItem(cat, 0, t)}
+                        placeholder="مورد ۱…"
+                        placeholderTextColor="rgba(231,238,247,.35)"
+                        style={[styles.inputOne, isReview && styles.inputReadOnly]}
+                        textAlign="right"
+                        editable={!isReview}
+                        selectTextOnFocus={!isReview}
+                        onFocus={() => {
+                          requestAnimationFrame(() => {
+                            scrollRef.current?.scrollToEnd({ animated: true });
+                          });
+                        }}
                       />
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.choiceText}>{c.title}</Text>
-                        <Text style={styles.choiceSub}>{c.examples}</Text>
-                      </View>
+                      <TextInput
+                        value={a1}
+                        onChangeText={(t) => setItem(cat, 1, t)}
+                        placeholder="مورد ۲…"
+                        placeholderTextColor="rgba(231,238,247,.35)"
+                        style={[styles.inputOne, isReview && styles.inputReadOnly]}
+                        textAlign="right"
+                        editable={!isReview}
+                        selectTextOnFocus={!isReview}
+                        onFocus={() => {
+                          requestAnimationFrame(() => {
+                            scrollRef.current?.scrollToEnd({ animated: true });
+                          });
+                        }}
+                      />
+                      <TextInput
+                        value={a2}
+                        onChangeText={(t) => setItem(cat, 2, t)}
+                        placeholder="مورد ۳…"
+                        placeholderTextColor="rgba(231,238,247,.35)"
+                        style={[styles.inputOne, isReview && styles.inputReadOnly]}
+                        textAlign="right"
+                        editable={!isReview}
+                        selectTextOnFocus={!isReview}
+                        onFocus={() => {
+                          requestAnimationFrame(() => {
+                            scrollRef.current?.scrollToEnd({ animated: true });
+                          });
+                        }}
+                      />
+
+                      <Text style={styles.small}>حداکثر ۳ مورد</Text>
                     </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <View style={{ marginTop: 14, gap: 10 }}>
-              <Text style={styles.small}>انتخاب‌شده: {selectedCategories.length} دسته</Text>
-
-              <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-                <TouchableOpacity activeOpacity={0.9} onPress={() => setStep(0)} style={[styles.secondaryBtn, { flex: 1 }]}>
-                  <Text style={styles.secondaryBtnText}>بازگشت</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  disabled={!canGoStep2}
-                  onPress={() => setStep(2)}
-                  style={[styles.primaryBtn, { flex: 1 }, !canGoStep2 && { opacity: 0.45 }]}
-                >
-                  <Text style={styles.primaryBtnText}>ادامه</Text>
-                </TouchableOpacity>
+                  );
+                })}
               </View>
 
-              {!canGoStep2 ? <Text style={styles.warn}>حداقل ۲ دسته انتخاب کن.</Text> : null}
-            </View>
-          </>
-        ) : null}
+              <View style={{ marginTop: 14, gap: 10 }}>
+                <Text style={styles.small}>موردهای نوشته‌شده: {totalFilled}</Text>
 
-        {/* Step 2 */}
-        {step === 2 ? (
-          <>
-            <View style={styles.sectionCard}>
-              <Text style={styles.h1}>کوتاه و واقعی بنویس</Text>
-              <Text style={styles.p}>
-                در هر دسته حداکثر سه مورد بنویس.{"\n"}
-                هر مورد یک جمله کوتاه و ملموس.
-              </Text>
-              <Text style={[styles.small, { marginTop: 8 }]}>
-                حداقل پنج مورد در مجموع لازمه تا بتونی به مرحله بعد بری.
-              </Text>
-            </View>
+                <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+                  <TouchableOpacity activeOpacity={0.9} onPress={() => setStep(1)} style={[styles.secondaryBtn, { flex: 1 }]}>
+                    <Text style={styles.secondaryBtnText}>بازگشت</Text>
+                  </TouchableOpacity>
 
-            <View style={{ gap: 12, marginTop: 10 }}>
-              {selectedCategories.map((cat) => {
-                const meta = CATEGORIES.find((x) => x.key === cat)!;
-                const arr = itemsByCat[cat] || ["", "", ""];
-                const a0 = String(arr[0] || "");
-                const a1 = String(arr[1] || "");
-                const a2 = String(arr[2] || "");
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    disabled={!canGoReview}
+                    onPress={() => setStep(3)}
+                    style={[styles.primaryBtn, { flex: 1 }, !canGoReview && { opacity: 0.45 }]}
+                  >
+                    <Text style={styles.primaryBtnText}>مرور</Text>
+                  </TouchableOpacity>
+                </View>
 
-                return (
-                  <View key={cat} style={[styles.noteCard, isReview && { opacity: 0.9 }]}>
-                    <Text style={styles.noteTitle}>{meta.title}</Text>
-                    <Text style={styles.noteHint}>{meta.examples}</Text>
+                {!canGoReview ? <Text style={styles.warn}>برای ادامه باید حداقل ۵ مورد واقعی بنویسی.</Text> : null}
+              </View>
+            </>
+          ) : null}
 
-                    <TextInput
-                      value={a0}
-                      onChangeText={(t) => setItem(cat, 0, t)}
-                      placeholder="مورد ۱…"
-                      placeholderTextColor="rgba(231,238,247,.35)"
-                      style={[styles.inputOne, isReview && styles.inputReadOnly]}
-                      textAlign="right"
-                      editable={!isReview}
-                      selectTextOnFocus={!isReview}
-                    />
-                    <TextInput
-                      value={a1}
-                      onChangeText={(t) => setItem(cat, 1, t)}
-                      placeholder="مورد ۲…"
-                      placeholderTextColor="rgba(231,238,247,.35)"
-                      style={[styles.inputOne, isReview && styles.inputReadOnly]}
-                      textAlign="right"
-                      editable={!isReview}
-                      selectTextOnFocus={!isReview}
-                    />
-                    <TextInput
-                      value={a2}
-                      onChangeText={(t) => setItem(cat, 2, t)}
-                      placeholder="مورد ۳…"
-                      placeholderTextColor="rgba(231,238,247,.35)"
-                      style={[styles.inputOne, isReview && styles.inputReadOnly]}
-                      textAlign="right"
-                      editable={!isReview}
-                      selectTextOnFocus={!isReview}
-                    />
-
-                    <Text style={styles.small}>حداکثر ۳ مورد</Text>
-                  </View>
-                );
-              })}
-            </View>
-
-            <View style={{ marginTop: 14, gap: 10 }}>
-              <Text style={styles.small}>موردهای نوشته‌شده: {totalFilled}</Text>
-
-              <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-                <TouchableOpacity activeOpacity={0.9} onPress={() => setStep(1)} style={[styles.secondaryBtn, { flex: 1 }]}>
-                  <Text style={styles.secondaryBtnText}>بازگشت</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  disabled={!canGoReview}
-                  onPress={() => setStep(3)}
-                  style={[styles.primaryBtn, { flex: 1 }, !canGoReview && { opacity: 0.45 }]}
-                >
-                  <Text style={styles.primaryBtnText}>مرور</Text>
-                </TouchableOpacity>
+          {/* Step 3 */}
+          {step === 3 ? (
+            <>
+              <View style={styles.sectionCard}>
+                <Text style={styles.h1}>مرور واقع‌بینانه</Text>
+                <Text style={styles.p}>
+                  این‌ها هزینه‌های واقعی این رابطه است.{"\n"}
+                  اگر آماده‌ای، ثبت کن و این ریز‌اقدام قفل می‌شود.
+                </Text>
               </View>
 
-              {!canGoReview ? <Text style={styles.warn}>برای ادامه باید حداقل ۵ مورد واقعی بنویسی.</Text> : null}
-            </View>
-          </>
-        ) : null}
+              <View style={{ gap: 12, marginTop: 10 }}>
+                {selectedCategories.map((cat) => {
+                  const meta = CATEGORIES.find((x) => x.key === cat)!;
+                  const arr = (itemsByCat[cat] || []).map((x) => String(x || "").trim()).filter((x) => x.length >= 3);
+                  if (arr.length === 0) return null;
 
-        {/* Step 3 */}
-        {step === 3 ? (
-          <>
-            <View style={styles.sectionCard}>
-              <Text style={styles.h1}>مرور واقع‌بینانه</Text>
-              <Text style={styles.p}>
-                این‌ها هزینه‌های واقعی این رابطه است.{"\n"}
-                اگر آماده‌ای، ثبت کن و این ریز‌اقدام قفل می‌شود.
-              </Text>
-            </View>
-
-            <View style={{ gap: 12, marginTop: 10 }}>
-              {selectedCategories.map((cat) => {
-                const meta = CATEGORIES.find((x) => x.key === cat)!;
-                const arr = (itemsByCat[cat] || []).map((x) => String(x || "").trim()).filter((x) => x.length >= 3);
-
-                if (arr.length === 0) return null;
-
-                return (
-                  <View key={cat} style={styles.reviewCard}>
-                    <Text style={styles.reviewTitle}>{meta.title}</Text>
-                    {arr.map((t, i) => (
-                      <View key={i} style={styles.bulletRow}>
-                        <Text style={styles.bullet}>•</Text>
-                        <Text style={styles.bulletText}>{t}</Text>
-                      </View>
-                    ))}
-                  </View>
-                );
-              })}
-            </View>
-
-            <View style={{ marginTop: 14, gap: 10 }}>
-              <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  onPress={() => setStep(2)}
-                  style={[styles.secondaryBtn, { flex: 1 }]}
-                  disabled={saving}
-                >
-                  <Text style={styles.secondaryBtnText}>بازگشت</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  disabled={(!isReview && !canGoReview) || saving}
-                  onPress={onFinishPress}
-                  style={[styles.primaryBtn, { flex: 1 }, ((!isReview && !canGoReview) || saving) && { opacity: 0.45 }]}
-                >
-                  <Text style={styles.primaryBtnText}>{saving ? "در حال انجام…" : isReview ? "خروج" : "ثبت و پایان"}</Text>
-                </TouchableOpacity>
+                  return (
+                    <View key={cat} style={styles.reviewCard}>
+                      <Text style={styles.reviewTitle}>{meta.title}</Text>
+                      {arr.map((t, i) => (
+                        <View key={i} style={styles.bulletRow}>
+                          <Text style={styles.bullet}>•</Text>
+                          <Text style={styles.bulletText}>{t}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  );
+                })}
               </View>
 
-              {!isReview && !canGoReview ? <Text style={styles.warn}>هنوز برای ثبت آماده نیستی.</Text> : null}
-            </View>
-          </>
-        ) : null}
-      </ScrollView>
+              <View style={{ marginTop: 14, gap: 10 }}>
+                <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => setStep(2)}
+                    style={[styles.secondaryBtn, { flex: 1 }]}
+                    disabled={saving}
+                  >
+                    <Text style={styles.secondaryBtnText}>بازگشت</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    disabled={(!isReview && !canGoReview) || saving}
+                    onPress={onFinishPress}
+                    style={[styles.primaryBtn, { flex: 1 }, ((!isReview && !canGoReview) || saving) && { opacity: 0.45 }]}
+                  >
+                    <Text style={styles.primaryBtnText}>{saving ? "در حال انجام…" : isReview ? "خروج" : "ثبت و پایان"}</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {!isReview && !canGoReview ? <Text style={styles.warn}>هنوز برای ثبت آماده نیستی.</Text> : null}
+              </View>
+            </>
+          ) : null}
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* ✅ لودینگ ورود */}
       {booting ? (
@@ -814,7 +824,7 @@ export default function RC2CostsScreen() {
         visible={confirmLockModal}
         kind="warn"
         title="قبل از ثبت، این رو بدون"
-        message="با زدن «ثبت و پایان»، این ریز‌اقدام قفل میشه و دیگر امکان تغییر نوشته‌ها رو نخواهی داشت."
+        message="با زدن «ثبت و پایان»، این ریز‌اقدام قفل میشه و دیگه امکان تغییر نوشته‌ها رو نخواهی داشت."
         primaryText="ثبت و قفل کن"
         secondaryText="فعلاً نه"
         loading={saving}
@@ -909,21 +919,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   reviewBannerText: { color: "rgba(231,238,247,.88)", fontWeight: "800", fontSize: 12, textAlign: "right", flex: 1 },
-  reviewJumpBtn: {
-    marginTop: 10,
-    alignSelf: "flex-start",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,.06)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,.12)",
-  },
-  reviewJumpText: {
-    color: palette.text,
-    fontWeight: "900",
-    fontSize: 12,
-  },
 
   sectionCard: {
     borderWidth: 1,

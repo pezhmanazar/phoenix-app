@@ -1399,6 +1399,22 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         },
       });
 
+      // ✅ 2.5) update action progress counters/status (so bastan day sync can unlock next day)
+      const doneCount = await tx.bastanSubtaskProgress.count({
+        where: { userId: user.id, actionId: subtask.actionId, isDone: true },
+      });
+
+      const minReqFinal = Math.max(0, Number(subtask.action?.minRequiredSubtasks || 0));
+
+      await tx.bastanActionProgress.update({
+        where: { userId_actionId: { userId: user.id, actionId: subtask.actionId } },
+        data: {
+          doneSubtasksCount: doneCount,
+          status: doneCount >= minReqFinal ? "done" : "active",
+          // minRequiredSubtasks already updated above
+        },
+      });
+
       // 3) XP ledger (only if xpReward > 0)
       if (xp > 0) {
         await tx.xpLedger.create({

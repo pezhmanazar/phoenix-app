@@ -514,7 +514,7 @@ export default function RC1RedFlagsScreen() {
       openModal({
         kind: "success",
         title: "ثبت شد",
-        message: "ثبت انجام شد. از این به بعد امکان تغییر این ریز‌اقدام وجود ندارد.",
+        message: "ثبت انجام شد. از این به بعد امکان تغییر این ریز‌اقدام وجود نداره.",
         primaryText: "خروج",
         onPrimary: () => {
           closeModal();
@@ -790,7 +790,7 @@ export default function RC1RedFlagsScreen() {
         visible={confirmLockModal}
         kind="warn"
         title="قبل از ثبت، این رو بدون"
-        message="با زدن «ثبت و پایان»، این ریز‌اقدام قفل میشه و دیگر امکان تغییر انتخاب‌ها و متن‌ها رو نخواهی داشت."
+        message="با زدن «ثبت و پایان»، این ریز‌اقدام قفل میشه و دیگه امکان تغییر انتخاب‌ها و متن‌ها رو نخواهی داشت."
         primaryText="ثبت و قفل کن"
         secondaryText="فعلاً نه"
         loading={saving}

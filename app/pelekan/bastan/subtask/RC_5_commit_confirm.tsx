@@ -4,19 +4,19 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    InteractionManager,
-    Keyboard,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    findNodeHandle,
+  ActivityIndicator,
+  InteractionManager,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  findNodeHandle,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -539,8 +539,8 @@ export default function RC5CommitConfirmScreen() {
       <ThemedModal
         visible={confirmLockModal}
         kind="warn"
-        title="قبل از ثبت این را بدان"
-        message="با زدن ثبت و پایان این ریز اقدام قفل می شود و دیگر امکان تغییر متن و تایید وجود ندارد."
+        title="قبل از ثبت این رو بدون"
+        message="با زدن ثبت و پایان این ریز اقدام قفل می شود و دبگه امکان تغییر متن‌ها وجود نداره."
         primaryText="ثبت و قفل کن"
         secondaryText="فعلا نه"
         loading={saving}

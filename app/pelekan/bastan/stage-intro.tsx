@@ -40,6 +40,9 @@ export default function BastanStageIntroScreen() {
   const [posMs, setPosMs] = useState(0);
   const [durMs, setDurMs] = useState(1);
 
+  // ✅ NEW: buffering state (UX)
+  const [isBuffering, setIsBuffering] = useState(false);
+
   const [trackW, setTrackW] = useState(0);
 
   // restore position
@@ -98,6 +101,9 @@ export default function BastanStageIntroScreen() {
         setPosMs(Number(st.positionMillis ?? 0));
         setDurMs(Number(st.durationMillis ?? 1));
 
+        // ✅ وقتی واقعاً لود شد، از حالت بافرینگ خارج شو
+        setIsBuffering(false);
+
         // ✅ هیچ “auto-complete” اینجا نداریم.
         // فقط پوزیشن سبک ذخیره می‌کنیم (برای تجربه بهتر)
         const position = Number(st.positionMillis ?? 0);
@@ -127,21 +133,38 @@ export default function BastanStageIntroScreen() {
   }, [AUDIO_URL, ensureAudioMode, STORAGE_POS_KEY]);
 
   const togglePlay = useCallback(async () => {
+    // ✅ اگر در حال بافرینگ هستیم، دوباره کلیک نکن
+    if (isBuffering) return;
+
     try {
       setErr(null);
+
+      // ✅ اگر هنوز لود نشده، بافرینگ را روشن کن تا آیکن تغییر کند
+      if (!soundRef.current) setIsBuffering(true);
+
       await loadIfNeeded();
       const s = soundRef.current;
-      if (!s) return;
+      if (!s) {
+        setIsBuffering(false);
+        return;
+      }
 
       const st: any = await s.getStatusAsync();
-      if (!st.isLoaded) return;
+      if (!st.isLoaded) {
+        setIsBuffering(false);
+        return;
+      }
+
+      // ✅ آماده‌ایم
+      setIsBuffering(false);
 
       if (st.isPlaying) await s.pauseAsync();
       else await s.playAsync();
     } catch (e: any) {
+      setIsBuffering(false);
       setErr(String(e?.message || e));
     }
-  }, [loadIfNeeded]);
+  }, [loadIfNeeded, isBuffering]);
 
   const seekTo = useCallback(
     async (ms: number) => {
@@ -187,6 +210,7 @@ export default function BastanStageIntroScreen() {
 
     soundRef.current = null;
     setIsPlaying(false);
+    setIsBuffering(false);
   }, [STORAGE_POS_KEY]);
 
   const onBackPress = useCallback(async () => {
@@ -256,7 +280,16 @@ export default function BastanStageIntroScreen() {
 
       <View style={styles.content}>
         <TouchableOpacity activeOpacity={0.9} onPress={togglePlay} style={styles.bigPlayWrap}>
-          <Ionicons name={isPlaying ? "pause" : "play"} size={72} color="#0b0f14" style={{ marginLeft: isPlaying ? 0 : 6 }} />
+          {isBuffering ? (
+            <ActivityIndicator color="#0b0f14" />
+          ) : (
+            <Ionicons
+              name={isPlaying ? "pause" : "play"}
+              size={72}
+              color="#0b0f14"
+              style={{ marginLeft: isPlaying ? 0 : 6 }}
+            />
+          )}
         </TouchableOpacity>
 
         <Text style={styles.title}>معرفی مرحله بستن</Text>
