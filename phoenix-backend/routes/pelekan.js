@@ -541,6 +541,19 @@ router.get("/state", authUser, async (req, res) => {
       create: { userId: user.id, lastActiveAt: new Date() },
     });
 
+    // ✅ Persist enterTreatment so user stays in treating after leaving review_result
+    const progressRow = await prisma.pelekanProgress.findUnique({
+    where: { userId: user.id },
+    select: { bastanUnlockedAt: true },
+    });
+
+   if (enterTreatment && !progressRow?.bastanUnlockedAt) {
+   await prisma.pelekanProgress.update({
+   where: { userId: user.id },
+    data: { bastanUnlockedAt: new Date() },
+  });
+}
+
     // ✅ engine signature: (prisma, userId)
     await pelekanEngine.refresh(prisma, user.id);
 
@@ -788,7 +801,8 @@ const introDone = !!(pelekanProg?.bastanIntroAudioCompletedAt || bastanState?.in
     // ✅ ورود به treating فقط اگر:
     // - کاربر skip_review کرده باشد
     // - یا واقعاً progress درمانی دارد
-    const isTreatmentEntry = chosenPath === "skip_review" || hasAnyProgressFinal;
+   const isTreatmentEntry =
+   chosenPath === "skip_review" || hasAnyProgressFinal || !!progressRow?.bastanUnlockedAt;
 
     // ✅ شروع واقعی درمان فقط بعد از intro + داشتن progress معنی‌دار است
     const hasStartedTreatment = introDone && hasAnyProgressFinal;
