@@ -790,19 +790,20 @@ router.get("/state", authUser, async (req, res) => {
     //   but bastanUnlockedAt should only set when you actually let user proceed.
     const canUnlockTreatmentNow = introDone && isProLike;
 
-    // ✅ Persist enterTreatment so user stays in treating after leaving review_result
-    // ✅ BUT only set bastanUnlockedAt when introDone + paywall passed
-    if (enterTreatment && canUnlockTreatmentNow && !pelekanProg?.bastanUnlockedAt) {
-      await prisma.pelekanProgress.update({
-        where: { userId: user.id },
-        data: { bastanUnlockedAt: new Date() },
-      });
-      // refresh local copy
-      progressRow = await prisma.pelekanProgress.findUnique({
-        where: { userId: user.id },
-        select: { bastanUnlockedAt: true, bastanIntroAudioCompletedAt: true },
-      });
-    }
+    // ✅ Unlock treatment as soon as intro is done + user is Pro-like
+// ✅ (Do NOT depend on enterTreatment=1, because skip_review users may never call it.)
+if (canUnlockTreatmentNow && !pelekanProg?.bastanUnlockedAt) {
+  await prisma.pelekanProgress.update({
+    where: { userId: user.id },
+    data: { bastanUnlockedAt: new Date() },
+  });
+
+  // refresh local copy
+  progressRow = await prisma.pelekanProgress.findUnique({
+    where: { userId: user.id },
+    select: { bastanUnlockedAt: true, bastanIntroAudioCompletedAt: true },
+  });
+}
 
     // baseline session (hb_baseline)
     const baselineSession = await prisma.assessmentSession.findUnique({
@@ -1163,20 +1164,34 @@ router.post("/review/choose", authUser, async (req, res) => {
       select: { id: true, status: true, chosenPath: true, completedAt: true, test2SkippedAt: true, updatedAt: true },
     });
 
-    // 2) اگر کاربر skip_review زد -> روز 1 bastan را active کن + نتایج دو آزمون آخر را ریست کن
-    if (choice === "skip_review") {
+    // 2) اگر کاربر skip_review زد -> فقط وارد حالت درمان شود (treating entry)
+// ✅ اکشن‌ها هنوز قفل می‌مانند تا intro کامل شود و paywall رد شود.
+if (choice === "skip_review") {
+  // ✅ Persist "treating entry" marker (do NOT unlock actions here)
+  await prisma.pelekanProgress.upsert({
+    where: { userId: user.id },
+    create: {
+      userId: user.id,
+      lastActiveAt: now,
+      // bastanUnlockedAt را اینجا ست نمی‌کنیم
+    },
+    update: {
+      lastActiveAt: now,
+      // bastanUnlockedAt را اینجا ست نمی‌کنیم
+    },
+  });
 
-      // B) ریست دو آزمون آخر
-      const RESET_KINDS = ["relationship_rescan", "ex_returns"];
+  // B) ریست دو آزمون آخر
+  const RESET_KINDS = ["relationship_rescan", "ex_returns"];
 
-      await prisma.assessmentResult.deleteMany({
-        where: { userId: user.id, kind: { in: RESET_KINDS } },
-      });
+  await prisma.assessmentResult.deleteMany({
+    where: { userId: user.id, kind: { in: RESET_KINDS } },
+  });
 
-      await prisma.assessmentSession.deleteMany({
-        where: { userId: user.id, kind: { in: RESET_KINDS } },
-      });
-    }
+  await prisma.assessmentSession.deleteMany({
+    where: { userId: user.id, kind: { in: RESET_KINDS } },
+  });
+}
 
     return res.json({ ok: true, data: { session } });
   } catch (e) {
