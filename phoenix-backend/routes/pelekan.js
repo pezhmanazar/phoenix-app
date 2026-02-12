@@ -518,6 +518,184 @@ async function syncBastanActionsToPelekanDays(prismaClient, userId) {
   }
 }
 
+/* ===========================
+   ✅ ADDED: Bastan action->day sync
+   - Each Bastan action (sortOrder 1..8) == one Bastan day (dayNumberInStage 1..8)
+   - When action i is done => day i completed, day i+1 becomes active
+   - Self-heal: also upserts BastanActionProgress from SubtaskProgress
+   =========================== */
+async function syncBastanActionsToDays(prisma, userId, stages, now = new Date()) {
+  // find bastan stage + days
+  const bastanStage = (stages || []).find((s) => s.code === "bastan");
+  if (!bastanStage) return;
+
+  const bastanDays = (bastanStage.days || [])
+    .slice()
+    .sort((a, b) => (a.dayNumberInStage || 0) - (b.dayNumberInStage || 0));
+
+  if (!bastanDays.length) return;
+
+  // action defs (ordered)
+  const actions = await prisma.bastanActionDefinition.findMany({
+    orderBy: { sortOrder: "asc" },
+    select: {
+      id: true,
+      sortOrder: true,
+      minRequiredSubtasks: true,
+      totalSubtasks: true,
+    },
+  });
+
+  if (!actions.length) return;
+
+  // Keep only first N where N = min(actions, days)
+  const N = Math.min(actions.length, bastanDays.length);
+
+  // Preload existing dayProgress for these days (for faster + safer updates)
+  const dayIds = bastanDays.slice(0, N).map((d) => d.id);
+  const existingDP = await prisma.pelekanDayProgress.findMany({
+    where: { userId, dayId: { in: dayIds } },
+    select: {
+      dayId: true,
+      status: true,
+      completionPercent: true,
+      startedAt: true,
+      completedAt: true,
+    },
+  });
+
+  const dpByDayId = new Map(existingDP.map((r) => [r.dayId, r]));
+
+  // compute each action doneCount from subtasks, and self-heal BastanActionProgress
+  const actionStates = [];
+  for (let i = 0; i < N; i++) {
+    const a = actions[i];
+    const minReq = Number(a.minRequiredSubtasks || 0);
+
+    const doneCount = await prisma.bastanSubtaskProgress.count({
+      where: { userId, actionId: a.id, isDone: true },
+    });
+
+    const status = doneCount >= minReq ? "done" : "active";
+
+    await prisma.bastanActionProgress.upsert({
+      where: { userId_actionId: { userId, actionId: a.id } },
+      create: {
+        userId,
+        actionId: a.id,
+        status,
+        doneSubtasksCount: doneCount,
+        minRequiredSubtasks: minReq,
+        totalSubtasks: Number(a.totalSubtasks || 0),
+        // startedAt/completedAt را اینجا دست نمی‌زنیم چون ممکنه جای دیگه مدیریت بشه
+      },
+      update: {
+        status,
+        doneSubtasksCount: doneCount,
+        minRequiredSubtasks: minReq,
+        totalSubtasks: Number(a.totalSubtasks || 0),
+      },
+    });
+
+    actionStates.push({ index: i, minReq, doneCount, isDone: doneCount >= minReq });
+  }
+
+  // find first incomplete action
+  let firstIncomplete = actionStates.find((x) => !x.isDone);
+  const allDone = !firstIncomplete;
+  const activeIndex = allDone ? N - 1 : firstIncomplete.index;
+
+  // helper: upsert day progress
+  async function upsertDay(dayId, data) {
+    const existing = dpByDayId.get(dayId);
+
+    const nextStatus = data.status ?? existing?.status ?? "active";
+
+    const nextCompletionPercent =
+      typeof data.completionPercent === "number"
+        ? data.completionPercent
+        : existing?.completionPercent ?? 0;
+
+    const nextStartedAt = existing?.startedAt || data.startedAt || now;
+
+    const nextCompletedAt =
+      nextStatus === "completed"
+        ? (existing?.completedAt || data.completedAt || now)
+        : (data.completedAt ?? null);
+
+    await prisma.pelekanDayProgress.upsert({
+      where: { userId_dayId: { userId, dayId } },
+      create: {
+        userId,
+        dayId,
+        status: nextStatus,
+        completionPercent: nextCompletionPercent,
+        startedAt: nextStartedAt,
+        lastActivityAt: now,
+        deadlineAt: null,
+        completedAt: nextCompletedAt,
+        xpEarned: data.xpEarned ?? 0,
+      },
+      update: {
+        status: nextStatus,
+        completionPercent: nextCompletionPercent,
+        startedAt: nextStartedAt,
+        lastActivityAt: now,
+        completedAt: nextCompletedAt,
+      },
+    });
+  }
+
+  // 1) mark all days before activeIndex as completed(100)
+  for (let i = 0; i < activeIndex; i++) {
+    const day = bastanDays[i];
+    await upsertDay(day.id, {
+      status: "completed",
+      completionPercent: 100,
+      completedAt: now,
+      startedAt: dpByDayId.get(day.id)?.startedAt || now,
+    });
+  }
+
+  // 2) active day: reflect progress as percent based on action minReq
+  {
+    const day = bastanDays[activeIndex];
+    const st = actionStates[activeIndex];
+    const minReq = Math.max(1, Number(st.minReq || 1));
+    const pct = st.isDone ? 100 : Math.min(99, Math.round((st.doneCount / minReq) * 100));
+
+    await upsertDay(day.id, {
+      status: st.isDone ? "completed" : "active",
+      completionPercent: pct,
+      completedAt: st.isDone ? now : null,
+      startedAt: dpByDayId.get(day.id)?.startedAt || now,
+    });
+
+    // اگر همین active هم done شد، روز بعدی باید active شود (در همان request)
+    if (st.isDone && activeIndex + 1 < N) {
+      const nextDay = bastanDays[activeIndex + 1];
+      await upsertDay(nextDay.id, {
+        status: "active",
+        completionPercent: 0,
+        completedAt: null,
+        startedAt: dpByDayId.get(nextDay.id)?.startedAt || now,
+      });
+    }
+  }
+
+  // 3) safety self-heal: اگر برای روزهای بعدی رکورد active ساخته شده بود، پاکش کن (جز completed ها)
+  const futureDayIds = bastanDays.slice(activeIndex + 2, N).map((d) => d.id);
+  if (futureDayIds.length) {
+    await prisma.pelekanDayProgress.deleteMany({
+      where: {
+        userId,
+        dayId: { in: futureDayIds },
+        status: { not: "completed" },
+      },
+    });
+  }
+}
+
 /* ---------- GET /api/pelekan/state ---------- */
 router.get("/state", authUser, async (req, res) => {
   try {
@@ -541,23 +719,20 @@ router.get("/state", authUser, async (req, res) => {
       create: { userId: user.id, lastActiveAt: new Date() },
     });
 
-    // ✅ read current PelekanProgress (we need intro + unlock flags)
-    const progressRow = await prisma.pelekanProgress.findUnique({
+    // ✅ Read progressRow (we need bastanUnlockedAt later)
+    let progressRow = await prisma.pelekanProgress.findUnique({
       where: { userId: user.id },
-      select: {
-        bastanUnlockedAt: true,
-        bastanIntroAudioCompletedAt: true,
-      },
+      select: { bastanUnlockedAt: true, bastanIntroAudioCompletedAt: true },
     });
 
     // ✅ engine signature: (prisma, userId)
     await pelekanEngine.refresh(prisma, user.id);
 
     // ✅ ADDED: bastan intro state (source of truth: PelekanProgress)
-    const pelekanProg = await prisma.pelekanProgress.findUnique({
+    const pelekanProg = progressRow || (await prisma.pelekanProgress.findUnique({
       where: { userId: user.id },
-      select: { bastanIntroAudioCompletedAt: true },
-    });
+      select: { bastanIntroAudioCompletedAt: true, bastanUnlockedAt: true },
+    }));
 
     // backward-compatible fallback (اگر هنوز ستون قدیمی روی bastanState داشتی)
     let bastanState = null;
@@ -608,6 +783,26 @@ router.get("/state", authUser, async (req, res) => {
     );
 
     const isProLike = planStatusFinal === "pro" || planStatusFinal === "expiring";
+
+    // ✅ IMPORTANT: Unlock treatment only AFTER intro is done + paywall is effectively passed
+    // - For Pro-like users: paywall passed by definition
+    // - For free/expired: you can keep your computePaywall flow (not changing it here),
+    //   but bastanUnlockedAt should only set when you actually let user proceed.
+    const canUnlockTreatmentNow = introDone && isProLike;
+
+    // ✅ Persist enterTreatment so user stays in treating after leaving review_result
+    // ✅ BUT only set bastanUnlockedAt when introDone + paywall passed
+    if (enterTreatment && canUnlockTreatmentNow && !pelekanProg?.bastanUnlockedAt) {
+      await prisma.pelekanProgress.update({
+        where: { userId: user.id },
+        data: { bastanUnlockedAt: new Date() },
+      });
+      // refresh local copy
+      progressRow = await prisma.pelekanProgress.findUnique({
+        where: { userId: user.id },
+        select: { bastanUnlockedAt: true, bastanIntroAudioCompletedAt: true },
+      });
+    }
 
     // baseline session (hb_baseline)
     const baselineSession = await prisma.assessmentSession.findUnique({
@@ -696,17 +891,14 @@ router.get("/state", authUser, async (req, res) => {
       let tabState = "idle";
       if (isBaselineInProgress) tabState = "baseline_assessment";
 
-      // ✅ FIX: وقتی review تمام شده، دیگه tabState را review نکن
       if (!isBaselineInProgress && reviewInProgress) {
         tabState = "review";
       } else if (!isBaselineInProgress && reviewFinished && !enterTreatment) {
-        // ✅ NEW: فقط اگر enterTreatment نیومده، روی review_result بمان
         tabState = "review_result";
       } else if (isBaselineCompleted) {
         tabState = "choose_path";
       }
 
-      // ✅ اگر UI صراحتاً گفته برو درمان، treating شو (حتی بدون content)
       if (enterTreatment) tabState = "treating";
 
       const treatmentAccess = computeTreatmentAccess(
@@ -756,6 +948,13 @@ router.get("/state", authUser, async (req, res) => {
       });
     }
 
+    // ✅ ADDED: if treatment is unlocked (introDone + paywall passed), sync Actions -> Days
+    // This is the missing link that prevented Day2 from activating.
+    const unlockedAt = progressRow?.bastanUnlockedAt || pelekanProg?.bastanUnlockedAt || null;
+    if (introDone && unlockedAt) {
+      await syncBastanActionsToDays(prisma, user.id, stages, new Date());
+    }
+
     // progress
     const dayProgress = await prisma.pelekanDayProgress.findMany({
       where: { userId: user.id },
@@ -800,68 +999,38 @@ router.get("/state", authUser, async (req, res) => {
     // ✅ ورود به treating فقط اگر:
     // - کاربر skip_review کرده باشد
     // - یا واقعاً progress درمانی دارد
-    // - یا قبلاً treating را "unlock" کرده (persisted)
+    // - یا treatment unlocked شده (bastanUnlockedAt)
     const isTreatmentEntry =
-      chosenPath === "skip_review" ||
-      hasAnyProgressFinal ||
-      !!progressRow?.bastanUnlockedAt;
+      chosenPath === "skip_review" || hasAnyProgressFinal || !!unlockedAt;
 
-    // ✅ Paywall rule:
-    // - Paywall ONLY becomes relevant AFTER intro is done
-    // - If intro not done => suppress paywall
-    const paywallEligible = introDone;
+    // ✅ شروع واقعی درمان فقط بعد از intro + unlock شدن است
+    const hasStartedTreatment = introDone && !!unlockedAt;
 
-    // ✅ If user is treating AND introDone, now we can evaluate paywall need
-    // (the 2nd arg is used by your computePaywall as "hasStartedTreatment-like" flag)
-    const paywallNeedObj = paywallEligible
-      ? computePaywall(planStatusFinal, true)
-      : { needed: false, reason: null };
-
-    // ✅ User can start actions ONLY after:
-    // - intro is completed
-    // - paywall is not needed (i.e. user is pro-like / has access)
-    const canStartActions = introDone && !paywallNeedObj.needed;
-
-    // ✅ Persist bastanUnlockedAt ONLY when user truly can start actions
-    // (not just because enterTreatment=1 was passed)
-    if (enterTreatment && canStartActions && !progressRow?.bastanUnlockedAt) {
-      await prisma.pelekanProgress.update({
-        where: { userId: user.id },
-        data: { bastanUnlockedAt: new Date() },
-      });
-    }
-
-    // ✅ activeDayId نهایی:
-    // - before intro => null
-    // - after intro but paywall not passed => null
-    // - after intro + paywall passed => activeDayIdRaw
-    const activeDayId = canStartActions ? activeDayIdRaw : null;
+    // ✅ activeDayId نهایی: قبل از intro، null (و قبل از unlock هم null)
+    const activeDayId = !introDone || !unlockedAt ? null : activeDayIdRaw;
 
     let tabState = "idle";
 
-    // 1) baseline flows
     if (isBaselineInProgress) tabState = "baseline_assessment";
     else if (baselineNeedsResultScreen) tabState = "baseline_result";
     else if (isBaselineCompleted && !reviewSession?.chosenPath) tabState = "choose_path";
-    // ✅ review in progress
     else if (reviewInProgress) tabState = "review";
-    // ✅ review finished => stay on review_result (ONLY if UI didn't request enterTreatment)
-    else if (reviewFinished && !enterTreatment && !isTreatmentEntry) tabState = "review_result";
-    // 2) treatment entry (OR explicit enterTreatment)
+    else if (reviewFinished && !enterTreatment) tabState = "review_result";
     else if (enterTreatment || isTreatmentEntry) tabState = "treating";
     else tabState = "idle";
 
-    // ✅ treatmentAccess:
-    // we treat "started" as "canStartActions" (intro done + paywall passed)
-    const treatmentAccess = computeTreatmentAccess(planStatusFinal, canStartActions);
+    const treatmentAccess = computeTreatmentAccess(
+      planStatusFinal,
+      hasStartedTreatment
+    );
 
-    // ✅ paywall:
-    // - only when treating AND introDone (eligible)
-    // - if intro not done => suppress
+    // ✅ paywall فقط وقتی treating هستیم و introDone شده مطرح است
     const suppressPaywall =
-      tabState !== "treating" || !paywallEligible || tabState === "baseline_assessment";
+      tabState !== "treating" || !introDone || tabState === "baseline_assessment";
 
-    const paywall = suppressPaywall ? { needed: false, reason: null } : paywallNeedObj;
+    const paywall = suppressPaywall
+      ? { needed: false, reason: null }
+      : computePaywall(planStatusFinal, hasStartedTreatment);
 
     let treatment = null;
     if (tabState === "treating") {
@@ -896,16 +1065,12 @@ router.get("/state", authUser, async (req, res) => {
             }
           : null,
 
-        // ✅ start block:
-        // - required until intro done
-        // - actions must stay locked until intro done AND paywall passed
         start: {
           required: !introDone,
           completedAt:
             pelekanProg?.bastanIntroAudioCompletedAt ||
             bastanState?.introAudioCompletedAt ||
             null,
-          lockedActionsUntilDone: !canStartActions,
         },
       };
     }
@@ -931,8 +1096,7 @@ router.get("/state", authUser, async (req, res) => {
             bastanState?.introAudioCompletedAt ||
             null,
           required: true,
-          // ✅ IMPORTANT: lock actions until intro done + paywall passed
-          lockedActionsUntilDone: !canStartActions,
+          lockedActionsUntilDone: !introDone,
         },
         treatment,
         hasContent: true,
@@ -1543,15 +1707,26 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       }
     });
 
-    // ✅ 5) optional: sync bastan days so /api/pelekan/state unlocks next day immediately
-    // اگر این فانکشن/منطق را داری، فعالش کن. اگر ندارى، همین بلوک را کامنت کن.
+    // ✅ 5) sync bastan actions -> pelekan days immediately (CRITICAL)
+    // This prevents "next action/day not activated" when app refreshes only bastan/state.
     try {
-      if (typeof syncBastanDaysForUser === "function") {
-        await syncBastanDaysForUser(user.id);
-      }
+      const nowSync = new Date();
+
+      // Fetch stages (needed for syncBastanActionsToDays)
+      const stages = await prisma.pelekanStage.findMany({
+        orderBy: { sortOrder: "asc" },
+        include: {
+          days: {
+            orderBy: { dayNumberInStage: "asc" },
+            include: { tasks: { orderBy: { sortOrder: "asc" } } },
+          },
+        },
+      });
+
+      await syncBastanActionsToDays(prisma, user.id, stages, nowSync);
     } catch (e) {
-      console.warn("[pelekan.bastan.subtask.complete] syncBastanDaysForUser failed:", e);
-      // sync failure نباید باعث fail شدن ثبت subtask شود
+      console.warn("[pelekan.bastan.subtask.complete] syncBastanActionsToDays failed:", e);
+      // sync failure must NOT break completing the subtask
     }
 
     return res.json({
