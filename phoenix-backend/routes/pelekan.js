@@ -541,40 +541,39 @@ router.get("/state", authUser, async (req, res) => {
       create: { userId: user.id, lastActiveAt: new Date() },
     });
 
-    // ✅ Persist enterTreatment so user stays in treating after leaving review_result
+    // ✅ read current PelekanProgress (we need intro + unlock flags)
     const progressRow = await prisma.pelekanProgress.findUnique({
-    where: { userId: user.id },
-    select: { bastanUnlockedAt: true },
+      where: { userId: user.id },
+      select: {
+        bastanUnlockedAt: true,
+        bastanIntroAudioCompletedAt: true,
+      },
     });
-
-   if (enterTreatment && !progressRow?.bastanUnlockedAt) {
-   await prisma.pelekanProgress.update({
-   where: { userId: user.id },
-    data: { bastanUnlockedAt: new Date() },
-  });
-}
 
     // ✅ engine signature: (prisma, userId)
     await pelekanEngine.refresh(prisma, user.id);
 
-// ✅ ADDED: bastan intro state (source of truth: PelekanProgress)
-const pelekanProg = await prisma.pelekanProgress.findUnique({
-  where: { userId: user.id },
-  select: { bastanIntroAudioCompletedAt: true },
-});
+    // ✅ ADDED: bastan intro state (source of truth: PelekanProgress)
+    const pelekanProg = await prisma.pelekanProgress.findUnique({
+      where: { userId: user.id },
+      select: { bastanIntroAudioCompletedAt: true },
+    });
 
-// backward-compatible fallback (اگر هنوز ستون قدیمی روی bastanState داشتی)
-let bastanState = null;
-try {
-  bastanState = await prisma.bastanState.findUnique({
-    where: { userId: user.id },
-    select: { introAudioCompletedAt: true },
-  });
-} catch {
-  bastanState = null;
-}
+    // backward-compatible fallback (اگر هنوز ستون قدیمی روی bastanState داشتی)
+    let bastanState = null;
+    try {
+      bastanState = await prisma.bastanState.findUnique({
+        where: { userId: user.id },
+        select: { introAudioCompletedAt: true },
+      });
+    } catch {
+      bastanState = null;
+    }
 
-const introDone = !!(pelekanProg?.bastanIntroAudioCompletedAt || bastanState?.introAudioCompletedAt);
+    const introDone = !!(
+      pelekanProg?.bastanIntroAudioCompletedAt ||
+      bastanState?.introAudioCompletedAt
+    );
 
     // 2) reviewSession AFTER user
     const reviewSession = await prisma.pelekanReviewSession.findUnique({
@@ -801,14 +800,42 @@ const introDone = !!(pelekanProg?.bastanIntroAudioCompletedAt || bastanState?.in
     // ✅ ورود به treating فقط اگر:
     // - کاربر skip_review کرده باشد
     // - یا واقعاً progress درمانی دارد
-   const isTreatmentEntry =
-   chosenPath === "skip_review" || hasAnyProgressFinal || !!progressRow?.bastanUnlockedAt;
+    // - یا قبلاً treating را "unlock" کرده (persisted)
+    const isTreatmentEntry =
+      chosenPath === "skip_review" ||
+      hasAnyProgressFinal ||
+      !!progressRow?.bastanUnlockedAt;
 
-    // ✅ شروع واقعی درمان فقط بعد از intro + داشتن progress معنی‌دار است
-    const hasStartedTreatment = introDone && hasAnyProgressFinal;
+    // ✅ Paywall rule:
+    // - Paywall ONLY becomes relevant AFTER intro is done
+    // - If intro not done => suppress paywall
+    const paywallEligible = introDone;
 
-    // ✅ activeDayId نهایی: قبل از intro، null
-    const activeDayId = !introDone ? null : activeDayIdRaw;
+    // ✅ If user is treating AND introDone, now we can evaluate paywall need
+    // (the 2nd arg is used by your computePaywall as "hasStartedTreatment-like" flag)
+    const paywallNeedObj = paywallEligible
+      ? computePaywall(planStatusFinal, true)
+      : { needed: false, reason: null };
+
+    // ✅ User can start actions ONLY after:
+    // - intro is completed
+    // - paywall is not needed (i.e. user is pro-like / has access)
+    const canStartActions = introDone && !paywallNeedObj.needed;
+
+    // ✅ Persist bastanUnlockedAt ONLY when user truly can start actions
+    // (not just because enterTreatment=1 was passed)
+    if (enterTreatment && canStartActions && !progressRow?.bastanUnlockedAt) {
+      await prisma.pelekanProgress.update({
+        where: { userId: user.id },
+        data: { bastanUnlockedAt: new Date() },
+      });
+    }
+
+    // ✅ activeDayId نهایی:
+    // - before intro => null
+    // - after intro but paywall not passed => null
+    // - after intro + paywall passed => activeDayIdRaw
+    const activeDayId = canStartActions ? activeDayIdRaw : null;
 
     let tabState = "idle";
 
@@ -819,23 +846,22 @@ const introDone = !!(pelekanProg?.bastanIntroAudioCompletedAt || bastanState?.in
     // ✅ review in progress
     else if (reviewInProgress) tabState = "review";
     // ✅ review finished => stay on review_result (ONLY if UI didn't request enterTreatment)
-    else if (reviewFinished && !enterTreatment) tabState = "review_result";
+    else if (reviewFinished && !enterTreatment && !isTreatmentEntry) tabState = "review_result";
     // 2) treatment entry (OR explicit enterTreatment)
     else if (enterTreatment || isTreatmentEntry) tabState = "treating";
     else tabState = "idle";
 
-    const treatmentAccess = computeTreatmentAccess(
-      planStatusFinal,
-      hasStartedTreatment
-    );
+    // ✅ treatmentAccess:
+    // we treat "started" as "canStartActions" (intro done + paywall passed)
+    const treatmentAccess = computeTreatmentAccess(planStatusFinal, canStartActions);
 
-    // ✅ paywall فقط وقتی treating هستیم و introDone شده مطرح است
+    // ✅ paywall:
+    // - only when treating AND introDone (eligible)
+    // - if intro not done => suppress
     const suppressPaywall =
-      tabState !== "treating" || !introDone || tabState === "baseline_assessment";
+      tabState !== "treating" || !paywallEligible || tabState === "baseline_assessment";
 
-    const paywall = suppressPaywall
-      ? { needed: false, reason: null }
-      : computePaywall(planStatusFinal, hasStartedTreatment);
+    const paywall = suppressPaywall ? { needed: false, reason: null } : paywallNeedObj;
 
     let treatment = null;
     if (tabState === "treating") {
@@ -870,13 +896,17 @@ const introDone = !!(pelekanProg?.bastanIntroAudioCompletedAt || bastanState?.in
             }
           : null,
 
+        // ✅ start block:
+        // - required until intro done
+        // - actions must stay locked until intro done AND paywall passed
         start: {
-  required: !introDone,
-  completedAt:
-    pelekanProg?.bastanIntroAudioCompletedAt ||
-    bastanState?.introAudioCompletedAt ||
-    null,
-},
+          required: !introDone,
+          completedAt:
+            pelekanProg?.bastanIntroAudioCompletedAt ||
+            bastanState?.introAudioCompletedAt ||
+            null,
+          lockedActionsUntilDone: !canStartActions,
+        },
       };
     }
 
@@ -896,13 +926,14 @@ const introDone = !!(pelekanProg?.bastanIntroAudioCompletedAt || bastanState?.in
         path: null,
         review,
         bastanIntro: {
-  completedAt:
-    pelekanProg?.bastanIntroAudioCompletedAt ||
-    bastanState?.introAudioCompletedAt ||
-    null,
-  required: true,
-  lockedActionsUntilDone: !introDone,
-},
+          completedAt:
+            pelekanProg?.bastanIntroAudioCompletedAt ||
+            bastanState?.introAudioCompletedAt ||
+            null,
+          required: true,
+          // ✅ IMPORTANT: lock actions until intro done + paywall passed
+          lockedActionsUntilDone: !canStartActions,
+        },
         treatment,
         hasContent: true,
         stages,
