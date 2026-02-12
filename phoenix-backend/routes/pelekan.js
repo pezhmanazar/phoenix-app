@@ -544,12 +544,24 @@ router.get("/state", authUser, async (req, res) => {
     // ✅ engine signature: (prisma, userId)
     await pelekanEngine.refresh(prisma, user.id);
 
-    // ✅ ADDED: bastan intro state (برای اینکه قبل از intro، روز 1 فعال نشه)
-    const bastanState = await prisma.bastanState.findUnique({
-      where: { userId: user.id },
-      select: { introAudioCompletedAt: true },
-    });
-    const introDone = !!bastanState?.introAudioCompletedAt;
+// ✅ ADDED: bastan intro state (source of truth: PelekanProgress)
+const pelekanProg = await prisma.pelekanProgress.findUnique({
+  where: { userId: user.id },
+  select: { bastanIntroAudioCompletedAt: true },
+});
+
+// backward-compatible fallback (اگر هنوز ستون قدیمی روی bastanState داشتی)
+let bastanState = null;
+try {
+  bastanState = await prisma.bastanState.findUnique({
+    where: { userId: user.id },
+    select: { introAudioCompletedAt: true },
+  });
+} catch {
+  bastanState = null;
+}
+
+const introDone = !!(pelekanProg?.bastanIntroAudioCompletedAt || bastanState?.introAudioCompletedAt);
 
     // 2) reviewSession AFTER user
     const reviewSession = await prisma.pelekanReviewSession.findUnique({
@@ -845,9 +857,12 @@ router.get("/state", authUser, async (req, res) => {
           : null,
 
         start: {
-          required: !introDone,
-          completedAt: bastanState?.introAudioCompletedAt || null,
-        },
+  required: !introDone,
+  completedAt:
+    pelekanProg?.bastanIntroAudioCompletedAt ||
+    bastanState?.introAudioCompletedAt ||
+    null,
+},
       };
     }
 
@@ -867,10 +882,13 @@ router.get("/state", authUser, async (req, res) => {
         path: null,
         review,
         bastanIntro: {
-          completedAt: bastanState?.introAudioCompletedAt || null,
-          required: true,
-          lockedActionsUntilDone: !introDone,
-        },
+  completedAt:
+    pelekanProg?.bastanIntroAudioCompletedAt ||
+    bastanState?.introAudioCompletedAt ||
+    null,
+  required: true,
+  lockedActionsUntilDone: !introDone,
+},
         treatment,
         hasContent: true,
         stages,
