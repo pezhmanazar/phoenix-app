@@ -30,6 +30,8 @@ export default function BastanStageIntroScreen() {
   // ✅ لوکال keys
   const STORAGE_DONE_KEY = useMemo(() => `pelekan:bastan:stage_intro_done:v1:${phone || "no_phone"}`, [phone]);
   const STORAGE_POS_KEY = useMemo(() => `pelekan:bastan:stage_intro_pos_ms:v1:${phone || "no_phone"}`, [phone]);
+  // ✅ برای سبز شدن دایره‌ی «بستن» در نقشه
+  const MAP_HEARD_KEY = "pelekan:stage_intro:bastan:heard:v1";
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -231,10 +233,15 @@ export default function BastanStageIntroScreen() {
 
       // ✅ 2) فقط اگر >= 5 ثانیه بود، DONE ثبت شود
       if (phone && listenedMs >= HEARD_MIN_MS) {
-        try {
-          await AsyncStorage.setItem(STORAGE_DONE_KEY, "1");
-        } catch {}
-      }
+  try {
+    await AsyncStorage.setItem(STORAGE_DONE_KEY, "1");
+  } catch {}
+
+  // ✅ این یکی برای نقشه پلکان
+  try {
+    await AsyncStorage.setItem(MAP_HEARD_KEY, "1");
+  } catch {}
+}
 
       // ✅ 3) بعدش player را unload کنیم
       await stopAndUnload();

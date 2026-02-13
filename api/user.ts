@@ -1,6 +1,6 @@
 // phoenix-app/api/user.ts
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { APP_API_URL } from "../constants/env";
 
 type ApiOk<T> = { ok: true; data: T };
 type ApiErr = { ok: false; error: string };
@@ -11,14 +11,20 @@ export type UserPlan = "free" | "pro" | "vip";
 export type UserRecord = {
   id?: string;
   phone: string;
+
   fullName?: string | null;
   gender?: "male" | "female" | "other" | null;
   birthDate?: string | null; // yyyy-mm-dd
+
   avatarUrl?: string | null; // http/file/icon
+
   plan?: UserPlan;
   planExpiresAt?: string | null; // ISO
+
   profileCompleted?: boolean;
+
   notifyTags?: string[];
+
   createdAt?: string | null;
   lastLoginAt?: string | null;
   updatedAt?: string | null;
@@ -40,7 +46,10 @@ function userUrl(path: string) {
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-async function doJson<T>(input: RequestInfo, init?: RequestInit): Promise<ApiResp<T>> {
+async function doJson<T>(
+  input: RequestInfo,
+  init?: RequestInit
+): Promise<ApiResp<T>> {
   try {
     // 1) هدرهای قبلی را جمع می‌کنیم
     const baseHeaders: Record<string, string> = {};
@@ -107,6 +116,7 @@ async function doJson<T>(input: RequestInfo, init?: RequestInit): Promise<ApiRes
 }
 
 // ----------------- helper تبدیل رقم -----------------
+
 const toEnDigits = (s: string) =>
   String(s || "").replace(/[0-9۰-۹٠-٩]/g, (d) => {
     const fa = "۰۱۲۳۴۵۶۷۸۹";
@@ -128,13 +138,18 @@ export function normalizeIranPhone(v: string) {
 }
 
 /* ----------------- این سه تا برای پروفایل‌ویزارد و کار با بک‌اند لوکال ----------------- */
+
 // GET http://192.168.xxx.xxx:4000/api/users/me?phone=...
-export async function getMeByPhone(phone: string): Promise<ApiResp<UserRecord | null>> {
+export async function getMeByPhone(
+  phone: string
+): Promise<ApiResp<UserRecord | null>> {
   const p = normalizeIranPhone(phone);
   const cacheBuster = `cb=${Date.now()}`;
   // 🔥 بسیار مهم: فقط یک ? باید وجود داشته باشد
-  const url = userUrl(`/api/users/me`) + `?phone=${encodeURIComponent(p)}&${cacheBuster}`;
+  const url =
+    userUrl(`/api/users/me`) + `?phone=${encodeURIComponent(p)}&${cacheBuster}`;
   console.log("[user.getMeByPhone] FINAL URL =", url);
+
   return doJson<UserRecord | null>(url, {
     method: "GET",
     headers: {
@@ -154,6 +169,7 @@ export async function upsertUserByPhone(
     ...payload,
     phone: p,
   });
+
   return doJson<UserRecord>(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -162,20 +178,35 @@ export async function upsertUserByPhone(
 }
 
 // DELETE برای ریست پروفایل (اگر روی بک‌اند پیاده شده باشد)
-export async function resetUserByPhone(phone: string): Promise<ApiResp<UserRecord>> {
+export async function resetUserByPhone(
+  phone: string
+): Promise<ApiResp<UserRecord>> {
   const p = normalizeIranPhone(phone);
   const url = userUrl(`/api/users/reset?phone=${encodeURIComponent(p)}`);
   return doJson<UserRecord>(url, { method: "DELETE" });
 }
 
+// ✅ NEW: POST /api/users/me/reset?phone=...
+// ریست کامل داده‌های درمان/آزمون/پلکان روی سرور (بدون حذف خود User)
+export async function resetAllUserDataByPhone(
+  phone: string
+): Promise<ApiResp<{ reset: boolean }>> {
+  const p = normalizeIranPhone(phone);
+  const url = userUrl(`/api/users/me/reset?phone=${encodeURIComponent(p)}`);
+  return doJson<{ reset: boolean }>(url, { method: "POST" });
+}
+
 // DELETE /api/users/delete?phone=...
-export async function deleteMeByPhone(phone: string): Promise<ApiResp<{ deleted: boolean }>> {
+export async function deleteMeByPhone(
+  phone: string
+): Promise<ApiResp<{ deleted: boolean }>> {
   const p = normalizeIranPhone(phone);
   const url = userUrl(`/api/users/me/delete?phone=${encodeURIComponent(p)}`);
   return doJson<{ deleted: boolean }>(url, { method: "POST" });
 }
 
 /* ----------------- fetchMe برای useUser ----------------- */
+
 /**
  * me را واقعا از بک‌اند ققنوس می‌خواند.
  * منبع شماره موبایل: otp_phone_v1 داخل AsyncStorage (همونی که useAuth می‌سازه).
@@ -187,12 +218,15 @@ export async function fetchMe(): Promise<Me | null> {
       console.log("[user.fetchMe] no stored phone");
       return null;
     }
+
     console.log("[user.fetchMe] loading me for phone =", storedPhone);
+
     const resp = await getMeByPhone(storedPhone);
     if (!resp.ok) {
       console.log("[user.fetchMe] error =", resp.error);
       return null;
     }
+
     console.log("[user.fetchMe] loaded me =", resp.data);
     return resp.data;
   } catch (e: any) {

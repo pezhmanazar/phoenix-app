@@ -1,5 +1,6 @@
 // routes/users.js
 import express from "express";
+import jwt from "jsonwebtoken";
 import prisma from "../utils/prisma.js";
 
 const router = express.Router();
@@ -23,27 +24,61 @@ function parseDateOrNull(value) {
   return d;
 }
 
-/* ---------- auth با شماره موبایل (بدون JWT) ---------- */
+/* ----------احراز هویت با JWT---------- */
 /**
  * منطق:
  *   - شماره را از query.phone یا body.phone می‌خوانیم
  *   - اگر قابل نرمال‌سازی بود → req.userPhone
  *   - اگر نبود → 401 با PHONE_REQUIRED
  */
-function authUser(req, res, next) {
-  const fromQuery = normalizePhone(req.query?.phone);
-  const fromBody = normalizePhone(req.body?.phone);
-  const phone = fromQuery || fromBody;
+function getBearerToken(req) {
+  const h = String(req.headers["authorization"] || "");
+  const m = h.match(/^Bearer\s+(.+)$/i);
+  if (m?.[1]) return m[1].trim();
 
-  if (!phone) {
-    console.warn("[users.authUser] missing or invalid phone in query/body", {
-      queryPhone: req.query?.phone,
-      bodyPhone: req.body?.phone,
-    });
-    return res.status(401).json({ ok: false, error: "PHONE_REQUIRED" });
+  const x = String(req.headers["x-session-token"] || "").trim();
+  if (x) return x;
+
+  return "";
+}
+
+function authUser(req, res, next) {
+  const token = getBearerToken(req);
+  if (!token) {
+    return res.status(401).json({ ok: false, error: "TOKEN_REQUIRED" });
   }
 
-  req.userPhone = phone;
+  const secret = String(process.env.APP_JWT_SECRET || "").trim();
+  if (!secret) {
+    console.error("[authUser] APP_JWT_SECRET missing");
+    return res.status(500).json({ ok: false, error: "SERVER_MISCONFIG" });
+  }
+
+  let payload;
+  try {
+    payload = jwt.verify(token, secret);
+  } catch (e) {
+    return res.status(401).json({ ok: false, error: "TOKEN_INVALID" });
+  }
+
+  // تو auth.js توکن رو چطور می‌سازی؟ باید phone داخلش باشد.
+  const tokenPhoneRaw = payload?.phone || payload?.userPhone || null;
+
+  const tokenPhone = normalizePhone(tokenPhoneRaw);
+  if (!tokenPhone) {
+    return res.status(401).json({ ok: false, error: "TOKEN_NO_PHONE" });
+  }
+
+  // اگر client phone هم فرستاد، باید همون باشد
+  const fromQuery = normalizePhone(req.query?.phone);
+  const fromBody = normalizePhone(req.body?.phone);
+  const claimed = fromQuery || fromBody;
+
+  if (claimed && claimed !== tokenPhone) {
+    return res.status(401).json({ ok: false, error: "PHONE_MISMATCH" });
+  }
+
+  req.userPhone = tokenPhone;
   return next();
 }
 
@@ -102,6 +137,75 @@ router.post("/me/delete", authUser, async (req, res) => {
     return res.json({ ok: true, data: { deleted: true } });
   } catch (e) {
     console.error("[users.me.delete] error:", e);
+    const code = e?.code ? String(e.code) : "";
+    const errorLabel = code && code.startsWith("P") ? `PRISMA_${code}` : "SERVER_ERROR";
+    return res.status(500).json({ ok: false, error: errorLabel });
+  }
+});
+
+/* ---------- POST /api/users/me/reset ----------
+   ریست کامل داده‌های درمان/آزمون‌ها/پیشرفت‌ها
+   ✅ پروفایل و پلن کاربر باقی می‌ماند
+   POST https://qoqnoos.app/api/users/me/reset?phone=09...
+------------------------------------------------ */
+router.post("/me/reset", authUser, async (req, res) => {
+  try {
+    noStore(res);
+    const phone = req.userPhone;
+
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true, phone: true, plan: true, planExpiresAt: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+    }
+
+    const userId = user.id;
+
+    // ✅ همه چیزهایی که «شروع از صفر» باید پاک کند (طبق اسکیما)
+    await prisma.$transaction([
+      // ---- Assessments ----
+      prisma.assessmentResult.deleteMany({ where: { userId } }),
+      prisma.assessmentSession.deleteMany({ where: { userId } }),
+
+      // ---- Review session ----
+      prisma.pelekanReviewSession.deleteMany({ where: { userId } }),
+
+      // ---- Pelekan legacy root ----
+      prisma.pelekanProgress.deleteMany({ where: { userId } }),
+
+      // ---- Pelekan progress v1 ----
+      prisma.pelekanTaskProgress.deleteMany({ where: { userId } }),
+      prisma.pelekanDayProgress.deleteMany({ where: { userId } }),
+      prisma.xpLedger.deleteMany({ where: { userId } }),
+      prisma.userMedal.deleteMany({ where: { userId } }),
+      prisma.userIdentityBadge.deleteMany({ where: { userId } }),
+      prisma.noContactLog.deleteMany({ where: { userId } }),
+      prisma.pelekanStreak.deleteMany({ where: { userId } }),
+
+      // ---- Bastan action-based ----
+      prisma.bastanSubtaskProgress.deleteMany({ where: { userId } }),
+      prisma.bastanActionProgress.deleteMany({ where: { userId } }),
+      prisma.bastanState.deleteMany({ where: { userId } }),
+
+      // ---- Announcements seen (اختیاری ولی منطقی برای ریست کامل) ----
+      prisma.announcementSeen.deleteMany({ where: { userId } }),
+
+      // ---- AI memory (اگر می‌خوای ریست کامل واقعی باشد) ----
+      prisma.aiMemory.deleteMany({ where: { userId } }),
+    ]);
+
+    return res.json({
+      ok: true,
+      data: {
+        reset: true,
+        kept: { phone: user.phone, plan: user.plan, planExpiresAt: user.planExpiresAt },
+      },
+    });
+  } catch (e) {
+    console.error("[users.me.reset] error:", e);
     const code = e?.code ? String(e.code) : "";
     const errorLabel = code && code.startsWith("P") ? `PRISMA_${code}` : "SERVER_ERROR";
     return res.status(500).json({ ok: false, error: errorLabel });
