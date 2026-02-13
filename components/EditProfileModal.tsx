@@ -1,10 +1,15 @@
 // components/EditProfileModal.tsx
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   I18nManager,
   Image,
   Keyboard,
   KeyboardAvoidingView,
+  LayoutChangeEvent,
   Modal,
   Platform,
   ScrollView,
@@ -13,20 +18,19 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  LayoutChangeEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import * as ImagePicker from "expo-image-picker";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import {
+  deleteMeByPhone,
+  resetAllUserDataByPhone,
+  upsertUserByPhone,
+} from "../api/user";
 import { usePhoenix } from "../hooks/PhoenixContext";
-import { useUser } from "../hooks/useUser";
 import { useAuth } from "../hooks/useAuth";
-import JalaliSelect from "./JalaliSelect";
+import { useUser } from "../hooks/useUser";
 import { saveReminders, saveTags, saveToday } from "../lib/storage";
-import { upsertUserByPhone, deleteMeByPhone } from "../api/user";
+import JalaliSelect from "./JalaliSelect";
 
 type Props = { onClose: () => void };
 type Gender = "male" | "female" | "other";
@@ -470,9 +474,66 @@ export default function EditProfileModal({ onClose }: Props) {
     }
   };
 
-  /* ---------------- Reset "Pelekan + Points" and go onboarding ---------------- */
-  const doResetAll = async () => {
+  /* ---------------- Reset helpers (local) ---------------- */
+  const clearAllLocalExcept = async (keepKeys: string[]) => {
     try {
+      const keys = await AsyncStorage.getAllKeys();
+      const keep = new Set(keepKeys);
+      const toRemove = (keys || []).filter((k) => !keep.has(k));
+      if (toRemove.length > 0) {
+        await AsyncStorage.multiRemove(toRemove);
+      }
+    } catch {
+      // اگر getAllKeys مشکل داشت، حداقل چیزهایی که می‌دونیم باید پاک بشن رو پاک می‌کنیم
+    }
+  };
+
+  const clearAllLocal = async () => {
+    try {
+      await AsyncStorage.clear();
+    } catch {
+      try {
+        const keys = await AsyncStorage.getAllKeys();
+        if (keys?.length) await AsyncStorage.multiRemove(keys);
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  /* ---------------- Reset "Start from zero" (Server + Local) ---------------- */
+  const doResetAll = async () => {
+    if (saving) return;
+
+    try {
+      setSaving(true);
+
+      const p = String(phone || "").trim();
+      if (!p) {
+        openDialog({
+          tone: "danger",
+          title: "خطا",
+          message: "شماره موبایل پیدا نشد. دوباره وارد شو.",
+          buttons: [{ text: "باشه", kind: "primary", onPress: closeDialog }],
+        });
+        return;
+      }
+
+      // ✅ 1) ریست سمت سرور (آزمون‌ها/اینتروها/اقدامات/روزها/پیشرفت‌ها)
+      const serverRes = await resetAllUserDataByPhone(p);
+
+      if (!serverRes || typeof serverRes !== "object" || (serverRes as any).ok !== true) {
+        const err = (serverRes as any)?.error || "ریست سمت سرور ناموفق بود.";
+        openDialog({
+          tone: "danger",
+          title: "ریست نشد",
+          message: String(err),
+          buttons: [{ text: "باشه", kind: "primary", onPress: closeDialog }],
+        });
+        return;
+      }
+
+      // ✅ 2) ریست سمت اپ (استیت‌ها)
       await Promise.all([saveToday([]), saveReminders([]), saveTags([])]);
 
       setPelekanProgress(0);
@@ -481,12 +542,23 @@ export default function EditProfileModal({ onClose }: Props) {
       resetNoContact();
       if (typeof points === "number" && points !== 0) addPoints(-points);
 
-      await AsyncStorage.multiRemove([
-  "profile_completed_flag",
-  "hasOnboarded_v1",
-]);
+      // ✅ 3) پاکسازی AsyncStorage:
+      // فقط اطلاعات پروفایل + (در صورت لاگین بودن) سشن را نگه می‌داریم تا دوباره USER_NOT_FOUND/گیر نکنه
+      // پرو بودن از سرور خوانده می‌شود، ولی سشن را نگه می‌داریم تا هنوز لاگین باشی.
+      const KEEP_KEYS = [
+        "phoenix_profile",
+        "profile_completed_flag",
+        "session_v1",
+        "otp_phone_v1",
+        "otp_token_v1",
+      ];
+
+      await clearAllLocalExcept(KEEP_KEYS);
 
       showToast("ok", "ریست انجام شد. از نو شروع کن ✨");
+
+      // ✅ 4) ریفرش user تا plan/pro درست برگرده
+      await refresh?.({ force: true }).catch(() => {});
 
       onClose();
       setTimeout(() => {
@@ -496,9 +568,11 @@ export default function EditProfileModal({ onClose }: Props) {
       openDialog({
         tone: "danger",
         title: "خطا",
-        message: "در پاک‌سازی داده‌ها مشکلی پیش آمد.",
+        message: "در ریست/پاک‌سازی داده‌ها مشکلی پیش آمد.",
         buttons: [{ text: "باشه", kind: "primary", onPress: closeDialog }],
       });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -507,7 +581,7 @@ export default function EditProfileModal({ onClose }: Props) {
       tone: "danger",
       title: "شروع از صفر",
       message:
-        "فقط «تمرین‌ها، استمرار روزها و امتیازها» صفر میشه و به صفحه شروع منتقل میشی. ادامه میدی؟",
+        "همهٔ پیشرفت‌ها (آزمون‌ها، اینترو، اقدام‌ها و روزها) پاک میشه و از نو شروع می‌کنی. فقط پروفایل باقی می‌مونه. ادامه میدی؟",
       buttons: [
         { text: "انصراف", kind: "secondary", onPress: closeDialog },
         {
@@ -577,8 +651,7 @@ export default function EditProfileModal({ onClose }: Props) {
     openDialog({
       tone: "danger",
       title: "خروج از حساب",
-      message:
-        "فقط از حسابت خارج میشی. هیچ اطلاعاتی پاک نمیشه. ادامه میدی؟",
+      message: "فقط از حسابت خارج میشی. هیچ اطلاعاتی پاک نمیشه. ادامه میدی؟",
       buttons: [
         { text: "انصراف", kind: "secondary", onPress: closeDialog },
         {
@@ -594,27 +667,6 @@ export default function EditProfileModal({ onClose }: Props) {
   };
 
   /* ---------------- Delete account (DB) with double confirmation ---------------- */
-
-  const LOCAL_KEYS_TO_CLEAR = [
-    "phoenix_profile",
-    "profile_completed_flag",
-    "hasOnboarded_v1",
-    "otp_phone_v1",
-    "session_v1",
-    "tags_v1",
-    "reminders_v1",
-    "today_v1",
-  ] as const;
-
-  const clearLocalUserData = async () => {
-    try {
-      await AsyncStorage.multiRemove([...LOCAL_KEYS_TO_CLEAR]);
-    } catch {
-      await Promise.all(
-        LOCAL_KEYS_TO_CLEAR.map((k) => AsyncStorage.removeItem(k).catch(() => {}))
-      );
-    }
-  };
 
   const deleteAccount = async () => {
     if (saving) return;
@@ -651,7 +703,10 @@ export default function EditProfileModal({ onClose }: Props) {
         showToast("danger", "حساب روی سرور پیدا نشد (یا قبلاً حذف شده).");
       }
 
-      await clearLocalUserData();
+      // ✅ پاکسازی کامل AsyncStorage (همه چیز)
+      await clearAllLocal();
+
+      // ✅ auth/user state هم پاک شود
       await signOut().catch(() => {});
       await refresh?.({ force: true }).catch(() => {});
 
@@ -727,11 +782,15 @@ export default function EditProfileModal({ onClose }: Props) {
         <View style={styles.dialogBackdrop}>
           <View style={[styles.dialogCard, { borderColor: P.line }]}>
             <View style={styles.dialogHeader}>
-              <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
+              <View
+                style={{
+                  flexDirection: "row-reverse",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
                 <Ionicons name={icon as any} size={22} color={toneC} />
-                <Text style={styles.dialogTitle}>
-                  {dialog.title || "پیام"}
-                </Text>
+                <Text style={styles.dialogTitle}>{dialog.title || "پیام"}</Text>
               </View>
 
               <TouchableOpacity onPress={closeDialog} hitSlop={12}>
@@ -815,7 +874,11 @@ export default function EditProfileModal({ onClose }: Props) {
         ? "rgba(248,113,113,.45)"
         : "rgba(212,175,55,.35)";
     const icon =
-      t === "ok" ? "checkmark-circle-outline" : t === "danger" ? "warning-outline" : "information-circle-outline";
+      t === "ok"
+        ? "checkmark-circle-outline"
+        : t === "danger"
+        ? "warning-outline"
+        : "information-circle-outline";
     const iconC = t === "ok" ? P.ok : t === "danger" ? P.danger : P.gold;
 
     return (
@@ -823,10 +886,22 @@ export default function EditProfileModal({ onClose }: Props) {
         pointerEvents="none"
         style={[
           styles.toastWrap,
-          { top: 12, left: 16, right: 16, borderColor: border, backgroundColor: bg },
+          {
+            top: 12,
+            left: 16,
+            right: 16,
+            borderColor: border,
+            backgroundColor: bg,
+          },
         ]}
       >
-        <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
+        <View
+          style={{
+            flexDirection: "row-reverse",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
           <Ionicons name={icon as any} size={18} color={iconC} />
           <Text style={styles.toastText}>{toast.text}</Text>
         </View>
@@ -885,7 +960,9 @@ export default function EditProfileModal({ onClose }: Props) {
 
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
-            keyboardVerticalOffset={(Platform.select({ ios: 8, android: 0 }) as number) || 0}
+            keyboardVerticalOffset={
+              (Platform.select({ ios: 8, android: 0 }) as number) || 0
+            }
             style={{ maxHeight: "88%" }}
           >
             <ScrollView
@@ -899,7 +976,11 @@ export default function EditProfileModal({ onClose }: Props) {
               <View style={styles.headerRow}>
                 <View style={{ width: 32 }} />
                 <View style={styles.headerCenter}>
-                  <Ionicons name="person-circle-outline" size={22} color={P.gold} />
+                  <Ionicons
+                    name="person-circle-outline"
+                    size={22}
+                    color={P.gold}
+                  />
                   <Text style={styles.headerTitle}>ویرایش پروفایل</Text>
                 </View>
                 <TouchableOpacity onPress={onClose} hitSlop={10}>
@@ -912,7 +993,10 @@ export default function EditProfileModal({ onClose }: Props) {
               </View>
 
               {/* Name */}
-              <View style={{ gap: 10, marginTop: 16 }} onLayout={onLayoutCapture("name")}>
+              <View
+                style={{ gap: 10, marginTop: 16 }}
+                onLayout={onLayoutCapture("name")}
+              >
                 <View style={styles.labelRow}>
                   <Text style={styles.labelText}>نام</Text>
                   <Ionicons name="person-outline" size={16} color={P.muted} />
@@ -938,12 +1022,26 @@ export default function EditProfileModal({ onClose }: Props) {
                 </View>
 
                 <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
-                  <TouchableOpacity onPress={pickFromGallery} style={[styles.secondaryBtn, { flexDirection: "row", gap: 6 }]} activeOpacity={0.9}>
+                  <TouchableOpacity
+                    onPress={pickFromGallery}
+                    style={[
+                      styles.secondaryBtn,
+                      { flexDirection: "row", gap: 6 },
+                    ]}
+                    activeOpacity={0.9}
+                  >
                     <Ionicons name="images-outline" size={18} color={P.text} />
                     <Text style={styles.btnText}>از گالری</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity onPress={pickFromCamera} style={[styles.secondaryBtn, { flexDirection: "row", gap: 6 }]} activeOpacity={0.9}>
+                  <TouchableOpacity
+                    onPress={pickFromCamera}
+                    style={[
+                      styles.secondaryBtn,
+                      { flexDirection: "row", gap: 6 },
+                    ]}
+                    activeOpacity={0.9}
+                  >
                     <Ionicons name="camera-outline" size={18} color={P.text} />
                     <Text style={styles.btnText}>دوربین</Text>
                   </TouchableOpacity>
@@ -957,11 +1055,22 @@ export default function EditProfileModal({ onClose }: Props) {
                   <Ionicons name="sparkles-outline" size={16} color={P.muted} />
                 </View>
 
-                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 12, marginTop: 10 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    marginBottom: 12,
+                    marginTop: 10,
+                  }}
+                >
                   {PRESET_AVATARS.slice(0, 4).map((av) => {
                     const selected = (photo || "avatar:phoenix") === av.id;
                     return (
-                      <TouchableOpacity key={av.id} onPress={() => setPhoto(av.id)} activeOpacity={0.85}>
+                      <TouchableOpacity
+                        key={av.id}
+                        onPress={() => setPhoto(av.id)}
+                        activeOpacity={0.85}
+                      >
                         <View
                           style={{
                             width: 64,
@@ -973,18 +1082,31 @@ export default function EditProfileModal({ onClose }: Props) {
                             backgroundColor: P.cardBg2,
                           }}
                         >
-                          <Image source={av.src} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+                          <Image
+                            source={av.src}
+                            style={{ width: "100%", height: "100%" }}
+                            resizeMode="cover"
+                          />
                         </View>
                       </TouchableOpacity>
                     );
                   })}
                 </View>
 
-                <View style={{ flexDirection: "row", justifyContent: "space-evenly" }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-evenly",
+                  }}
+                >
                   {PRESET_AVATARS.slice(4).map((av) => {
                     const selected = (photo || "avatar:phoenix") === av.id;
                     return (
-                      <TouchableOpacity key={av.id} onPress={() => setPhoto(av.id)} activeOpacity={0.85}>
+                      <TouchableOpacity
+                        key={av.id}
+                        onPress={() => setPhoto(av.id)}
+                        activeOpacity={0.85}
+                      >
                         <View
                           style={{
                             width: 64,
@@ -996,7 +1118,11 @@ export default function EditProfileModal({ onClose }: Props) {
                             backgroundColor: P.cardBg2,
                           }}
                         >
-                          <Image source={av.src} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+                          <Image
+                            source={av.src}
+                            style={{ width: "100%", height: "100%" }}
+                            resizeMode="cover"
+                          />
                         </View>
                       </TouchableOpacity>
                     );
@@ -1008,7 +1134,11 @@ export default function EditProfileModal({ onClose }: Props) {
               <View style={{ marginTop: 18 }}>
                 <View style={styles.labelRow}>
                   <Text style={styles.labelText}>جنسیت</Text>
-                  <Ionicons name="male-female-outline" size={16} color={P.muted} />
+                  <Ionicons
+                    name="male-female-outline"
+                    size={16}
+                    color={P.muted}
+                  />
                 </View>
 
                 <View style={{ flexDirection: "row-reverse", gap: 10, marginTop: 10 }}>
@@ -1036,8 +1166,14 @@ export default function EditProfileModal({ onClose }: Props) {
                           gap: 6,
                         }}
                       >
-                        <Ionicons name={g.icon as any} size={18} color={selected ? P.gold : P.muted} />
-                        <Text style={{ color: P.text, fontWeight: "800" }}>{g.label}</Text>
+                        <Ionicons
+                          name={g.icon as any}
+                          size={18}
+                          color={selected ? P.gold : P.muted}
+                        />
+                        <Text style={{ color: P.text, fontWeight: "800" }}>
+                          {g.label}
+                        </Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -1048,7 +1184,11 @@ export default function EditProfileModal({ onClose }: Props) {
               <View style={{ marginTop: 18 }} onLayout={onLayoutCapture("birth")}>
                 <View style={styles.labelRow}>
                   <Text style={styles.labelText}>تاریخ تولد (اختیاری)</Text>
-                  <Ionicons name="calendar-outline" size={16} color={P.muted} />
+                  <Ionicons
+                    name="calendar-outline"
+                    size={16}
+                    color={P.muted}
+                  />
                 </View>
 
                 <View style={{ marginTop: 10 }}>
@@ -1076,7 +1216,14 @@ export default function EditProfileModal({ onClose }: Props) {
                 </View>
 
                 {!!birthDate && (
-                  <Text style={{ color: P.muted2, fontSize: 12, marginTop: 8, textAlign: "right" }}>
+                  <Text
+                    style={{
+                      color: P.muted2,
+                      fontSize: 12,
+                      marginTop: 8,
+                      textAlign: "right",
+                    }}
+                  >
                     تاریخ انتخابی (میلادی):{" "}
                     <Text style={{ color: P.text, fontWeight: "800" }}>
                       {normalizeIsoDateOnly(birthDate)}
@@ -1108,7 +1255,14 @@ export default function EditProfileModal({ onClose }: Props) {
                   </Text>
                 </TouchableOpacity>
 
-                <Text style={{ color: P.muted2, fontSize: 11, textAlign: "center", marginTop: 6 }}>
+                <Text
+                  style={{
+                    color: P.muted2,
+                    fontSize: 11,
+                    textAlign: "center",
+                    marginTop: 6,
+                  }}
+                >
                   با این کار تمرین‌های پلکان و امتیازها صفر میشه و به صفحه شروع منتقل میشی.
                 </Text>
               </View>
@@ -1136,7 +1290,14 @@ export default function EditProfileModal({ onClose }: Props) {
                   </Text>
                 </TouchableOpacity>
 
-                <Text style={{ color: P.muted2, fontSize: 11, textAlign: "center", marginTop: 6 }}>
+                <Text
+                  style={{
+                    color: P.muted2,
+                    fontSize: 11,
+                    textAlign: "center",
+                    marginTop: 6,
+                  }}
+                >
                   فقط از حساب خارج میشی. هیچ اطلاعاتی پاک نمیشه و دوباره با شماره وارد میشی.
                 </Text>
               </View>
@@ -1158,13 +1319,24 @@ export default function EditProfileModal({ onClose }: Props) {
                     gap: 8,
                   }}
                 >
-                  <Ionicons name="trash-bin-outline" size={18} color={P.danger} />
+                  <Ionicons
+                    name="trash-bin-outline"
+                    size={18}
+                    color={P.danger}
+                  />
                   <Text style={{ color: P.danger, fontWeight: "900" }}>
                     حذف حساب کاربری
                   </Text>
                 </TouchableOpacity>
 
-                <Text style={{ color: P.muted2, fontSize: 11, textAlign: "center", marginTop: 6 }}>
+                <Text
+                  style={{
+                    color: P.muted2,
+                    fontSize: 11,
+                    textAlign: "center",
+                    marginTop: 6,
+                  }}
+                >
                   هشدار: حذف حساب غیرقابل بازگشته و اگر کاربر پرو باشی، اشتراکت هم حذف میشه.
                 </Text>
               </View>
@@ -1176,7 +1348,9 @@ export default function EditProfileModal({ onClose }: Props) {
                   style={[
                     styles.primaryBtn,
                     {
-                      backgroundColor: saving ? "rgba(255,255,255,.06)" : P.goldSoft,
+                      backgroundColor: saving
+                        ? "rgba(255,255,255,.06)"
+                        : P.goldSoft,
                       borderColor: saving ? P.line : P.goldBorder,
                     },
                   ]}
@@ -1194,9 +1368,7 @@ export default function EditProfileModal({ onClose }: Props) {
                   disabled={saving}
                   activeOpacity={0.9}
                 >
-                  <Text style={{ color: P.text, fontWeight: "800" }}>
-                    انصراف
-                  </Text>
+                  <Text style={{ color: P.text, fontWeight: "800" }}>انصراف</Text>
                 </TouchableOpacity>
               </View>
 

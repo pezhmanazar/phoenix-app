@@ -369,7 +369,7 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
     const iconCol = done || heard ? palette.node.doneIcon : active ? palette.node.availableIcon : palette.node.lockedIcon;
     const labelCol = done || heard ? palette.node.doneLabel : active ? palette.node.availableLabel : palette.node.lockedLabel;
 
-    const strokeCol = done ? palette.pathDone : isGosastanStage && heard ? palette.pathDone : palette.pathIdle;
+    const strokeCol = done || heard ? palette.pathDone : palette.pathIdle;
 
     const bottomY = CELL_H;
     const topY = 0;

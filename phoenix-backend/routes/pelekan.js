@@ -1,5 +1,6 @@
 // routes/pelekan.js
 import express from "express";
+import jwt from "jsonwebtoken";
 import engineModule from "../services/pelekan/engine.cjs";
 import prisma from "../utils/prisma.js";
 
@@ -17,16 +18,54 @@ function normalizePhone(input) {
   return null;
 }
 
+function getBearerToken(req) {
+  const h = String(req.headers["authorization"] || "");
+  const m = h.match(/^Bearer\s+(.+)$/i);
+  if (m?.[1]) return m[1].trim();
+
+  const x = String(req.headers["x-session-token"] || "").trim();
+  if (x) return x;
+
+  return "";
+}
+
 function authUser(req, res, next) {
+  const token = getBearerToken(req);
+  if (!token) {
+    return res.status(401).json({ ok: false, error: "TOKEN_REQUIRED" });
+  }
+
+  const secret = String(process.env.APP_JWT_SECRET || "").trim();
+  if (!secret) {
+    console.error("[authUser] APP_JWT_SECRET missing");
+    return res.status(500).json({ ok: false, error: "SERVER_MISCONFIG" });
+  }
+
+  let payload;
+  try {
+    payload = jwt.verify(token, secret);
+  } catch (e) {
+    return res.status(401).json({ ok: false, error: "TOKEN_INVALID" });
+  }
+
+  // تو auth.js توکن رو چطور می‌سازی؟ باید phone داخلش باشد.
+  const tokenPhoneRaw = payload?.phone || payload?.userPhone || null;
+
+  const tokenPhone = normalizePhone(tokenPhoneRaw);
+  if (!tokenPhone) {
+    return res.status(401).json({ ok: false, error: "TOKEN_NO_PHONE" });
+  }
+
+  // اگر client phone هم فرستاد، باید همون باشد
   const fromQuery = normalizePhone(req.query?.phone);
   const fromBody = normalizePhone(req.body?.phone);
-  const phone = fromQuery || fromBody;
+  const claimed = fromQuery || fromBody;
 
-  // NOTE: for baseline endpoints behind WCDN, 4xx becomes HTML.
-  // But authUser is shared across routes; keep 401 here.
-  if (!phone) return res.status(401).json({ ok: false, error: "PHONE_REQUIRED" });
+  if (claimed && claimed !== tokenPhone) {
+    return res.status(401).json({ ok: false, error: "PHONE_MISMATCH" });
+  }
 
-  req.userPhone = phone;
+  req.userPhone = tokenPhone;
   return next();
 }
 
