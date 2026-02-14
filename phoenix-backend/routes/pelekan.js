@@ -1592,12 +1592,14 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
 
     // --- gateChoice extractor ---
     const rawGate =
-      payload?.answer?.gateChoice ??
-      payload?.gateChoice ??
-      payload?.answer?.choice ??
-      payload?.choice ??
-      null;
-
+    payload?.answer?.gateChoice ??
+    payload?.gateChoice ??
+    payload?.answer?.choice ??
+    payload?.choice ??
+    payload?.answer?.summary?.lastSafetyCheckResult ?? 
+    payload?.answer?.step2?.eventType ??                 
+    null;
+    
     // ✅ اگر این زیر اقدام CC_3 است، قبل از هر کاری validate کن
     if (subtask.key === "CC_3_24h_safety_check") {
       if (!rawGate) return wcdnOkError(res, "SAFETY_RESULT_REQUIRED");
