@@ -207,12 +207,26 @@ export default function PelekanTab() {
           headers: { "Cache-Control": "no-store" },
         });
 
+        console.log("🧾 [PelekanTab] res", {
+        status: res.status,
+        ok: res.ok,
+        contentType: String(res.headers.get("content-type") || ""),
+        });
+
         let json: any = null;
         try {
           json = await res.json();
         } catch {
           json = null;
         }
+
+        console.log("🧾 [PelekanTab] json summary", {
+        ok: json?.ok ?? null,
+        tabState: json?.data?.tabState ?? null,
+        activeStage: json?.data?.treatment?.activeStage ?? null,
+        activeDay: json?.data?.treatment?.activeDay ?? null,
+        progressActiveDayId: json?.data?.progress?.activeDayId ?? null,
+      });
 
         if (!res.ok || !json?.ok) {
           console.log("❌ [PelekanTab] state not ok", {
