@@ -581,7 +581,18 @@ export default function EditProfileModal({ onClose }: Props) {
       tone: "danger",
       title: "شروع از صفر",
       message:
-        "همهٔ پیشرفت‌ها (آزمون‌ها، اینترو، اقدام‌ها و روزها) پاک میشه و از نو شروع می‌کنی. فقط پروفایل باقی می‌مونه. ادامه میدی؟",
+  "با انجام این کار، تمام پیشرفت‌های درمانیت حذف میشه.\n\n" +
+  "مواردی که پاک میشن:\n" +
+  "• آزمون‌ها و نتایج اون‌ها\n" +
+  "• امتیازها و مدال‌ها\n" +
+  "• اقدام‌ها و روزهای پلکان\n" +
+  "• عکس پروفایل فعلی\n\n" +
+  "مواردی که باقی می‌مونند:\n" +
+  "• اطلاعات پایه پروفایل\n" +
+  "• اشتراک فعال (در صورت داشتن)\n" +
+  "• پیام‌های بخش پشتیبانی\n\n" +
+  "پس از تأیید، مسیر درمان از ابتدا آغاز میشه.\n\n" +
+  "ادامه میدی؟",
       buttons: [
         { text: "انصراف", kind: "secondary", onPress: closeDialog },
         {
@@ -702,20 +713,30 @@ export default function EditProfileModal({ onClose }: Props) {
       if (deleted === false) {
         showToast("danger", "حساب روی سرور پیدا نشد (یا قبلاً حذف شده).");
       }
+// داخل deleteAccount بعد از ok شدن res:
 
-      // ✅ پاکسازی کامل AsyncStorage (همه چیز)
-      await clearAllLocal();
+// ✅ 1) اول سشن/توکن امن پاک شود (SecureStore داخل signOut)
+await signOut().catch(() => {});
 
-      // ✅ auth/user state هم پاک شود
-      await signOut().catch(() => {});
-      await refresh?.({ force: true }).catch(() => {});
+// ✅ 2) بعد AsyncStorage کامل پاک شود
+await clearAllLocal();
 
-      showToast("ok", "حساب حذف شد.");
-      onClose();
+// ✅ 3) استیت‌ها هم صفر شوند (اختیاری ولی تمیز)
+setPelekanProgress(0);
+setDayProgress(0);
+resetStreak();
+resetNoContact();
+if (typeof points === "number" && points !== 0) addPoints(-points);
 
-      setTimeout(() => {
-        router.replace("/onboarding");
-      }, 200);
+// ✅ 4) refresh لازم نیست (چون لاگ‌اوت کردی). اگر می‌خوای بزن ولی اهمیتی نداره.
+await refresh?.({ force: true }).catch(() => {});
+
+showToast("ok", "حساب حذف شد.");
+onClose();
+
+setTimeout(() => {
+  router.replace("/(auth)/login"); // ✅ نصب تازه = ورود
+}, 200);
     } catch (e: any) {
       openDialog({
         tone: "danger",
@@ -738,7 +759,12 @@ export default function EditProfileModal({ onClose }: Props) {
     openDialog({
       tone: "danger",
       title: "حذف حساب کاربری",
-      message: "این کار غیرقابل بازگشته و همهٔ اطلاعاتت پاک میشه. ادامه میدی؟",
+      message:
+  "این کار غیرقابل بازگشته و با حذف حساب، همهٔ اطلاعات و پیشرفت‌ها از روی این گوشی پاک میشه و حسابت در اپ حذف میشه.\n\n" +
+  "توجه:\n" +
+  "پیام‌های بخش پشتیبانی پاک نمیشن و ممکنه بعد از ورود دوباره هم قابل مشاهده باشند.\n" +
+  "این پیام‌ها فقط برای پیگیری پشتیبانی و به شکل کاملاً ناشناس و محرمانه نگه‌داری میشن.\n\n" +
+  "ادامه میدی؟",
       buttons: [
         { text: "انصراف", kind: "secondary", onPress: closeDialog },
         {
@@ -1183,7 +1209,7 @@ export default function EditProfileModal({ onClose }: Props) {
               {/* Birthdate */}
               <View style={{ marginTop: 18 }} onLayout={onLayoutCapture("birth")}>
                 <View style={styles.labelRow}>
-                  <Text style={styles.labelText}>تاریخ تولد (اختیاری)</Text>
+                  <Text style={styles.labelText}>تاریخ تولد</Text>
                   <Ionicons
                     name="calendar-outline"
                     size={16}

@@ -1482,6 +1482,10 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
   try {
     noStore(res);
 
+    console.log("[CC3 DEBUG] userPhone=", req.userPhone);
+    console.log("[CC3 DEBUG] content-type=", req.headers["content-type"]);
+    console.log("[CC3 DEBUG] body=", req.body);
+
     const phone = req.userPhone;
     const { subtaskKey, payload } = req.body || {};
 
