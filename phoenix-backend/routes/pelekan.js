@@ -697,6 +697,7 @@ async function syncBastanActionsToDays(prisma, userId, stages, now = new Date())
 }
 
 /* ---------- GET /api/pelekan/state ---------- */
+
 router.get("/state", authUser, async (req, res) => {
   try {
     noStore(res);
@@ -729,10 +730,12 @@ router.get("/state", authUser, async (req, res) => {
     await pelekanEngine.refresh(prisma, user.id);
 
     // ✅ ADDED: bastan intro state (source of truth: PelekanProgress)
-    const pelekanProg = progressRow || (await prisma.pelekanProgress.findUnique({
-      where: { userId: user.id },
-      select: { bastanIntroAudioCompletedAt: true, bastanUnlockedAt: true },
-    }));
+    const pelekanProg =
+      progressRow ||
+      (await prisma.pelekanProgress.findUnique({
+        where: { userId: user.id },
+        select: { bastanIntroAudioCompletedAt: true, bastanUnlockedAt: true },
+      }));
 
     // backward-compatible fallback (اگر هنوز ستون قدیمی روی bastanState داشتی)
     let bastanState = null;
@@ -746,8 +749,7 @@ router.get("/state", authUser, async (req, res) => {
     }
 
     const introDone = !!(
-      pelekanProg?.bastanIntroAudioCompletedAt ||
-      bastanState?.introAudioCompletedAt
+      pelekanProg?.bastanIntroAudioCompletedAt || bastanState?.introAudioCompletedAt
     );
 
     // 2) reviewSession AFTER user
@@ -785,25 +787,22 @@ router.get("/state", authUser, async (req, res) => {
     const isProLike = planStatusFinal === "pro" || planStatusFinal === "expiring";
 
     // ✅ IMPORTANT: Unlock treatment only AFTER intro is done + paywall is effectively passed
-    // - For Pro-like users: paywall passed by definition
-    // - For free/expired: you can keep your computePaywall flow (not changing it here),
-    //   but bastanUnlockedAt should only set when you actually let user proceed.
     const canUnlockTreatmentNow = introDone && isProLike;
 
     // ✅ Unlock treatment as soon as intro is done + user is Pro-like
-// ✅ (Do NOT depend on enterTreatment=1, because skip_review users may never call it.)
-if (canUnlockTreatmentNow && !pelekanProg?.bastanUnlockedAt) {
-  await prisma.pelekanProgress.update({
-    where: { userId: user.id },
-    data: { bastanUnlockedAt: new Date() },
-  });
+    // ✅ (Do NOT depend on enterTreatment=1, because skip_review users may never call it.)
+    if (canUnlockTreatmentNow && !pelekanProg?.bastanUnlockedAt) {
+      await prisma.pelekanProgress.update({
+        where: { userId: user.id },
+        data: { bastanUnlockedAt: new Date() },
+      });
 
-  // refresh local copy
-  progressRow = await prisma.pelekanProgress.findUnique({
-    where: { userId: user.id },
-    select: { bastanUnlockedAt: true, bastanIntroAudioCompletedAt: true },
-  });
-}
+      // refresh local copy
+      progressRow = await prisma.pelekanProgress.findUnique({
+        where: { userId: user.id },
+        select: { bastanUnlockedAt: true, bastanIntroAudioCompletedAt: true },
+      });
+    }
 
     // baseline session (hb_baseline)
     const baselineSession = await prisma.assessmentSession.findUnique({
@@ -847,12 +846,7 @@ if (canUnlockTreatmentNow && !pelekanProg?.bastanUnlockedAt) {
       where: { userId: user.id },
       select: {
         medal: {
-          select: {
-            code: true,
-            titleFa: true,
-            description: true,
-            iconKey: true,
-          },
+          select: { code: true, titleFa: true, description: true, iconKey: true },
         },
       },
     });
@@ -861,12 +855,7 @@ if (canUnlockTreatmentNow && !pelekanProg?.bastanUnlockedAt) {
       where: { userId: user.id },
       select: {
         badge: {
-          select: {
-            code: true,
-            titleFa: true,
-            description: true,
-            iconKey: true,
-          },
+          select: { code: true, titleFa: true, description: true, iconKey: true },
         },
       },
     });
@@ -883,6 +872,7 @@ if (canUnlockTreatmentNow && !pelekanProg?.bastanUnlockedAt) {
       (!!reviewSession?.test2CompletedAt ||
         !!reviewSession?.test2SkippedAt ||
         !!reviewSession?.completedAt);
+
     const reviewInProgress = chosenPath === "review" && !reviewFinished;
 
     // no content
@@ -892,7 +882,10 @@ if (canUnlockTreatmentNow && !pelekanProg?.bastanUnlockedAt) {
       let tabState = "idle";
       if (isBaselineInProgress) tabState = "baseline_assessment";
 
-      if (!isBaselineInProgress && reviewInProgress) {
+      // ✅ IMPORTANT: treating باید از review_result بالاتر باشد
+      if (!isBaselineInProgress && (enterTreatment || chosenPath === "skip_review")) {
+        tabState = "treating";
+      } else if (!isBaselineInProgress && reviewInProgress) {
         tabState = "review";
       } else if (!isBaselineInProgress && reviewFinished && !enterTreatment) {
         tabState = "review_result";
@@ -900,12 +893,7 @@ if (canUnlockTreatmentNow && !pelekanProg?.bastanUnlockedAt) {
         tabState = "choose_path";
       }
 
-      if (enterTreatment) tabState = "treating";
-
-      const treatmentAccess = computeTreatmentAccess(
-        planStatusFinal,
-        hasAnyProgressFinal
-      );
+      const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasAnyProgressFinal);
 
       const suppressPaywall = tabState !== "treating";
       const paywall = suppressPaywall
@@ -950,8 +938,9 @@ if (canUnlockTreatmentNow && !pelekanProg?.bastanUnlockedAt) {
     }
 
     // ✅ ADDED: if treatment is unlocked (introDone + paywall passed), sync Actions -> Days
-    // This is the missing link that prevented Day2 from activating.
-    const unlockedAt = progressRow?.bastanUnlockedAt || pelekanProg?.bastanUnlockedAt || null;
+    const unlockedAt =
+      progressRow?.bastanUnlockedAt || pelekanProg?.bastanUnlockedAt || null;
+
     if (introDone && unlockedAt) {
       await syncBastanActionsToDays(prisma, user.id, stages, new Date());
     }
@@ -1016,14 +1005,16 @@ if (canUnlockTreatmentNow && !pelekanProg?.bastanUnlockedAt) {
     else if (baselineNeedsResultScreen) tabState = "baseline_result";
     else if (isBaselineCompleted && !reviewSession?.chosenPath) tabState = "choose_path";
     else if (reviewInProgress) tabState = "review";
-    else if (reviewFinished && !enterTreatment) tabState = "review_result";
     else if (enterTreatment || isTreatmentEntry) tabState = "treating";
+    else if (reviewFinished && !enterTreatment) tabState = "review_result";
     else tabState = "idle";
 
-    const treatmentAccess = computeTreatmentAccess(
-      planStatusFinal,
-      hasStartedTreatment
-    );
+    // ✅ SELF-HEAL: اگر درمان عملاً شروع شده/ورود درمانی داریم، اجازه نده روی review_result بماند
+    if ((hasStartedTreatment || isTreatmentEntry) && tabState === "review_result") {
+      tabState = "treating";
+    }
+
+    const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasStartedTreatment);
 
     // ✅ paywall فقط وقتی treating هستیم و introDone شده مطرح است
     const suppressPaywall =
@@ -1037,14 +1028,11 @@ if (canUnlockTreatmentNow && !pelekanProg?.bastanUnlockedAt) {
     if (tabState === "treating") {
       const allDays = stages.flatMap((s) => s.days);
 
-      const activeDay = activeDayId
-        ? allDays.find((d) => d.id === activeDayId)
-        : null;
+      const activeDay = activeDayId ? allDays.find((d) => d.id === activeDayId) : null;
 
-      const activeStage =
-        activeDay
-          ? stages.find((s) => s.id === activeDay.stageId)
-          : stages.find((s) => s.code === "bastan") || null;
+      const activeStage = activeDay
+        ? stages.find((s) => s.id === activeDay.stageId)
+        : stages.find((s) => s.code === "bastan") || null;
 
       treatment = {
         activeStage: activeStage?.code || null,
@@ -1060,8 +1048,7 @@ if (canUnlockTreatmentNow && !pelekanProg?.bastanUnlockedAt) {
               status: "active",
               minPercent: 70,
               percentDone:
-                dayProgress.find((dp) => dp.dayId === activeDayId)
-                  ?.completionPercent ?? 0,
+                dayProgress.find((dp) => dp.dayId === activeDayId)?.completionPercent ?? 0,
               timing: { unlockedNextAt: null, minDoneAt: null, fullDoneAt: null },
             }
           : null,
@@ -1086,9 +1073,7 @@ if (canUnlockTreatmentNow && !pelekanProg?.bastanUnlockedAt) {
           paywall,
           flags: { suppressPaywall, isBaselineInProgress, isBaselineCompleted },
         },
-        baseline: baselineSession
-          ? { session: baselineSession, content: toBaselineUiContent() }
-          : null,
+        baseline: baselineSession ? { session: baselineSession, content: toBaselineUiContent() } : null,
         path: null,
         review,
         bastanIntro: {
