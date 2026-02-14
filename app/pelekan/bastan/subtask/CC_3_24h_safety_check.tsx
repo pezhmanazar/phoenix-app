@@ -608,51 +608,56 @@ export default function CC324hSafetyCheckScreen() {
   ]);
 
   const doFinalize = useCallback(async () => {
-    if (!canFinalize) return;
-    if (savingRef.current) return;
-    savingRef.current = true;
+  if (!canFinalize) return;
+  if (savingRef.current) return;
+  savingRef.current = true;
 
-    try {
-      setSaving(true);
+  try {
+    setSaving(true);
 
-      const r = await completeOnServer();
-      if (r === "fail") return;
+    const r = await completeOnServer();
+    if (r === "fail") {
+      // مهم: اگر fail شد، قفل نکن
+      return;
+    }
 
-      await persistFinalLocal();
+    await persistFinalLocal();
 
-      if (r === "already") {
-        openModal({
-          kind: "info",
-          title: "قبلاً ثبت شده",
-          message: "این ریز اقدام قبلاً ثبت شده و نیازی به ثبت دوباره نیست.",
-          primaryText: "خروج",
-          onPrimary: () => {
-            closeModal();
-            router.back();
-          },
-        });
-        return;
-      }
-
+    if (r === "already") {
       openModal({
-        kind: "success",
-        title: "ثبت شد",
-        message: computed.isSafe
-          ? "بررسی ایمنی ثبت شد."
-          : "ثبت شد. فعلاً «ایمن نیستی» و این یعنی باید ۲۴ ساعت محافظت رو جدی‌تر اجرا کنی.",
+        kind: "info",
+        title: "قبلاً ثبت شده",
+        message: "این ریز اقدام قبلاً ثبت شده و نیازی به ثبت دوباره نیست.",
         primaryText: "خروج",
         onPrimary: () => {
           closeModal();
           router.back();
         },
       });
-    } finally {
-      setSaving(false);
-      savingRef.current = false;
-      setIsReview(true);
-      setStep(3);
+      return;
     }
-  }, [canFinalize, closeModal, completeOnServer, computed.isSafe, openModal, persistFinalLocal, router]);
+
+    // فقط بعد از موفقیت، برو حالت مرور
+    setIsReview(true);
+    setStep(3);
+
+    openModal({
+      kind: "success",
+      title: "ثبت شد",
+      message: computed.isSafe
+        ? "بررسی ایمنی ثبت شد."
+        : "ثبت شد. فعلاً «ایمن نیستی» و این یعنی باید ۲۴ ساعت محافظت رو جدی‌تر اجرا کنی.",
+      primaryText: "خروج",
+      onPrimary: () => {
+        closeModal();
+        router.back();
+      },
+    });
+  } finally {
+    setSaving(false);
+    savingRef.current = false;
+  }
+}, [canFinalize, closeModal, completeOnServer, computed.isSafe, openModal, persistFinalLocal, router]);
 
   const onFinishPress = useCallback(() => {
     if (isReview) {

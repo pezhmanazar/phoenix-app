@@ -27,6 +27,12 @@ type Slide = {
 export default function Onboarding() {
   const slides = useMemo<Slide[]>(
     () => [
+     {
+       t: "به ققنوس خوش اومدی",
+       d: "ققنوس جاییه برای وقتی که فکر می‌کنی همه چی تموم شده و دیگه حالت خوب نمیشه اما قراره از همون خاکستر، قوی‌تر از قبل بلند شی. اینجا قراره  حالت خوب بشه و دوباره خودت رو بسازی، قدم‌به‌قدم و آگاهانه.",
+       icon: "flame",
+       accent: "gold",
+     },
       {
         t: "پلکان درمان: مسیر روزانه برای عبور از جدایی  و شكست عشقی",
         d: "هر روز یک قدم کوچیک و مشخص اون هم بدون سردرگمی و بدون ول کردن وسط راه.",
@@ -35,7 +41,7 @@ export default function Onboarding() {
       },
       {
         t: "پناهگاه برای زمان‌هایی که یهویی حالت بد میشه",
-        d: "اگه یهو «اکست رو دیدی» یا موج اضطراب و ناراحتی سراغت اومد و هر مشکل دیگه‌ای، زود میای پناهگاه؛ چون پناهگاه برای هر مشکل ناگهانی تو راهکار سریع و ساده داره تا در عرض چند دقیقه دردت آروم بشه و ذهنت از هم نپاشه.",
+        d: "اگه یهو «اکست رو دیدی» یا موج اضطراب و ناراحتی سراغت اومد و یا هر مشکل دیگه‌ای، زود میای پناهگاه؛ چون پناهگاه برای هر مشکل ناگهانی تو راهکار سریع و ساده داره تا در عرض چند دقیقه دردت آروم بشه و ذهنت از هم نپاشه.",
         icon: "shield-checkmark-outline",
         accent: "orange",
       },
@@ -144,14 +150,24 @@ export default function Onboarding() {
             style={[styles.cta, accentStyle(current.accent).cta]}
           >
             <Text style={styles.ctaText}>
-              {index === slides.length - 1 ? "شروع" : "بعدی"}
-            </Text>
+  {index === 0
+    ? "دیدن امکانات ققنوس"
+    : index === slides.length - 1
+    ? "شروع"
+    : "بعدی"}
+</Text>
             <Ionicons
-              name={index === slides.length - 1 ? "sparkles-outline" : "arrow-forward-outline"}
-              size={18}
-              color="#e8eef7"
-              style={{ marginLeft: 8 }}
-            />
+  name={
+    index === slides.length - 1
+      ? "sparkles-outline"
+      : index === 0
+      ? "eye-outline"
+      : "arrow-forward-outline"
+  }
+  size={18}
+  color="#e8eef7"
+  style={{ marginLeft: 8 }}
+/>
           </Pressable>
 
           <Text style={styles.hint}>
