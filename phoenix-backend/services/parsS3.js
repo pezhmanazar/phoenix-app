@@ -1,7 +1,8 @@
-// services/parsS3.js
-const { S3Client } = require("@aws-sdk/client-s3");
-const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
-const { GetObjectCommand, PutObjectCommand } = require("@aws-sdk/client-s3");
+// services/parsS3.js  (ESM)
+// پارس‌پک S3: تولید لینک‌های امضاشده برای استریم (GET) و آپلود (PUT)
+
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 function must(name) {
   const v = String(process.env[name] || "").trim();
@@ -19,27 +20,26 @@ function makeClient() {
     region,
     endpoint,
     credentials: { accessKeyId, secretAccessKey },
-    forcePathStyle: true, // پارس‌پک معمولا path-style می‌خواد
+    forcePathStyle: true, // پارس‌پک معمولاً path-style می‌خواد
   });
 }
 
 // ✅ گرفتن لینک استریم (GET) برای کلید مشخص
-async function presignGet({ key, expiresSec = 3600 }) {
+export async function presignGet({ key, expiresSec = 3600 }) {
   const Bucket = must("PARS_S3_BUCKET");
   const s3 = makeClient();
 
   const cmd = new GetObjectCommand({
     Bucket,
     Key: key,
-    // برای استریم بهتره cache-control رو از سمت CDN/Origin تنظیم کنی، اینجا لازم نیست
   });
 
   const url = await getSignedUrl(s3, cmd, { expiresIn: expiresSec });
   return url;
 }
 
-// (اختیاری) اگر بعدا خواستی آپلود مستقیم از کلاینت داشته باشی
-async function presignPut({ key, contentType, expiresSec = 900 }) {
+// (اختیاری) اگر بعداً خواستی آپلود مستقیم از کلاینت داشته باشی
+export async function presignPut({ key, contentType, expiresSec = 900 }) {
   const Bucket = must("PARS_S3_BUCKET");
   const s3 = makeClient();
 
@@ -53,7 +53,7 @@ async function presignPut({ key, contentType, expiresSec = 900 }) {
   return url;
 }
 
-module.exports = {
+export default {
   presignGet,
   presignPut,
 };
