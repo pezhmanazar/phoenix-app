@@ -14,6 +14,7 @@ import adminRouter from "./routes/admin.js";
 import aiRouter from "./routes/ai.js"; // روتر پشتیبانی هوش مصنوعی
 import announcementsRouter from "./routes/announcements.js";
 import authRouter from "./routes/auth.js"; // 🔹 روتر جدید احراز هویت / OTP
+import mediaRouter from "./routes/media.js";
 import payRouter from "./routes/pay.js"; // 🔹 روتر پرداخت / زرین‌پال (جدید)
 import paymentsRouter from "./routes/payments.js";
 import pelekanRouter from "./routes/pelekan.js";
@@ -21,6 +22,7 @@ import pelekanReviewRoutes from "./routes/pelekanReview.js";
 import publicRouter from "./routes/public.js"; // روتر عمومی که /tickets هم دارد
 import ticketsRouter from "./routes/tickets.js";
 import usersRouter from "./routes/users.js"; // 🔹 روتر یوزرها
+app.use("/api/media", mediaRouter);
 
 // ---------- Paths ----------
 const __filename = fileURLToPath(import.meta.url);
