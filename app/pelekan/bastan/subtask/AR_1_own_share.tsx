@@ -4,19 +4,20 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    InteractionManager,
-    Keyboard,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    findNodeHandle,
+  ActivityIndicator,
+  findNodeHandle,
+  InteractionManager,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  UIManager,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -317,18 +318,42 @@ export default function AR1OwnShareScreen() {
     };
   }, [step, booting]);
 
-  /* ----------------------------- Scroll to input without measureLayout ----------------------------- */
-  const scrollToInput = useCallback((id: string, extraOffset = 22) => {
-    const input = inputRefs.current[id] as any;
-    const scroll = scrollRef.current as any;
-    if (!input || !scroll) return;
+ /* ----------------------------- Scroll to input (keyboard safe) ----------------------------- */
+const scrollToInput = useCallback((id: string, extraOffset = 22) => {
+  const input = inputRefs.current[id] as any;
+  const scroll = scrollRef.current as any;
+  if (!input || !scroll) return;
 
-    const node = findNodeHandle(input);
-    if (!node) return;
-
+  const doScroll = () => {
     const responder = scroll.getScrollResponder?.();
-    responder?.scrollResponderScrollNativeHandleToKeyboard?.(node, extraOffset, true);
-  }, []);
+
+    const innerMaybe =
+      responder?.getInnerViewNode?.() ??
+      responder?.getScrollableNode?.() ??
+      findNodeHandle(scroll);
+
+    const innerNode = typeof innerMaybe === "number" ? innerMaybe : findNodeHandle(innerMaybe);
+    const inputNode = findNodeHandle(input);
+
+    if (!innerNode || !inputNode) return;
+
+    UIManager.measureLayout(
+      inputNode,
+      innerNode,
+      () => {},
+      (_x, y) => {
+        const targetY = Math.max(0, y - extraOffset);
+        scroll.scrollTo?.({ y: targetY, animated: true });
+      }
+    );
+  };
+
+  // 1) فوری (اگر کیبورد از قبل بازه)
+  requestAnimationFrame(doScroll);
+
+  // 2) دوباره بعد از بالا آمدن کیبورد (اندروید)
+  setTimeout(doScroll, 220);
+}, []);
 
   /* ----------------------------- Helpers ----------------------------- */
   const toggleBehavior = useCallback(

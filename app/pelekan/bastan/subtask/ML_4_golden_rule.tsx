@@ -5,17 +5,17 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    InteractionManager,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  InteractionManager,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -179,12 +179,20 @@ const IMMEDIATE_ACTIONS: { key: Exclude<ActionKey, "a_custom">; title: string; d
   { key: "a_leave_place", title: "ترک موقعیت", desc: "از اون مکان خارج می‌شم تا مغزم بتونه فکر کنه." },
   { key: "a_mute_block", title: "قطع ارتباط با ساکت کردن اعلان‌ها", desc: "اعلان‌ها رو می‌بندم تا تحریک نشم که بهش جواب بدم." },
   { key: "a_breath_446", title: "تنفس ۴–۴–۶", desc: "۵ دقیقه برای برگشت سیستم عصبی." },
-  { key: "a_write_note", title: "یادداشت فوری", desc: "یک جمله داخل دفترچم می‌نویسم که «اصل طلایی من نقض شد» و بعد اقدامات لازمی که باید انجام بدم رو می‌نویسم." },
+  {
+    key: "a_write_note",
+    title: "یادداشت فوری",
+    desc: "یک جمله داخل دفترچم می‌نویسم که «اصل طلایی من نقض شد» و بعد اقدامات لازمی که باید انجام بدم رو می‌نویسم.",
+  },
   { key: "a_open_app_tab", title: "اومدن به اپ ققنوس", desc: "باز کردن تب پناهگاه داخل اپ و انجام دادن یک تکنیک حمایتی." },
 ];
 
 const NEXT_ACTIONS: { key: Exclude<ActionKey, "a_custom">; title: string; desc: string }[] = [
-  { key: "a_no_contact_24h", title: "قطع ارتباط کامل تا ۲۴ ساعت", desc: "۲۴ ساعت هیچ پیامی نمیدم، چکش نمی‌کنم و استوری‌هاش رو نکاه نمی‌کنم و استوری تیکه‌دار هم نمی‌ذارم." },
+  {
+    key: "a_no_contact_24h",
+    title: "قطع ارتباط کامل تا ۲۴ ساعت",
+    desc: "۲۴ ساعت هیچ پیامی نمیدم، چکش نمی‌کنم و استوری‌هاش رو نکاه نمی‌کنم و استوری تیکه‌دار هم نمی‌ذارم.",
+  },
   { key: "a_call_safe_friend", title: "تماس با آدم امن", desc: "با یک نفر مشخص برای مهار کردن لغزش تماس می‌‌گیرم." },
   { key: "a_walk_20m", title: "پیاده‌روی ۲۰ دقیقه", desc: "حرکت بدن برای کاهش وسوسه." },
   { key: "a_open_app_tab", title: "برگشتن به همین صفحه", desc: "مرور کردن اصل طلایی در این صفحه" },
@@ -288,8 +296,13 @@ export default function ML4GoldenRuleScreen() {
   const [isReview, setIsReview] = useState(false);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
+
   const scrollRef = useRef<ScrollView>(null);
   const startedAtRef = useRef<number | null>(null);
+
+  // ✅ جلوگیری از لرزش/قفل شدن اسکرول: اسکرول-به-ابتدا فقط وقتی مرحله عوض میشه (نه روی mount)
+  const didMountRef = useRef(false);
+  const isUserScrollingRef = useRef(false);
 
   // Step 1
   const [patterns, setPatterns] = useState<PatternKey[]>([]);
@@ -382,7 +395,6 @@ export default function ML4GoldenRuleScreen() {
     return ` ${b}، بدون مذاکره ${a}.`;
   }, [selectedLine]);
 
-  // keep goldenRuleText synced (only when not review + not typed anything yet)
   useEffect(() => {
     if (isReview) return;
     if (!selectedLine) return;
@@ -542,12 +554,21 @@ export default function ML4GoldenRuleScreen() {
   useEffect(() => {
     if (booting) return;
 
+    // ✅ مهم: روی mount اسکرول نکن (این همون لرزش/قفل شدنِ اسکرول رو می‌سازه)
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
+
+    // ✅ اگر کاربر در حال اسکروله، زورکی scrollTo نزن
+    if (isUserScrollingRef.current) return;
+
     let cancelled = false;
     const task = InteractionManager.runAfterInteractions(() => {
       if (cancelled) return;
       requestAnimationFrame(() => {
         if (cancelled) return;
-        scrollRef.current?.scrollTo({ y: 0, animated: true });
+        scrollRef.current?.scrollTo({ y: 0, animated: false });
       });
     });
 
@@ -834,6 +855,11 @@ export default function ML4GoldenRuleScreen() {
     </View>
   );
 
+  const scrollContentStyle = useMemo(
+    () => ({ padding: 16, paddingBottom: 18 + insets.bottom + 24 }),
+    [insets.bottom]
+  );
+
   return (
     <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
       <View pointerEvents="none" style={styles.glowTop} />
@@ -857,14 +883,28 @@ export default function ML4GoldenRuleScreen() {
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={insets.top + 12}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 12 : 0}
       >
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={{ padding: 16, paddingBottom: 18 + insets.bottom + 24 }}
+          contentContainerStyle={scrollContentStyle}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          scrollEventThrottle={16}
+          onScrollBeginDrag={() => {
+            isUserScrollingRef.current = true;
+          }}
+          onScrollEndDrag={() => {
+            isUserScrollingRef.current = false;
+          }}
+          onMomentumScrollBegin={() => {
+            isUserScrollingRef.current = true;
+          }}
+          onMomentumScrollEnd={() => {
+            isUserScrollingRef.current = false;
+          }}
         >
           {isReview ? (
             <View style={styles.reviewBanner}>
@@ -1065,7 +1105,7 @@ export default function ML4GoldenRuleScreen() {
                 {validRedLines.length ? (
                   validRedLines.map((t, i) => (
                     <Text key={`${t.id}-${i}`} style={styles.pairText}>
-                      •  {t.behavior} ←  {t.meaning} ←  {t.action}
+                      • {t.behavior} ← {t.meaning} ← {t.action}
                     </Text>
                   ))
                 ) : (
@@ -1135,9 +1175,9 @@ export default function ML4GoldenRuleScreen() {
                           />
                           <View style={{ flex: 1 }}>
                             <Text style={[styles.choiceText, { flexShrink: 1 }]}>
-                               {x.behavior} ←  {x.action}
+                              {x.behavior} ← {x.action}
                             </Text>
-                            <Text style={[styles.small, { flexShrink: 1, marginTop: 6 }]}> {x.meaning}</Text>
+                            <Text style={[styles.small, { flexShrink: 1, marginTop: 6 }]}>{x.meaning}</Text>
                           </View>
                         </View>
                       </Pressable>
@@ -1194,9 +1234,7 @@ export default function ML4GoldenRuleScreen() {
                       size={18}
                       color={acceptNotToSaveRelationship ? palette.green : "rgba(231,238,247,.55)"}
                     />
-                    <Text style={[styles.choiceText, { flex: 1 }]}>
-                      می‌پذیرم: اصل طلایی برای نجات رابطه نیست؛ برای نجات منه.
-                    </Text>
+                    <Text style={[styles.choiceText, { flex: 1 }]}>می‌پذیرم: اصل طلایی برای نجات رابطه نیست؛ برای نجات منه.</Text>
                   </View>
                 </Pressable>
 
@@ -1227,9 +1265,7 @@ export default function ML4GoldenRuleScreen() {
               </View>
 
               {!step3Ok ? (
-                <Text style={[styles.warn, { marginTop: 10 }]}>
-                  برای ادامه: انتخاب منبع + متن اصل طلایی + هر دو تیک ضد دور زدن لازمه.
-                </Text>
+                <Text style={[styles.warn, { marginTop: 10 }]}>برای ادامه: انتخاب منبع + متن اصل طلایی + هر دو تیک ضد دور زدن لازمه.</Text>
               ) : null}
 
               <View style={{ marginTop: 14, gap: 10 }}>
@@ -1474,15 +1510,15 @@ export default function ML4GoldenRuleScreen() {
                       size={18}
                       color={agreeLocked ? palette.green : "rgba(231,238,247,.55)"}
                     />
-                    <Text style={[styles.choiceText, { flex: 1 }]}>
-                      تعهد می‌دم: اگه اصل طلایی نقض شد، توجیه نمی‌کنم و طبق پروتکل عمل کنم.
-                    </Text>
+                    <Text style={[styles.choiceText, { flex: 1 }]}>تعهد می‌دم: اگه اصل طلایی نقض شد، توجیه نمی‌کنم و طبق پروتکل عمل کنم.</Text>
                   </View>
                 </Pressable>
               </View>
 
               {!step4Ok ? (
-                <Text style={[styles.warn, { marginTop: 10 }]}>برای ثبت: اقدام فوری + اقدام ۲۴ساعته + معیار تشخیص + متن تعهد + تیک قفل لازمه.</Text>
+                <Text style={[styles.warn, { marginTop: 10 }]}>
+                  برای ثبت: اقدام فوری + اقدام ۲۴ساعته + معیار تشخیص + متن تعهد + تیک قفل لازمه.
+                </Text>
               ) : null}
 
               <View style={{ marginTop: 14, gap: 10 }}>
@@ -1610,6 +1646,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: { color: palette.text, fontWeight: "900", fontSize: 16, textAlign: "center" },
   headerSub: { color: "rgba(231,238,247,.85)", marginTop: 4, fontSize: 12, textAlign: "center" },
+
   reviewBanner: {
     borderWidth: 1,
     borderColor: "rgba(255,255,255,.12)",
@@ -1628,6 +1665,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
     flex: 1,
   },
+
   sectionCard: {
     borderWidth: 1,
     borderColor: palette.border,
@@ -1636,6 +1674,7 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 6,
   },
+
   stepPills: { flexDirection: "row-reverse", gap: 8, justifyContent: "center", marginBottom: 12, flexWrap: "wrap" },
   stepPill: {
     paddingHorizontal: 10,
@@ -1647,10 +1686,12 @@ const styles = StyleSheet.create({
   },
   stepPillOn: { backgroundColor: "rgba(212,175,55,.12)", borderColor: "rgba(212,175,55,.28)" },
   stepPillText: { color: "rgba(231,238,247,.85)", fontWeight: "800", fontSize: 11, textAlign: "center" },
+
   h1: { color: palette.text, fontWeight: "900", fontSize: 16, textAlign: "center", lineHeight: 22 },
   p: { color: "rgba(231,238,247,.78)", marginTop: 8, textAlign: "right", lineHeight: 20, fontSize: 12 },
   small: { color: "rgba(231,238,247,.70)", fontSize: 11, textAlign: "right", lineHeight: 18 },
   warn: { color: "rgba(252,165,165,.95)", fontWeight: "800", fontSize: 11, textAlign: "right" },
+
   noteTitle: { color: palette.text, fontWeight: "900", fontSize: 13, textAlign: "right", lineHeight: 18 },
   noteCard: {
     borderWidth: 1,
@@ -1659,6 +1700,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 12,
   },
+
   choiceCard: {
     borderWidth: 1,
     borderColor: palette.border,
@@ -1668,6 +1710,7 @@ const styles = StyleSheet.create({
   },
   choiceCardOn: { borderColor: "rgba(34,197,94,.35)", backgroundColor: "rgba(34,197,94,.06)" },
   choiceText: { color: palette.text, fontWeight: "800", fontSize: 13, textAlign: "right", lineHeight: 18, flex: 1 },
+
   dangerCard: {
     borderWidth: 1,
     borderColor: "rgba(252,165,165,.22)",
@@ -1676,6 +1719,7 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   dangerTitle: { color: "rgba(252,165,165,.95)", fontWeight: "900", fontSize: 13, textAlign: "right", lineHeight: 18 },
+
   pairCard: {
     marginTop: 10,
     borderWidth: 1,
@@ -1686,6 +1730,7 @@ const styles = StyleSheet.create({
   },
   pairLabel: { color: "rgba(231,238,247,.72)", fontWeight: "900", fontSize: 11, textAlign: "right" },
   pairText: { color: "rgba(231,238,247,.88)", fontWeight: "800", fontSize: 12, textAlign: "right", marginTop: 6, lineHeight: 18 },
+
   input: {
     borderWidth: 1,
     borderColor: "rgba(255,255,255,.10)",
@@ -1698,6 +1743,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
   },
+
   iconBtn: {
     width: 34,
     height: 34,
@@ -1708,6 +1754,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.border,
   },
+
   primaryBtn: {
     paddingVertical: 14,
     borderRadius: 16,
@@ -1717,6 +1764,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(212,175,55,.35)",
   },
   primaryBtnText: { color: palette.bg, fontWeight: "900" },
+
   secondaryBtn: {
     paddingVertical: 14,
     borderRadius: 16,
@@ -1726,6 +1774,7 @@ const styles = StyleSheet.create({
     borderColor: palette.border,
   },
   secondaryBtnText: { color: palette.text, fontWeight: "900" },
+
   bootOverlay: {
     position: "absolute",
     top: 0,
@@ -1749,6 +1798,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   bootText: { color: "rgba(231,238,247,.88)", fontWeight: "800", fontSize: 12, textAlign: "center" },
+
   /* Modal */
   modalOverlay: {
     position: "absolute",

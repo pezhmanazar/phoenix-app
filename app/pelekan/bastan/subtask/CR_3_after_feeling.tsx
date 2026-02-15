@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   InteractionManager,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -206,7 +207,7 @@ const TOOLS: { key: ToolKey; title: string; help?: string }[] = [
 const STABILIZE_CHECKLIST: ChecklistItem[] = [
   { id: "st1", text: "هیجاناتم رو نام‌گذاری کردم و قبولشون کردم" },
   { id: "st2", text: "یادم هست هیجان مثل یک «موج»ه: میاد و میره", help: "ممکنه بعدش دوباره این هیجانات برگرده و کاملاً طبیعی‌ه." },
-  { id: "st3", text: "به خودم یادآوری می‌کنم: «من هیجانم نیستم؛ من کسی‌ام که هیجان داره»" },
+  { id: "st3", text: "به خودم یادآوری می‌کنم: «من هیجانم نیستم بلکه من کسی هستم که هیجان داره»" },
   { id: "st4", text: "می‌دونم مغزم ممکنه دنبال «معنا یا امید» بگرده و این نشونه حرکت در مسیر درمانه" },
 ];
 
@@ -311,7 +312,6 @@ export default function CR3AfterFeelingScreen() {
   const phone = String(me?.phone || "").trim();
   const { token } = useAuth();
 
-  // اگر تو پروژه‌ت apiBase چیز دیگه‌ست، همین‌جا عوضش کن
   const apiBase = "https://api.qoqnoos.app";
 
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
@@ -324,12 +324,17 @@ export default function CR3AfterFeelingScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const startedAtRef = useRef<number | null>(null);
 
+  // ✅ برای اینکه ته صفحه زیر کیبورد نره
+  const [kbHeight, setKbHeight] = useState(0);
+  const scrollInnerRef = useRef<View>(null);
+  const nextActionInputRef = useRef<TextInput>(null);
+
   const [cr2, setCr2] = useState<CR2Saved | null>(null);
 
   // Step 2
   const [emotionsSelected, setEmotionsSelected] = useState<EmotionKey[]>([]);
   const [bodySelected, setBodySelected] = useState<BodyKey[]>([]);
-  const [intensityText, setIntensityText] = useState("7");
+  const [intensityText, setIntensityText] = useState("");
   const [whatHappenedText, setWhatHappenedText] = useState("");
   const [selfTalkText, setSelfTalkText] = useState("");
   const [toolSelected, setToolSelected] = useState<ToolKey | null>(null);
@@ -369,6 +374,53 @@ export default function CR3AfterFeelingScreen() {
     setModal({ ...cfg, visible: true } as any);
   }, []);
 
+  /* ----------------------------- Keyboard handling ----------------------------- */
+
+  useEffect(() => {
+    const showEvt = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvt = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const onShow = (e: any) => {
+      const h = Math.max(0, Math.floor(e?.endCoordinates?.height || 0));
+      setKbHeight(h);
+    };
+
+    const onHide = () => setKbHeight(0);
+
+    const s1 = Keyboard.addListener(showEvt as any, onShow);
+    const s2 = Keyboard.addListener(hideEvt as any, onHide);
+
+    return () => {
+      s1.remove();
+      s2.remove();
+    };
+  }, []);
+
+  const scrollToInput = useCallback(
+  (inputRef: React.RefObject<TextInput | null>, extra = 18) => {
+    const input = inputRef.current as any;
+    const sc = scrollRef.current as any;
+    const container = scrollInnerRef.current as any;
+    if (!input || !sc || !container) return;
+
+    requestAnimationFrame(() => {
+      try {
+        input.measureLayout(
+          container,
+          (_x: number, y: number, _w: number, h: number) => {
+            sc.scrollTo({ y: Math.max(0, y - 12), animated: true });
+            setTimeout(() => {
+              sc.scrollTo({ y: Math.max(0, y - 12 + h + extra - 80), animated: true });
+            }, 40);
+          },
+          () => {}
+        );
+      } catch {}
+    });
+  },
+  []
+);
+
   /* ----------------------------- Helpers ----------------------------- */
 
   const ritualInfo = useMemo(() => (cr2 ? cr2.ritual : null), [cr2]);
@@ -390,7 +442,9 @@ export default function CR3AfterFeelingScreen() {
       if (isReview) return;
 
       if (kind === "emotions") {
-        setEmotionsSelected((prev) => (prev.includes(key as EmotionKey) ? prev.filter((x) => x !== key) : [...prev, key as EmotionKey]));
+        setEmotionsSelected((prev) =>
+          prev.includes(key as EmotionKey) ? prev.filter((x) => x !== key) : [...prev, key as EmotionKey]
+        );
         return;
       }
 
@@ -771,14 +825,6 @@ export default function CR3AfterFeelingScreen() {
     }
   }, [canFinalize, closeModal, completeOnServer, openModal, persistFinalLocal, router]);
 
-  const onFinishPress = useCallback(() => {
-    if (isReview) {
-      router.back();
-      return;
-    }
-    setConfirmLockModal(true);
-  }, [isReview, router]);
-
   /* ----------------------------- Step Pills ----------------------------- */
 
   const StepPills = (
@@ -799,6 +845,9 @@ export default function CR3AfterFeelingScreen() {
   );
 
   /* ----------------------------- Render ----------------------------- */
+
+  const contentBottomPad =
+  16 + insets.bottom + (Platform.OS === "android" && kbHeight ? kbHeight + 14 : 0);
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
@@ -822,91 +871,267 @@ export default function CR3AfterFeelingScreen() {
       </View>
 
       <KeyboardAvoidingView
-        style={styles.kav}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 12 : 0}
-      >
+  style={styles.kav}
+  behavior={Platform.OS === "ios" ? "padding" : undefined}
+  keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 12 : 0}
+>
         <ScrollView
           ref={scrollRef}
           style={styles.scroll}
-          contentContainerStyle={[
-            styles.scrollContent,
-            {
-              paddingBottom: 16 + insets.bottom,
-            },
-          ]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPad }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {isReview ? (
-            <View style={styles.reviewBanner}>
-              <Ionicons name="eye" size={16} color="rgba(231,238,247,.88)" />
-              <Text style={styles.reviewBannerText}>حالت مرور فعاله: می‌تونی ببینی، ولی قابل تغییر نیست.</Text>
-            </View>
-          ) : null}
+          <View ref={scrollInnerRef} collapsable={false}>
+            {isReview ? (
+              <View style={styles.reviewBanner}>
+                <Ionicons name="eye" size={16} color="rgba(231,238,247,.88)" />
+                <Text style={styles.reviewBannerText}>حالت مرور فعاله: می‌تونی ببینی، ولی قابل تغییر نیست.</Text>
+              </View>
+            ) : null}
 
-          {StepPills}
+            {StepPills}
 
-          {/* Step 1 */}
-          {step === 1 ? (
-            <View style={styles.sectionCard}>
-              <Text style={styles.h1}>سنجش هیجانات بعد از آیین بستن</Text>
-              <Text style={styles.p}>
-                بعد از یک موج هیجانی (مثل گریه، خشم، بی‌حسی و دلتنگی)، مغز معمولاً می‌خواد سریع برگرده به «چک‌کردن»، «امید»، یا
-                «یک پیام کوچیک».
-                {"\n\n"}
-                این ریزاقدام برای اینه که:
-                {"\n"}۱) هیجاناتت رو ببینی و روشون اسم بذاری
-                {"\n"}۲) بدنت رو آروم‌تر کنی
-                {"\n"}۳) و «برگشتِ اشتباه» رو قفل کنی
-              </Text>
-
-              {!step1Ok ? (
-                <Text style={[styles.warn, { marginTop: 10 }]}>
-                  برای ادامه، باید ریز اقدام قبلی (CR_2_do_ritual) روی همین دستگاه ثبت شده باشه.
-                </Text>
-              ) : null}
-
-              <View style={{ height: 12 }} />
-
-              <TouchableOpacity
-                activeOpacity={0.9}
-                disabled={!canGo2}
-                onPress={() => {
-                  if (!isReview && !startedAtRef.current) startedAtRef.current = Date.now();
-                  setStep(2);
-                }}
-                style={[styles.primaryBtn, !canGo2 && { opacity: 0.45 }]}
-              >
-                <Text style={styles.primaryBtnText}>شروع می‌کنم</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
-
-          {/* Step 2 */}
-          {step === 2 ? (
-            <>
+            {/* Step 1 */}
+            {step === 1 ? (
               <View style={styles.sectionCard}>
-                <Text style={styles.h1}>مشاهده‌ی موج هیجانات</Text>
+                <Text style={styles.h1}>سنجش هیجانات بعد از آیین بستن</Text>
                 <Text style={styles.p}>
-                  اینجا «تحلیل» نمی‌کنی.
-                  {"\n"}
-                  فقط قرار است مبهم‌بودن را کم کنی تا مغز نتونه با ابهام، تو رو برگردونه.
+                  بعد از یک موج هیجانی (مثل گریه، خشم، بی‌حسی و دلتنگی)، مغز معمولاً می‌خواد سریع برگرده به «چک‌کردن»، «امید»، یا
+                  «یک پیام کوچیک».
+                  {"\n\n"}
+                  این ریزاقدام برای اینه که:
+                  {"\n"}۱) هیجاناتت رو ببینی و روشون اسم بذاری
+                  {"\n"}۲) بدنت رو آروم‌تر کنی
+                  {"\n"}۳) و «برگشتِ اشتباه» رو قفل کنی
                 </Text>
+
+                <View style={{ height: 12 }} />
+
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  disabled={!cr2}
+                  onPress={() => {
+                    if (!isReview && !startedAtRef.current) startedAtRef.current = Date.now();
+                    setStep(2);
+                  }}
+                  style={[styles.primaryBtn, !cr2 && { opacity: 0.45 }]}
+                >
+                  <Text style={styles.primaryBtnText}>شروع می‌کنم</Text>
+                </TouchableOpacity>
               </View>
+            ) : null}
 
-              <View style={[styles.noteCard, { marginTop: 12 }]}>
-                <Text style={styles.noteTitle}>الان چه احساسی داری؟ (حداقل یک مورد)</Text>
-                <Text style={styles.small}>چندتا هم می‌تونی انتخاب کنی.</Text>
+            {/* Step 2 */}
+            {step === 2 ? (
+              <>
+                <View style={styles.sectionCard}>
+                  <Text style={styles.h1}>مشاهده‌ی موج هیجانات</Text>
+                  <Text style={styles.p}>
+                    اینجا «تحلیل» نمی‌کنی.
+                    {"\n"}
+                    فقط قراره مبهم‌بودن رو کم کنی تا مغز نتونه با ابهام، تو رو برگردونه.
+                  </Text>
+                </View>
 
-                <View style={{ height: 10 }} />
-                <View style={{ gap: 10 }}>
-                  {EMOTIONS.map((it) => {
-                    const on = emotionsSelected.includes(it.key);
+                <View style={[styles.noteCard, { marginTop: 12 }]}>
+                  <Text style={styles.noteTitle}>الان چه احساسی داری؟ (حداقل یک مورد)</Text>
+                  <Text style={styles.small}>چندتا هم می‌تونی انتخاب کنی.</Text>
+
+                  <View style={{ height: 10 }} />
+                  <View style={{ gap: 10 }}>
+                    {EMOTIONS.map((it) => {
+                      const on = emotionsSelected.includes(it.key);
+                      return (
+                        <Pressable
+                          key={it.key}
+                          onPress={() => toggleMulti("emotions", it.key)}
+                          disabled={isReview}
+                          style={[styles.choiceCard, on && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
+                        >
+                          <View style={{ flexDirection: "row-reverse", alignItems: "flex-start", gap: 10 }}>
+                            <Ionicons
+                              name={on ? "checkbox" : "square-outline"}
+                              size={18}
+                              color={on ? palette.green : "rgba(231,238,247,.55)"}
+                            />
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.choiceText, { flexShrink: 1 }]}>{it.title}</Text>
+                              {it.help ? <Text style={[styles.small, { marginTop: 6 }]}>{it.help}</Text> : null}
+                            </View>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                <View style={[styles.noteCard, { marginTop: 12 }]}>
+                  <Text style={styles.noteTitle}>این حس کجای بدنت نشسته؟ (حداقل یک مورد)</Text>
+
+                  <View style={{ height: 10 }} />
+                  <View style={{ gap: 10 }}>
+                    {BODY.map((it) => {
+                      const on = bodySelected.includes(it.key);
+                      return (
+                        <Pressable
+                          key={it.key}
+                          onPress={() => toggleMulti("body", it.key)}
+                          disabled={isReview}
+                          style={[styles.choiceCard, on && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
+                        >
+                          <View style={{ flexDirection: "row-reverse", alignItems: "flex-start", gap: 10 }}>
+                            <Ionicons
+                              name={on ? "checkbox" : "square-outline"}
+                              size={18}
+                              color={on ? palette.green : "rgba(231,238,247,.55)"}
+                            />
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.choiceText, { flexShrink: 1 }]}>{it.title}</Text>
+                              {it.help ? <Text style={[styles.small, { marginTop: 6 }]}>{it.help}</Text> : null}
+                            </View>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                <View style={[styles.noteCard, { marginTop: 12 }]}>
+                  <Text style={styles.noteTitle}>شدت احساس از ۱ تا ۱۰</Text>
+                  <Text style={styles.small}>فقط عدد. مثال: ۷</Text>
+
+                  <View style={{ height: 10 }} />
+                  <TextInput
+                    editable={!isReview}
+                    value={intensityText}
+                    onChangeText={(t) => (isReview ? null : setIntensityText(t))}
+                    keyboardType="number-pad"
+                    placeholder="مثلاً ۷"
+                    placeholderTextColor="rgba(231,238,247,.45)"
+                    style={[styles.input, isReview && { opacity: 0.7 }]}
+                  />
+
+                  <View style={{ height: 12 }} />
+                  <Text style={styles.noteTitle}>این موج از چی شروع شد؟ (خیلی کوتاه)</Text>
+                  <Text style={styles.small}>مثال: «عکسش رو دیدم»، «شب شد»، «یادم افتاد…»</Text>
+
+                  <View style={{ height: 10 }} />
+                  <TextInput
+                    editable={!isReview}
+                    value={whatHappenedText}
+                    onChangeText={(t) => (isReview ? null : setWhatHappenedText(t))}
+                    placeholder="جرقه چی بود…"
+                    placeholderTextColor="rgba(231,238,247,.45)"
+                    style={[styles.inputMultiline, isReview && { opacity: 0.7 }]}
+                    multiline
+                    textAlignVertical="top"
+                    maxLength={220}
+                  />
+
+                  <View style={{ height: 12 }} />
+                  <Text style={styles.noteTitle}>یک جمله‌ی بالغ برای خودت</Text>
+                  <Text style={styles.small}>قشنگ لازم نیست؛ واقعی باشه.</Text>
+
+                  <View style={{ height: 10 }} />
+                  <TextInput
+                    editable={!isReview}
+                    value={selfTalkText}
+                    onChangeText={(t) => (isReview ? null : setSelfTalkText(t))}
+                    placeholder="مثال: «سخته، ولی تصمیمم عوض نمی‌شه.»"
+                    placeholderTextColor="rgba(231,238,247,.45)"
+                    style={[styles.inputMultiline, isReview && { opacity: 0.7 }]}
+                    multiline
+                    textAlignVertical="top"
+                    maxLength={240}
+                  />
+                </View>
+
+                <View style={[styles.noteCard, { marginTop: 12 }]}>
+                  <Text style={styles.noteTitle}>یک ابزار فوری انتخاب کن (اجباری)</Text>
+                  <Text style={styles.small}>همین الان یا وقتی وسوسه آمد.</Text>
+
+                  <View style={{ height: 10 }} />
+                  <View style={{ gap: 10 }}>
+                    {TOOLS.map((it) => {
+                      const on = toolSelected === it.key;
+                      return (
+                        <Pressable
+                          key={it.key}
+                          onPress={() => (isReview ? null : setToolSelected(it.key))}
+                          disabled={isReview}
+                          style={[
+                            styles.choiceCard,
+                            isReview && { opacity: 0.7 },
+                            on && { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.08)" },
+                          ]}
+                        >
+                          <View style={{ flexDirection: "row-reverse", alignItems: "flex-start", gap: 10 }}>
+                            <Ionicons
+                              name={on ? "radio-button-on" : "radio-button-off"}
+                              size={18}
+                              color={on ? palette.gold : "rgba(231,238,247,.55)"}
+                            />
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.choiceText, { flexShrink: 1 }]}>{it.title}</Text>
+                              {it.help ? <Text style={[styles.small, { marginTop: 6 }]}>{it.help}</Text> : null}
+                            </View>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                {!step2Ok ? (
+                  <Text style={[styles.warn, { marginTop: 10 }]}>
+                    برای ادامه: حداقل ۱ احساس + ۱ بخش بدن + شدت (۱ تا ۱۰) + دو متن کوتاه + انتخاب ابزار لازمه.
+                  </Text>
+                ) : null}
+
+                <View style={{ marginTop: 14, gap: 10 }}>
+                  <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => setStep(1)}
+                      style={[styles.secondaryBtn, { flex: 1 }]}
+                      disabled={saving}
+                    >
+                      <Text style={styles.secondaryBtnText}>بازگشت</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => setStep(3)}
+                      style={[styles.primaryBtn, { flex: 1 }, (!step2Ok || saving) && { opacity: 0.45 }]}
+                      disabled={!step2Ok || saving}
+                    >
+                      <Text style={styles.primaryBtnText}>ادامه</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </>
+            ) : null}
+
+            {/* Step 3 */}
+            {step === 3 ? (
+              <>
+                <View style={styles.sectionCard}>
+                  <Text style={styles.h1}>تثبیت بعد از موج</Text>
+                  <Text style={styles.p}>
+                    اینجا مغزت رو از «منطقِ برگشت» جدا می‌کنی.
+                    {"\n"}
+                    هدف: «پایان» رو دوباره محکم کنی، نه اینکه هیجان خودت رو حذف کنی.
+                  </Text>
+                </View>
+
+                <View style={{ gap: 10, marginTop: 12 }}>
+                  {STABILIZE_CHECKLIST.map((it) => {
+                    const on = stabilizeDoneIds.includes(it.id);
                     return (
                       <Pressable
-                        key={it.key}
-                        onPress={() => toggleMulti("emotions", it.key)}
+                        key={it.id}
+                        onPress={() => toggleId("stabilize", it.id)}
                         disabled={isReview}
                         style={[styles.choiceCard, on && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
                       >
@@ -917,7 +1142,7 @@ export default function CR3AfterFeelingScreen() {
                             color={on ? palette.green : "rgba(231,238,247,.55)"}
                           />
                           <View style={{ flex: 1 }}>
-                            <Text style={[styles.choiceText, { flexShrink: 1 }]}>{it.title}</Text>
+                            <Text style={[styles.choiceText, { flexShrink: 1 }]}>{it.text}</Text>
                             {it.help ? <Text style={[styles.small, { marginTop: 6 }]}>{it.help}</Text> : null}
                           </View>
                         </View>
@@ -925,116 +1150,72 @@ export default function CR3AfterFeelingScreen() {
                     );
                   })}
                 </View>
-              </View>
 
-              <View style={[styles.noteCard, { marginTop: 12 }]}>
-                <Text style={styles.noteTitle}>این حس کجای بدنت نشسته؟ (حداقل یک مورد)</Text>
+                {!step3Ok ? <Text style={[styles.warn, { marginTop: 10 }]}>برای ادامه: همه‌ی موارد این چک‌لیست باید تیک بخوره.</Text> : null}
 
-                <View style={{ height: 10 }} />
-                <View style={{ gap: 10 }}>
-                  {BODY.map((it) => {
-                    const on = bodySelected.includes(it.key);
-                    return (
-                      <Pressable
-                        key={it.key}
-                        onPress={() => toggleMulti("body", it.key)}
-                        disabled={isReview}
-                        style={[styles.choiceCard, on && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
-                      >
-                        <View style={{ flexDirection: "row-reverse", alignItems: "flex-start", gap: 10 }}>
-                          <Ionicons
-                            name={on ? "checkbox" : "square-outline"}
-                            size={18}
-                            color={on ? palette.green : "rgba(231,238,247,.55)"}
-                          />
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.choiceText, { flexShrink: 1 }]}>{it.title}</Text>
-                            {it.help ? <Text style={[styles.small, { marginTop: 6 }]}>{it.help}</Text> : null}
-                          </View>
-                        </View>
-                      </Pressable>
-                    );
-                  })}
+                <View style={{ marginTop: 14, gap: 10 }}>
+                  <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => setStep(2)}
+                      style={[styles.secondaryBtn, { flex: 1 }]}
+                      disabled={saving}
+                    >
+                      <Text style={styles.secondaryBtnText}>بازگشت</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => setStep(4)}
+                      style={[styles.primaryBtn, { flex: 1 }, (!step3Ok || saving) && { opacity: 0.45 }]}
+                      disabled={!step3Ok || saving}
+                    >
+                      <Text style={styles.primaryBtnText}>ادامه</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
+              </>
+            ) : null}
 
-              <View style={[styles.noteCard, { marginTop: 12 }]}>
-                <Text style={styles.noteTitle}>شدت احساس از ۱ تا ۱۰</Text>
-                <Text style={styles.small}>فقط عدد. مثال: ۷</Text>
+            {/* Step 4 */}
+            {step === 4 ? (
+              <>
+                <View style={styles.sectionCard}>
+                  <Text style={styles.h1}>قفلِ بازگشت بعد از احساس</Text>
+                  <Text style={styles.p}>
+                    بعد از موج هیجانات، مغز دنبال «راه فرار» می‌گرده:
+                    {"\n"}مثلاً: «فقط یه بار دیگه ببینمش»، «فقط یه پیام بدم» یا «فقط چکش کنم…»
+                    {"\n\n"}
+                    اینجا اون راه رو می‌بندی.
+                  </Text>
+                </View>
 
-                <View style={{ height: 10 }} />
-                <TextInput
-                  editable={!isReview}
-                  value={intensityText}
-                  onChangeText={(t) => (isReview ? null : setIntensityText(t))}
-                  keyboardType="number-pad"
-                  placeholder="مثلاً ۷"
-                  placeholderTextColor="rgba(231,238,247,.45)"
-                  style={[styles.input, isReview && { opacity: 0.7 }]}
-                />
-
-                <View style={{ height: 12 }} />
-                <Text style={styles.noteTitle}>این موج از چی شروع شد؟ (خیلی کوتاه)</Text>
-                <Text style={styles.small}>مثال: «عکسش رو دیدم»، «شب شد»، «یادم افتاد…»</Text>
-
-                <View style={{ height: 10 }} />
-                <TextInput
-                  editable={!isReview}
-                  value={whatHappenedText}
-                  onChangeText={(t) => (isReview ? null : setWhatHappenedText(t))}
-                  placeholder="جرقه چی بود…"
-                  placeholderTextColor="rgba(231,238,247,.45)"
-                  style={[styles.inputMultiline, isReview && { opacity: 0.7 }]}
-                  multiline
-                  textAlignVertical="top"
-                  maxLength={220}
-                />
-
-                <View style={{ height: 12 }} />
-                <Text style={styles.noteTitle}>یک جمله‌ی بالغ برای خودت</Text>
-                <Text style={styles.small}>قشنگ لازم نیست؛ واقعی باشه.</Text>
-
-                <View style={{ height: 10 }} />
-                <TextInput
-                  editable={!isReview}
-                  value={selfTalkText}
-                  onChangeText={(t) => (isReview ? null : setSelfTalkText(t))}
-                  placeholder="مثال: «سخته، ولی تصمیمم عوض نمی‌شه.»"
-                  placeholderTextColor="rgba(231,238,247,.45)"
-                  style={[styles.inputMultiline, isReview && { opacity: 0.7 }]}
-                  multiline
-                  textAlignVertical="top"
-                  maxLength={240}
-                />
-              </View>
-
-              <View style={[styles.noteCard, { marginTop: 12 }]}>
-                <Text style={styles.noteTitle}>یک ابزار فوری انتخاب کن (اجباری)</Text>
-                <Text style={styles.small}>همین الان یا وقتی وسوسه آمد.</Text>
-
-                <View style={{ height: 10 }} />
-                <View style={{ gap: 10 }}>
-                  {TOOLS.map((it) => {
-                    const on = toolSelected === it.key;
+                <View style={{ gap: 10, marginTop: 12 }}>
+                  {LOCK_CHECKLIST.map((it) => {
+                    const on = lockDoneIds.includes(it.id);
+                    const isDanger = it.id === "lk2";
+                    const isGold = it.id === "lk4";
                     return (
                       <Pressable
-                        key={it.key}
-                        onPress={() => (isReview ? null : setToolSelected(it.key))}
+                        key={it.id}
+                        onPress={() => toggleId("lock", it.id)}
                         disabled={isReview}
                         style={[
                           styles.choiceCard,
+                          on && styles.choiceCardOn,
                           isReview && { opacity: 0.7 },
-                          on && { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.08)" },
+                          isDanger && { backgroundColor: "rgba(252,165,165,.04)", borderColor: "rgba(252,165,165,.18)" },
+                          isGold && { backgroundColor: "rgba(212,175,55,.06)", borderColor: "rgba(212,175,55,.18)" },
                         ]}
                       >
                         <View style={{ flexDirection: "row-reverse", alignItems: "flex-start", gap: 10 }}>
                           <Ionicons
-                            name={on ? "radio-button-on" : "radio-button-off"}
+                            name={on ? "checkbox" : "square-outline"}
                             size={18}
-                            color={on ? palette.gold : "rgba(231,238,247,.55)"}
+                            color={on ? palette.green : "rgba(231,238,247,.55)"}
                           />
                           <View style={{ flex: 1 }}>
-                            <Text style={[styles.choiceText, { flexShrink: 1 }]}>{it.title}</Text>
+                            <Text style={[styles.choiceText, { flexShrink: 1 }]}>{it.text}</Text>
                             {it.help ? <Text style={[styles.small, { marginTop: 6 }]}>{it.help}</Text> : null}
                           </View>
                         </View>
@@ -1042,208 +1223,75 @@ export default function CR3AfterFeelingScreen() {
                     );
                   })}
                 </View>
-              </View>
 
-              {!step2Ok ? (
-                <Text style={[styles.warn, { marginTop: 10 }]}>
-                  برای ادامه: حداقل ۱ احساس + ۱ بخش بدن + شدت (۱ تا ۱۰) + دو متن کوتاه + انتخاب ابزار لازمه.
-                </Text>
-              ) : null}
+                <View style={[styles.noteCard, { marginTop: 12 }]}>
+                  <Text style={styles.noteTitle}>اون «کار مشخص» چیه؟ (اجباری)</Text>
+                  <Text style={styles.small}>
+                    یک کار خیلی ساده بنویس که همین الان انجام می‌دی.
+                    {"\n"}مثال: «می‌رم آب می‌خورم»، «۱۰ دقیقه قدم می‌زنم»، «به یه آدم امن زنگ می‌زنم»، «می‌خوابم»
+                  </Text>
 
-              <View style={{ marginTop: 14, gap: 10 }}>
-                <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={() => setStep(1)}
-                    style={[styles.secondaryBtn, { flex: 1 }]}
-                    disabled={saving}
-                  >
-                    <Text style={styles.secondaryBtnText}>بازگشت</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={() => setStep(3)}
-                    style={[styles.primaryBtn, { flex: 1 }, (!step2Ok || saving) && { opacity: 0.45 }]}
-                    disabled={!step2Ok || saving}
-                  >
-                    <Text style={styles.primaryBtnText}>ادامه</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </>
-          ) : null}
-
-          {/* Step 3 */}
-          {step === 3 ? (
-            <>
-              <View style={styles.sectionCard}>
-                <Text style={styles.h1}>تثبیت بعد از موج</Text>
-                <Text style={styles.p}>
-                  اینجا مغزت رو از «منطقِ برگشت» جدا می‌کنی.
-                  {"\n"}
-                  هدف: «پایان» رو دوباره محکم کنی، نه اینکه هیجان خودت رو حذف کنی.
-                </Text>
-              </View>
-
-              <View style={{ gap: 10, marginTop: 12 }}>
-                {STABILIZE_CHECKLIST.map((it) => {
-                  const on = stabilizeDoneIds.includes(it.id);
-                  return (
-                    <Pressable
-                      key={it.id}
-                      onPress={() => toggleId("stabilize", it.id)}
-                      disabled={isReview}
-                      style={[styles.choiceCard, on && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
-                    >
-                      <View style={{ flexDirection: "row-reverse", alignItems: "flex-start", gap: 10 }}>
-                        <Ionicons
-                          name={on ? "checkbox" : "square-outline"}
-                          size={18}
-                          color={on ? palette.green : "rgba(231,238,247,.55)"}
-                        />
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.choiceText, { flexShrink: 1 }]}>{it.text}</Text>
-                          {it.help ? <Text style={[styles.small, { marginTop: 6 }]}>{it.help}</Text> : null}
-                        </View>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              {!step3Ok ? (
-                <Text style={[styles.warn, { marginTop: 10 }]}>برای ادامه: همه‌ی موارد این چک‌لیست باید تیک بخوره.</Text>
-              ) : null}
-
-              <View style={{ marginTop: 14, gap: 10 }}>
-                <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={() => setStep(2)}
-                    style={[styles.secondaryBtn, { flex: 1 }]}
-                    disabled={saving}
-                  >
-                    <Text style={styles.secondaryBtnText}>بازگشت</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={() => setStep(4)}
-                    style={[styles.primaryBtn, { flex: 1 }, (!step3Ok || saving) && { opacity: 0.45 }]}
-                    disabled={!step3Ok || saving}
-                  >
-                    <Text style={styles.primaryBtnText}>ادامه</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </>
-          ) : null}
-
-          {/* Step 4 */}
-          {step === 4 ? (
-            <>
-              <View style={styles.sectionCard}>
-                <Text style={styles.h1}>قفلِ بازگشت بعد از احساس</Text>
-                <Text style={styles.p}>
-                  بعد از موج هیجانات، مغز دنبال «راه فرار» می‌گرده:
-                  {"\n"}مثلاً: «فقط یه بار دیگه ببینمش»، «فقط یه پیام بدم» یا «فقط چکش کنم…»
-                  {"\n\n"}
-                  اینجا اون راه رو می‌بندی.
-                </Text>
-              </View>
-
-              <View style={{ gap: 10, marginTop: 12 }}>
-                {LOCK_CHECKLIST.map((it) => {
-                  const on = lockDoneIds.includes(it.id);
-                  const isDanger = it.id === "lk2";
-                  const isGold = it.id === "lk4";
-                  return (
-                    <Pressable
-                      key={it.id}
-                      onPress={() => toggleId("lock", it.id)}
-                      disabled={isReview}
-                      style={[
-                        styles.choiceCard,
-                        on && styles.choiceCardOn,
-                        isReview && { opacity: 0.7 },
-                        isDanger && { backgroundColor: "rgba(252,165,165,.04)", borderColor: "rgba(252,165,165,.18)" },
-                        isGold && { backgroundColor: "rgba(212,175,55,.06)", borderColor: "rgba(212,175,55,.18)" },
-                      ]}
-                    >
-                      <View style={{ flexDirection: "row-reverse", alignItems: "flex-start", gap: 10 }}>
-                        <Ionicons
-                          name={on ? "checkbox" : "square-outline"}
-                          size={18}
-                          color={on ? palette.green : "rgba(231,238,247,.55)"}
-                        />
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.choiceText, { flexShrink: 1 }]}>{it.text}</Text>
-                          {it.help ? <Text style={[styles.small, { marginTop: 6 }]}>{it.help}</Text> : null}
-                        </View>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <View style={[styles.noteCard, { marginTop: 12 }]}>
-                <Text style={styles.noteTitle}>اون «کار مشخص» چیه؟ (اجباری)</Text>
-                <Text style={styles.small}>
-                  یک کار خیلی ساده بنویس که همین الان انجام می‌دی.
-                  {"\n"}مثال: «می‌رم آب می‌خورم»، «۱۰ دقیقه قدم می‌زنم»، «به یه آدم امن زنگ می‌زنم»، «می‌خوابم»
-                </Text>
-
-                <View style={{ height: 10 }} />
-                <TextInput
-                  editable={!isReview}
-                  value={nextActionText}
-                  onChangeText={(t) => (isReview ? null : setNextActionText(t))}
-                  placeholder="کار مشخص من…"
-                  placeholderTextColor="rgba(231,238,247,.45)"
-                  style={[styles.inputMultiline, isReview && { opacity: 0.7 }]}
-                  multiline
-                  textAlignVertical="top"
-                  maxLength={220}
-                />
-              </View>
-
-              {!step4Ok ? (
-                <Text style={[styles.warn, { marginTop: 10 }]}>برای ثبت: همه تیک‌ها + یک کار مشخص لازمه.</Text>
-              ) : null}
-
-              <View style={{ marginTop: 14, gap: 10 }}>
-                <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={() => setStep(3)}
-                    style={[styles.secondaryBtn, { flex: 1 }]}
-                    disabled={saving}
-                  >
-                    <Text style={styles.secondaryBtnText}>بازگشت</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    disabled={saving || (!isReview && !canFinalize)}
-                    onPress={() => {
-                      if (isReview) {
-                        router.back();
-                        return;
+                  <View style={{ height: 10 }} />
+                  <TextInput
+                    ref={nextActionInputRef}
+                    editable={!isReview}
+                    value={nextActionText}
+                    onChangeText={(t) => (isReview ? null : setNextActionText(t))}
+                    onFocus={() => {
+                      if (Platform.OS === "android") {
+                        // اندروید بیشتر قاطی می‌کنه → با تاخیر کوچیک اسکرول کن
+                        setTimeout(() => scrollToInput(nextActionInputRef, 24), 40);
+                      } else {
+                        scrollToInput(nextActionInputRef, 18);
                       }
-                      setConfirmLockModal(true);
                     }}
-                    style={[styles.primaryBtn, { flex: 1 }, (saving || (!isReview && !canFinalize)) && { opacity: 0.45 }]}
-                  >
-                    <Text style={styles.primaryBtnText}>{saving ? "در حال انجام…" : isReview ? "خروج" : "ثبت و پایان"}</Text>
-                  </TouchableOpacity>
+                    placeholder="کار مشخص من…"
+                    placeholderTextColor="rgba(231,238,247,.45)"
+                    style={[styles.inputMultiline, isReview && { opacity: 0.7 }]}
+                    multiline
+                    textAlignVertical="top"
+                    maxLength={220}
+                  />
                 </View>
 
-                {!isReview && !canFinalize ? <Text style={styles.warn}>قبل از ثبت، همه مراحل باید کامل بشه.</Text> : null}
-                {isReview ? <Text style={styles.small}>در حالت مرور، فقط نمایش است و امکان ادیت نداری.</Text> : null}
-              </View>
-            </>
-          ) : null}
+                {!step4Ok ? <Text style={[styles.warn, { marginTop: 10 }]}>برای ثبت: همه تیک‌ها + یک کار مشخص لازمه.</Text> : null}
+
+                <View style={{ marginTop: 14, gap: 10 }}>
+                  <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => setStep(3)}
+                      style={[styles.secondaryBtn, { flex: 1 }]}
+                      disabled={saving}
+                    >
+                      <Text style={styles.secondaryBtnText}>بازگشت</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      disabled={saving || (!isReview && !canFinalize)}
+                      onPress={() => {
+                        if (isReview) {
+                          router.back();
+                          return;
+                        }
+                        setConfirmLockModal(true);
+                      }}
+                      style={[styles.primaryBtn, { flex: 1 }, (saving || (!isReview && !canFinalize)) && { opacity: 0.45 }]}
+                    >
+                      <Text style={styles.primaryBtnText}>{saving ? "در حال انجام…" : isReview ? "خروج" : "ثبت و پایان"}</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {!isReview && !canFinalize ? <Text style={styles.warn}>قبل از ثبت، همه مراحل باید کامل بشه.</Text> : null}
+                  {isReview ? <Text style={styles.small}>در حالت مرور، فقط نمایش است و امکان ادیت نداری.</Text> : null}
+                </View>
+
+                {/* ✅ این spacer باعث میشه حتی با باگ‌های کیبورد اندروید هم ته صفحه قابل اسکرول باشه */}
+                <View style={{ height: 24 }} />
+              </>
+            ) : null}
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -1302,7 +1350,6 @@ export default function CR3AfterFeelingScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: palette.bg },
 
-  // ✅ مهم: شفاف باشه تا گلوها دفن نشن
   kav: { flex: 1, backgroundColor: "transparent" },
   scroll: { flex: 1, backgroundColor: "transparent" },
   scrollContent: { flexGrow: 1, padding: 16 },

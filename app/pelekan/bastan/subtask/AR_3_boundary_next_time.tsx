@@ -4,19 +4,19 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    InteractionManager,
-    Keyboard,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    findNodeHandle,
+  ActivityIndicator,
+  InteractionManager,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  findNodeHandle,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -211,6 +211,9 @@ export default function AR3BoundaryNextTimeScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const inputRefs = useRef<Record<string, TextInput | null>>({});
 
+  // ✅ مثل RC4: آخرین input فوکوس‌شده را نگه می‌داریم تا بعد از باز شدن کیبورد re-scroll کنیم
+  const focusedKeyRef = useRef<string | null>(null);
+
   // داده‌های ورودی از ریز اقدام اول
   const [top3, setTop3] = useState<string[]>([]);
 
@@ -275,7 +278,7 @@ export default function AR3BoundaryNextTimeScreen() {
     };
   }, [step, booting]);
 
-  /* ----------------------------- Scroll to input ----------------------------- */
+  /* ----------------------------- Scroll to input (RC4 style) ----------------------------- */
   const scrollToInput = useCallback((id: string, extraOffset = 22) => {
     const input = inputRefs.current[id] as any;
     const scroll = scrollRef.current as any;
@@ -287,6 +290,33 @@ export default function AR3BoundaryNextTimeScreen() {
     const responder = scroll.getScrollResponder?.();
     responder?.scrollResponderScrollNativeHandleToKeyboard?.(node, extraOffset, true);
   }, []);
+
+  // ✅ مثل RC4: بعد از باز شدن کیبورد، دوباره روی input فوکوس‌شده اسکرول کن
+  useEffect(() => {
+    const onShow = () => {
+      const k = focusedKeyRef.current;
+      if (!k) return;
+
+      // اندروید گاهی اولین اسکرول قبل از استقرار کیبورد انجام میشه؛ یک رفرش با تاخیر کوتاه
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          // offset بیشتر تا زیر کیبورد نره
+          scrollToInput(k, Platform.OS === "ios" ? 22 : 90);
+        }, 40);
+      });
+    };
+
+    const subShow = Keyboard.addListener("keyboardDidShow", onShow);
+    const subHide = Keyboard.addListener("keyboardDidHide", () => {
+      // پاک نکنیم، چون ممکنه کاربر سریع دوباره فوکوس کنه
+      // فقط اگر خواستی می‌تونی اینجا null کنی.
+    });
+
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, [scrollToInput]);
 
   const labelOf = useCallback((id: string) => {
     return BEHAVIORS.find((x) => x.id === id)?.label || id;
@@ -734,7 +764,9 @@ export default function AR3BoundaryNextTimeScreen() {
                         {idx + 1}) {labelOf(id)}
                       </Text>
 
-                      <Text style={[styles.small, { marginTop: 8 }]}>اگه اون موقع مرز داشتی، شرایط فرق می‌کرد؟ اگه اره تایید کن که مرز بسازی</Text>
+                      <Text style={[styles.small, { marginTop: 8 }]}>
+                        اگه اون موقع مرز داشتی، شرایط فرق می‌کرد؟ اگه اره تایید کن که مرز بسازی
+                      </Text>
 
                       <View style={{ marginTop: 10 }}>
                         <Pressable
@@ -813,7 +845,15 @@ export default function AR3BoundaryNextTimeScreen() {
                         }}
                         value={txt}
                         onChangeText={(t) => setBoundaryText(id, t)}
-                        onFocus={() => setTimeout(() => scrollToInput(keyB, 22), 60)}
+                        onFocus={() => {
+                          focusedKeyRef.current = keyB;
+                          // ✅ اسکرول سریع + یک رفرش بعد از اینکه کیبورد آمد (keyboardDidShow)
+                          requestAnimationFrame(() => {
+                            setTimeout(() => {
+                              scrollToInput(keyB, Platform.OS === "ios" ? 22 : 90);
+                            }, 30);
+                          });
+                        }}
                         placeholder="اگر دوباره این اتفاق افتاد، من..…"
                         placeholderTextColor="rgba(231,238,247,.35)"
                         multiline
@@ -827,7 +867,7 @@ export default function AR3BoundaryNextTimeScreen() {
                       />
 
                       <Text style={[styles.small, !isReview && (len < 30 || len > 160) ? { color: palette.red } : null]}>
-                        {isReview ? "ثبت شده" : `${len}/30`}
+                        {isReview ? "ثبت شده" : `${len}/160`}
                       </Text>
                     </View>
                   );
@@ -943,9 +983,7 @@ export default function AR3BoundaryNextTimeScreen() {
                     onPress={onFinishPress}
                     style={[styles.primaryBtn, { flex: 1 }, ((!isReview && !step4Ok) || saving) && { opacity: 0.45 }]}
                   >
-                    <Text style={styles.primaryBtnText}>
-                      {saving ? "در حال انجام" : isReview ? "خروج" : "ثبت و پایان"}
-                    </Text>
+                    <Text style={styles.primaryBtnText}>{saving ? "در حال انجام" : isReview ? "خروج" : "ثبت و پایان"}</Text>
                   </TouchableOpacity>
                 </View>
 

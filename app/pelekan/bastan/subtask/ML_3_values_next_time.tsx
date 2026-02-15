@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   InteractionManager,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -522,8 +523,7 @@ export default function ML3ValuesNextTimeScreen() {
 
   /* ----------------------------- Validation ----------------------------- */
 
-  const step1Ok =
-    values.length >= MIN_VALUES && (!hasCustomValue || String(customValueTitle || "").trim().length >= 2);
+  const step1Ok = values.length >= MIN_VALUES && (!hasCustomValue || String(customValueTitle || "").trim().length >= 2);
 
   const step2Ok = cleanedNonNegotiables.length >= MIN_NN;
 
@@ -620,7 +620,6 @@ export default function ML3ValuesNextTimeScreen() {
         commitmentLen: String(commitmentText || "").trim().length,
         agreeLocked: agreeLocked,
 
-        // خلاصه‌ی انسانی برای گزارش/لاگ (مشابه ML_2 که anchorText می‌فرستاد)
         summary: {
           values: selectedValueTitles.slice(0, 12),
           nonNegotiablesSample: cleanedNonNegotiables.slice(0, 3).map((x) => x.text),
@@ -780,16 +779,22 @@ export default function ML3ValuesNextTimeScreen() {
         <View style={{ width: 34, height: 34 }} />
       </View>
 
+      {/* IMPORTANT: Android jitter fix => do NOT use behavior="height" */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={insets.top + 12}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 12 : 0}
       >
         <ScrollView
           ref={scrollRef}
           contentContainerStyle={{ padding: 16, paddingBottom: 18 + insets.bottom + 24 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          nestedScrollEnabled
+          scrollEventThrottle={16}
+          removeClippedSubviews={false}
+          onScrollBeginDrag={() => Keyboard.dismiss()}
         >
           {isReview ? (
             <View style={styles.reviewBanner}>
@@ -805,7 +810,7 @@ export default function ML3ValuesNextTimeScreen() {
             <View style={styles.sectionCard}>
               <Text style={styles.h1}>ارزش‌های غیرقابل مذاکره</Text>
               <Text style={styles.p}>
-                 تا پايان مسير درمانيت داخل ققنوس پيشنهاد ميشه وارد رابطه عاطفی ديگه‌ای نشی
+                تا پايان مسير درمانيت داخل ققنوس پيشنهاد ميشه وارد رابطه عاطفی ديگه‌ای نشی
                 {"\n"}ولی از همین الان، ارزش‌های غیرقابل مذاکره رابطه بعدیت باید مشخص باشه تا رابطه بعدیت شبیه رابطه قبلیت نشه
                 {"\n"}الان فقط انتخاب می‌کنی که چی برای رابطه بعدی «قانون»ه.
                 {"\n\n"}حداقل {MIN_VALUES} ارزش رو انتخاب کن.
@@ -846,10 +851,11 @@ export default function ML3ValuesNextTimeScreen() {
                             editable={!isReview}
                             value={String(meanings[v.key] || "")}
                             onChangeText={(t) => updateMeaning(v.key, t)}
-                            
                             placeholderTextColor="rgba(231,238,247,.45)"
                             style={[styles.input, isReview && { opacity: 0.7 }]}
                             multiline
+                            scrollEnabled={Platform.OS === "ios"} // Android jitter fix
+                            underlineColorAndroid="transparent"
                           />
                         </View>
                       ) : null}
@@ -881,6 +887,7 @@ export default function ML3ValuesNextTimeScreen() {
                         placeholder="نام ارزش دلخواه"
                         placeholderTextColor="rgba(231,238,247,.45)"
                         style={[styles.input, isReview && { opacity: 0.7 }]}
+                        underlineColorAndroid="transparent"
                       />
                       <View style={{ height: 8 }} />
                       <TextInput
@@ -891,6 +898,8 @@ export default function ML3ValuesNextTimeScreen() {
                         placeholderTextColor="rgba(231,238,247,.45)"
                         style={[styles.input, isReview && { opacity: 0.7 }]}
                         multiline
+                        scrollEnabled={Platform.OS === "ios"} // Android jitter fix
+                        underlineColorAndroid="transparent"
                       />
                     </View>
                   ) : null}
@@ -972,6 +981,8 @@ export default function ML3ValuesNextTimeScreen() {
                         placeholderTextColor="rgba(231,238,247,.45)"
                         style={[styles.input, isReview && { opacity: 0.7 }]}
                         multiline
+                        scrollEnabled={Platform.OS === "ios"} // Android jitter fix
+                        underlineColorAndroid="transparent"
                       />
                     </View>
                   ))}
@@ -997,18 +1008,11 @@ export default function ML3ValuesNextTimeScreen() {
                 </View>
               </View>
 
-              {!step2Ok ? (
-                <Text style={[styles.warn, { marginTop: 10 }]}>برای ادامه، حداقل {MIN_NN} مرزِ قابل اجرا بنویس.</Text>
-              ) : null}
+              {!step2Ok ? <Text style={[styles.warn, { marginTop: 10 }]}>برای ادامه، حداقل {MIN_NN} مرزِ قابل اجرا بنویس.</Text> : null}
 
               <View style={{ marginTop: 14, gap: 10 }}>
                 <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={() => setStep(1)}
-                    style={[styles.secondaryBtn, { flex: 1 }]}
-                    disabled={saving}
-                  >
+                  <TouchableOpacity activeOpacity={0.9} onPress={() => setStep(1)} style={[styles.secondaryBtn, { flex: 1 }]} disabled={saving}>
                     <Text style={styles.secondaryBtnText}>بازگشت</Text>
                   </TouchableOpacity>
 
@@ -1089,11 +1093,7 @@ export default function ML3ValuesNextTimeScreen() {
                           <Pressable
                             onPress={() => updateIfThen(x.id, { triggerKey: "t_custom" })}
                             disabled={isReview}
-                            style={[
-                              styles.choiceCard,
-                              x.triggerKey === "t_custom" && styles.choiceCardOn,
-                              isReview && { opacity: 0.7 },
-                            ]}
+                            style={[styles.choiceCard, x.triggerKey === "t_custom" && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
                           >
                             <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
                               <Ionicons
@@ -1114,6 +1114,7 @@ export default function ML3ValuesNextTimeScreen() {
                                 placeholder="موقعیت دلخواه رو بنویس…"
                                 placeholderTextColor="rgba(231,238,247,.45)"
                                 style={[styles.input, isReview && { opacity: 0.7 }]}
+                                underlineColorAndroid="transparent"
                               />
                             </View>
                           ) : null}
@@ -1130,6 +1131,8 @@ export default function ML3ValuesNextTimeScreen() {
                           placeholderTextColor="rgba(231,238,247,.45)"
                           style={[styles.input, isReview && { opacity: 0.7 }]}
                           multiline
+                          scrollEnabled={Platform.OS === "ios"} // Android jitter fix
+                          underlineColorAndroid="transparent"
                         />
                       </View>
                     );
@@ -1164,12 +1167,7 @@ export default function ML3ValuesNextTimeScreen() {
 
               <View style={{ marginTop: 14, gap: 10 }}>
                 <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={() => setStep(2)}
-                    style={[styles.secondaryBtn, { flex: 1 }]}
-                    disabled={saving}
-                  >
+                  <TouchableOpacity activeOpacity={0.9} onPress={() => setStep(2)} style={[styles.secondaryBtn, { flex: 1 }]} disabled={saving}>
                     <Text style={styles.secondaryBtnText}>بازگشت</Text>
                   </TouchableOpacity>
 
@@ -1222,6 +1220,8 @@ export default function ML3ValuesNextTimeScreen() {
                     placeholderTextColor="rgba(231,238,247,.45)"
                     style={[styles.input, { minHeight: 90 }, isReview && { opacity: 0.7 }]}
                     multiline
+                    scrollEnabled={Platform.OS === "ios"} // Android jitter fix
+                    underlineColorAndroid="transparent"
                   />
                 </View>
 
@@ -1246,25 +1246,18 @@ export default function ML3ValuesNextTimeScreen() {
                         color={agreeLocked ? palette.green : "rgba(231,238,247,.55)"}
                       />
                       <Text style={[styles.choiceText, { flex: 1 }]}>
-                      قول میدم همه ارزش‌ها و مرزهای خودم پایبند باشم و اون‌ها رو تحت هیچ شرایطی زیر پا نذارم.
+                        قول میدم همه ارزش‌ها و مرزهای خودم پایبند باشم و اون‌ها رو تحت هیچ شرایطی زیر پا نذارم.
                       </Text>
                     </View>
                   </Pressable>
                 </View>
 
-                {!step4Ok ? (
-                  <Text style={[styles.warn, { marginTop: 10 }]}>برای ثبت: متن تعهد + تیک قفل لازم است.</Text>
-                ) : null}
+                {!step4Ok ? <Text style={[styles.warn, { marginTop: 10 }]}>برای ثبت: متن تعهد + تیک قفل لازم است.</Text> : null}
               </View>
 
               <View style={{ marginTop: 14, gap: 10 }}>
                 <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={() => setStep(3)}
-                    style={[styles.secondaryBtn, { flex: 1 }]}
-                    disabled={saving}
-                  >
+                  <TouchableOpacity activeOpacity={0.9} onPress={() => setStep(3)} style={[styles.secondaryBtn, { flex: 1 }]} disabled={saving}>
                     <Text style={styles.secondaryBtnText}>بازگشت</Text>
                   </TouchableOpacity>
 

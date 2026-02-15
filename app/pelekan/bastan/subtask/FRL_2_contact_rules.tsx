@@ -4,16 +4,16 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    InteractionManager,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  InteractionManager,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -678,7 +678,7 @@ export default function FRL2ContactRulesScreen() {
                   {"\n\n"}
                   از نظر نوروساینس:
                   {"\n"}
-                  تماس‌های مبهم و کش‌دار، سیستم پاداش و دلبستگی رو فعال می‌کنن (دقیقاً همون چیزی که اعتیاد رابطه رو زنده نگه می‌داره).
+                  تماس‌های مبهم و کش‌دار، سیستم پاداش و دلبستگی رو فعال می‌کنن.
                   {"\n\n"}
                   هدف این ریزاقدام:
                   {"\n"}• تماس رو «اجرایی» کنه، نه «احساسی»
@@ -695,22 +695,29 @@ export default function FRL2ContactRulesScreen() {
                 </View>
 
                 <Pressable
-                  onPress={() => {
-                    if (isReview) return;
-                    setAcceptedProtocol((x) => !x);
-                  }}
-                  style={[styles.choiceCard, acceptedProtocol && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
-                  disabled={isReview}
-                >
-                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
-                    <Ionicons
-                      name={acceptedProtocol ? "checkmark-circle" : "ellipse-outline"}
-                      size={18}
-                      color={acceptedProtocol ? palette.green : "rgba(231,238,247,.55)"}
-                    />
-                    <Text style={styles.choiceText}>قبول دارم: اینجا فقط «پروتکل تماس» می‌سازم، نه رابطه</Text>
-                  </View>
-                </Pressable>
+  onPress={() => {
+    if (isReview) return;
+    setAcceptedProtocol((x) => !x);
+  }}
+  style={[
+    styles.choiceCard,
+    { marginTop: 12 }, 
+    acceptedProtocol && styles.choiceCardOn,
+    isReview && { opacity: 0.7 },
+  ]}
+  disabled={isReview}
+>
+  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+    <Ionicons
+      name={acceptedProtocol ? "checkmark-circle" : "ellipse-outline"}
+      size={18}
+      color={acceptedProtocol ? palette.green : "rgba(231,238,247,.55)"}
+    />
+    <Text style={styles.choiceText}>
+      قبول دارم: اینجا فقط «پروتکل تماس» می‌سازم، نه رابطه
+    </Text>
+  </View>
+</Pressable>
 
                 <View style={{ height: 12 }} />
 
@@ -1406,4 +1413,4 @@ const styles = StyleSheet.create({
     borderColor: palette.border,
   },
   modalSecondaryText: { color: palette.text, fontWeight: "900" },
-});
+}); 

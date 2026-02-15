@@ -410,7 +410,7 @@ export default function BastanActionScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.subtaskTitle}>{faOnlyTitle(s.titleFa)}</Text>
 
-                      {!!s.helpFa ? <Text style={styles.subtaskHelp}>{faOnlyTitle(s.helpFa)}</Text> : null}
+                      
 
                       <View style={styles.metaRow}>
                         <View style={styles.metaPill}>

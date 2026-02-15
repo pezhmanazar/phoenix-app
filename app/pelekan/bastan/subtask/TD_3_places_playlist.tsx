@@ -13,7 +13,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -134,10 +134,22 @@ function ThemedModal({
   if (!visible) return null;
 
   const icon =
-    kind === "success" ? "checkmark-circle" : kind === "warn" ? "warning" : kind === "info" ? "information-circle" : "alert-circle";
+    kind === "success"
+      ? "checkmark-circle"
+      : kind === "warn"
+      ? "warning"
+      : kind === "info"
+      ? "information-circle"
+      : "alert-circle";
 
   const iconColor =
-    kind === "success" ? palette.green : kind === "warn" ? palette.orange : kind === "info" ? "rgba(231,238,247,.85)" : palette.red;
+    kind === "success"
+      ? palette.green
+      : kind === "warn"
+      ? palette.orange
+      : kind === "info"
+      ? "rgba(231,238,247,.85)"
+      : palette.red;
 
   return (
     <View style={styles.modalOverlay} pointerEvents="auto">
@@ -206,10 +218,22 @@ export default function TD3PlacesPlaylistScreen() {
   const [acceptedWhy, setAcceptedWhy] = useState(false);
 
   // Step 2: places (5)
-  const [places, setPlaces] = useState<TriggerItem[]>([emptyTrigger(), emptyTrigger(), emptyTrigger(), emptyTrigger(), emptyTrigger()]);
+  const [places, setPlaces] = useState<TriggerItem[]>([
+    emptyTrigger(),
+    emptyTrigger(),
+    emptyTrigger(),
+    emptyTrigger(),
+    emptyTrigger(),
+  ]);
 
   // Step 3: playlists/media (5)
-  const [playlists, setPlaylists] = useState<TriggerItem[]>([emptyTrigger(), emptyTrigger(), emptyTrigger(), emptyTrigger(), emptyTrigger()]);
+  const [playlists, setPlaylists] = useState<TriggerItem[]>([
+    emptyTrigger(),
+    emptyTrigger(),
+    emptyTrigger(),
+    emptyTrigger(),
+    emptyTrigger(),
+  ]);
 
   // Step 4: core triggers (3)
   const [core, setCore] = useState<CorePlan[]>([
@@ -271,7 +295,8 @@ export default function TD3PlacesPlaylistScreen() {
         }));
 
     const normCore = (arr: any[]): CorePlan[] =>
-      [...arr,
+      [
+        ...arr,
         { label: "محرک اول", fromType: "place", index: 0, plan30: "", envChange: "" },
         { label: "محرک دوم", fromType: "place", index: 0, plan30: "", envChange: "" },
         { label: "محرک سوم", fromType: "place", index: 0, plan30: "", envChange: "" },
@@ -695,11 +720,7 @@ export default function TD3PlacesPlaylistScreen() {
               activeOpacity={0.9}
               onPress={() => onChange(w.key)}
               disabled={!!disabled}
-              style={[
-                styles.pill,
-                on && styles.pillOn,
-                disabled && { opacity: 0.7 },
-              ]}
+              style={[styles.pill, on && styles.pillOn, disabled && { opacity: 0.7 }]}
             >
               <Text style={styles.pillText}>{w.fa}</Text>
             </TouchableOpacity>
@@ -759,12 +780,19 @@ export default function TD3PlacesPlaylistScreen() {
         <View style={{ width: 34, height: 34 }} />
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={insets.top + 12}>
+      {/* ✅ Fix: one unified KeyboardAvoidingView for BOTH iOS & Android */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 12 : 0}
+      >
         <ScrollView
           ref={scrollRef}
           contentContainerStyle={{ padding: 16, paddingBottom: 18 + insets.bottom + 24 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          nestedScrollEnabled
         >
           {isReview ? (
             <View style={styles.reviewBanner}>
@@ -827,223 +855,198 @@ export default function TD3PlacesPlaylistScreen() {
           ) : null}
 
           {/* ----------------------------- Step 2 ----------------------------- */}
-{step === 2 ? (
-  <>
-    <View style={styles.sectionCard}>
-      <Text style={styles.h1}>۵ مکان محرک</Text>
-      <Text style={styles.p}>
-        ۵ جایی رو بنویس که بیشتر از همه موج وسوسه یا ناراحتی می‌سازه.
-        {"\n"}برای هر مورد: شدت موج، نوع موج و رفتاری که معمولاً بعدش انجام می‌دی رو مشخص کن.
-        {"\n\n"}نکته: لازم نیست داستان بنویسی؛ کوتاه و دقیق.
-      </Text>
-    </View>
+          {step === 2 ? (
+            <>
+              <View style={styles.sectionCard}>
+                <Text style={styles.h1}>۵ مکان محرک</Text>
+                <Text style={styles.p}>
+                  ۵ جایی رو بنویس که بیشتر از همه موج وسوسه یا ناراحتی می‌سازه.
+                  {"\n"}برای هر مورد: شدت موج، نوع موج و رفتاری که معمولاً بعدش انجام می‌دی رو مشخص کن.
+                  {"\n\n"}نکته: لازم نیست داستان بنویسی؛ کوتاه و دقیق.
+                </Text>
+              </View>
 
-    <View style={{ gap: 12, marginTop: 10 }}>
-      {places.map((it, idx) => {
-        const titleLen = trimLen(it.title);
-        const afterLen = trimLen(it.afterBehavior);
+              <View style={{ gap: 12, marginTop: 10 }}>
+                {places.map((it, idx) => {
+                  const titleLen = trimLen(it.title);
+                  const afterLen = trimLen(it.afterBehavior);
 
-        return (
-          <View key={`pl_${idx}`} style={[styles.noteCard, isReview && { opacity: 0.95 }]}>
-            <Text style={styles.noteTitle}>{idx + 1}) مکان</Text>
+                  return (
+                    <View key={`pl_${idx}`} style={[styles.noteCard, isReview && { opacity: 0.95 }]}>
+                      <Text style={styles.noteTitle}>{idx + 1}) مکان</Text>
 
-            <TextInput
-              value={it.title}
-              onChangeText={(t) => setPlaceTitle(idx, t)}
-              placeholder={`مثال: کافه...، مسیر... مثل مسیر دانشگاه یا سر کار`}
-              placeholderTextColor="rgba(231,238,247,.35)"
-              style={[styles.inputOne, isReview && styles.inputReadOnly]}
-              textAlign="right"
-              editable={!isReview}
-              selectTextOnFocus={!isReview}
-            />
+                      <TextInput
+                        value={it.title}
+                        onChangeText={(t) => setPlaceTitle(idx, t)}
+                        placeholder={`مثال: کافه...، مسیر... مثل مسیر دانشگاه یا سر کار`}
+                        placeholderTextColor="rgba(231,238,247,.35)"
+                        style={[styles.inputOne, isReview && styles.inputReadOnly]}
+                        textAlign="right"
+                        editable={!isReview}
+                        selectTextOnFocus={!isReview}
+                      />
 
-            <Text style={[styles.small, !isReview && titleLen < 2 ? { color: palette.red } : null]}>
-              {isReview ? "ثبت شده" : `${titleLen}/2`}
-            </Text>
+                      <Text style={[styles.small, !isReview && titleLen < 2 ? { color: palette.red } : null]}>
+                        {isReview ? "ثبت شده" : `${titleLen}/2`}
+                      </Text>
 
-            {/* ✅ شدت موج - وسط چین */}
-            <View style={{ marginTop: 10, alignItems: "center" }}>
-              <Text style={[styles.small, { textAlign: "center" }]}>شدت موج (۱ کم تا ۵ شدید):</Text>
-            </View>
-            <View style={{ alignItems: "center", marginTop: 8 }}>
-              <IntensitySelector
-                value={it.intensity}
-                onChange={(v) => setPlaceIntensity(idx, v)}
-                disabled={isReview}
-              />
-            </View>
+                      <View style={{ marginTop: 10, alignItems: "center" }}>
+                        <Text style={[styles.small, { textAlign: "center" }]}>شدت موج (۱ کم تا ۵ شدید):</Text>
+                      </View>
+                      <View style={{ alignItems: "center", marginTop: 8 }}>
+                        <IntensitySelector value={it.intensity} onChange={(v) => setPlaceIntensity(idx, v)} disabled={isReview} />
+                      </View>
 
-            {/* ✅ نوع موج - وسط چین */}
-            <View style={{ marginTop: 12, alignItems: "center" }}>
-              <Text style={[styles.small, { textAlign: "center" }]}>نوع موج:</Text>
-            </View>
-            <View style={{ alignItems: "center", marginTop: 8 }}>
-              <WaveSelector
-                value={it.wave}
-                onChange={(v) => setPlaceWave(idx, v)}
-                disabled={isReview}
-              />
-            </View>
+                      <View style={{ marginTop: 12, alignItems: "center" }}>
+                        <Text style={[styles.small, { textAlign: "center" }]}>نوع موج:</Text>
+                      </View>
+                      <View style={{ alignItems: "center", marginTop: 8 }}>
+                        <WaveSelector value={it.wave} onChange={(v) => setPlaceWave(idx, v)} disabled={isReview} />
+                      </View>
 
-            <TextInput
-              value={it.afterBehavior}
-              onChangeText={(t) => setPlaceAfter(idx, t)}
-              placeholder="بعدش معمولاً چی کار می‌کنی؟ (مثال: چکش میکنم، بهش پیام می‌دم یا می‌رم تو چت‌های قدیمی…)"
-              placeholderTextColor="rgba(231,238,247,.35)"
-              style={[styles.inputFinal, isReview && styles.inputReadOnly]}
-              textAlign="right"
-              textAlignVertical="top"
-              editable={!isReview}
-              selectTextOnFocus={!isReview}
-              multiline
-            />
+                      <TextInput
+                        value={it.afterBehavior}
+                        onChangeText={(t) => setPlaceAfter(idx, t)}
+                        placeholder="بعدش معمولاً چی کار می‌کنی؟ (مثال: چکش میکنم، بهش پیام می‌دم یا می‌رم تو چت‌های قدیمی…)"
+                        placeholderTextColor="rgba(231,238,247,.35)"
+                        style={[styles.inputFinal, isReview && styles.inputReadOnly]}
+                        textAlign="right"
+                        textAlignVertical="top"
+                        editable={!isReview}
+                        selectTextOnFocus={!isReview}
+                        multiline
+                      />
 
-            <Text style={[styles.small, !isReview && afterLen < 3 ? { color: palette.red } : null]}>
-              {isReview ? "ثبت شده" : `${afterLen}/3`}
-            </Text>
-          </View>
-        );
-      })}
-    </View>
+                      <Text style={[styles.small, !isReview && afterLen < 3 ? { color: palette.red } : null]}>
+                        {isReview ? "ثبت شده" : `${afterLen}/3`}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
 
-    <View style={{ marginTop: 14, gap: 10 }}>
-      <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => setStep(1)}
-          style={[styles.secondaryBtn, { flex: 1 }]}
-          disabled={saving}
-        >
-          <Text style={styles.secondaryBtnText}>بازگشت</Text>
-        </TouchableOpacity>
+              <View style={{ marginTop: 14, gap: 10 }}>
+                <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => setStep(1)}
+                    style={[styles.secondaryBtn, { flex: 1 }]}
+                    disabled={saving}
+                  >
+                    <Text style={styles.secondaryBtnText}>بازگشت</Text>
+                  </TouchableOpacity>
 
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => setStep(3)}
-          style={[styles.primaryBtn, { flex: 1 }, (!canGo3 || saving) && { opacity: 0.45 }]}
-          disabled={!canGo3 || saving}
-        >
-          <Text style={styles.primaryBtnText}>ادامه</Text>
-        </TouchableOpacity>
-      </View>
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => setStep(3)}
+                    style={[styles.primaryBtn, { flex: 1 }, (!canGo3 || saving) && { opacity: 0.45 }]}
+                    disabled={!canGo3 || saving}
+                  >
+                    <Text style={styles.primaryBtnText}>ادامه</Text>
+                  </TouchableOpacity>
+                </View>
 
-      {!canGo3 ? <Text style={styles.warn}>برای رفتن به مرحله بعد، هر ۵ مکان باید کامل باشه (نام + رفتار بعدش).</Text> : null}
-    </View>
-  </>
-) : null}
+                {!canGo3 ? <Text style={styles.warn}>برای رفتن به مرحله بعد، هر ۵ مکان باید کامل باشه (نام + رفتار بعدش).</Text> : null}
+              </View>
+            </>
+          ) : null}
+
           {/* ----------------------------- Step 3 ----------------------------- */}
-{step === 3 ? (
-  <>
-    <View style={styles.sectionCard}>
-      <Text style={styles.h1}>۵ پلی‌لیست یا رسانه محرک</Text>
-      <Text style={styles.p}>
-        اینجا منظور فقط آهنگ نیست؛ هر چیزی که تو رو پرت می‌کنه داخل خاطره.
-        {"\n"}مثل: پلی‌لیست، یک آهنگ خاص، کلیپ‌ها، آلبوم عکس‌ها، سریال‌های مشترک…
-        {"\n\n"}
-      </Text>
-    </View>
+          {step === 3 ? (
+            <>
+              <View style={styles.sectionCard}>
+                <Text style={styles.h1}>۵ پلی‌لیست یا رسانه محرک</Text>
+                <Text style={styles.p}>
+                  اینجا منظور فقط آهنگ نیست؛ هر چیزی که تو رو پرت می‌کنه داخل خاطره.
+                  {"\n"}مثل: پلی‌لیست، یک آهنگ خاص، کلیپ‌ها، آلبوم عکس‌ها، سریال‌های مشترک…
+                  {"\n\n"}
+                </Text>
+              </View>
 
-    <View style={{ gap: 12, marginTop: 10 }}>
-      {playlists.map((it, idx) => {
-        const titleLen = trimLen(it.title);
-        const afterLen = trimLen(it.afterBehavior);
+              <View style={{ gap: 12, marginTop: 10 }}>
+                {playlists.map((it, idx) => {
+                  const titleLen = trimLen(it.title);
+                  const afterLen = trimLen(it.afterBehavior);
 
-        return (
-          <View key={`md_${idx}`} style={[styles.noteCard, isReview && { opacity: 0.95 }]}>
-            <Text style={styles.noteTitle}>{idx + 1}) پلی‌لیست یا رسانه</Text>
+                  return (
+                    <View key={`md_${idx}`} style={[styles.noteCard, isReview && { opacity: 0.95 }]}>
+                      <Text style={styles.noteTitle}>{idx + 1}) پلی‌لیست یا رسانه</Text>
 
-            <TextInput
-              value={it.title}
-              onChangeText={(t) => setPlayTitle(idx, t)}
-              placeholder="مثال: پلی‌لیست تلگرام، یک آهنگ خاص، آلبوم عکس…"
-              placeholderTextColor="rgba(231,238,247,.35)"
-              style={[styles.inputOne, isReview && styles.inputReadOnly]}
-              textAlign="right"
-              editable={!isReview}
-              selectTextOnFocus={!isReview}
-            />
+                      <TextInput
+                        value={it.title}
+                        onChangeText={(t) => setPlayTitle(idx, t)}
+                        placeholder="مثال: پلی‌لیست تلگرام، یک آهنگ خاص، آلبوم عکس…"
+                        placeholderTextColor="rgba(231,238,247,.35)"
+                        style={[styles.inputOne, isReview && styles.inputReadOnly]}
+                        textAlign="right"
+                        editable={!isReview}
+                        selectTextOnFocus={!isReview}
+                      />
 
-            <Text style={[styles.small, !isReview && titleLen < 2 ? { color: palette.red } : null]}>
-              {isReview ? "ثبت شده" : `${titleLen}/2`}
-            </Text>
+                      <Text style={[styles.small, !isReview && titleLen < 2 ? { color: palette.red } : null]}>
+                        {isReview ? "ثبت شده" : `${titleLen}/2`}
+                      </Text>
 
-            {/* ✅ شدت موج - وسط چین */}
-            <View style={{ marginTop: 10, alignItems: "center" }}>
-              <Text style={[styles.small, { textAlign: "center" }]}>
-                شدت موج (۱ کم تا ۵ شدید):
-              </Text>
-            </View>
-            <View style={{ alignItems: "center", marginTop: 8 }}>
-              <IntensitySelector
-                value={it.intensity}
-                onChange={(v) => setPlayIntensity(idx, v)}
-                disabled={isReview}
-              />
-            </View>
+                      <View style={{ marginTop: 10, alignItems: "center" }}>
+                        <Text style={[styles.small, { textAlign: "center" }]}>شدت موج (۱ کم تا ۵ شدید):</Text>
+                      </View>
+                      <View style={{ alignItems: "center", marginTop: 8 }}>
+                        <IntensitySelector value={it.intensity} onChange={(v) => setPlayIntensity(idx, v)} disabled={isReview} />
+                      </View>
 
-            {/* ✅ نوع موج - وسط چین */}
-            <View style={{ marginTop: 12, alignItems: "center" }}>
-              <Text style={[styles.small, { textAlign: "center" }]}>نوع موج:</Text>
-            </View>
-            <View style={{ alignItems: "center", marginTop: 8 }}>
-              <WaveSelector
-                value={it.wave}
-                onChange={(v) => setPlayWave(idx, v)}
-                disabled={isReview}
-              />
-            </View>
+                      <View style={{ marginTop: 12, alignItems: "center" }}>
+                        <Text style={[styles.small, { textAlign: "center" }]}>نوع موج:</Text>
+                      </View>
+                      <View style={{ alignItems: "center", marginTop: 8 }}>
+                        <WaveSelector value={it.wave} onChange={(v) => setPlayWave(idx, v)} disabled={isReview} />
+                      </View>
 
-            <TextInput
-              value={it.afterBehavior}
-              onChangeText={(t) => setPlayAfter(idx, t)}
-              placeholder="بعدش معمولاً چی کار می‌کنی؟ (مثال: دوباره می‌رم سراغ چت‌ها، گریه می‌کنم یا باهاش تماس می‌گیرم)"
-              placeholderTextColor="rgba(231,238,247,.35)"
-              style={[styles.inputFinal, isReview && styles.inputReadOnly]}
-              textAlign="right"
-              textAlignVertical="top"
-              editable={!isReview}
-              selectTextOnFocus={!isReview}
-              multiline
-            />
+                      <TextInput
+                        value={it.afterBehavior}
+                        onChangeText={(t) => setPlayAfter(idx, t)}
+                        placeholder="بعدش معمولاً چی کار می‌کنی؟ (مثال: دوباره می‌رم سراغ چت‌ها، گریه می‌کنم یا باهاش تماس می‌گیرم)"
+                        placeholderTextColor="rgba(231,238,247,.35)"
+                        style={[styles.inputFinal, isReview && styles.inputReadOnly]}
+                        textAlign="right"
+                        textAlignVertical="top"
+                        editable={!isReview}
+                        selectTextOnFocus={!isReview}
+                        multiline
+                      />
 
-            <Text style={[styles.small, !isReview && afterLen < 3 ? { color: palette.red } : null]}>
-              {isReview ? "ثبت شده" : `${afterLen}/3`}
-            </Text>
-          </View>
-        );
-      })}
-    </View>
+                      <Text style={[styles.small, !isReview && afterLen < 3 ? { color: palette.red } : null]}>
+                        {isReview ? "ثبت شده" : `${afterLen}/3`}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
 
-    <View style={{ marginTop: 14, gap: 10 }}>
-      <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => setStep(2)}
-          style={[styles.secondaryBtn, { flex: 1 }]}
-          disabled={saving}
-        >
-          <Text style={styles.secondaryBtnText}>بازگشت</Text>
-        </TouchableOpacity>
+              <View style={{ marginTop: 14, gap: 10 }}>
+                <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => setStep(2)}
+                    style={[styles.secondaryBtn, { flex: 1 }]}
+                    disabled={saving}
+                  >
+                    <Text style={styles.secondaryBtnText}>بازگشت</Text>
+                  </TouchableOpacity>
 
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => setStep(4)}
-          style={[styles.primaryBtn, { flex: 1 }, (!canGo4 || saving) && { opacity: 0.45 }]}
-          disabled={!canGo4 || saving}
-        >
-          <Text style={styles.primaryBtnText}>ادامه</Text>
-        </TouchableOpacity>
-      </View>
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => setStep(4)}
+                    style={[styles.primaryBtn, { flex: 1 }, (!canGo4 || saving) && { opacity: 0.45 }]}
+                    disabled={!canGo4 || saving}
+                  >
+                    <Text style={styles.primaryBtnText}>ادامه</Text>
+                  </TouchableOpacity>
+                </View>
 
-      {!canGo4 ? (
-        <Text style={styles.warn}>
-          برای رفتن به مرحله بعد، هر ۵ رسانه باید کامل باشه (نام + رفتار بعدش).
-        </Text>
-      ) : null}
-    </View>
-  </>
-) : null}
+                {!canGo4 ? <Text style={styles.warn}>برای رفتن به مرحله بعد، هر ۵ رسانه باید کامل باشه (نام + رفتار بعدش).</Text> : null}
+              </View>
+            </>
+          ) : null}
 
           {/* ----------------------------- Step 4 ----------------------------- */}
           {step === 4 ? (
@@ -1123,7 +1126,7 @@ export default function TD3PlacesPlaylistScreen() {
                       <TextInput
                         value={c.plan30}
                         onChangeText={(t) => setCorePlan30(i, t)}
-                        placeholder='نقشه اضطراریت رو برای این مورد بنویس '
+                        placeholder="نقشه اضطراریت رو برای این مورد بنویس "
                         placeholderTextColor="rgba(231,238,247,.35)"
                         style={[styles.inputFinal, isReview && styles.inputReadOnly]}
                         textAlign="right"
@@ -1218,9 +1221,7 @@ export default function TD3PlacesPlaylistScreen() {
                 {!isReview && !canFinalize ? <Text style={styles.warn}>قبل از ثبت، همه مراحل باید کامل شود.</Text> : null}
 
                 {isReview ? (
-                  <Text style={styles.small}>
-                    نکته: در حالت مرور، می‌تونی با «بازگشت» مراحل ۲ تا ۴ رو ببینی. فقط ادیت قفله.
-                  </Text>
+                  <Text style={styles.small}>نکته: در حالت مرور، می‌تونی با «بازگشت» مراحل ۲ تا ۴ رو ببینی. فقط ادیت قفله.</Text>
                 ) : null}
               </View>
             </>

@@ -684,11 +684,6 @@ export default function RC2CostsScreen() {
                         textAlign="right"
                         editable={!isReview}
                         selectTextOnFocus={!isReview}
-                        onFocus={() => {
-                          requestAnimationFrame(() => {
-                            scrollRef.current?.scrollToEnd({ animated: true });
-                          });
-                        }}
                       />
                       <TextInput
                         value={a1}
@@ -699,11 +694,6 @@ export default function RC2CostsScreen() {
                         textAlign="right"
                         editable={!isReview}
                         selectTextOnFocus={!isReview}
-                        onFocus={() => {
-                          requestAnimationFrame(() => {
-                            scrollRef.current?.scrollToEnd({ animated: true });
-                          });
-                        }}
                       />
                       <TextInput
                         value={a2}
@@ -714,11 +704,6 @@ export default function RC2CostsScreen() {
                         textAlign="right"
                         editable={!isReview}
                         selectTextOnFocus={!isReview}
-                        onFocus={() => {
-                          requestAnimationFrame(() => {
-                            scrollRef.current?.scrollToEnd({ animated: true });
-                          });
-                        }}
                       />
 
                       <Text style={styles.small}>حداکثر ۳ مورد</Text>

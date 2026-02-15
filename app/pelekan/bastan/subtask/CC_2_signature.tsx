@@ -208,6 +208,8 @@ export default function CC2SignatureScreen() {
   const [cooldownDone, setCooldownDone] = useState(false);
   const cooldownTimerRef = useRef<any>(null);
   const [finalAcknowledge, setFinalAcknowledge] = useState(false);
+  const [cooldownLeft, setCooldownLeft] = useState<number>(20);
+  const cooldownIntervalRef = useRef<any>(null);
 
   const [confirmLockModal, setConfirmLockModal] = useState(false);
 
@@ -331,28 +333,59 @@ export default function CC2SignatureScreen() {
   /* ----------------------------- Step 3 cooldown ----------------------------- */
 
   useEffect(() => {
-    if (isReview) return;
+  if (isReview) return;
 
-    if (step !== 3) {
-      setCooldownDone(false);
-      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
-      cooldownTimerRef.current = null;
-      return;
-    }
-
+  // هر بار که از Step 3 خارج شدیم، ریست
+  if (step !== 3) {
     setCooldownDone(false);
+    setCooldownLeft(20);
+
     if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
+    cooldownTimerRef.current = null;
 
-    cooldownTimerRef.current = setTimeout(() => {
-      setCooldownDone(true);
-      cooldownTimerRef.current = null;
-    }, 2500);
+    if (cooldownIntervalRef.current) clearInterval(cooldownIntervalRef.current);
+    cooldownIntervalRef.current = null;
 
-    return () => {
-      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
-      cooldownTimerRef.current = null;
-    };
-  }, [step, isReview]);
+    return;
+  }
+
+  // شروع شمارش از 20
+  setCooldownDone(false);
+  setCooldownLeft(20);
+
+  if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
+  cooldownTimerRef.current = null;
+
+  if (cooldownIntervalRef.current) clearInterval(cooldownIntervalRef.current);
+  cooldownIntervalRef.current = null;
+
+  // هر ثانیه یکی کم کن
+  cooldownIntervalRef.current = setInterval(() => {
+    setCooldownLeft((prev) => {
+      const next = Math.max(0, prev - 1);
+      return next;
+    });
+  }, 1000);
+
+  // بعد از 20 ثانیه آزاد کن
+  cooldownTimerRef.current = setTimeout(() => {
+    setCooldownDone(true);
+
+    if (cooldownIntervalRef.current) clearInterval(cooldownIntervalRef.current);
+    cooldownIntervalRef.current = null;
+
+    cooldownTimerRef.current = null;
+    setCooldownLeft(0);
+  }, 20000);
+
+  return () => {
+    if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
+    cooldownTimerRef.current = null;
+
+    if (cooldownIntervalRef.current) clearInterval(cooldownIntervalRef.current);
+    cooldownIntervalRef.current = null;
+  };
+}, [step, isReview]);
 
   /* ----------------------------- Image Picker ----------------------------- */
 
@@ -948,11 +981,11 @@ export default function CC2SignatureScreen() {
         <View style={{ height: 6 }} />
 
         {/* متن وابسته به cooldown */}
-        <Text style={styles.small}>
-          {cooldownDone
-            ? "حالا می‌تونی با آگاهی کامل این تصمیم رو قفل کنی."
-            : "چند ثانیه مکث کن و اجازه بده مغزت از حالت فرار خارج بشه."}
-        </Text>
+       <Text style={styles.small}>
+  {cooldownDone
+    ? "حالا می‌تونی با آگاهی کامل این تصمیم رو قفل کنی."
+    : `مکث اجباری: ${cooldownLeft} ثانیه`}
+</Text>
 
 
                   <View style={{ height: 12 }} />
@@ -978,8 +1011,9 @@ export default function CC2SignatureScreen() {
                     </View>
                   </Pressable>
 
-                  {!isReview && !cooldownDone ? <Text style={[styles.small, { marginTop: 10 }]}>چند ثانیه…</Text> : null}
-
+{!isReview && !cooldownDone ? (
+  <Text style={[styles.small, { marginTop: 10 }]}>تا فعال شدن تأیید نهایی: {cooldownLeft} ثانیه</Text>
+) : null}
                   {!isReview && cooldownDone && !finalAcknowledge ? (
                     <Text style={[styles.warn, { marginTop: 10 }]}>بدون تأیید نهایی، ثبت فعال نمی‌شه.</Text>
                   ) : null}

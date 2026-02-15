@@ -278,7 +278,11 @@ export default function CC324hSafetyCheckScreen() {
   // Step 3 (lock)
   const [cooldownDone, setCooldownDone] = useState(false);
   const cooldownTimerRef = useRef<any>(null);
-  const [finalAcknowledge, setFinalAcknowledge] = useState(false);
+
+  const [cooldownLeft, setCooldownLeft] = useState<number>(20);
+  const cooldownIntervalRef = useRef<any>(null);
+
+const [finalAcknowledge, setFinalAcknowledge] = useState(false);
 
   const [confirmLockModal, setConfirmLockModal] = useState(false);
 
@@ -436,29 +440,53 @@ export default function CC324hSafetyCheckScreen() {
 
   /* ----------------------------- Step 3 cooldown ----------------------------- */
 
-  useEffect(() => {
-    if (isReview) return;
+useEffect(() => {
+  if (isReview) return;
 
-    if (step !== 3) {
-      setCooldownDone(false);
-      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
-      cooldownTimerRef.current = null;
-      return;
-    }
-
+  if (step !== 3) {
     setCooldownDone(false);
+    setCooldownLeft(20);
+
     if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
+    cooldownTimerRef.current = null;
 
-    cooldownTimerRef.current = setTimeout(() => {
-      setCooldownDone(true);
-      cooldownTimerRef.current = null;
-    }, 20000);
+    if (cooldownIntervalRef.current) clearInterval(cooldownIntervalRef.current);
+    cooldownIntervalRef.current = null;
 
-    return () => {
-      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
-      cooldownTimerRef.current = null;
-    };
-  }, [step, isReview]);
+    return;
+  }
+
+  setCooldownDone(false);
+  setCooldownLeft(20);
+
+  if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
+  cooldownTimerRef.current = null;
+
+  if (cooldownIntervalRef.current) clearInterval(cooldownIntervalRef.current);
+  cooldownIntervalRef.current = null;
+
+  cooldownIntervalRef.current = setInterval(() => {
+    setCooldownLeft((prev) => Math.max(0, prev - 1));
+  }, 1000);
+
+  cooldownTimerRef.current = setTimeout(() => {
+    setCooldownDone(true);
+
+    if (cooldownIntervalRef.current) clearInterval(cooldownIntervalRef.current);
+    cooldownIntervalRef.current = null;
+
+    cooldownTimerRef.current = null;
+    setCooldownLeft(0);
+  }, 20000);
+
+  return () => {
+    if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
+    cooldownTimerRef.current = null;
+
+    if (cooldownIntervalRef.current) clearInterval(cooldownIntervalRef.current);
+    cooldownIntervalRef.current = null;
+  };
+}, [step, isReview]);
 
   /* ----------------------------- Persist FINAL local ----------------------------- */
 
@@ -1062,10 +1090,10 @@ export default function CC324hSafetyCheckScreen() {
                 <Text style={[styles.small, { marginTop: 8 }]}>این تصمیم ممکنه سخت‌ترین تصمیم این مرحله باشه.</Text>
                 <View style={{ height: 6 }} />
                 <Text style={styles.small}>
-                  {cooldownDone
-                    ? "حالا می‌تونی با آگاهی کامل ثبتش کنی."
-                    : "چند ثانیه مکث کن. چون عجله کردن یعنی لغزش."}
-                </Text>
+  {cooldownDone
+    ? "حالا می‌تونی با آگاهی کامل ثبتش کنی."
+    : `مکث اجباری: ${cooldownLeft} ثانیه`}
+</Text>
 
                 <View style={{ height: 12 }} />
 
@@ -1129,8 +1157,8 @@ export default function CC324hSafetyCheckScreen() {
                 </Pressable>
 
                 {!isReview && !cooldownDone ? (
-                  <Text style={[styles.small, { marginTop: 10 }]}>چند ثانیه…</Text>
-                ) : null}
+  <Text style={[styles.small, { marginTop: 10 }]}>تا فعال شدن تأیید نهایی: {cooldownLeft} ثانیه</Text>
+) : null}
 
                 {!isReview && cooldownDone && !finalAcknowledge ? (
                   <Text style={[styles.warn, { marginTop: 10 }]}>بدون تأیید نهایی، ثبت فعال نمی‌شه.</Text>

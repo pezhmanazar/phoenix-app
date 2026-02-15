@@ -4,17 +4,18 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    InteractionManager,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  InteractionManager,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -59,23 +60,29 @@ type ContactObligation =
   | "legal_or_admin"
   | "none_of_above";
 
-type ContactChannel = "sms" | "messenger" | "call_only_urgent" | "in_person_only_if_required" | "third_party";
+type ContactChannel =
+  | "sms"
+  | "messenger"
+  | "call_only_urgent"
+  | "in_person_only_if_required"
+  | "third_party";
 
-type FRL1Saved = {
-  version: 1;
+// v2: obligation -> obligations[]
+type FRL1SavedV2 = {
+  version: 2;
   savedAt: string;
 
   acceptedTruth: boolean;
 
-  obligation: ContactObligation | null;
+  obligations: ContactObligation[]; // step2 (multi-select). last option is exclusive
 
   // role definitions (step 3)
-  myRoleTitle: string; // e.g. "والد"
-  theirRoleTitle: string; // e.g. "والد"
+  myRoleTitle: string;
+  theirRoleTitle: string;
   channel: ContactChannel | null;
 
-  allowedTopics: string; // short bullets text
-  forbiddenTopics: string; // short bullets text
+  allowedTopics: string;
+  forbiddenTopics: string;
 
   // commitments (step 4)
   agreeNoEmotionalContact: boolean;
@@ -87,7 +94,7 @@ type FRL1Saved = {
 
 /* ----------------------------- Storage Keys ----------------------------- */
 const SUBTASK_KEY = "FRL_1_define_roles";
-const KEY_FRL1_FINAL = `pelekan:bastan:subtask:${SUBTASK_KEY}:final:v1`;
+const KEY_FRL1_FINAL_V2 = `pelekan:bastan:subtask:${SUBTASK_KEY}:final:v2`;
 const KEY_BASTAN_DIRTY = "pelekan:bastan:dirty:v1";
 
 /* ----------------------------- Presets ----------------------------- */
@@ -109,7 +116,7 @@ const OBLIGATION_OPTIONS: { key: ContactObligation; title: string; desc: string;
   },
   {
     key: "neighbor_or_shared_asset",
-    title: "همسایه یا مالکیت یا مسئولیت مشترک داریم",
+    title: "همسایه یا مالکیت مشترک داریم",
     desc: "تماس فقط برای مسائل اجرایی مثل ساختمان، قرارداد، یا امور مشترک ضروریه.",
   },
   {
@@ -121,7 +128,7 @@ const OBLIGATION_OPTIONS: { key: ContactObligation; title: string; desc: string;
     key: "none_of_above",
     title: "هیچ‌کدوم از موارد بالا نیست",
     desc:
-      "⚠️ این یعنی «اجبار واقعی» نداری. این ریزاقدام برای تو نیست. باید برگردی و مسیر «مجبور نیستم» توو زیراقدام اول رو انتخاب کنی.",
+      "⚠️ این یعنی «اجبار واقعی» نداری. این ریزاقدام برای تو نیست. باید برگردی و مسیر «مجبور نیستم» رو انتخاب کنی.",
     danger: true,
   },
 ];
@@ -239,11 +246,27 @@ export default function FRL1DefineRolesScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const startedAtRef = useRef<number | null>(null);
 
+  // ✅ keyboard height (for extra bottom padding while keyboard is open)
+  const [keyboardH, setKeyboardH] = useState(0);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener("keyboardDidShow", (e) => {
+      setKeyboardH(e?.endCoordinates?.height ?? 0);
+    });
+    const hideSub = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardH(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
   // Step 1
   const [acceptedTruth, setAcceptedTruth] = useState(false);
 
-  // Step 2
-  const [obligation, setObligation] = useState<ContactObligation | null>(null);
+  // Step 2 (multi)
+  const [obligations, setObligations] = useState<ContactObligation[]>([]);
 
   // Step 3
   const [myRoleTitle, setMyRoleTitle] = useState("");
@@ -290,16 +313,16 @@ export default function FRL1DefineRolesScreen() {
 
   /* ----------------------------- Load FINAL if any ----------------------------- */
   const loadFinalIfAny = useCallback(async () => {
-    const raw = await AsyncStorage.getItem(KEY_FRL1_FINAL);
+    const raw = await AsyncStorage.getItem(KEY_FRL1_FINAL_V2);
     if (!raw) return { loaded: false as const };
 
-    const j = JSON.parse(raw) as FRL1Saved;
-    if (!j || j.version !== 1) return { loaded: false as const };
+    const j = JSON.parse(raw) as FRL1SavedV2;
+    if (!j || j.version !== 2) return { loaded: false as const };
 
     setAcceptedTruth(!!j.acceptedTruth);
 
-    const ob = (String(j.obligation || "") as ContactObligation) || null;
-    setObligation(ob);
+    const obs = Array.isArray(j.obligations) ? (j.obligations as any[]) : [];
+    setObligations(obs.filter(Boolean) as ContactObligation[]);
 
     setMyRoleTitle(String(j.myRoleTitle || ""));
     setTheirRoleTitle(String(j.theirRoleTitle || ""));
@@ -325,7 +348,7 @@ export default function FRL1DefineRolesScreen() {
         const { loaded } = await loadFinalIfAny();
         if (!alive) return;
         setIsReview(!!loaded);
-        if (loaded) setStep(5); // مرور: مستقیم جمع‌بندی
+        if (loaded) setStep(5);
       } catch {
         if (alive) setIsReview(false);
       } finally {
@@ -358,13 +381,31 @@ export default function FRL1DefineRolesScreen() {
     };
   }, [step, booting]);
 
-  /* ----------------------------- Pickers ----------------------------- */
-  const onPickObligation = useCallback(
+  /* ----------------------------- Step 2 multi-select logic ----------------------------- */
+  const noneSelected = useMemo(() => obligations.includes("none_of_above"), [obligations]);
+  const hasAnyValidObligation = useMemo(() => obligations.some((x) => x !== "none_of_above"), [obligations]);
+
+  const toggleObligation = useCallback(
     (k: ContactObligation) => {
       if (isReview) return;
-      setObligation(k);
 
-      // reset dependent fields if they chose none_of_above
+      setObligations((prev) => {
+        const has = prev.includes(k);
+
+        // last option is exclusive
+        if (k === "none_of_above") {
+          if (has) return [];
+          return ["none_of_above"];
+        }
+
+        // selecting any valid option must disable none_of_above
+        const withoutNone = prev.filter((x) => x !== "none_of_above");
+        if (has) return withoutNone.filter((x) => x !== k);
+
+        return [...withoutNone, k];
+      });
+
+      // if they hit none_of_above, reset dependent fields
       if (k === "none_of_above") {
         setMyRoleTitle("");
         setTheirRoleTitle("");
@@ -388,18 +429,19 @@ export default function FRL1DefineRolesScreen() {
   );
 
   /* ----------------------------- Validation ----------------------------- */
-  const obligationOk = useMemo(() => !!obligation, [obligation]);
+  const step1Ok = acceptedTruth;
 
-  const obligationIsInvalidForThisFlow = useMemo(() => obligation === "none_of_above", [obligation]);
+  // Step2: at least one selection OR none_of_above selected (but that blocks going forward)
+  const step2PickedAnything = obligations.length > 0;
+  const step2InvalidForThisFlow = noneSelected;
 
   const roleOk = useMemo(() => {
-    if (!obligation || obligationIsInvalidForThisFlow) return false;
+    if (!step2PickedAnything || step2InvalidForThisFlow) return false;
     return trimLen(myRoleTitle) >= 2 && trimLen(theirRoleTitle) >= 2 && !!channel;
-  }, [channel, myRoleTitle, obligation, obligationIsInvalidForThisFlow, theirRoleTitle]);
+  }, [channel, myRoleTitle, step2PickedAnything, step2InvalidForThisFlow, theirRoleTitle]);
 
   const topicsOk = useMemo(() => {
     if (!roleOk) return false;
-    // سخت‌گیرانه: هر دو باید حداقل یک خط داشته باشند
     return trimLen(allowedTopics) >= 3 && trimLen(forbiddenTopics) >= 3;
   }, [allowedTopics, forbiddenTopics, roleOk]);
 
@@ -408,24 +450,32 @@ export default function FRL1DefineRolesScreen() {
     return agreeNoEmotionalContact && agreeKeepDryOfficial && agreeNoEscapeRearrangeLife;
   }, [agreeKeepDryOfficial, agreeNoEmotionalContact, agreeNoEscapeRearrangeLife, topicsOk]);
 
-  const canGo2 = acceptedTruth;
-  const canGo3 = acceptedTruth && obligationOk && !obligationIsInvalidForThisFlow;
+  const canGo2 = step1Ok;
+  const canGo3 = step1Ok && step2PickedAnything && !step2InvalidForThisFlow && hasAnyValidObligation;
   const canGo4 = canGo3 && roleOk && topicsOk;
   const canGo5 = canGo4 && commitOk;
 
   const canFinalize = canGo5;
+
+  /* ----------------------------- Derived titles ----------------------------- */
+  const selectedObligationsTitles = useMemo(() => {
+    const set = new Set(obligations);
+    return OBLIGATION_OPTIONS.filter((x) => set.has(x.key)).map((x) => x.title);
+  }, [obligations]);
+
+  const channelTitle = useMemo(() => CHANNEL_OPTIONS.find((x) => x.key === channel)?.title || "—", [channel]);
 
   /* ----------------------------- Persist FINAL local ----------------------------- */
   const persistFinalLocal = useCallback(async () => {
     const startedAt = startedAtRef.current;
     const durationSec = startedAt ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : null;
 
-    const payload: FRL1Saved = {
-      version: 1,
+    const payload: FRL1SavedV2 = {
+      version: 2,
       savedAt: new Date().toISOString(),
 
       acceptedTruth: true,
-      obligation: obligation || "shared_child",
+      obligations: obligations,
 
       myRoleTitle: String(myRoleTitle || "").trim(),
       theirRoleTitle: String(theirRoleTitle || "").trim(),
@@ -441,86 +491,105 @@ export default function FRL1DefineRolesScreen() {
       durationSec,
     };
 
-    await AsyncStorage.setItem(KEY_FRL1_FINAL, JSON.stringify(payload));
+    await AsyncStorage.setItem(KEY_FRL1_FINAL_V2, JSON.stringify(payload));
     await AsyncStorage.setItem(KEY_BASTAN_DIRTY, new Date().toISOString());
-  }, [allowedTopics, channel, forbiddenTopics, myRoleTitle, obligation, theirRoleTitle]);
+  }, [allowedTopics, channel, forbiddenTopics, myRoleTitle, obligations, theirRoleTitle]);
 
   /* ----------------------------- Server submit (ONLY completion) ----------------------------- */
-  const completeOnServer = useCallback(async (): Promise<"ok" | "already" | "fail"> => {
-    const t = String(token || "").trim();
-    const p = String(phone || "").trim();
+  const completeOnServer = useCallback(
+    async (): Promise<"ok" | "already" | "fail"> => {
+      const t = String(token || "").trim();
+      const p = String(phone || "").trim();
 
-    if (!t || !p) {
+      if (!t || !p) {
+        openModal({
+          kind: "error",
+          title: "ورود لازم است",
+          message: "برای ثبت انجام شدن باید وارد حساب باشی",
+          primaryText: "باشه",
+          onPrimary: closeModal,
+        });
+        return "fail";
+      }
+
+      const startedAt = startedAtRef.current;
+      const durationSec = startedAt ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : null;
+
+      const payloadToSend = {
+        version: 2,
+        savedAt: new Date().toISOString(),
+        answer: {
+          acceptedTruth: true,
+
+          obligations: obligations,
+          obligationsCount: obligations.length,
+          hasNoneOfAbove: noneSelected,
+
+          myRoleTitle: String(myRoleTitle || "").trim(),
+          theirRoleTitle: String(theirRoleTitle || "").trim(),
+          channel: channel,
+
+          hasAllowedTopics: trimLen(allowedTopics) >= 3,
+          hasForbiddenTopics: trimLen(forbiddenTopics) >= 3,
+          committed: commitOk,
+
+          durationSec,
+        },
+      };
+
+      const url = `${apiBase}/api/pelekan/bastan/subtask/complete?phone=${encodeURIComponent(p)}`;
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+          Authorization: `Bearer ${t}`,
+        },
+        body: JSON.stringify({
+          phone: p,
+          subtaskKey: SUBTASK_KEY,
+          payload: payloadToSend,
+        }),
+      });
+
+      let json: any = null;
+      try {
+        json = await res.json();
+      } catch {
+        json = null;
+      }
+
+      if (res.ok && json?.ok) return "ok";
+
+      const err = String(json?.error || "");
+      if (err === "ALREADY_DONE") return "already";
+
       openModal({
         kind: "error",
-        title: "ورود لازم است",
-        message: "برای ثبت انجام شدن باید وارد حساب باشی",
+        title: "ثبت ناموفق بود",
+        message: faOnlyTitle(err || "مشکلی پیش آمد"),
         primaryText: "باشه",
         onPrimary: closeModal,
       });
       return "fail";
-    }
-
-    const startedAt = startedAtRef.current;
-    const durationSec = startedAt ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : null;
-
-    const payloadToSend = {
-      version: 1,
-      savedAt: new Date().toISOString(),
-      answer: {
-        acceptedTruth: true,
-
-        obligation: obligation,
-        myRoleTitle: String(myRoleTitle || "").trim(),
-        theirRoleTitle: String(theirRoleTitle || "").trim(),
-        channel: channel,
-
-        // compact booleans for server (تحلیل‌پذیر)
-        hasAllowedTopics: trimLen(allowedTopics) >= 3,
-        hasForbiddenTopics: trimLen(forbiddenTopics) >= 3,
-        committed: commitOk,
-
-        durationSec,
-      },
-    };
-
-    const url = `${apiBase}/api/pelekan/bastan/subtask/complete?phone=${encodeURIComponent(p)}`;
-
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-store",
-        Authorization: `Bearer ${t}`,
-      },
-      body: JSON.stringify({
-        phone: p,
-        subtaskKey: SUBTASK_KEY,
-        payload: payloadToSend,
-      }),
-    });
-
-    let json: any = null;
-    try {
-      json = await res.json();
-    } catch {
-      json = null;
-    }
-
-    if (res.ok && json?.ok) return "ok";
-
-    const err = String(json?.error || "");
-    if (err === "ALREADY_DONE") return "already";
-
-    openModal({
-      kind: "error",
-      title: "ثبت ناموفق بود",
-      message: faOnlyTitle(err || "مشکلی پیش آمد"),
-      primaryText: "باشه",
-      onPrimary: closeModal,
-    });
-    return "fail";
-  }, [apiBase, closeModal, commitOk, openModal, phone, token, obligation, myRoleTitle, theirRoleTitle, channel, allowedTopics, forbiddenTopics]);
+    },
+    [
+      apiBase,
+      closeModal,
+      commitOk,
+      openModal,
+      phone,
+      token,
+      obligations,
+      noneSelected,
+      myRoleTitle,
+      theirRoleTitle,
+      channel,
+      allowedTopics,
+      forbiddenTopics,
+    ]
+  );
 
   const doFinalize = useCallback(async () => {
     if (!canFinalize) return;
@@ -596,9 +665,6 @@ export default function FRL1DefineRolesScreen() {
     </View>
   );
 
-  const obligationTitle = useMemo(() => OBLIGATION_OPTIONS.find((x) => x.key === obligation)?.title || "—", [obligation]);
-  const channelTitle = useMemo(() => CHANNEL_OPTIONS.find((x) => x.key === channel)?.title || "—", [channel]);
-
   return (
     <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
       <View pointerEvents="none" style={styles.glowTop} />
@@ -620,16 +686,25 @@ export default function FRL1DefineRolesScreen() {
         <View style={{ width: 34, height: 34 }} />
       </View>
 
+      {/* IMPORTANT: Android jitter fix => do NOT use behavior="height" */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={insets.top + 12}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 12 : 0}
       >
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={{ padding: 16, paddingBottom: 18 + insets.bottom + 24 }}
+          contentContainerStyle={{
+            padding: 16,
+            paddingBottom: 18 + insets.bottom + 24 + keyboardH, // ✅ keyboard-aware bottom space
+          }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          nestedScrollEnabled
+          scrollEventThrottle={16}
+          removeClippedSubviews={false}
+          onScrollBeginDrag={() => Keyboard.dismiss()}
         >
           {isReview ? (
             <View style={styles.reviewBanner}>
@@ -642,70 +717,73 @@ export default function FRL1DefineRolesScreen() {
 
           {/* ----------------------------- Step 1 ----------------------------- */}
           {step === 1 ? (
-            <>
-              <View style={styles.sectionCard}>
-                <Text style={styles.h1}>اول حقیقت رو روشن کنیم</Text>
-                <Text style={styles.p}>
-                  این ریزاقدام فقط زمانی معنی داره که «اجبار واقعی» وجود داشته باشه.
-                  {"\n\n"}
-                  «دوستی»، «دلتنگی»، «گاهی حرف زدن»، «بسته نشدن ذهنی» اجبار نیست.
-                  {"\n\n"}
-                  تو این‌جا داریم یک چیز رو طراحی می‌کنیم:
-                  {"\n"}یک «نقش خشک و رسمی» که ارتباط رو از عشق و احساس جدا کنه.
+            <View style={styles.sectionCard}>
+              <Text style={styles.h1}>اول حقیقت رو روشن کنیم</Text>
+              <Text style={styles.p}>
+                این ریزاقدام فقط زمانی معنی داره که «اجبار واقعی» وجود داشته باشه.
+                {"\n\n"}
+                «دوستی»، «دلتنگی»، «گاهی حرف زدن» و «بسته نشدن پرونده رابطه داخل ذهن» اجبار نیست.
+                {"\n\n"}
+                اینجا داریم یک «نقش خشک و رسمی» طراحی می‌کنیم که ارتباط رو از عشق و احساس جدا کنه.
+              </Text>
+
+              <View style={[styles.noteCard, { marginTop: 10 }]}>
+                <Text style={styles.noteTitle}>هدف درمانی</Text>
+                <Text style={styles.small}>
+                  ۱) کاهش محرک‌ها و امید پنهان{"\n"}
+                  ۲) جلوگیری از کش‌دار شدن گفت‌وگو{"\n"}
+                  ۳) تبدیل رابطه به یک «کانال اجرایی»
                 </Text>
-
-                <View style={[styles.noteCard, { marginTop: 10 }]}>
-                  <Text style={styles.noteTitle}>هدف درمانی</Text>
-                  <Text style={styles.small}>
-                    ۱) کاهش محرک‌ها و امید پنهان{"\n"}
-                    ۲) جلوگیری از کش‌دار شدن گفت‌وگو{"\n"}
-                    ۳) تبدیل رابطه به یک «کانال اجرایی»
-                  </Text>
-                </View>
-
-                <Pressable
-                  onPress={() => {
-                    if (isReview) return;
-                    setAcceptedTruth((x) => !x);
-                  }}
-                  style={[styles.choiceCard, acceptedTruth && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
-                  disabled={isReview}
-                >
-                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
-                    <Ionicons
-                      name={acceptedTruth ? "checkmark-circle" : "ellipse-outline"}
-                      size={18}
-                      color={acceptedTruth ? palette.green : "rgba(231,238,247,.55)"}
-                    />
-                    <Text style={styles.choiceText}>قبول دارم: فقط «اجبار واقعی» من رو وارد این مسیر می‌کنه</Text>
-                  </View>
-                </Pressable>
-
-                <View style={{ height: 12 }} />
-
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  disabled={!canGo2}
-                  onPress={() => {
-                    if (!isReview && !startedAtRef.current) startedAtRef.current = Date.now();
-                    setStep(2);
-                  }}
-                  style={[styles.primaryBtn, !canGo2 && { opacity: 0.45 }]}
-                >
-                  <Text style={styles.primaryBtnText}>ادامه</Text>
-                </TouchableOpacity>
               </View>
-            </>
+
+              <Pressable
+                onPress={() => {
+                  if (isReview) return;
+                  setAcceptedTruth((x) => !x);
+                }}
+                style={[
+                  styles.choiceCard,
+                  { marginTop: 14 }, // ← این خط رو اضافه کن
+                  acceptedTruth && styles.choiceCardOn,
+                  isReview && { opacity: 0.7 },
+                ]}
+                disabled={isReview}
+              >
+                <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+                  <Ionicons
+                    name={acceptedTruth ? "checkmark-circle" : "ellipse-outline"}
+                    size={18}
+                    color={acceptedTruth ? palette.green : "rgba(231,238,247,.55)"}
+                  />
+                  <Text style={styles.choiceText}>قبول دارم: فقط «اجبار واقعی» من رو وارد این مسیر می‌کنه</Text>
+                </View>
+              </Pressable>
+
+              <View style={{ height: 12 }} />
+
+              <TouchableOpacity
+                activeOpacity={0.9}
+                disabled={!canGo2}
+                onPress={() => {
+                  if (!isReview && !startedAtRef.current) startedAtRef.current = Date.now();
+                  setStep(2);
+                }}
+                style={[styles.primaryBtn, !canGo2 && { opacity: 0.45 }]}
+              >
+                <Text style={styles.primaryBtnText}>ادامه</Text>
+              </TouchableOpacity>
+            </View>
           ) : null}
 
-          {/* ----------------------------- Step 2 ----------------------------- */}
+          {/* ----------------------------- Step 2 (MULTI) ----------------------------- */}
           {step === 2 ? (
             <>
               <View style={styles.sectionCard}>
                 <Text style={styles.h1}>نوع اجبار تو کدومه؟</Text>
                 <Text style={styles.p}>
-                  فقط یک گزینه.
-                  {"\n"}اگه هیچ‌کدوم برای تو دقیقاً صدق نمی‌کنه، یعنی این مسیر برای تو نیست.
+                  می‌تونی چند مورد رو انتخاب کنی (مثلاً هم همکار باشی هم فرزند مشترک داشته باشی).
+                  {"\n"}
+                  فقط گزینه‌ی آخر «هیچ‌کدوم…» انحصاریه.
                 </Text>
 
                 <View style={[styles.noteCard, { marginTop: 10, borderColor: "rgba(252,165,165,.28)" }]}>
@@ -719,12 +797,18 @@ export default function FRL1DefineRolesScreen() {
 
               <View style={{ gap: 10, marginTop: 10 }}>
                 {OBLIGATION_OPTIONS.map((s) => {
-                  const on = obligation === s.key;
+                  const on = obligations.includes(s.key);
                   const danger = !!s.danger;
+
+                  const isNone = s.key === "none_of_above";
+                  const iconName = isNone ? (on ? "checkmark-circle" : "ellipse-outline") : on ? "checkbox" : "square-outline";
+
+                  const iconColor = on ? (danger ? "rgba(252,165,165,.95)" : palette.green) : "rgba(231,238,247,.55)";
+
                   return (
                     <Pressable
                       key={s.key}
-                      onPress={() => onPickObligation(s.key)}
+                      onPress={() => toggleObligation(s.key)}
                       disabled={isReview}
                       style={[
                         styles.choiceCard,
@@ -733,14 +817,8 @@ export default function FRL1DefineRolesScreen() {
                         isReview && { opacity: 0.7 },
                       ]}
                     >
-                      <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
-                        <Ionicons
-                          name={on ? "checkmark-circle" : "ellipse-outline"}
-                          size={18}
-                          color={
-                            on ? (danger ? "rgba(252,165,165,.95)" : palette.green) : "rgba(231,238,247,.55)"
-                          }
-                        />
+                      <View style={{ flexDirection: "row-reverse", alignItems: "flex-start", gap: 10 }}>
+                        <Ionicons name={iconName as any} size={18} color={iconColor} />
                         <View style={{ flex: 1 }}>
                           <Text style={[styles.choiceText, danger && { color: "rgba(252,165,165,.95)" }]}>{s.title}</Text>
                           <Text style={styles.small}>{s.desc}</Text>
@@ -751,10 +829,14 @@ export default function FRL1DefineRolesScreen() {
                 })}
               </View>
 
-              {obligationIsInvalidForThisFlow ? (
+              {noneSelected ? (
                 <Text style={[styles.warn, { marginTop: 10 }]}>
-                  این انتخاب یعنی «اجبار واقعی نداری». باید ارتباط رو کامل قطع کنی و اقدام شش رو شروع کنی
+                  این انتخاب یعنی «اجبار واقعی نداری». باید برگردی و مسیر «مجبور نیستم» رو انتخاب کنی.
                 </Text>
+              ) : null}
+
+              {!step2PickedAnything ? (
+                <Text style={[styles.warn, { marginTop: 10 }]}>برای ادامه، حداقل یک گزینه رو انتخاب کن.</Text>
               ) : null}
 
               <View style={{ marginTop: 14, gap: 10 }}>
@@ -772,204 +854,177 @@ export default function FRL1DefineRolesScreen() {
                     <Text style={styles.primaryBtnText}>ادامه</Text>
                   </TouchableOpacity>
                 </View>
-
-                {!obligationOk ? <Text style={styles.warn}>برای ادامه، یک گزینه رو انتخاب کن.</Text> : null}
               </View>
             </>
           ) : null}
 
           {/* ----------------------------- Step 3 ----------------------------- */}
-{step === 3 ? (
-  <>
-    <View style={styles.sectionCard}>
-      <Text style={styles.h1}>نقش‌ها و کانال ارتباط</Text>
-      <Text style={styles.p}>
-        اینجا قرار نیست «رابطه» تعریف کنیم. قراره «فرایند اجرایی» تعریف کنیم.
-        {"\n\n"}
-        یعنی: چرا تماس می‌گیریم؟ از چه کانالی؟ درباره‌ی چه چیزهایی؟ و درباره‌ی چه چیزهایی نه؟
-      </Text>
-    </View>
+          {step === 3 ? (
+            <>
+              <View style={styles.sectionCard}>
+                <Text style={styles.h1}>نقش‌ها و کانال ارتباط</Text>
+                <Text style={styles.p}>
+                  اینجا قرار نیست «رابطه» تعریف کنیم. قراره «فرایند اجرایی» تعریف کنیم:
+                  {"\n"}چرا تماس می‌گیریم؟ از چه کانالی؟ درباره‌ی چه چیزهایی؟ و درباره‌ی چه چیزهایی نه؟
+                </Text>
+              </View>
 
-    {/* نقش خودت */}
-    <View style={[styles.noteCard, { marginTop: 10, alignSelf: "stretch" }]}>
-      <Text style={styles.noteTitle}>نقش خودت</Text>
-      <TextInput
-        value={myRoleTitle}
-        onChangeText={(t) => {
-          if (isReview) return;
-          setMyRoleTitle(String(t || ""));
-        }}
-        placeholder="مثلاً: والد، همکار، هم‌کلاسی یا مالک مشترک"
-        placeholderTextColor="rgba(231,238,247,.35)"
-        style={[styles.inputOneLine, isReview && styles.inputReadOnly]}
-        textAlign="right"
-        editable={!isReview}
-        selectTextOnFocus={!isReview}
-      />
-      <Text style={styles.small}>{isReview ? "ثبت شده" : "حداقل ۲ حرف"}</Text>
-    </View>
-
-    {/* نقش او */}
-    <View style={[styles.noteCard, { marginTop: 10, alignSelf: "stretch" }]}>
-      <Text style={styles.noteTitle}>نقش او</Text>
-      <TextInput
-        value={theirRoleTitle}
-        onChangeText={(t) => {
-          if (isReview) return;
-          setTheirRoleTitle(String(t || ""));
-        }}
-        placeholder="مثلاً: والد، همکار، هم‌کلاسی یا شریک قرارداد"
-        placeholderTextColor="rgba(231,238,247,.35)"
-        style={[styles.inputOneLine, isReview && styles.inputReadOnly]}
-        textAlign="right"
-        editable={!isReview}
-        selectTextOnFocus={!isReview}
-      />
-      <Text style={styles.small}>{isReview ? "ثبت شده" : "حداقل ۲ حرف"}</Text>
-    </View>
-
-    {/* کانال مجاز */}
-    <View style={[styles.noteCard, { marginTop: 10, alignSelf: "stretch" }]}>
-      <Text style={styles.noteTitle}>کانال مجاز ارتباطی</Text>
-      <Text style={styles.small}>
-        «کانال غیر احساسی» انتخاب کن. ویس و تماس طولانی، خطرناک‌ترین‌ها هستند.
-      </Text>
-
-      <View style={{ gap: 10, marginTop: 10, alignSelf: "stretch" }}>
-        {CHANNEL_OPTIONS.map((c) => {
-          const on = channel === c.key;
-
-          return (
-            <Pressable
-              key={c.key}
-              onPress={() => onPickChannel(c.key)}
-              disabled={isReview}
-              style={[
-                styles.choiceCard,
-                on && styles.choiceCardOn,
-                isReview && { opacity: 0.7 },
-                { alignSelf: "stretch" },
-              ]}
-            >
-              <View style={{ flexDirection: "row-reverse", alignItems: "flex-start", gap: 10 }}>
-                <Ionicons
-                  name={on ? "checkmark-circle" : "ellipse-outline"}
-                  size={18}
-                  color={on ? palette.green : "rgba(231,238,247,.55)"}
+              <View style={[styles.noteCard, { marginTop: 10 }]}>
+                <Text style={styles.noteTitle}>نقش خودت</Text>
+                <TextInput
+                  value={myRoleTitle}
+                  onChangeText={(t) => {
+                    if (isReview) return;
+                    setMyRoleTitle(String(t || ""));
+                  }}
+                  placeholder="مثلاً: والد، همکار، هم‌کلاسی یا مالک مشترک"
+                  placeholderTextColor="rgba(231,238,247,.35)"
+                  style={[styles.inputOneLine, isReview && styles.inputReadOnly]}
+                  textAlign="right"
+                  editable={!isReview}
+                  selectTextOnFocus={!isReview}
+                  returnKeyType="done"
                 />
+                <Text style={styles.small}>{isReview ? "ثبت شده" : "حداقل ۲ حرف"}</Text>
+              </View>
 
-                {/* نکته: این wrapper باید flex:1 داشته باشه تا متن جمع بشه */}
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.choiceText, { flexShrink: 1 }]}>{c.title}</Text>
-                  <Text style={[styles.small, { flexShrink: 1 }]}>{c.desc}</Text>
+              <View style={[styles.noteCard, { marginTop: 10 }]}>
+                <Text style={styles.noteTitle}>نقش او</Text>
+                <TextInput
+                  value={theirRoleTitle}
+                  onChangeText={(t) => {
+                    if (isReview) return;
+                    setTheirRoleTitle(String(t || ""));
+                  }}
+                  placeholder="مثلاً: والد، همکار، هم‌کلاسی یا شریک قرارداد"
+                  placeholderTextColor="rgba(231,238,247,.35)"
+                  style={[styles.inputOneLine, isReview && styles.inputReadOnly]}
+                  textAlign="right"
+                  editable={!isReview}
+                  selectTextOnFocus={!isReview}
+                  returnKeyType="done"
+                />
+                <Text style={styles.small}>{isReview ? "ثبت شده" : "حداقل ۲ حرف"}</Text>
+              </View>
+
+              <View style={[styles.noteCard, { marginTop: 10 }]}>
+                <Text style={styles.noteTitle}>کانال مجاز ارتباطی</Text>
+                <Text style={styles.small}>«کانال غیر احساسی» انتخاب کن. ویس و تماس طولانی، خطرناک‌ترین‌ها هستند.</Text>
+
+                <View style={{ gap: 10, marginTop: 10 }}>
+                  {CHANNEL_OPTIONS.map((c) => {
+                    const on = channel === c.key;
+                    return (
+                      <Pressable
+                        key={c.key}
+                        onPress={() => onPickChannel(c.key)}
+                        disabled={isReview}
+                        style={[styles.choiceCard, on && styles.choiceCardOn, isReview && { opacity: 0.7 }]}
+                      >
+                        <View style={{ flexDirection: "row-reverse", alignItems: "flex-start", gap: 10 }}>
+                          <Ionicons
+                            name={on ? "checkmark-circle" : "ellipse-outline"}
+                            size={18}
+                            color={on ? palette.green : "rgba(231,238,247,.55)"}
+                          />
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.choiceText, { flexShrink: 1 }]}>{c.title}</Text>
+                            <Text style={[styles.small, { flexShrink: 1 }]}>{c.desc}</Text>
+                          </View>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
                 </View>
               </View>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
 
-    {/* موضوعات مجاز */}
-    <View style={[styles.noteCard, { marginTop: 10, alignSelf: "stretch" }]}>
-      <Text style={styles.noteTitle}>موضوعات مجاز (خیلی مشخص)</Text>
-      <Text style={styles.small}>۳ تا ۵ مورد کوتاه. هر مورد یک خط.</Text>
+              <View style={[styles.noteCard, { marginTop: 10 }]}>
+                <Text style={styles.noteTitle}>موضوعات مجاز (خیلی مشخص)</Text>
+                <Text style={styles.small}>۳ تا ۵ مورد کوتاه. هر مورد یک خط.</Text>
 
-      {/* کادر مثال (ثابت و جمع‌شونده) — این همون جاییه که قبلاً می‌ریخت بیرون */}
-      <View style={styles.exampleBox}>
-        <Text style={styles.small}>مثال:</Text>
-        <Text style={styles.exampleText}>
-          {"• زمان تحویل بچه\n• هزینه مدرسه\n• زمان جلسه کاری"}
-        </Text>
-      </View>
+                <View style={styles.exampleBox}>
+                  <Text style={styles.small}>مثال:</Text>
+                  <Text style={styles.exampleText}>{"• زمان تحویل بچه\n• هزینه مدرسه\n• زمان جلسه کاری"}</Text>
+                </View>
 
-      <TextInput
-        value={allowedTopics}
-        onChangeText={(t) => {
-          if (isReview) return;
-          setAllowedTopics(String(t || ""));
-        }}
-        placeholder={"۳ تا ۵ مورد کوتاه بنویس. هر مورد یک خط."}
-        placeholderTextColor="rgba(231,238,247,.35)"
-        style={[styles.inputFinal, isReview && styles.inputReadOnly]}
-        textAlign="right"
-        textAlignVertical="top"
-        editable={!isReview}
-        selectTextOnFocus={!isReview}
-        multiline
-      />
-    </View>
+                <TextInput
+                  value={allowedTopics}
+                  onChangeText={(t) => {
+                    if (isReview) return;
+                    setAllowedTopics(String(t || ""));
+                  }}
+                  placeholder={"۳ تا ۵ مورد کوتاه بنویس. هر مورد یک خط."}
+                  placeholderTextColor="rgba(231,238,247,.35)"
+                  style={[styles.inputFinal, isReview && styles.inputReadOnly]}
+                  textAlign="right"
+                  textAlignVertical="top"
+                  editable={!isReview}
+                  selectTextOnFocus={!isReview}
+                  multiline
+                  scrollEnabled={Platform.OS === "ios"} // Android jitter fix
+                  underlineColorAndroid="transparent"
+                />
+              </View>
 
-    {/* موضوعات ممنوع */}
-    <View
-      style={[
-        styles.noteCard,
-        { marginTop: 10, borderColor: "rgba(252,165,165,.18)", alignSelf: "stretch" },
-      ]}
-    >
-      <Text style={[styles.noteTitle, { color: "rgba(252,165,165,.95)" }]}>
-        موضوعات ممنوع (خط قرمز)
-      </Text>
-      <Text style={styles.small}>اگر این‌ها شروع شد: مکالمه تمام.</Text>
+              <View style={[styles.noteCard, { marginTop: 10, borderColor: "rgba(252,165,165,.18)" }]}>
+                <Text style={[styles.noteTitle, { color: "rgba(252,165,165,.95)" }]}>موضوعات ممنوع (خط قرمز)</Text>
+                <Text style={styles.small}>اگر این‌ها شروع شد: مکالمه تمام.</Text>
 
-      {/* کادر مثال ممنوع */}
-      <View style={[styles.exampleBox, { borderColor: "rgba(252,165,165,.18)" }]}>
-        <Text style={[styles.small, { color: "rgba(252,165,165,.85)" }]}>مثال:</Text>
-        <Text style={[styles.exampleText, { color: "rgba(252,165,165,.90)" }]}>
-          {"• رابطه و گذشته\n• دلتنگی و احساسات\n• مقایسه و سرزنش"}
-        </Text>
-      </View>
+                <View style={[styles.exampleBox, { borderColor: "rgba(252,165,165,.18)" }]}>
+                  <Text style={[styles.small, { color: "rgba(252,165,165,.85)" }]}>مثال:</Text>
+                  <Text style={[styles.exampleText, { color: "rgba(252,165,165,.90)" }]}>
+                    {"• رابطه و گذشته\n• دلتنگی و احساسات\n• مقایسه و سرزنش"}
+                  </Text>
+                </View>
 
-      <TextInput
-        value={forbiddenTopics}
-        onChangeText={(t) => {
-          if (isReview) return;
-          setForbiddenTopics(String(t || ""));
-        }}
-        placeholder={"۳ تا ۵ خط قرمز کوتاه بنویس. هر مورد یک خط."}
-        placeholderTextColor="rgba(231,238,247,.35)"
-        style={[styles.inputFinal, isReview && styles.inputReadOnly]}
-        textAlign="right"
-        textAlignVertical="top"
-        editable={!isReview}
-        selectTextOnFocus={!isReview}
-        multiline
-      />
-    </View>
+                <TextInput
+                  value={forbiddenTopics}
+                  onChangeText={(t) => {
+                    if (isReview) return;
+                    setForbiddenTopics(String(t || ""));
+                  }}
+                  onFocus={() => {
+                    requestAnimationFrame(() => {
+                      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+                    });
+                  }}
+                  placeholder={"۳ تا ۵ خط قرمز کوتاه بنویس. هر مورد یک خط."}
+                  placeholderTextColor="rgba(231,238,247,.35)"
+                  style={[styles.inputFinal, isReview && styles.inputReadOnly]}
+                  textAlign="right"
+                  textAlignVertical="top"
+                  editable={!isReview}
+                  selectTextOnFocus={!isReview}
+                  multiline
+                  scrollEnabled={Platform.OS === "ios"} // Android jitter fix
+                  underlineColorAndroid="transparent"
+                />
+              </View>
 
-    {!roleOk ? (
-      <Text style={[styles.warn, { marginTop: 10 }]}>
-        برای ادامه: نقش خودت + نقش او + کانال مجاز باید مشخص شود.
-      </Text>
-    ) : !topicsOk ? (
-      <Text style={[styles.warn, { marginTop: 10 }]}>
-        برای ادامه: موضوعات مجاز و ممنوع را حداقل به شکل کوتاه بنویس.
-      </Text>
-    ) : null}
+              {!roleOk ? (
+                <Text style={[styles.warn, { marginTop: 10 }]}>برای ادامه: نقش خودت + نقش او + کانال مجاز باید مشخص شود.</Text>
+              ) : !topicsOk ? (
+                <Text style={[styles.warn, { marginTop: 10 }]}>برای ادامه: موضوعات مجاز و ممنوع را حداقل به شکل کوتاه بنویس.</Text>
+              ) : null}
 
-    <View style={{ marginTop: 14, gap: 10 }}>
-      <View style={{ flexDirection: "row-reverse", gap: 10 }}>
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => setStep(2)}
-          style={[styles.secondaryBtn, { flex: 1 }]}
-          disabled={saving}
-        >
-          <Text style={styles.secondaryBtnText}>بازگشت</Text>
-        </TouchableOpacity>
+              <View style={{ marginTop: 14, gap: 10 }}>
+                <View style={{ flexDirection: "row-reverse", gap: 10 }}>
+                  <TouchableOpacity activeOpacity={0.9} onPress={() => setStep(2)} style={[styles.secondaryBtn, { flex: 1 }]} disabled={saving}>
+                    <Text style={styles.secondaryBtnText}>بازگشت</Text>
+                  </TouchableOpacity>
 
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => setStep(4)}
-          style={[styles.primaryBtn, { flex: 1 }, (!canGo4 || saving) && { opacity: 0.45 }]}
-          disabled={!canGo4 || saving}
-        >
-          <Text style={styles.primaryBtnText}>ادامه</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  </>
-) : null}
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => setStep(4)}
+                    style={[styles.primaryBtn, { flex: 1 }, (!canGo4 || saving) && { opacity: 0.45 }]}
+                    disabled={!canGo4 || saving}
+                  >
+                    <Text style={styles.primaryBtnText}>ادامه</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </>
+          ) : null}
 
           {/* ----------------------------- Step 4 ----------------------------- */}
           {step === 4 ? (
@@ -977,8 +1032,8 @@ export default function FRL1DefineRolesScreen() {
               <View style={styles.sectionCard}>
                 <Text style={styles.h1}>قفل تصمیم</Text>
                 <Text style={styles.p}>
-                  اگر این سه تعهد قفل نشه، ذهنِ دلتنگ، توی اولین موج احساسی همه‌چیز رو خراب می‌کنه.
-                  {"\n\n"}این تعهدها برای «آدمِ منطقیِ امروز»ه، نه «آدمِ دلتنگِ فردا».
+                  اگه این سه تعهد قفل نشه، ذهن دلتنگ، توی اولین موج احساسی همه‌چیز رو خراب می‌کنه.
+                  {"\n\n"}این تعهدها برای «آدم منطقی امروز»ه، نه «آدم دلتنگ فردا».
                 </Text>
               </View>
 
@@ -997,7 +1052,7 @@ export default function FRL1DefineRolesScreen() {
                       size={18}
                       color={agreeNoEmotionalContact ? palette.green : "rgba(231,238,247,.55)"}
                     />
-                    <Text style={styles.choiceText}>تعهد می‌دم هیچ تماس احساسی (مثل ویس، دلتنگی و احوالپرسی) وارد این کانال نکنم</Text>
+                    <Text style={styles.choiceText}>تعهد می‌دم هیچ تماس احساسی (ویس، دلتنگی، احوالپرسی) وارد این کانال نکنم</Text>
                   </View>
                 </Pressable>
 
@@ -1015,7 +1070,7 @@ export default function FRL1DefineRolesScreen() {
                       size={18}
                       color={agreeKeepDryOfficial ? palette.green : "rgba(231,238,247,.55)"}
                     />
-                    <Text style={styles.choiceText}>تعهد می‌دم رابطه «خشک، رسمی و محدود» بمونه، حتی اگه اون خواست صمیمی بشه</Text>
+                    <Text style={styles.choiceText}>تعهد می‌دم رابطه «خشک، رسمی و محدود» بمونه حتی اگه اون خواست صمیمی بشه</Text>
                   </View>
                 </Pressable>
 
@@ -1033,15 +1088,15 @@ export default function FRL1DefineRolesScreen() {
                       size={18}
                       color={agreeNoEscapeRearrangeLife ? palette.green : "rgba(231,238,247,.55)"}
                     />
-                    <Text style={styles.choiceText}>
-                      تعهد می‌دم از «فرار» استفاده نکنم (مثل عوض کردن کار، محله یا کلاس صرفاً برای ندیدن اون)
-                    </Text>
+                    <Text style={styles.choiceText}>تعهد می‌دم از «فرار» استفاده نکنم (مثل عوض کردن کار، محله، کلاس اون هم صرفاً برای ندیدنش)</Text>
                   </View>
                 </Pressable>
 
                 <View style={[styles.pairCard, { marginTop: 4 }]}>
                   <Text style={styles.pairLabel}>جمع‌بندی:</Text>
-                  <Text style={styles.pairText}>• اجبار: {obligationTitle}</Text>
+                  <Text style={styles.pairText}>
+                    • اجبارها: {selectedObligationsTitles.length ? selectedObligationsTitles.join(" + ") : "—"}
+                  </Text>
                   <Text style={styles.pairText}>• نقش من: {trimLen(myRoleTitle) ? String(myRoleTitle).trim() : "—"}</Text>
                   <Text style={styles.pairText}>• نقش او: {trimLen(theirRoleTitle) ? String(theirRoleTitle).trim() : "—"}</Text>
                   <Text style={styles.pairText}>• کانال مجاز: {channelTitle}</Text>
@@ -1075,15 +1130,15 @@ export default function FRL1DefineRolesScreen() {
               <View style={styles.sectionCard}>
                 <Text style={styles.h1}>پایان</Text>
                 <Text style={styles.p}>
-                  اینجا «رابطه» تعریف نشد.
-                  {"\n"}اینجا فقط یک «کانال اجرایی» ساخته شد.
+                  اینجا «رابطه» تعریف نشد؛ فقط یک «کانال اجرایی» ساخته شد.
                   {"\n\n"}خلاصه:
-                  {"\n"}• اجبار: {obligationTitle}
+                  {"\n"}• اجبارها: {selectedObligationsTitles.length ? selectedObligationsTitles.join(" + ") : "—"}
                   {"\n"}• نقش من: {trimLen(myRoleTitle) ? String(myRoleTitle).trim() : "—"}
                   {"\n"}• نقش او: {trimLen(theirRoleTitle) ? String(theirRoleTitle).trim() : "—"}
                   {"\n"}• کانال مجاز: {channelTitle}
                   {"\n\n"}قانون طلایی:
-                  {"\n"}در کمترین میزان ممکن و رسمی‌ترین حالت ممکن باهاش ارتباط برقرار کن  و هر وقت صحبت رفت سمت احساس، گذشته، احوالپرسی احساسی و سرزنش، مکالمه رو بلافاصله تموم کن.
+                  {"\n"}حداقلی + رسمی + اجرایی.
+                  {"\n"}هر وقت صحبت رفت سمت احساس/گذشته/سرزنش یعنی مکالمه فوری تمام.
                 </Text>
               </View>
 
@@ -1298,6 +1353,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: "right",
   },
+
   inputReadOnly: {
     backgroundColor: "rgba(0,0,0,.12)",
     borderColor: "rgba(255,255,255,.08)",
@@ -1358,6 +1414,24 @@ const styles = StyleSheet.create({
   },
   bootText: { color: "rgba(231,238,247,.88)", fontWeight: "800", fontSize: 12, textAlign: "center" },
 
+  exampleBox: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.10)",
+    backgroundColor: "rgba(0,0,0,.14)",
+    borderRadius: 14,
+    padding: 12,
+    alignSelf: "stretch",
+  },
+  exampleText: {
+    marginTop: 8,
+    color: "rgba(231,238,247,.82)",
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "right",
+    flexShrink: 1,
+  },
+
   /* Modal */
   modalOverlay: {
     position: "absolute",
@@ -1401,24 +1475,4 @@ const styles = StyleSheet.create({
     borderColor: palette.border,
   },
   modalSecondaryText: { color: palette.text, fontWeight: "900" },
-
-  exampleBox: {
-  marginTop: 10,
-  borderWidth: 1,
-  borderColor: "rgba(255,255,255,.10)",
-  backgroundColor: "rgba(0,0,0,.14)",
-  borderRadius: 14,
-  padding: 12,
-  alignSelf: "stretch",
-},
-
-exampleText: {
-  marginTop: 8,
-  color: "rgba(231,238,247,.82)",
-  fontSize: 12,
-  lineHeight: 18,
-  textAlign: "right",
-  flexShrink: 1,
-}, 
-
 });

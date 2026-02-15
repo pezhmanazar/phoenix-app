@@ -4,16 +4,16 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    InteractionManager,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  InteractionManager,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -663,13 +663,13 @@ export default function TD6DetoxConfirmScreen() {
           {step === 3 ? (
             <>
               <View style={styles.sectionCard}>
-                <Text style={styles.h1}>اگر لغزش شد چی؟</Text>
+                <Text style={styles.h1}>اگه لغزش اتفاق افتاد چی؟</Text>
                 <Text style={styles.p}>
-                  لغزش یعنی «اطلاعات مهم»، نه «شکست».
-                  {"\n\n"}اگر یک بار چک کردی یا افتادی تو مرور:
+                  اینو بدون که لغزش یعنی «اطلاعات مهم»، نه «شکست».
+                  {"\n\n"}اگه یک بار چک کردی یا افتادی تو مرور:
                   {"\n"}۱) خودت رو سرزنش نمی‌کنی
                   {"\n"}۲) همون لحظه چرخه رو قطع می‌کنی
-                  {"\n"}۳) مسیر ۷ روزه رو ادامه می‌دی (نه خودت رو تنبیه، نه مسیر رو صفر کن)
+                  {"\n"}۳) مسیر ۷ روزه رو ادامه می‌دی (نه خودت رو تنبیه کن و نه مسیر رو صفر کن)
                   {"\n"}
                 </Text>
 
@@ -721,7 +721,7 @@ export default function TD6DetoxConfirmScreen() {
                 <Text style={styles.p}>
                   اینجا «فکر کردن» ممنوعه.
                   {"\n"}یا شروع می‌کنی، یا برمی‌گردی و فعلاً شروع نمی‌کنی.
-                  {"\n\n"}یک گزینه انتخاب کن:
+                  {"\n\n"}یک گزینه رو انتخاب کن:
                 </Text>
               </View>
 
