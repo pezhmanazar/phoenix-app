@@ -22,7 +22,7 @@ import pelekanReviewRoutes from "./routes/pelekanReview.js";
 import publicRouter from "./routes/public.js"; // روتر عمومی که /tickets هم دارد
 import ticketsRouter from "./routes/tickets.js";
 import usersRouter from "./routes/users.js"; // 🔹 روتر یوزرها
-app.use("/api/media", mediaRouter);
+
 
 // ---------- Paths ----------
 const __filename = fileURLToPath(import.meta.url);
@@ -108,6 +108,7 @@ app.use(jsonUnlessMultipart);
 app.use(express.urlencoded({ extended: true, limit: "1mb" })); // برای فرم‌های پنل
 
 app.use("/api/announcements", announcementsRouter);
+app.use("/api/media", mediaRouter);
 
 // ---------- Upload helpers ----------
 const withUploadAny = (req, res, next) => {
