@@ -4,8 +4,6 @@ import { Router } from "express";
 import fs from "fs";
 import path from "path";
 
-// ✅ تضمین fetch روی Node<18
-import fetch from "node-fetch";
 
 const router = Router();
 
