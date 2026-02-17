@@ -1,4 +1,5 @@
 // app/pelekan/gosastan/stage-intro.tsx
+import { AUDIO_KEYS, mediaUrl } from "@/constants/media";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio } from "expo-av";
@@ -21,8 +22,9 @@ export default function GosastanStageIntroScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  // ✅ فعلاً همان فایل بستن
-  const AUDIO_URL = useMemo(() => "https://api.qoqnoos.app/static/audio/bastan-intro.mp3", []);
+  const AUDIO_URL = useMemo(() => {
+  return mediaUrl(AUDIO_KEYS.gosastanIntro);
+}, []);
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);

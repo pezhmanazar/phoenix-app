@@ -1,4 +1,5 @@
 // app/pelekan/bastan/stage-intro.tsx
+import { AUDIO_KEYS, mediaUrl } from "@/constants/media";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio } from "expo-av";
@@ -21,8 +22,10 @@ export default function BastanStageIntroScreen() {
   const { me } = useUser();
   const phone = String(me?.phone || "").trim();
 
-  // ✅ فعلاً همین فایل اینترو (بعداً عوض می‌کنیم)
-  const AUDIO_URL = useMemo(() => "https://api.qoqnoos.app/static/audio/bastan-intro.mp3", []);
+  // ✅ فایل اینترو
+  const AUDIO_URL = useMemo(() => {
+  return mediaUrl(AUDIO_KEYS.bastanIntro);
+}, []);
 
   // ✅ معیار: فقط وقتی کاربر «بازگشت» زد
   const HEARD_MIN_MS = 5000;

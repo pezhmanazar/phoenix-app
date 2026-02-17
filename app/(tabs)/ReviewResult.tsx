@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
+import { AUDIO_KEYS, mediaUrl } from "../../constants/media";
 
 /**
  * ✅ دو دامنه برای جلوگیری از گیرهای محیطی/کش
@@ -389,13 +390,12 @@ function SeekBar({
 
 type ReviewAudioKey = "danger" | "draining" | "unstable" | "good" | "unclear";
 
-// فعلاً برای نمونه همه به یک فایل اشاره می‌کنند
 const AUDIO_MAP: Record<ReviewAudioKey, string> = {
-  danger: "https://api.qoqnoos.app/static/audio/bastan-intro.mp3",
-  draining: "https://api.qoqnoos.app/static/audio/bastan-intro.mp3",
-  unstable: "https://api.qoqnoos.app/static/audio/bastan-intro.mp3",
-  good: "https://api.qoqnoos.app/static/audio/bastan-intro.mp3",
-  unclear: "https://api.qoqnoos.app/static/audio/bastan-intro.mp3",
+  danger: mediaUrl(AUDIO_KEYS.review.danger),
+  draining: mediaUrl(AUDIO_KEYS.review.draining),
+  unstable: mediaUrl(AUDIO_KEYS.review.unstable),
+  good: mediaUrl(AUDIO_KEYS.review.good),
+  unclear: mediaUrl(AUDIO_KEYS.review.unclear),
 };
 
 function computeReviewAudioKeyFromMeta(metaTest1: any): ReviewAudioKey {

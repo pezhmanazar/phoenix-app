@@ -1,4 +1,5 @@
 // app/pelekan/bastan/intro.tsx
+import { AUDIO_KEYS, mediaUrl } from "@/constants/media";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio } from "expo-av";
@@ -34,8 +35,8 @@ export default function BastanIntroScreen() {
   const apiBase = "https://api.qoqnoos.app";
 
   const AUDIO_URL = useMemo(() => {
-    return "https://api.qoqnoos.app/static/audio/bastan-intro.mp3";
-  }, []);
+  return mediaUrl(AUDIO_KEYS.introOverall);
+}, []);
 
   const STORAGE_POS_KEY = useMemo(() => `bastan_intro_pos_ms:${phone || "no_phone"}`, [phone]);
 
