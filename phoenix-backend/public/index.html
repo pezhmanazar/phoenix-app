@@ -405,23 +405,26 @@
   .brand img{ height: 38px; }
 
   /* download: left (RTL) - make it 44x44 so it doesn't break centering */
-  .mobile-cta{
-    display:inline-flex;
-    justify-self:end;
+.mobile-cta{
+  display:flex;              /* تغییر مهم */
+  align-items:center;        /* وسط عمودی */
+  justify-content:center;    /* وسط افقی */
+  justify-self:end;
 
-    width:44px;
-    height:44px;
-    padding:0;
-    border-radius:14px;
-    justify-content:center;
+  width:44px;
+  height:44px;
+  padding:0;
+  border-radius:14px;
 
-    font-size:0; /* متن مخفی */
-  }
-  .mobile-cta::before{
-    content:"⬇";
-    font-size:16px;
-    line-height:1;
-  }
+  font-size:0; /* متن مخفی */
+}
+
+.mobile-cta::before{
+  content:"⬇";
+  font-size:16px;
+  line-height:1;
+  display:block;
+}
 
   /* Dropdown */
   .mobile-menu{
