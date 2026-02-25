@@ -340,91 +340,117 @@
     }
 
     /* --- Mobile Header: hamburger right, logo center, download left --- */
-    .menu-toggle { display: none; }
-    .hamburger{ display:none; }
-    .mobile-cta{ display:none; }
-    .mobile-menu{ display:none; }
 
-    .hamburger{
-      width:44px;
-      height:44px;
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,0.10);
-      background: rgba(255,255,255,0.04);
-      align-items:center;
-      justify-content:center;
-      cursor:pointer;
-    }
-    .hamburger span{
-      display:block;
-      width:18px;
-      height:2px;
-      background: rgba(232,236,241,0.9);
-      border-radius: 999px;
-      position: relative;
-    }
-    .hamburger span::before,
-    .hamburger span::after{
-      content:"";
-      position:absolute;
-      left:0;
-      width:18px;
-      height:2px;
-      background: rgba(232,236,241,0.9);
-      border-radius: 999px;
-    }
-    .hamburger span::before{ top:-6px; }
-    .hamburger span::after{ top:6px; }
+.menu-toggle { display: none; }
+.hamburger{ display:none; }
+.mobile-cta{ display:none; }
+.mobile-menu{ display:none; }
 
-    @media (max-width: 900px){
-      .nav-links,
-      .nav-cta{ display:none; }
-
-      .nav{
-        display:grid;
-        grid-template-columns: 44px 1fr 44px;
-        align-items:center;
-        gap: 10px;
-      }
-
-      .hamburger{
-      justify-self: start;   /* در RTL یعنی سمت راست */
-      }
-
-.brand{
-  justify-self: center;  /* دقیقاً وسط */
+.hamburger{
+  width:44px;
+  height:44px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
 }
 
-.mobile-cta{
-  justify-self: end;     /* در RTL یعنی سمت چپ */
+.hamburger span{
+  display:block;
+  width:18px;
+  height:2px;
+  background: rgba(232,236,241,0.9);
+  border-radius: 999px;
+  position: relative;
 }
 
-      /* Dropdown */
-      .mobile-menu{
-        display:none;
-        padding: 10px 0 14px;
-        border-top: 1px solid rgba(255,255,255,0.06);
-      }
-      .mobile-menu a{
-        display:block;
-        padding: 12px 12px;
-        margin: 6px 0;
-        border-radius: 14px;
-        color: var(--text);
-        text-decoration:none;
-        border: 1px solid rgba(255,255,255,0.06);
-        background: rgba(255,255,255,0.03);
-        font-size: 14px;
-      }
-      .mobile-menu a:active{
-        background: rgba(212,175,55,0.08);
-        border-color: rgba(212,175,55,0.22);
-      }
+.hamburger span::before,
+.hamburger span::after{
+  content:"";
+  position:absolute;
+  left:0;
+  width:18px;
+  height:2px;
+  background: rgba(232,236,241,0.9);
+  border-radius: 999px;
+}
+.hamburger span::before{ top:-6px; }
+.hamburger span::after{ top:6px; }
 
-      .menu-toggle:checked ~ .mobile-menu{
-        display:block;
-      }
-    }
+@media (max-width: 900px){
+  .nav-links,
+  .nav-cta{ display:none; }
+
+  .nav{
+    display:grid;
+    grid-template-columns: 44px 1fr 44px; /* ✅ دو طرف برابر تا لوگو دقیق وسط شود */
+    align-items:center;
+    gap: 10px;
+  }
+
+  /* hamburger: right (RTL) */
+  .hamburger{
+    display:flex;
+    justify-self: start;
+  }
+
+  /* logo: center */
+  .brand{
+    min-width:auto;
+    justify-self:center;
+  }
+  .brand-title{ display:none; }
+  .brand img{ height: 38px; }
+
+  /* download: left (RTL) - make it 44x44 so it doesn't break centering */
+  .mobile-cta{
+    display:inline-flex;
+    justify-self:end;
+
+    width:44px;
+    height:44px;
+    padding:0;
+    border-radius:14px;
+    justify-content:center;
+
+    font-size:0; /* متن مخفی */
+  }
+  .mobile-cta::before{
+    content:"⬇";
+    font-size:16px;
+    line-height:1;
+  }
+
+  /* Dropdown */
+  .mobile-menu{
+    display:none;
+    padding: 10px 0 14px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .mobile-menu a{
+    display:block;
+    padding: 12px 12px;
+    margin: 6px 0;
+    border-radius: 14px;
+    color: var(--text);
+    text-decoration:none;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.03);
+    font-size: 14px;
+  }
+
+  .mobile-menu a:active{
+    background: rgba(212,175,55,0.08);
+    border-color: rgba(212,175,55,0.22);
+  }
+
+  .menu-toggle:checked ~ .mobile-menu{
+    display:block;
+  }
+}
 
     /* Sections */
     .section{
