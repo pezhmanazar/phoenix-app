@@ -1,5 +1,6 @@
+//phoenix-app\app\(tabs)\Rooznegar.tsx
 import { Ionicons } from "@expo/vector-icons";
-import { jalaaliMonthLength, toGregorian, toJalaali } from "jalaali-js";
+import { toGregorian, toJalaali } from "jalaali-js";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -54,61 +55,160 @@ const UI = {
 const toFa = (s: string | number) =>
   String(s).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[+d]);
 const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
-const timeLabel = (date: Date) => `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+const timeLabel = (date: Date) =>
+  `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 const uid = () =>
   Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+
+/** jalaali-js تابع طول ماه نداره؛ این helper جایگزینه */
+const jalaaliMonthLength = (jy: number, jm: number) => {
+  if (jm <= 6) return 31;
+  if (jm <= 11) return 30;
+
+  // Esfand: calculate length by comparing gregorian dates
+  const a = toGregorian(jy, 12, 1); // jy/12/01
+  const b = toGregorian(jy + 1, 1, 1); // (jy+1)/01/01
+  const da = new Date(a.gy, a.gm - 1, a.gd);
+  const db = new Date(b.gy, b.gm - 1, b.gd);
+  const diffDays = Math.round(
+    (db.getTime() - da.getTime()) / (24 * 60 * 60 * 1000)
+  );
+  return diffDays; // 29 or 30
+};
 
 const jalaliLabel = (d: Date) => {
   const { jy, jm, jd } = toJalaali(d);
   const months = [
-    "فروردین","اردیبهشت","خرداد","تیر","مرداد","شهریور",
-    "مهر","آبان","آذر","دی","بهمن","اسفند",
+    "فروردین",
+    "اردیبهشت",
+    "خرداد",
+    "تیر",
+    "مرداد",
+    "شهریور",
+    "مهر",
+    "آبان",
+    "آذر",
+    "دی",
+    "بهمن",
+    "اسفند",
   ];
-  const weekdays = ["یکشنبه","دوشنبه","سه‌شنبه","چهارشنبه","پنجشنبه","جمعه","شنبه"];
+  const weekdays = [
+    "یکشنبه",
+    "دوشنبه",
+    "سه‌شنبه",
+    "چهارشنبه",
+    "پنجشنبه",
+    "جمعه",
+    "شنبه",
+  ];
   return `${weekdays[d.getDay()]} ${toFa(jd)} ${months[jm - 1]} ${toFa(jy)}`;
 };
 
 /* +++ TAGS: افزودن فیلد اختیاری tags به مدل‌ها */
-type TodayItem = { id: string; title: string; time: string; done: boolean; createdAt: number; tags?: string[] };
-type ReminderItem = { id: string; title: string; when: number; createdAt: number; done?: boolean; tags?: string[]; notificationId?: string };
+type TodayItem = {
+  id: string;
+  title: string;
+  time: string;
+  done: boolean;
+  createdAt: number;
+  tags?: string[];
+};
+type ReminderItem = {
+  id: string;
+  title: string;
+  when: number;
+  createdAt: number;
+  done?: boolean;
+  tags?: string[];
+  notificationId?: string;
+};
 
 /* +++ TAGS: تعریف نوع نمایش تگ با آیکن (فقط برای UI) */
 type TagDef = { name: string; icon: string };
+
+/* ===================== THEMED ALERT (replace raw Alert.alert) ===================== */
+function ThemedAlert({
+  visible,
+  title,
+  message,
+  okText = "باشه",
+  onClose,
+}: {
+  visible: boolean;
+  title: string;
+  message?: string;
+  okText?: string;
+  onClose: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={[styles.alertCard, { paddingBottom: (insets.bottom || 0) + 12 }]}>
+          <Text style={styles.alertTitle}>{title}</Text>
+          {message ? <Text style={styles.alertMsg}>{message}</Text> : null}
+
+          <TouchableOpacity onPress={onClose} activeOpacity={0.85} style={[styles.btn, styles.btnPrimary]}>
+            <Text style={styles.btnPrimaryText}>{okText}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 /* ---------- tiny UI ---------- */
 function ProgressBar({
   value = 0,
   color = UI.PRIMARY,
   track = UI.BORDER,
-}:{
-  value: number; color?: string; track?: string;
+}: {
+  value: number;
+  color?: string;
+  track?: string;
 }) {
   const clamped = Math.max(0, Math.min(100, value));
   return (
-    <View style={{ height: 10, borderRadius: 999, backgroundColor: track, overflow: "hidden" }}>
-      <View style={{ width: `${clamped}%`, height: "100%", backgroundColor: color, borderRadius: 999 }} />
+    <View
+      style={{
+        height: 10,
+        borderRadius: 999,
+        backgroundColor: track,
+        overflow: "hidden",
+      }}
+    >
+      <View
+        style={{
+          width: `${clamped}%`,
+          height: "100%",
+          backgroundColor: color,
+          borderRadius: 999,
+        }}
+      />
     </View>
   );
 }
 
 /* +++ TAGS: چپس کوچکِ برچسب */
 function TagChip({
-  label, selected, onPress, onRemove, iconName,
-}:{
+  label,
+  selected,
+  onPress,
+  onRemove,
+  iconName,
+}: {
   label: string;
   selected?: boolean;
-  onPress?: ()=>void;
-  onRemove?: ()=>void;
+  onPress?: () => void;
+  onRemove?: () => void;
   iconName?: string;
 }) {
   return (
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.85}
-      style={[
-        styles.chip,
-        selected ? styles.chipSelected : null,
-      ]}
+      style={[styles.chip, selected ? styles.chipSelected : null]}
     >
       {iconName ? (
         <Ionicons
@@ -124,8 +224,16 @@ function TagChip({
       </Text>
 
       {onRemove && (
-        <TouchableOpacity onPress={onRemove} style={{ marginStart: 2 }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="close" size={14} color={selected ? "#111827" : UI.TEXT} />
+        <TouchableOpacity
+          onPress={onRemove}
+          style={{ marginStart: 2 }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons
+            name="close"
+            size={14}
+            color={selected ? "#111827" : UI.TEXT}
+          />
         </TouchableOpacity>
       )}
     </TouchableOpacity>
@@ -145,7 +253,12 @@ function RoozHeader() {
       {/* اکشن ساده سمت چپ (اختیاری / زیبایی) */}
       <View style={{ width: 44, alignItems: "flex-start" }}>
         <View style={styles.headerIconBubble}>
-          <Ionicons name="calendar-outline" size={18} color={UI.TEXT} style={{ opacity: 0.9 }} />
+          <Ionicons
+            name="calendar-outline"
+            size={18}
+            color={UI.TEXT}
+            style={{ opacity: 0.9 }}
+          />
         </View>
       </View>
     </View>
@@ -154,16 +267,28 @@ function RoozHeader() {
 
 /* ---------- Segmented tabs ---------- */
 function Segmented({
-  tab, setTab,
-}: { tab: "today"|"rem"; setTab: (t:"today"|"rem")=>void }) {
+  tab,
+  setTab,
+}: {
+  tab: "today" | "rem";
+  setTab: (t: "today" | "rem") => void;
+}) {
   return (
     <View style={styles.segmentWrap}>
       <TouchableOpacity
         onPress={() => setTab("today")}
         activeOpacity={0.85}
-        style={[styles.segmentBtn, tab === "today" ? styles.segmentBtnActive : null]}
+        style={[
+          styles.segmentBtn,
+          tab === "today" ? styles.segmentBtnActive : null,
+        ]}
       >
-        <Text style={[styles.segmentText, tab === "today" ? styles.segmentTextActive : null]}>
+        <Text
+          style={[
+            styles.segmentText,
+            tab === "today" ? styles.segmentTextActive : null,
+          ]}
+        >
           برنامهٔ امروز
         </Text>
       </TouchableOpacity>
@@ -173,7 +298,12 @@ function Segmented({
         activeOpacity={0.85}
         style={[styles.segmentBtn, tab === "rem" ? styles.segmentBtnActive : null]}
       >
-        <Text style={[styles.segmentText, tab === "rem" ? styles.segmentTextActive : null]}>
+        <Text
+          style={[
+            styles.segmentText,
+            tab === "rem" ? styles.segmentTextActive : null,
+          ]}
+        >
           یادآور
         </Text>
       </TouchableOpacity>
@@ -182,10 +312,16 @@ function Segmented({
 }
 
 /* ---------- ProgressCard ---------- */
-function ProgressCard({ value }:{ value:number }) {
+function ProgressCard({ value }: { value: number }) {
   return (
     <View style={styles.card}>
-      <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" }}>
+      <View
+        style={{
+          flexDirection: "row-reverse",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
         <Text style={{ color: UI.TEXT, fontWeight: "900" }}>پیشرفت امروز</Text>
         <Text style={{ color: UI.MUTED, fontWeight: "900" }}>{toFa(value)}٪</Text>
       </View>
@@ -196,30 +332,56 @@ function ProgressCard({ value }:{ value:number }) {
 
 /* +++ TAGS: مودال مدیریت/ویرایش تگ‌ها */
 function TagManagerModal({
-  visible, onClose, tags, onChange,
-}:{
-  visible:boolean; onClose:()=>void; tags:TagDef[]; onChange:(next:TagDef[])=>void;
+  visible,
+  onClose,
+  tags,
+  onChange,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  tags: TagDef[];
+  onChange: (next: TagDef[]) => void;
 }) {
   const insets = useSafeAreaInsets();
   const [list, setList] = useState<TagDef[]>(tags);
 
-  useEffect(()=> setList(tags), [tags]);
+  // ✅ فقط موقع باز شدن، لیست رو از بیرون sync کن (نه با هر رندر/تغییر tags)
+  useEffect(() => {
+    if (visible) setList(tags);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   const iconBank: string[] = [
-    "pricetag-outline","bookmark-outline","heart-outline","briefcase-outline",
-    "book-outline","fitness-outline","bicycle-outline","code-slash-outline",
-    "medkit-outline","musical-notes-outline","sparkles-outline","sunny-outline",
+    "pricetag-outline",
+    "bookmark-outline",
+    "heart-outline",
+    "briefcase-outline",
+    "book-outline",
+    "fitness-outline",
+    "bicycle-outline",
+    "code-slash-outline",
+    "medkit-outline",
+    "musical-notes-outline",
+    "sparkles-outline",
+    "sunny-outline",
   ];
 
-  const updateTag = (idx:number, patch:Partial<TagDef>) => {
-    setList(arr => arr.map((t,i)=> i===idx ? {...t, ...patch} : t));
+  const updateTag = (idx: number, patch: Partial<TagDef>) => {
+    setList((arr) => arr.map((t, i) => (i === idx ? { ...t, ...patch } : t)));
   };
-  const addEmpty = () => setList(arr => [...arr, { name:"", icon:"pricetag-outline" }]);
-  const removeAt = (idx:number) => setList(arr => arr.filter((_,i)=>i!==idx));
+  const addEmpty = () =>
+    setList((arr) => [...arr, { name: "", icon: "pricetag-outline" }]);
+  const removeAt = (idx: number) => setList((arr) => arr.filter((_, i) => i !== idx));
   const persist = () => {
-    const cleaned = list.map(t=>({ name:t.name.trim(), icon:t.icon })).filter(t=>t.name);
-    const seen:Record<string,TagDef> = {};
-    cleaned.forEach(t => { seen[t.name]=t; });
+    const cleaned = list
+      .map((t) => ({ name: t.name.trim(), icon: t.icon }))
+      .filter((t) => t.name);
+
+    const seen: Record<string, TagDef> = {};
+    cleaned.forEach((t) => {
+      seen[t.name] = t;
+    });
+
     onChange(Object.values(seen));
     onClose();
   };
@@ -230,26 +392,31 @@ function TagManagerModal({
         <View style={[styles.modalCard, { paddingBottom: (insets.bottom || 0) + 12 }]}>
           <Text style={styles.modalTitle}>مدیریت برچسب‌ها</Text>
 
-          <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={{ maxHeight: 360 }}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
             {list.map((t, idx) => (
-              <View key={`${t.name}-${idx}`} style={styles.modalItem}>
+              // ✅ key پایدار: تغییر name باعث remount و پریدن کیبورد نشه
+              <View key={`tagrow-${idx}`} style={styles.modalItem}>
                 <View style={styles.inputBox}>
                   <TextInput
                     value={t.name}
-                    onChangeText={(v)=>updateTag(idx, { name:v })}
+                    onChangeText={(v) => updateTag(idx, { name: v })}
                     placeholder="نام تگ"
                     placeholderTextColor={UI.PLACEHOLDER}
                     style={{ color: UI.TEXT, textAlign: "right", fontWeight: "800" }}
                   />
                 </View>
 
-                <View style={{ flexDirection:"row", flexWrap:"wrap", gap: 6 }}>
-                  {iconBank.map(ic => {
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                  {iconBank.map((ic) => {
                     const selected = ic === t.icon;
                     return (
                       <TouchableOpacity
                         key={ic}
-                        onPress={()=>updateTag(idx,{ icon:ic })}
+                        onPress={() => updateTag(idx, { icon: ic })}
                         activeOpacity={0.85}
                         style={{
                           borderWidth: 1,
@@ -265,8 +432,11 @@ function TagManagerModal({
                   })}
                 </View>
 
-                <View style={{ flexDirection:"row", justifyContent:"flex-end" }}>
-                  <TouchableOpacity onPress={()=>removeAt(idx)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
+                  <TouchableOpacity
+                    onPress={() => removeAt(idx)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
                     <Ionicons name="trash-outline" size={18} color={UI.DANGER} />
                   </TouchableOpacity>
                 </View>
@@ -274,16 +444,28 @@ function TagManagerModal({
             ))}
           </ScrollView>
 
-          <View style={{ flexDirection:"row-reverse", gap:8 }}>
-            <TouchableOpacity onPress={persist} activeOpacity={0.85} style={[styles.btn, styles.btnPrimary, { flex: 1 }]}>
+          <View style={{ flexDirection: "row-reverse", gap: 8 }}>
+            <TouchableOpacity
+              onPress={persist}
+              activeOpacity={0.85}
+              style={[styles.btn, styles.btnPrimary, { flex: 1 }]}
+            >
               <Text style={styles.btnPrimaryText}>ذخیره</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={addEmpty} activeOpacity={0.85} style={[styles.btn, styles.btnOutline, { flex: 1 }]}>
+            <TouchableOpacity
+              onPress={addEmpty}
+              activeOpacity={0.85}
+              style={[styles.btn, styles.btnOutline, { flex: 1 }]}
+            >
               <Text style={styles.btnOutlineText}>تگ جدید</Text>
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity onPress={onClose} activeOpacity={0.85} style={[styles.btn, styles.btnOutline, { marginTop: 6 }]}>
+          <TouchableOpacity
+            onPress={onClose}
+            activeOpacity={0.85}
+            style={[styles.btn, styles.btnOutline, { marginTop: 6 }]}
+          >
             <Text style={styles.btnOutlineText}>بستن</Text>
           </TouchableOpacity>
         </View>
@@ -295,8 +477,10 @@ function TagManagerModal({
 /* ---------- TodayBlock ---------- */
 function TodayBlock({
   rtl,
-  items, setItems,
-  title, setTitle,
+  items,
+  setItems,
+  title,
+  setTitle,
   time,
   onOpenTime,
   onAdd,
@@ -309,37 +493,37 @@ function TodayBlock({
   setTagInput,
   allTags,
   tagIcons,
-}:{
+}: {
   rtl: boolean;
-  items: TodayItem[]; setItems: React.Dispatch<React.SetStateAction<TodayItem[]>>;
-  title: string; setTitle: (s:string)=>void;
-  time: Date|null;
-  onOpenTime: ()=>void;
-  onAdd: ()=>void;
+  items: TodayItem[];
+  setItems: React.Dispatch<React.SetStateAction<TodayItem[]>>;
+  title: string;
+  setTitle: (s: string) => void;
+  time: Date | null;
+  onOpenTime: () => void;
+  onAdd: () => void;
   editingId: string | null;
   onEditItem: (it: TodayItem) => void;
   todaySelectedTags: string[];
-  onAddTagToToday: (t:string)=>void;
-  onRemoveTagFromToday: (t:string)=>void;
+  onAddTagToToday: (t: string) => void;
+  onRemoveTagFromToday: (t: string) => void;
   tagInput: string;
-  setTagInput: (s:string)=>void;
+  setTagInput: (s: string) => void;
   allTags: string[];
-  tagIcons: Record<string,string>;
+  tagIcons: Record<string, string>;
 }) {
-  const toggle = (id:string) =>
-    setItems(list => sortToday(list.map(it => it.id===id ? {...it, done: !it.done} : it)));
-  const remove = (id:string) => setItems(list => list.filter(it => it.id!==id));
+  const toggle = (id: string) =>
+    setItems((list) =>
+      sortToday(list.map((it) => (it.id === id ? { ...it, done: !it.done } : it)))
+    );
+  const remove = (id: string) => setItems((list) => list.filter((it) => it.id !== id));
 
   return (
     <View style={styles.card}>
       <Text style={styles.helperText}>برنامه امروزت رو اینجا اضافه کن</Text>
 
       <View style={{ flexDirection: "row-reverse", gap: 8 }}>
-        <TouchableOpacity
-          onPress={onOpenTime}
-          activeOpacity={0.85}
-          style={styles.timeBtn}
-        >
+        <TouchableOpacity onPress={onOpenTime} activeOpacity={0.85} style={styles.timeBtn}>
           <Text style={{ color: UI.TEXT, fontWeight: "900" }}>
             {time ? toFa(timeLabel(time)) : "انتخاب ساعت"}
           </Text>
@@ -357,13 +541,9 @@ function TodayBlock({
           />
         </View>
 
-        <TouchableOpacity
-          onPress={onAdd}
-          activeOpacity={0.85}
-          style={styles.addBtn}
-        >
+        <TouchableOpacity onPress={onAdd} activeOpacity={0.85} style={styles.addBtn}>
           {editingId ? (
-            <Text style={{ color:"#111827", fontWeight:"900" }}>ذخیره</Text>
+            <Text style={{ color: "#111827", fontWeight: "900" }}>ذخیره</Text>
           ) : (
             <Ionicons name="add" size={22} color="#111827" />
           )}
@@ -372,14 +552,24 @@ function TodayBlock({
 
       {/* TAGS: امروز */}
       <View style={{ marginTop: 8 }}>
-        <View style={{ flexDirection:"row", flexWrap:"wrap" }}>
-          {todaySelectedTags.map(t => (
-            <TagChip key={t} label={t} iconName={tagIcons[t]} selected onRemove={()=>onRemoveTagFromToday(t)} />
+        <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+          {todaySelectedTags.map((t) => (
+            <TagChip
+              key={t}
+              label={t}
+              iconName={tagIcons[t]}
+              selected
+              onRemove={() => onRemoveTagFromToday(t)}
+            />
           ))}
         </View>
 
-        <View style={{ flexDirection:"row-reverse", alignItems:"center", marginTop:6 }}>
-          <TouchableOpacity onPress={()=> onAddTagToToday(tagInput.trim())} style={{ marginStart: 8 }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <View style={{ flexDirection: "row-reverse", alignItems: "center", marginTop: 6 }}>
+          <TouchableOpacity
+            onPress={() => onAddTagToToday(tagInput.trim())}
+            style={{ marginStart: 8 }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <Ionicons name="pricetag-outline" size={22} color={UI.MUTED2} />
           </TouchableOpacity>
 
@@ -389,15 +579,15 @@ function TodayBlock({
               onChangeText={setTagInput}
               placeholder="اضافه‌کردن برچسب"
               placeholderTextColor={UI.PLACEHOLDER}
-              onSubmitEditing={()=> onAddTagToToday(tagInput.trim())}
+              onSubmitEditing={() => onAddTagToToday(tagInput.trim())}
               style={{ color: UI.TEXT, textAlign: "right", fontWeight: "800" }}
             />
           </View>
         </View>
 
-        <View style={{ flexDirection:"row", flexWrap:"wrap", marginTop:6 }}>
-          {allTags.map(t => (
-            <TagChip key={t} label={t} iconName={tagIcons[t]} onPress={()=>onAddTagToToday(t)} />
+        <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 6 }}>
+          {allTags.map((t) => (
+            <TagChip key={t} label={t} iconName={tagIcons[t]} onPress={() => onAddTagToToday(t)} />
           ))}
         </View>
       </View>
@@ -406,41 +596,39 @@ function TodayBlock({
         <Text style={styles.emptyText}>هنوز آیتمی در این برنامه ثبت نشده.</Text>
       ) : (
         <View style={{ marginTop: 4 }}>
-          {items.map(item => (
+          {items.map((item) => (
             <View key={item.id} style={styles.rowCard}>
               <TouchableOpacity
-                onPress={()=>toggle(item.id)}
+                onPress={() => toggle(item.id)}
                 activeOpacity={0.85}
-                style={[
-                  styles.checkBox,
-                  item.done ? styles.checkBoxDone : null,
-                ]}
+                style={[styles.checkBox, item.done ? styles.checkBoxDone : null]}
               >
                 {item.done && <Ionicons name="checkmark" size={14} color="#111827" />}
               </TouchableOpacity>
 
-              <View style={{ flex:1 }}>
+              <View style={{ flex: 1 }}>
                 <Text
                   style={{
                     color: UI.TEXT,
-                    textAlign:"right",
+                    textAlign: "right",
                     fontWeight: "900",
                     textDecorationLine: item.done ? "line-through" : "none",
                     opacity: item.done ? 0.6 : 1,
                   }}
-                  onLongPress={() => { setTitle(item.title); remove(item.id); }}
+                  // ✅ بهبود UX: longPress بره روی edit، نه پاک کردن!
+                  onLongPress={() => onEditItem(item)}
                 >
                   {item.title}
                 </Text>
 
-                <View style={{ flexDirection:"row", flexWrap:"wrap", marginTop:4 }}>
-                  {(item.tags ?? []).map(t => (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 4 }}>
+                  {(item.tags ?? []).map((t) => (
                     <TagChip key={t} label={t} iconName={tagIcons[t]} />
                   ))}
                 </View>
               </View>
 
-              <Text style={{ color: UI.MUTED, width:52, textAlign:"center", fontWeight: "900" }}>
+              <Text style={{ color: UI.MUTED, width: 52, textAlign: "center", fontWeight: "900" }}>
                 {toFa(item.time)}
               </Text>
 
@@ -448,7 +636,7 @@ function TodayBlock({
                 <Ionicons name="create-outline" size={18} color={UI.TEXT} />
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={()=>remove(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <TouchableOpacity onPress={() => remove(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="trash-outline" size={18} color={UI.DANGER} />
               </TouchableOpacity>
             </View>
@@ -462,12 +650,19 @@ function TodayBlock({
 /* ---------- ReminderBlock ---------- */
 function ReminderBlock({
   rtl,
-  jy, jm, jd, setJy, setJm, setJd,
-  remTitle, setRemTitle,
+  jy,
+  jm,
+  jd,
+  setJy,
+  setJm,
+  setJd,
+  remTitle,
+  setRemTitle,
   remTime,
   onOpenDate,
   onOpenTime,
-  items, setItems,
+  items,
+  setItems,
   onAdd,
   editingId,
   onEditItem,
@@ -481,42 +676,48 @@ function ReminderBlock({
   onToggleReminder,
   onRemoveReminder,
   onSnoozeReminder,
-}:{
-  rtl:boolean;
-  jy:number; jm:number; jd:number; setJy:(n:number)=>void; setJm:(n:number)=>void; setJd:(n:number)=>void;
-  remTitle:string; setRemTitle:(s:string)=>void;
-  remTime:Date|null;
-  onOpenDate:()=>void;
-  onOpenTime:()=>void;
-  items:ReminderItem[]; setItems:React.Dispatch<React.SetStateAction<ReminderItem[]>>;
-  onAdd:()=>void;
+}: {
+  rtl: boolean;
+  jy: number;
+  jm: number;
+  jd: number;
+  setJy: (n: number) => void;
+  setJm: (n: number) => void;
+  setJd: (n: number) => void;
+  remTitle: string;
+  setRemTitle: (s: string) => void;
+  remTime: Date | null;
+  onOpenDate: () => void;
+  onOpenTime: () => void;
+  items: ReminderItem[];
+  setItems: React.Dispatch<React.SetStateAction<ReminderItem[]>>;
+  onAdd: () => void;
   editingId: string | null;
   onEditItem: (it: ReminderItem) => void;
   remSelectedTags: string[];
-  onAddTagToRem: (t:string)=>void;
-  onRemoveTagFromRem: (t:string)=>void;
+  onAddTagToRem: (t: string) => void;
+  onRemoveTagFromRem: (t: string) => void;
   tagInput: string;
-  setTagInput: (s:string)=>void;
+  setTagInput: (s: string) => void;
   allTags: string[];
-  tagIcons: Record<string,string>;
-  onToggleReminder: (id:string)=>void;
-  onRemoveReminder: (id:string)=>void;
-  onSnoozeReminder: (id:string)=>void;
+  tagIcons: Record<string, string>;
+  onToggleReminder: (id: string) => void;
+  onRemoveReminder: (id: string) => void;
+  onSnoozeReminder: (id: string) => void;
 }) {
-
   return (
     <View style={styles.card}>
       <Text style={styles.helperText}>کارهای مهم خودت رو در روزهای آینده اینجا اضافه کن</Text>
 
-      <View style={{ flexDirection:"row-reverse", gap:8, flexWrap:"wrap" }}>
+      <View style={{ flexDirection: "row-reverse", gap: 8, flexWrap: "wrap" }}>
         <TouchableOpacity onPress={onOpenDate} activeOpacity={0.85} style={styles.timeBtn}>
-          <Text style={{ color: UI.TEXT, fontWeight:"900" }}>
+          <Text style={{ color: UI.TEXT, fontWeight: "900" }}>
             {toFa(jy)}/{toFa(pad(jm))}/{toFa(pad(jd))}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={onOpenTime} activeOpacity={0.85} style={styles.timeBtn}>
-          <Text style={{ color: UI.TEXT, fontWeight:"900" }}>
+          <Text style={{ color: UI.TEXT, fontWeight: "900" }}>
             {remTime ? toFa(timeLabel(remTime)) : "انتخاب ساعت"}
           </Text>
         </TouchableOpacity>
@@ -535,7 +736,7 @@ function ReminderBlock({
 
         <TouchableOpacity onPress={onAdd} activeOpacity={0.85} style={styles.addBtn}>
           {editingId ? (
-            <Text style={{ color:"#111827", fontWeight:"900" }}>ذخیره</Text>
+            <Text style={{ color: "#111827", fontWeight: "900" }}>ذخیره</Text>
           ) : (
             <Ionicons name="add" size={22} color="#111827" />
           )}
@@ -544,14 +745,18 @@ function ReminderBlock({
 
       {/* TAGS: یادآور */}
       <View style={{ marginTop: 8 }}>
-        <View style={{ flexDirection:"row", flexWrap:"wrap" }}>
-          {remSelectedTags.map(t => (
-            <TagChip key={t} label={t} iconName={tagIcons[t]} selected onRemove={()=>onRemoveTagFromRem(t)} />
+        <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+          {remSelectedTags.map((t) => (
+            <TagChip key={t} label={t} iconName={tagIcons[t]} selected onRemove={() => onRemoveTagFromRem(t)} />
           ))}
         </View>
 
-        <View style={{ flexDirection:"row-reverse", alignItems:"center", marginTop:6 }}>
-          <TouchableOpacity onPress={()=> onAddTagToRem(tagInput.trim())} style={{ marginStart: 8 }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <View style={{ flexDirection: "row-reverse", alignItems: "center", marginTop: 6 }}>
+          <TouchableOpacity
+            onPress={() => onAddTagToRem(tagInput.trim())}
+            style={{ marginStart: 8 }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <Ionicons name="pricetag-outline" size={22} color={UI.MUTED2} />
           </TouchableOpacity>
 
@@ -561,15 +766,15 @@ function ReminderBlock({
               onChangeText={setTagInput}
               placeholder="اضافه‌کردن برچسب"
               placeholderTextColor={UI.PLACEHOLDER}
-              onSubmitEditing={()=> onAddTagToRem(tagInput.trim())}
+              onSubmitEditing={() => onAddTagToRem(tagInput.trim())}
               style={{ color: UI.TEXT, textAlign: "right", fontWeight: "800" }}
             />
           </View>
         </View>
 
-        <View style={{ flexDirection:"row", flexWrap:"wrap", marginTop:6 }}>
-          {allTags.map(t => (
-            <TagChip key={t} label={t} iconName={tagIcons[t]} onPress={()=>onAddTagToRem(t)} />
+        <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 6 }}>
+          {allTags.map((t) => (
+            <TagChip key={t} label={t} iconName={tagIcons[t]} onPress={() => onAddTagToRem(t)} />
           ))}
         </View>
       </View>
@@ -578,19 +783,16 @@ function ReminderBlock({
         <Text style={styles.emptyText}>هنوز یادآوری ثبت نشده است.</Text>
       ) : (
         <View style={{ marginTop: 4 }}>
-          {items.map(item => {
+          {items.map((item) => {
             const d = new Date(item.when);
             const done = !!item.done;
 
             return (
               <View key={item.id} style={styles.rowCard}>
                 <TouchableOpacity
-                  onPress={()=>onToggleReminder(item.id)}
+                  onPress={() => onToggleReminder(item.id)}
                   activeOpacity={0.85}
-                  style={[
-                    styles.checkBox,
-                    done ? styles.checkBoxDone : null,
-                  ]}
+                  style={[styles.checkBox, done ? styles.checkBoxDone : null]}
                 >
                   {done && <Ionicons name="checkmark" size={14} color="#111827" />}
                 </TouchableOpacity>
@@ -599,8 +801,8 @@ function ReminderBlock({
                   <Text
                     style={{
                       color: UI.TEXT,
-                      fontWeight:"900",
-                      textAlign:"right",
+                      fontWeight: "900",
+                      textAlign: "right",
                       textDecorationLine: done ? "line-through" : "none",
                       opacity: done ? 0.6 : 1,
                     }}
@@ -608,23 +810,27 @@ function ReminderBlock({
                     {item.title}
                   </Text>
 
-                  <Text style={{ color: UI.MUTED, fontSize: 12, textAlign:"right", fontWeight: "800", marginTop: 2 }}>
+                  <Text
+                    style={{
+                      color: UI.MUTED,
+                      fontSize: 12,
+                      textAlign: "right",
+                      fontWeight: "800",
+                      marginTop: 2,
+                    }}
+                  >
                     {jalaliLabel(d)} • {toFa(timeLabel(d))}
                   </Text>
 
-                  <View style={{ flexDirection:"row", flexWrap:"wrap", marginTop: 6 }}>
-                    {(item.tags ?? []).map(t => (
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 6 }}>
+                    {(item.tags ?? []).map((t) => (
                       <TagChip key={t} label={t} iconName={tagIcons[t]} />
                     ))}
                   </View>
 
                   {!done && (
-                    <View style={{ flexDirection:"row-reverse", justifyContent:"flex-start", marginTop: 8 }}>
-                      <TouchableOpacity
-                        onPress={()=>onSnoozeReminder(item.id)}
-                        activeOpacity={0.85}
-                        style={styles.snoozeBtn}
-                      >
+                    <View style={{ flexDirection: "row-reverse", justifyContent: "flex-start", marginTop: 8 }}>
+                      <TouchableOpacity onPress={() => onSnoozeReminder(item.id)} activeOpacity={0.85} style={styles.snoozeBtn}>
                         <Ionicons name="time-outline" size={16} color={UI.TEXT} />
                         <Text style={{ color: UI.TEXT, fontSize: 12, fontWeight: "900" }}>+۱۰ دقیقه</Text>
                       </TouchableOpacity>
@@ -636,7 +842,7 @@ function ReminderBlock({
                   <Ionicons name="create-outline" size={18} color={UI.TEXT} />
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={()=>onRemoveReminder(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <TouchableOpacity onPress={() => onRemoveReminder(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Ionicons name="trash-outline" size={18} color={UI.DANGER} />
                 </TouchableOpacity>
               </View>
@@ -650,27 +856,52 @@ function ReminderBlock({
 
 /* ---------- DateModal ---------- */
 function DateModal({
-  visible, onClose,
-  jy, jm, jd, setJy, setJm, setJd,
-}:{
-  visible:boolean; onClose:()=>void;
-  jy:number; jm:number; jd:number; setJy:(n:number)=>void; setJm:(n:number)=>void; setJd:(n:number)=>void;
+  visible,
+  onClose,
+  jy,
+  jm,
+  jd,
+  setJy,
+  setJm,
+  setJd,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  jy: number;
+  jm: number;
+  jd: number;
+  setJy: (n: number) => void;
+  setJm: (n: number) => void;
+  setJd: (n: number) => void;
 }) {
   const insets = useSafeAreaInsets();
-  const monthsFa = ["فروردین","اردیبهشت","خرداد","تیر","مرداد","شهریور","مهر","آبان","آذر","دی","بهمن","اسفند"];
+  const monthsFa = [
+    "فروردین",
+    "اردیبهشت",
+    "خرداد",
+    "تیر",
+    "مرداد",
+    "شهریور",
+    "مهر",
+    "آبان",
+    "آذر",
+    "دی",
+    "بهمن",
+    "اسفند",
+  ];
 
-  const clampDay = (y:number, m:number) => {
+  const clampDay = (y: number, m: number) => {
     const lim = jalaaliMonthLength(y, m);
     if (jd > lim) setJd(lim);
   };
 
-  const changeYear = (delta:number) => {
+  const changeYear = (delta: number) => {
     const y = jy + delta;
     setJy(y);
     clampDay(y, jm);
   };
 
-  const selectMonth = (m:number) => {
+  const selectMonth = (m: number) => {
     setJm(m);
     clampDay(jy, m);
   };
@@ -685,63 +916,57 @@ function DateModal({
           <Text style={styles.modalTitle}>انتخاب تاریخ</Text>
 
           <View style={styles.yearRow}>
-            <TouchableOpacity onPress={()=>changeYear(-1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity onPress={() => changeYear(-1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="remove" size={20} color={UI.TEXT} />
             </TouchableOpacity>
-            <Text style={{ color: UI.TEXT, fontWeight:"900" }}>
-              {String(jy).replace(/\d/g, d=>"۰۱۲۳۴۵۶۷۸۹"[+d])}
+            <Text style={{ color: UI.TEXT, fontWeight: "900" }}>
+              {String(jy).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[+d])}
             </Text>
-            <TouchableOpacity onPress={()=>changeYear(1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity onPress={() => changeYear(1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="add" size={20} color={UI.TEXT} />
             </TouchableOpacity>
           </View>
 
-          <View style={{ flexDirection:"row", flexWrap:"wrap", gap:8, justifyContent:"space-between" }}>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "space-between" }}>
             {monthsFa.map((mTitle, idx) => {
               const m = idx + 1;
               const selected = jm === m;
               return (
                 <TouchableOpacity
                   key={m}
-                  onPress={()=>selectMonth(m)}
+                  onPress={() => selectMonth(m)}
                   activeOpacity={0.85}
-                  style={[
-                    styles.monthBtn,
-                    selected ? styles.monthBtnActive : null,
-                  ]}
+                  style={[styles.monthBtn, selected ? styles.monthBtnActive : null]}
                 >
-                  <Text style={{ color: selected ? "#111827" : UI.TEXT, fontWeight:"900" }}>{mTitle}</Text>
+                  <Text style={{ color: selected ? "#111827" : UI.TEXT, fontWeight: "900" }}>{mTitle}</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
 
-          <View style={{ flexDirection:"row", flexWrap:"wrap", marginTop: 6 }}>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 6 }}>
             {days.map((d) => {
               const selected = d === jd;
               return (
                 <TouchableOpacity
                   key={d}
-                  onPress={()=>setJd(d)}
+                  onPress={() => setJd(d)}
                   activeOpacity={0.85}
-                  style={[
-                    styles.dayBtn,
-                    selected ? styles.dayBtnActive : null,
-                  ]}
+                  style={[styles.dayBtn, selected ? styles.dayBtnActive : null]}
                 >
-                  <Text style={{ color: selected ? "#111827" : UI.TEXT, fontWeight:"900" }}>
-                    {String(d).replace(/\d/g, x=>"۰۱۲۳۴۵۶۷۸۹"[+x])}
+                  <Text style={{ color: selected ? "#111827" : UI.TEXT, fontWeight: "900" }}>
+                    {String(d).replace(/\d/g, (x) => "۰۱۲۳۴۵۶۷۸۹"[+x])}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
 
-          <View style={{ flexDirection:"row-reverse", gap:8, marginTop: 10 }}>
-            <TouchableOpacity onPress={onClose} activeOpacity={0.85} style={[styles.btn, styles.btnPrimary, { flex:1 }]}>
+          <View style={{ flexDirection: "row-reverse", gap: 8, marginTop: 10 }}>
+            <TouchableOpacity onPress={onClose} activeOpacity={0.85} style={[styles.btn, styles.btnPrimary, { flex: 1 }]}>
               <Text style={styles.btnPrimaryText}>تأیید</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={onClose} activeOpacity={0.85} style={[styles.btn, styles.btnOutline, { flex:1 }]}>
+            <TouchableOpacity onPress={onClose} activeOpacity={0.85} style={[styles.btn, styles.btnOutline, { flex: 1 }]}>
               <Text style={styles.btnOutlineText}>بستن</Text>
             </TouchableOpacity>
           </View>
@@ -758,6 +983,16 @@ export default function Rooznegar() {
   const { setDayProgress } = usePhoenix();
 
   const [tab, setTab] = useState<"today" | "rem">("today");
+
+  // ✅ Themed alert state + helper (replaces Alert.alert)
+  const [tAlertOpen, setTAlertOpen] = useState(false);
+  const [tAlertTitle, setTAlertTitle] = useState("");
+  const [tAlertMsg, setTAlertMsg] = useState("");
+  const showTAlert = (title: string, message?: string) => {
+    setTAlertTitle(title);
+    setTAlertMsg(message || "");
+    setTAlertOpen(true);
+  };
 
   // امروز
   const [todayTitle, setTodayTitle] = useState("");
@@ -780,12 +1015,16 @@ export default function Rooznegar() {
 
   /* TAGS */
   const [allTags, setAllTags] = useState<string[]>([]);
-  const [activeTag, setActiveTag] = useState<string | null>(null);
+  // ✅ فیلتر: "__all__"=همه ، "__untagged__"=بدون برچسب ، بقیه=نام تگ
+  const [activeTag, setActiveTag] = useState<string | null>("__all__");
   const [todayTags, setTodayTags] = useState<string[]>([]);
   const [remTags, setRemTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState("");
 
-  const [tagIcons, setTagIcons] = useState<Record<string,string>>({});
+  // ✅ بهبود سریع: ورودی تگ جدا
+  const [todayTagInput, setTodayTagInput] = useState("");
+  const [remTagInput, setRemTagInput] = useState("");
+
+  const [tagIcons, setTagIcons] = useState<Record<string, string>>({});
   const [showTagManager, setShowTagManager] = useState(false);
 
   const loadedRef = useRef(false);
@@ -817,11 +1056,14 @@ export default function Rooznegar() {
         ]);
       }
 
+      // ✅ iOS جدید: باید banner/list هم برگرده
       Notifications.setNotificationHandler({
         handleNotification: async () => ({
           shouldShowAlert: true,
           shouldPlaySound: true,
           shouldSetBadge: false,
+          shouldShowBanner: true,
+          shouldShowList: true,
         }),
       });
     })();
@@ -831,33 +1073,40 @@ export default function Rooznegar() {
     if (notifAllowed) return true;
     if (askedRef.current) return false;
     askedRef.current = true;
+
     const settings = await Notifications.getPermissionsAsync();
     let granted =
       settings.granted ||
       settings.ios?.status === Notifications.IosAuthorizationStatus.AUTHORIZED;
+
     if (!granted) {
       const res = await Notifications.requestPermissionsAsync();
       granted =
         res.granted ||
         res.ios?.status === Notifications.IosAuthorizationStatus.AUTHORIZED;
     }
+
     setNotifAllowed(granted);
     if (!granted) {
-      Alert.alert(
-        "اجازه نوتیفیکیشن لازم است",
-        "برای یادآورها نوتیف بده؛ اگر نمی‌خوای هم مشکلی نیست، اپ بدون نوتیف هم کار می‌کند."
-      );
+      // ✅ تم‌دار
+      showTAlert("اجازه نوتیفیکیشن", "برای اعلام یادآورها به تو، اجازه دسترسی به نوتیفیکیشن‌ها لازمه.");
     }
     return granted;
   };
 
-  const scheduleForReminder = async (it: ReminderItem): Promise<string | undefined> => {
+  const scheduleForReminder = async (
+    it: ReminderItem
+  ): Promise<string | undefined> => {
     if (!(await ensureNotifPermission())) return undefined;
 
     const triggerDate = new Date(it.when);
-    if (triggerDate.getTime() <= Date.now()) return undefined;
+    const diffMs = triggerDate.getTime() - Date.now();
+    if (diffMs <= 0) return undefined;
 
-    const content: Notifications.NotificationContentInput & { categoryIdentifier?: string; data?: any } = {
+    const content: Notifications.NotificationContentInput & {
+      categoryIdentifier?: string;
+      data?: any;
+    } = {
       title: "یادآور",
       body: it.title,
       sound: "default",
@@ -865,9 +1114,15 @@ export default function Rooznegar() {
       data: { rid: it.id },
     };
 
+    const seconds = Math.max(1, Math.floor(diffMs / 1000));
+
     const id = await Notifications.scheduleNotificationAsync({
       content,
-      trigger: triggerDate,
+      trigger: {
+        type: "timeInterval",
+        seconds,
+        repeats: false,
+      } as Notifications.NotificationTriggerInput,
     });
 
     return id;
@@ -875,7 +1130,9 @@ export default function Rooznegar() {
 
   const cancelNotif = async (id?: string) => {
     if (!id) return;
-    try { await Notifications.cancelScheduledNotificationAsync(id); } catch {}
+    try {
+      await Notifications.cancelScheduledNotificationAsync(id);
+    } catch {}
   };
 
   const todayProgress = useMemo(() => {
@@ -898,11 +1155,19 @@ export default function Rooznegar() {
           loadTags(),
           AsyncStorage.getItem(K_TAG_ICONS),
         ]);
-        if (Array.isArray(tList)) setTodayItems((prev) => (prev.length ? prev : sortToday(tList)));
-        if (Array.isArray(rList)) setRemItems((prev) => (prev.length ? prev : sortReminders(rList)));
+
+        if (Array.isArray(tList))
+          setTodayItems((prev) => (prev.length ? prev : sortToday(tList)));
+        if (Array.isArray(rList))
+          setRemItems((prev) => (prev.length ? prev : sortReminders(rList)));
         if (Array.isArray(tags)) setAllTags(tags);
+
         if (iconMapStr) {
-          try { setTagIcons(JSON.parse(iconMapStr) || {}); } catch { setTagIcons({}); }
+          try {
+            setTagIcons(JSON.parse(iconMapStr) || {});
+          } catch {
+            setTagIcons({});
+          }
         }
       } finally {
         loadedRef.current = true;
@@ -934,7 +1199,8 @@ export default function Rooznegar() {
     const t = todayTitle.trim();
     if (!t) return;
     if (!todayTime) {
-      Alert.alert("ساعت لازم است", "برای ثبت کارِ امروز، حتماً ساعت را انتخاب کن.");
+      // ✅ تم‌دار
+      showTAlert("انتخاب ساعت", "برای ثبت کارِ امروز، حتماً ساعت انجامش رو انتخاب کن.");
       return;
     }
 
@@ -964,6 +1230,7 @@ export default function Rooznegar() {
     setTodayTitle("");
     setTodayTime(null);
     setTodayTags([]);
+    setTodayTagInput("");
     Keyboard.dismiss();
   };
 
@@ -971,20 +1238,36 @@ export default function Rooznegar() {
     const t = remTitle.trim();
     if (!t) return;
     if (!remTime) {
-      Alert.alert("ساعت لازم است", "برای ثبت یادآور، حتماً ساعت را انتخاب کن.");
+      // ✅ تم‌دار
+      showTAlert("انتخاب ساعت", "برای ثبت یادآور، حتماً ساعت انجامش رو انتخاب کن.");
       return;
     }
     const g = toGregorian(jy, jm, jd);
-    const when = new Date(g.gy, g.gm - 1, g.gd, remTime.getHours(), remTime.getMinutes(), 0, 0);
+    const when = new Date(
+      g.gy,
+      g.gm - 1,
+      g.gd,
+      remTime.getHours(),
+      remTime.getMinutes(),
+      0,
+      0
+    );
 
     if (remEditingId) {
       let updatedNotificationId: string | undefined;
       await Promise.resolve();
+
       setRemItems((list) => {
         const mapped = list.map((it) => {
           if (it.id === remEditingId) {
             cancelNotif(it.notificationId);
-            return { ...it, title: t, when: when.getTime(), tags: remTags, notificationId: undefined };
+            return {
+              ...it,
+              title: t,
+              when: when.getTime(),
+              tags: remTags,
+              notificationId: undefined,
+            };
           }
           return it;
         });
@@ -1001,11 +1284,22 @@ export default function Rooznegar() {
       });
 
       setRemItems((list) =>
-        list.map((it) => (it.id === remEditingId ? { ...it, notificationId: updatedNotificationId } : it))
+        list.map((it) =>
+          it.id === remEditingId
+            ? { ...it, notificationId: updatedNotificationId }
+            : it
+        )
       );
       setRemEditingId(null);
     } else {
-      const base: ReminderItem = { id: uid(), title: t, when: when.getTime(), createdAt: Date.now(), done: false, tags: remTags };
+      const base: ReminderItem = {
+        id: uid(),
+        title: t,
+        when: when.getTime(),
+        createdAt: Date.now(),
+        done: false,
+        tags: remTags,
+      };
       const notificationId = await scheduleForReminder(base);
       const item: ReminderItem = { ...base, notificationId };
       setRemItems((list) => sortReminders([...list, item]));
@@ -1014,44 +1308,77 @@ export default function Rooznegar() {
     setRemTitle("");
     setRemTime(null);
     setRemTags([]);
+    setRemTagInput("");
     Keyboard.dismiss();
   };
 
-  const filteredToday = activeTag ? todayItems.filter(i => (i.tags ?? []).includes(activeTag)) : todayItems;
-  const filteredRem   = activeTag ? remItems.filter(i => (i.tags ?? []).includes(activeTag)) : remItems;
+  // ✅ فیلتر با حالت‌های جدید
+  const isAll = activeTag === "__all__";
+  const isUntagged = activeTag === "__untagged__";
+
+  const filteredToday = useMemo(() => {
+    if (isAll) return todayItems;
+    if (isUntagged) return todayItems.filter((i) => (i.tags ?? []).length === 0);
+    return todayItems.filter((i) => (i.tags ?? []).includes(activeTag as string));
+  }, [todayItems, activeTag, isAll, isUntagged]);
+
+  const filteredRem = useMemo(() => {
+    if (isAll) return remItems;
+    if (isUntagged) return remItems.filter((i) => (i.tags ?? []).length === 0);
+    return remItems.filter((i) => (i.tags ?? []).includes(activeTag as string));
+  }, [remItems, activeTag, isAll, isUntagged]);
 
   const tagDefs: TagDef[] = useMemo(() => {
-    return (allTags || []).map(name => ({ name, icon: tagIcons[name] || "pricetag-outline" }));
+    return (allTags || []).map((name) => ({
+      name,
+      icon: tagIcons[name] || "pricetag-outline",
+    }));
   }, [allTags, tagIcons]);
 
   const handleRemoveReminder = async (id: string) => {
-    const target = remItems.find(r => r.id === id);
+    const target = remItems.find((r) => r.id === id);
     if (target?.notificationId) await cancelNotif(target.notificationId);
-    setRemItems(list => sortReminders(list.filter(r => r.id !== id)));
+    setRemItems((list) => sortReminders(list.filter((r) => r.id !== id)));
   };
 
   const handleToggleReminder = async (id: string) => {
-    const target = remItems.find(r => r.id === id);
+    const target = remItems.find((r) => r.id === id);
     if (!target) return;
     const toggledDone = !target.done;
+
     if (toggledDone) {
       if (target.notificationId) await cancelNotif(target.notificationId);
-      setRemItems(list => sortReminders(list.map(r => r.id === id ? { ...r, done: true, notificationId: undefined } : r)));
+      setRemItems((list) =>
+        sortReminders(
+          list.map((r) =>
+            r.id === id ? { ...r, done: true, notificationId: undefined } : r
+          )
+        )
+      );
     } else {
       const notificationId = await scheduleForReminder({ ...target, done: false });
-      setRemItems(list => sortReminders(list.map(r => r.id === id ? { ...r, done: false, notificationId } : r)));
+      setRemItems((list) =>
+        sortReminders(
+          list.map((r) => (r.id === id ? { ...r, done: false, notificationId } : r))
+        )
+      );
     }
   };
 
   const handleSnoozeReminder = async (id: string) => {
-    const target = remItems.find(r => r.id === id);
+    const target = remItems.find((r) => r.id === id);
     if (!target) return;
+
     const base = Math.max(Date.now(), target.when);
     const nextWhen = base + 10 * 60 * 1000;
+
     if (target.notificationId) await cancelNotif(target.notificationId);
     const next: ReminderItem = { ...target, when: nextWhen, done: false };
     const newNotif = await scheduleForReminder(next);
-    setRemItems(list => sortReminders(list.map(r => r.id === id ? { ...next, notificationId: newNotif } : r)));
+
+    setRemItems((list) =>
+      sortReminders(list.map((r) => (r.id === id ? { ...next, notificationId: newNotif } : r)))
+    );
   };
 
   useEffect(() => {
@@ -1061,13 +1388,20 @@ export default function Rooznegar() {
       if (!rid) return;
 
       if (Platform.OS === "ios") {
-        if (act === "DONE") { handleToggleReminder(rid); return; }
-        if (act === "SNOOZE_10") { handleSnoozeReminder(rid); return; }
+        if (act === "DONE") {
+          handleToggleReminder(rid);
+          return;
+        }
+        if (act === "SNOOZE_10") {
+          handleSnoozeReminder(rid);
+          return;
+        }
         return;
       }
 
       if (act === Notifications.DEFAULT_ACTION_IDENTIFIER) {
-        const item = remItems.find(r => r.id === rid);
+        const item = remItems.find((r) => r.id === rid);
+        // این یکی عمداً خام موند چون دکمه چندگزینه‌ایه؛ اگر خواستی تم‌دارش کنیم باید یک Modal اکشن‌دار بسازیم
         Alert.alert(
           item?.title || "یادآور",
           "چه کاری انجام بدم؟",
@@ -1081,7 +1415,11 @@ export default function Rooznegar() {
       }
     });
 
-    return () => { try { sub.remove(); } catch {} };
+    return () => {
+      try {
+        sub.remove();
+      } catch {}
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remItems]);
 
@@ -1109,18 +1447,19 @@ export default function Rooznegar() {
             <Segmented tab={tab} setTab={setTab} />
 
             {/* TAGS: فیلتر */}
-            <View style={{ marginTop: 2, flexDirection:"row-reverse", flexWrap:"wrap", alignItems:"center" }}>
-              <TagChip label="همه" selected={activeTag === null} onPress={()=>setActiveTag(null)} />
-              {allTags.map(t => (
+            <View style={{ marginTop: 2, flexDirection: "row-reverse", flexWrap: "wrap", alignItems: "center" }}>
+              <TagChip label="همه" selected={activeTag === "__all__"} onPress={() => setActiveTag("__all__")} />
+              <TagChip label="بدون برچسب" selected={activeTag === "__untagged__"} onPress={() => setActiveTag("__untagged__")} />
+              {allTags.map((t) => (
                 <TagChip
                   key={t}
                   label={t}
                   iconName={tagIcons[t]}
                   selected={activeTag === t}
-                  onPress={()=>setActiveTag(t)}
+                  onPress={() => setActiveTag(t)}
                 />
               ))}
-              <TouchableOpacity onPress={()=>setShowTagManager(true)} style={{ marginStart: 6 }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <TouchableOpacity onPress={() => setShowTagManager(true)} style={{ marginStart: 6 }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="settings-outline" size={20} color={UI.TEXT} style={{ opacity: 0.9 }} />
               </TouchableOpacity>
             </View>
@@ -1148,28 +1487,35 @@ export default function Rooznegar() {
                   setTodayTags(it.tags ?? []);
                 }}
                 todaySelectedTags={todayTags}
-                onAddTagToToday={(t:string)=>{
+                onAddTagToToday={(t: string) => {
                   const v = t.trim();
                   if (!v) return;
+
                   if (!allTags.includes(v)) {
-                    setAllTags(prev=>[...prev, v]);
-                    setTagIcons(prev => ({ ...prev, [v]: "pricetag-outline" }));
+                    setAllTags((prev) => [...prev, v]);
+                    setTagIcons((prev) => ({ ...prev, [v]: "pricetag-outline" }));
                   }
-                  setTodayTags(prev=> prev.includes(v) ? prev : [...prev, v]);
-                  setTagInput("");
+
+                  setTodayTags((prev) => (prev.includes(v) ? prev : [...prev, v]));
+                  setTodayTagInput("");
                 }}
-                onRemoveTagFromToday={(t)=> setTodayTags(prev=> prev.filter(x=>x!==t))}
-                tagInput={tagInput}
-                setTagInput={setTagInput}
+                onRemoveTagFromToday={(t) => setTodayTags((prev) => prev.filter((x) => x !== t))}
+                tagInput={todayTagInput}
+                setTagInput={setTodayTagInput}
                 allTags={allTags}
                 tagIcons={tagIcons}
               />
             ) : (
               <ReminderBlock
                 rtl={rtl}
-                jy={jy} jm={jm} jd={jd}
-                setJy={setJy} setJm={setJm} setJd={setJd}
-                remTitle={remTitle} setRemTitle={setRemTitle}
+                jy={jy}
+                jm={jm}
+                jd={jd}
+                setJy={setJy}
+                setJm={setJm}
+                setJd={setJd}
+                remTitle={remTitle}
+                setRemTitle={setRemTitle}
                 remTime={remTime}
                 onOpenDate={() => setShowDateModal(true)}
                 onOpenTime={() => setShowRemTime(true)}
@@ -1182,26 +1528,30 @@ export default function Rooznegar() {
                   setRemTitle(it.title);
                   const d = new Date(it.when);
                   const j = toJalaali(d);
-                  setJy(j.jy); setJm(j.jm); setJd(j.jd);
+                  setJy(j.jy);
+                  setJm(j.jm);
+                  setJd(j.jd);
                   const tmp = new Date();
                   tmp.setHours(d.getHours(), d.getMinutes(), 0, 0);
                   setRemTime(tmp);
                   setRemTags(it.tags ?? []);
                 }}
                 remSelectedTags={remTags}
-                onAddTagToRem={(t:string)=>{
+                onAddTagToRem={(t: string) => {
                   const v = t.trim();
                   if (!v) return;
+
                   if (!allTags.includes(v)) {
-                    setAllTags(prev=>[...prev, v]);
-                    setTagIcons(prev => ({ ...prev, [v]: "pricetag-outline" }));
+                    setAllTags((prev) => [...prev, v]);
+                    setTagIcons((prev) => ({ ...prev, [v]: "pricetag-outline" }));
                   }
-                  setRemTags(prev=> prev.includes(v) ? prev : [...prev, v]);
-                  setTagInput("");
+
+                  setRemTags((prev) => (prev.includes(v) ? prev : [...prev, v]));
+                  setRemTagInput("");
                 }}
-                onRemoveTagFromRem={(t)=> setRemTags(prev=> prev.filter(x=>x!==t))}
-                tagInput={tagInput}
-                setTagInput={setTagInput}
+                onRemoveTagFromRem={(t) => setRemTags((prev) => prev.filter((x) => x !== t))}
+                tagInput={remTagInput}
+                setTagInput={setRemTagInput}
                 allTags={allTags}
                 tagIcons={tagIcons}
                 onToggleReminder={handleToggleReminder}
@@ -1218,33 +1568,53 @@ export default function Rooznegar() {
         isVisible={showTodayTime}
         mode="time"
         locale={Platform.OS === "ios" ? "fa-IR" : undefined}
-        onConfirm={(d)=>{ setTodayTime(d); setShowTodayTime(false); }}
-        onCancel={()=>setShowTodayTime(false)}
+        onConfirm={(d) => {
+          setTodayTime(d);
+          setShowTodayTime(false);
+        }}
+        onCancel={() => setShowTodayTime(false)}
       />
       <DateTimePickerModal
         isVisible={showRemTime}
         mode="time"
         locale={Platform.OS === "ios" ? "fa-IR" : undefined}
-        onConfirm={(d)=>{ setRemTime(d); setShowRemTime(false); }}
-        onCancel={()=>setShowRemTime(false)}
+        onConfirm={(d) => {
+          setRemTime(d);
+          setShowRemTime(false);
+        }}
+        onCancel={() => setShowRemTime(false)}
       />
       <DateModal
         visible={showDateModal}
-        onClose={()=>setShowDateModal(false)}
-        jy={jy} jm={jm} jd={jd}
-        setJy={setJy} setJm={setJm} setJd={setJd}
+        onClose={() => setShowDateModal(false)}
+        jy={jy}
+        jm={jm}
+        jd={jd}
+        setJy={setJy}
+        setJm={setJm}
+        setJd={setJd}
       />
 
       <TagManagerModal
         visible={showTagManager}
-        onClose={()=>setShowTagManager(false)}
+        onClose={() => setShowTagManager(false)}
         tags={tagDefs}
-        onChange={(next)=>{
-          setAllTags(next.map(x=>x.name));
-          const map: Record<string,string> = {};
-          next.forEach(x => { map[x.name] = x.icon || "pricetag-outline"; });
+        onChange={(next) => {
+          setAllTags(next.map((x) => x.name));
+          const map: Record<string, string> = {};
+          next.forEach((x) => {
+            map[x.name] = x.icon || "pricetag-outline";
+          });
           setTagIcons(map);
         }}
+      />
+
+      {/* ✅ THEMED ALERT RENDER */}
+      <ThemedAlert
+        visible={tAlertOpen}
+        title={tAlertTitle}
+        message={tAlertMsg}
+        onClose={() => setTAlertOpen(false)}
       />
     </SafeAreaView>
   );
@@ -1503,6 +1873,30 @@ const styles = {
     backgroundColor: UI.CARD,
   },
 
+  // ✅ Themed alert styles
+  alertCard: {
+    width: "92%" as const,
+    borderRadius: 16,
+    backgroundColor: UI.BAR,
+    borderWidth: 1,
+    borderColor: UI.BORDER,
+    padding: 16,
+    gap: 12,
+  },
+  alertTitle: {
+    color: UI.TEXT,
+    fontWeight: "900" as const,
+    fontSize: 16,
+    textAlign: "right" as const,
+  },
+  alertMsg: {
+    color: UI.MUTED2,
+    fontWeight: "800" as const,
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "right" as const,
+  },
+
   btn: {
     borderRadius: 12,
     paddingVertical: 10,
@@ -1553,7 +1947,7 @@ const styles = {
   },
 
   dayBtn: {
-    width: `${100/7}%` as const,
+    width: `${100 / 7}%` as const,
     aspectRatio: 1,
     alignItems: "center" as const,
     justifyContent: "center" as const,
