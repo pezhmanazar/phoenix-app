@@ -74,16 +74,66 @@
     .mt-14{ margin-top:14px; }
     .w-100{ width:100%; }
 
+    /* ===== Loader ===== */
+    #pageLoader{
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(11,15,20,0.92);
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity .25s ease, visibility .25s ease;
+    }
+    #pageLoader.hidden{
+      opacity: 0;
+      visibility: hidden;
+    }
+    .loader-card{
+      width: min(420px, 86%);
+      border-radius: 24px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+      box-shadow: 0 25px 70px rgba(0,0,0,0.45);
+      padding: 18px 16px;
+      display:flex;
+      align-items:center;
+      gap: 14px;
+    }
+    .loader-mark{
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(212,175,55,0.28), rgba(233,138,21,0.10));
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      border: 1px solid rgba(255,255,255,0.10);
+    }
+    .spinner{
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: 2px solid rgba(232,236,241,0.25);
+      border-top-color: rgba(212,175,55,0.95);
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader-text .t1{ font-weight: 900; font-size: 13px; color: rgba(232,236,241,0.95); }
+    .loader-text .t2{ margin-top: 3px; font-size: 12px; color: rgba(154,164,178,0.95); }
+
     /* Header */
-     header{
-       position: sticky;
-       top:0;
-       z-index:50;
-       background: rgba(11,15,20,0.78);
-       -webkit-backdrop-filter: blur(14px);
-       backdrop-filter: blur(14px);
-       border-bottom: 1px solid var(--border2);
-     }
+    header{
+      position: sticky;
+      top:0;
+      z-index:50;
+      background: rgba(11,15,20,0.78);
+      -webkit-backdrop-filter: blur(14px);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border2);
+    }
     .nav{
       display:flex;
       align-items:center;
@@ -91,12 +141,22 @@
       padding: 14px 0;
       gap: 14px;
     }
+
     .brand{
       display:flex;
       align-items:center;
       gap: 10px;
       min-width: 180px;
     }
+
+    .brand a{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      text-decoration:none;
+      color: inherit;
+    }
+
     .brand img{
       height: 40px;
       display:block;
@@ -279,85 +339,91 @@
       border-radius: 999px;
     }
 
-    /* --- Mobile Header Fix (hamburger) --- */
-.menu-toggle { display: none; }
+    /* --- Mobile Header: hamburger right, logo center, download left --- */
+    .menu-toggle { display: none; }
+    .hamburger{ display:none; }
+    .mobile-cta{ display:none; }
+    .mobile-menu{ display:none; }
 
-.hamburger{
-  display:none;
-  width:44px;
-  height:44px;
-  border-radius: 12px;
-  border: 1px solid var(--border2);
-  background: rgba(255,255,255,0.04);
-  align-items:center;
-  justify-content:center;
-  cursor:pointer;
-}
+    .hamburger{
+      width:44px;
+      height:44px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.04);
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+    }
+    .hamburger span{
+      display:block;
+      width:18px;
+      height:2px;
+      background: rgba(232,236,241,0.9);
+      border-radius: 999px;
+      position: relative;
+    }
+    .hamburger span::before,
+    .hamburger span::after{
+      content:"";
+      position:absolute;
+      left:0;
+      width:18px;
+      height:2px;
+      background: rgba(232,236,241,0.9);
+      border-radius: 999px;
+    }
+    .hamburger span::before{ top:-6px; }
+    .hamburger span::after{ top:6px; }
 
-.hamburger span{
-  display:block;
-  width:18px;
-  height:2px;
-  background: rgba(232,236,241,0.9);
-  border-radius: 999px;
-  position: relative;
-}
-.hamburger span::before,
-.hamburger span::after{
-  content:"";
-  position:absolute;
-  left:0;
-  width:18px;
-  height:2px;
-  background: rgba(232,236,241,0.9);
-  border-radius: 999px;
-}
-.hamburger span::before{ top:-6px; }
-.hamburger span::after{ top:6px; }
+    @media (max-width: 900px){
+      .nav-links,
+      .nav-cta{ display:none; }
 
-.mobile-cta{ display:none; }
+      .nav{
+        display:grid;
+        grid-template-columns: 44px 1fr auto;
+        align-items:center;
+        gap: 10px;
+      }
 
-@media (max-width: 900px){
-  .nav{ gap: 10px; }
+      /* hamburger: right */
+      .hamburger{ display:flex; justify-self: start; }
 
-  .nav-links,
-  .nav-cta{ display:none; }
+      /* logo: center */
+      .brand{ min-width:auto; justify-self:center; }
+      .brand-title{ display:none; }
+      .brand img{ height: 38px; }
 
-  .brand{ min-width: auto; }
-  .brand-title{ display:none; } /* موبایل فقط لوگو */
-  .brand img{ height: 38px; }
+      /* download: left */
+      .mobile-cta{ display:inline-flex; justify-self:end; }
 
-  .hamburger{ display:flex; }
-  .mobile-cta{ display:inline-flex; }
+      /* Dropdown */
+      .mobile-menu{
+        display:none;
+        padding: 10px 0 14px;
+        border-top: 1px solid rgba(255,255,255,0.06);
+      }
+      .mobile-menu a{
+        display:block;
+        padding: 12px 12px;
+        margin: 6px 0;
+        border-radius: 14px;
+        color: var(--text);
+        text-decoration:none;
+        border: 1px solid rgba(255,255,255,0.06);
+        background: rgba(255,255,255,0.03);
+        font-size: 14px;
+      }
+      .mobile-menu a:active{
+        background: rgba(212,175,55,0.08);
+        border-color: rgba(212,175,55,0.22);
+      }
 
-  /* Dropdown */
-  .mobile-menu{
-    display:none;
-    padding: 10px 0 14px;
-    border-top: 1px solid var(--border2);
-  }
-
-  .mobile-menu a{
-    display:block;
-    padding: 12px 12px;
-    margin: 6px 0;
-    border-radius: 14px;
-    color: var(--text);
-    text-decoration:none;
-    border: 1px solid rgba(255,255,255,0.06);
-    background: rgba(255,255,255,0.03);
-    font-size: 14px;
-  }
-  .mobile-menu a:active{
-    background: rgba(212,175,55,0.08);
-    border-color: rgba(212,175,55,0.22);
-  }
-
-  /* Toggle open */
-  .menu-toggle:checked ~ .mobile-menu{
-    display:block;
-  }
-}
+      .menu-toggle:checked ~ .mobile-menu{
+        display:block;
+      }
+    }
 
     /* Sections */
     .section{
@@ -442,11 +508,9 @@
     #zarinpal img{ width: 92px; }
     .enamad-img{ width: 92px; display:block; }
 
-    /* Responsive */
+    /* Responsive (content) */
     @media (max-width: 900px){
       .hero-grid{ grid-template-columns: 1fr; }
-      .brand{ min-width: auto; }
-      .nav-cta{ min-width: auto; }
       .grid{ grid-template-columns: 1fr; }
       .hero h1{ font-size: 28px; }
     }
@@ -454,39 +518,72 @@
 </head>
 
 <body>
+  <!-- Loader -->
+  <div id="pageLoader" aria-label="در حال بارگذاری">
+    <div class="loader-card">
+      <div class="loader-mark"><div class="spinner"></div></div>
+      <div class="loader-text">
+        <div class="t1">ققنوس</div>
+        <div class="t2">در حال آماده‌سازی...</div>
+      </div>
+    </div>
+  </div>
+
   <div class="bg">
     <div class="glow gold"></div>
     <div class="glow orange"></div>
   </div>
 
   <header>
-  <div class="container">
-    <div class="nav">
-      <div class="brand">
-        <img src="/static/img/logo.png" alt="لوگوی ققنوس">
+    <div class="container">
+      <div class="nav">
+        <!-- Hamburger toggle (mobile) -->
+        <label class="hamburger" for="menuToggle" aria-label="باز کردن منو">
+          <span></span>
+        </label>
+
+        <!-- Logo (click -> home) -->
+        <div class="brand">
+          <a href="/" aria-label="بازگشت به صفحه اصلی">
+            <img src="/static/img/logo.png" alt="لوگوی ققنوس">
+            <div class="brand-title">
+              ققنوس
+              <span>بازسازی بعد از شکست عشقی</span>
+            </div>
+          </a>
+        </div>
+
+        <!-- Desktop nav -->
+        <nav class="nav-links" aria-label="منوی اصلی">
+          <a href="/">خانه</a>
+          <a href="#changes">تغییرات</a>
+          <a href="#inside">داخل اشتراک</a>
+          <a href="/download.html">دانلود</a>
+          <a href="/contact.html">تماس با ما</a>
+        </nav>
+
+        <!-- Mobile CTA -->
+        <a class="btn btn-primary mobile-cta" href="/download.html">دانلود اپ</a>
+
+        <!-- Desktop CTA -->
+        <div class="nav-cta">
+          <a class="btn btn-ghost" href="#inside">ببین داخلش چیه</a>
+          <a class="btn btn-primary" href="/download.html">دانلود اپ</a>
+        </div>
       </div>
 
-      <!-- Mobile CTA -->
-      <a class="btn btn-primary mobile-cta" href="/download.html">دانلود اپ</a>
+      <input class="menu-toggle" type="checkbox" id="menuToggle" />
 
-      <!-- Hamburger toggle -->
-      <label class="hamburger" for="menuToggle" aria-label="باز کردن منو">
-        <span></span>
-      </label>
+      <nav class="mobile-menu" aria-label="منوی موبایل">
+        <a href="/">خانه</a>
+        <a href="#changes">تغییرات</a>
+        <a href="#inside">داخل اشتراک</a>
+        <a href="/download.html">دانلود</a>
+        <a href="/contact.html">تماس با ما</a>
+        <a href="/terms.html">قوانین استفاده</a>
+      </nav>
     </div>
-
-    <input class="menu-toggle" type="checkbox" id="menuToggle" />
-
-    <nav class="mobile-menu" aria-label="منوی موبایل">
-      <a href="/">خانه</a>
-      <a href="#changes" onclick="document.getElementById('menuToggle').checked=false;">تغییرات</a>
-      <a href="#inside" onclick="document.getElementById('menuToggle').checked=false;">داخل اشتراک</a>
-      <a href="/download.html">دانلود</a>
-      <a href="/contact.html">تماس</a>
-      <a href="/terms.html">قوانین استفاده</a>
-    </nav>
-  </div>
-</header>
+  </header>
 
   <main class="container">
     <!-- HERO -->
@@ -615,5 +712,31 @@
       </div>
     </div>
   </footer>
+
+  <script>
+    // Loader fade out
+    window.addEventListener("load", function () {
+      const el = document.getElementById("pageLoader");
+      if (!el) return;
+      el.classList.add("hidden");
+      setTimeout(() => el.remove(), 350);
+    });
+
+    // Close mobile menu after clicking any in-page hash link
+    (function () {
+      const toggle = document.getElementById("menuToggle");
+      if (!toggle) return;
+
+      document.addEventListener("click", function (e) {
+        const a = e.target && e.target.closest ? e.target.closest("a") : null;
+        if (!a) return;
+
+        const href = a.getAttribute("href") || "";
+        if (href.startsWith("#")) {
+          toggle.checked = false;
+        }
+      });
+    })();
+  </script>
 </body>
 </html>
