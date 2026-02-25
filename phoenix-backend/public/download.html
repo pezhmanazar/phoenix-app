@@ -2,13 +2,10 @@
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <title>تماس با ققنوس</title>
+  <title>دانلود ققنوس | دریافت اپلیکیشن</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="/static/img/favicon.png" />
-
-  <!-- Font -->
   <link href="https://cdn.jsdelivr.net/npm/vazirmatn@33.003/Vazirmatn-font-face.css" rel="stylesheet">
 
   <style>
@@ -21,7 +18,6 @@
 
       --glass: rgba(255,255,255,0.05);
       --glass2: rgba(255,255,255,0.03);
-      --border: rgba(255,255,255,0.10);
       --border2: rgba(255,255,255,0.06);
       --shadow: 0 20px 60px rgba(0,0,0,0.35);
     }
@@ -88,7 +84,6 @@
       padding: 14px 0;
       gap: 14px;
     }
-
     .brand{
       display:flex;
       align-items:center;
@@ -102,10 +97,7 @@
       text-decoration:none;
       color: inherit;
     }
-    .brand img{
-      height: 40px;
-      display:block;
-    }
+    .brand img{ height: 40px; display:block; }
     .brand-title{
       font-weight: 900;
       letter-spacing: -0.2px;
@@ -236,22 +228,15 @@
         gap: 10px;
       }
 
-      .hamburger{
-        display:flex;
-        justify-self: start;
-      }
+      .hamburger{ display:flex; justify-self: start; }
 
-      .brand{
-        min-width:auto;
-        justify-self:center;
-      }
+      .brand{ min-width:auto; justify-self:center; }
       .brand-title{ display:none; }
       .brand img{ height: 38px; }
 
       .mobile-cta{
         display:block;
         justify-self:end;
-
         width:44px;
         height:44px;
         padding:0;
@@ -289,96 +274,148 @@
         background: rgba(212,175,55,0.08);
         border-color: rgba(212,175,55,0.22);
       }
-
       .menu-toggle:checked ~ .mobile-menu{ display:block; }
     }
 
     /* Page */
-    .page{
-      padding: 34px 0 6px;
-    }
-    .page-title{
-      margin: 10px 0 16px;
-      font-size: 22px;
-      font-weight: 900;
-      letter-spacing: -0.2px;
-    }
-    .page-sub{
-      margin: 0 0 18px;
-      color: var(--muted);
-      font-size: 13px;
-      max-width: 70ch;
-      line-height: 2;
-    }
+    .page{ padding: 34px 0 6px; }
 
-    .card{
+    .hero{
       background: linear-gradient(180deg, var(--glass), var(--glass2));
       border: 1px solid var(--border2);
       border-radius: 24px;
       box-shadow: var(--shadow);
-      padding: 18px 16px;
+      padding: 22px 18px;
+      position: relative;
       overflow:hidden;
+    }
+    .hero::before{
+      content:"";
+      position:absolute;
+      inset:-60px -80px auto auto;
+      width: 280px;
+      height: 280px;
+      background: radial-gradient(circle, rgba(212,175,55,0.22), transparent 60%);
+      filter: blur(20px);
+      opacity: .9;
+    }
+    .kicker{
+      color: rgba(212,175,55,0.95);
+      font-weight: 800;
+      font-size: 13px;
+      letter-spacing: .2px;
+    }
+    .hero h1{
+      margin: 10px 0 10px;
+      font-size: 26px;
+      line-height: 1.5;
+      letter-spacing: -0.2px;
+    }
+    .hero p{
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      max-width: 80ch;
     }
 
     .grid{
+      margin-top: 14px;
       display:grid;
       grid-template-columns: repeat(2, 1fr);
       gap: 12px;
-      margin-top: 12px;
     }
     @media (max-width: 900px){
       .grid{ grid-template-columns: 1fr; }
     }
 
-    .info{
-      border: 1px solid rgba(255,255,255,0.06);
-      background: rgba(255,255,255,0.03);
-      border-radius: 18px;
-      padding: 14px 14px;
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02));
+      border: 1px solid var(--border2);
+      border-radius: 20px;
+      padding: 16px 16px;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.28);
     }
-    .info-title{
+
+    .card-title{
       display:flex;
       align-items:center;
+      justify-content: space-between;
       gap: 10px;
-      font-weight: 900;
-      font-size: 14px;
-      margin: 0 0 6px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
     }
-    .icon{
-      width: 30px;
-      height: 30px;
-      border-radius: 12px;
+    .card-title h2{
+      margin:0;
+      font-size: 15px;
+      font-weight: 900;
+      letter-spacing: -0.2px;
+    }
+    .badge{
+      font-size: 12px;
+      color: rgba(232,236,241,0.9);
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.03);
+      padding: 6px 10px;
+      border-radius: 999px;
+    }
+
+    .store-btn{
       display:flex;
       align-items:center;
       justify-content:center;
-      border: 1px solid rgba(255,255,255,0.10);
-      background: rgba(255,255,255,0.04);
-      color: rgba(212,175,55,0.95);
-      font-size: 14px;
-      flex: 0 0 30px;
-    }
-    .info-body{
-      color: rgba(232,236,241,0.92);
-      font-size: 13px;
-      line-height: 2;
-    }
-    .info-body a{
-      color: rgba(212,175,55,0.95);
+      gap: 10px;
+      padding: 12px 12px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
       text-decoration:none;
-      border-bottom: 1px dashed rgba(212,175,55,0.35);
+      transition: .2s ease;
+      width: 100%;
+      min-height: 64px;
     }
-    .info-body a:hover{
-      border-bottom-color: rgba(212,175,55,0.65);
+    .store-btn:hover{
+      background: rgba(255,255,255,0.05);
+      border-color: rgba(212,175,55,0.22);
     }
-
-    .note{
-      margin-top: 14px;
+    .store-btn img{
+      height: 38px;
+      display:block;
+    }
+    .store-btn .label{
       color: var(--muted);
       font-size: 12px;
-      line-height: 2;
-      border-top: 1px solid rgba(255,255,255,0.06);
-      padding-top: 12px;
     }
+
+    .cta-row{
+     margin-top:14px;
+     display:flex;
+     gap:10px;
+     flex-wrap:wrap;
+    }
+
+    .label-muted{
+     margin: 0 0 10px;
+     color: var(--muted);
+    }
+
+    .direct-row{
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .direct-row .btn{ flex:1 1 180px; }
+
+    .note{
+      margin-top: 10px;
+      color: rgba(232,236,241,0.82);
+      font-size: 12px;
+      border: 1px dashed rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.02);
+      border-radius: 16px;
+      padding: 12px 12px;
+    }
+    .note strong{ color: rgba(212,175,55,0.95); }
 
     /* Footer + Trust */
     footer{
@@ -408,14 +445,6 @@
     }
     #zarinpal img{ width: 92px; }
     .enamad-img{ width: 92px; display:block; }
-
-    /* Small helpers */
-    .links-row{
-      margin-top: 16px;
-      display:flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
   </style>
 </head>
 
@@ -437,7 +466,7 @@
             <img src="/static/img/logo.png" alt="لوگوی ققنوس">
             <div class="brand-title">
               ققنوس
-              <span>بازسازی بعد از شکست عشقی</span>
+              <span>دانلود اپلیکیشن</span>
             </div>
           </a>
         </div>
@@ -446,15 +475,15 @@
           <a href="/">خانه</a>
           <a href="/#changes">تغییرات</a>
           <a href="/#inside">داخل اشتراک</a>
-          <a href="/download.html">دانلود</a>
           <a href="/contact.html">تماس</a>
+          <a href="/terms.html">قوانین</a>
         </nav>
 
-        <a class="btn btn-primary mobile-cta" href="/download.html" aria-label="دانلود اپ">دانلود</a>
+        <a class="btn btn-primary mobile-cta" href="#get" aria-label="رفتن به بخش دانلود">دانلود</a>
 
         <div class="nav-cta">
-          <a class="btn btn-ghost" href="/terms.html">قوانین استفاده</a>
-          <a class="btn btn-primary" href="/download.html">دانلود اپ</a>
+          <a class="btn btn-ghost" href="/terms.html">قوانین</a>
+          <a class="btn btn-primary" href="#get">دانلود</a>
         </div>
       </div>
 
@@ -464,7 +493,6 @@
         <a href="/">خانه</a>
         <a href="/#changes">تغییرات</a>
         <a href="/#inside">داخل اشتراک</a>
-        <a href="/download.html">دانلود</a>
         <a href="/contact.html">تماس با ما</a>
         <a href="/terms.html">قوانین استفاده</a>
       </nav>
@@ -473,65 +501,84 @@
 
   <main class="container">
     <section class="page">
-      <div class="card">
-        <h1 class="page-title">تماس با ققنوس</h1>
-        <p class="page-sub">
-          اگر دربارهٔ اشتراک ققنوس، محتوای آموزشی، یا مسائل فنی سوالی داری،
-          از یکی از روش‌های زیر می‌تونی با ما در ارتباط باشی.
+      <div class="hero" id="get">
+        <div class="kicker">سریع‌ترین راه شروع بازسازی</div>
+        <h1>دانلود ققنوس</h1>
+        <p>
+          از مارکت‌های رسمی نصب کنید (پیشنهاد ما). اگر به هر دلیلی مارکت ندارید، دانلود مستقیم هم در دسترس است.
+          نسخه iOS به‌زودی اضافه می‌شود.
         </p>
+      </div>
 
-        <div class="grid">
-          <div class="info">
-            <div class="info-title"><span class="icon">✉</span> ایمیل پشتیبانی</div>
-            <div class="info-body">
-              <a href="mailto:support@qoqnoos.app">support@qoqnoos.app</a>
-            </div>
+      <div class="grid">
+        <!-- Bazaar -->
+        <div class="card">
+          <div class="card-title">
+            <h2>دانلود از کافه‌بازار</h2>
+            <span class="badge">پیشنهادی</span>
+          </div>
+          <a class="store-btn" href="https://example.com/BAZAAR_LINK" target="_blank" rel="noopener" aria-label="دانلود ققنوس از کافه‌بازار">
+            <img src="/static/img/bazaar.png" alt="دریافت از بازار">
+            <div class="label">باز کردن صفحه ققنوس در بازار</div>
+          </a>
+        </div>
+
+        <!-- Myket -->
+        <div class="card">
+          <div class="card-title">
+            <h2>دانلود از مایکت</h2>
+            <span class="badge">رسمی</span>
+          </div>
+          <a class="store-btn" href="https://example.com/MAYKET_LINK" target="_blank" rel="noopener" aria-label="دانلود ققنوس از مایکت">
+            <img src="/static/img/mayket.png" alt="دریافت از مایکت">
+            <div class="label">باز کردن صفحه ققنوس در مایکت</div>
+          </a>
+        </div>
+
+        <!-- Direct Download -->
+        <div class="card">
+          <div class="card-title">
+            <h2>دانلود مستقیم (Android)</h2>
+            <span class="badge">برای مواقع ضروری</span>
+          </div>
+          <p class="label label-muted">
+            اگر مارکت‌ها در دسترس نبودند، می‌توانید فایل نصب را مستقیم دریافت کنید.
+          </p>
+
+          <div class="direct-row">
+            <a class="btn btn-primary" href="https://example.com/DIRECT_APK" target="_blank" rel="noopener" aria-label="دانلود مستقیم فایل APK">دانلود APK</a>
+            <a class="btn btn-ghost" href="/terms.html" aria-label="مشاهده قوانین استفاده">قوانین استفاده</a>
           </div>
 
-          <div class="info">
-            <div class="info-title"><span class="icon">📱</span> تماس / واتساپ</div>
-            <div class="info-body">
-              <a href="tel:+989214460420">09214460420</a>
-            </div>
-          </div>
-
-          <div class="info">
-            <div class="info-title"><span class="icon">🌐</span> شبکه‌های اجتماعی</div>
-            <div class="info-body">
-              اینستاگرام و تلگرام:
-              <a href="https://instagram.com/pezhman_azar" target="_blank" rel="noopener">instagram.com/pezhman_azar</a>
-            </div>
-          </div>
-
-          <div class="info">
-            <div class="info-title"><span class="icon">⏱</span> ساعات پاسخ‌گویی</div>
-            <div class="info-body">
-              شنبه تا چهارشنبه، ساعت ۱۰ تا ۱۸ (به وقت ایران)
-            </div>
-          </div>
-
-          <div class="info info-full">
-            <div class="info-title"><span class="icon">📍</span> آدرس پستی</div>
-            <div class="info-body">
-              استان: آذربایجان غربی — شهرستان: ارومیه — بخش: مرکزی — شهر: ارومیه — محله: بل مدرس —
-              کوچه (اول) — خیابان همافر ۲ — پلاک: ۱۱ — طبقه: -۱
-              <br>
-              تلفن: <a href="tel:+983536248440">03536248440</a>
-            </div>
-
-            <div class="note">
-              اگر پیام‌ شما مربوط به «پرداخت» یا «اشتراک» است، لطفاً شماره موبایلِ ثبت‌نام در اپ و
-              زمان تقریبی پرداخت را هم داخل پیام ذکر کنید تا سریع‌تر پیگیری شود.
-            </div>
+          <div class="note">
+            <strong>نکته:</strong> اگر دانلود مستقیم انجام دادید و گوشی اخطار داد، طبیعی است.
+            فقط از همین دامنه/لینک رسمی استفاده کنید.
           </div>
         </div>
 
-        <div class="links-row">
-          <a class="btn btn-ghost" href="/">صفحه اصلی</a>
-          <a class="btn btn-ghost" href="/store.html">فروشگاه اشتراک‌ها</a>
-          <a class="btn btn-ghost" href="/terms.html">قوانین و حریم خصوصی</a>
-          <a class="btn btn-primary" href="/download.html">دانلود اپ</a>
+        <!-- iOS -->
+        <div class="card">
+          <div class="card-title">
+            <h2>نسخه iOS</h2>
+            <span class="badge">به‌زودی</span>
+          </div>
+          <p class="label label-muted">
+            نسخه iPhone در حال آماده‌سازی است. این بخش به محض انتشار فعال می‌شود.
+          </p>
+
+          <a class="btn btn-ghost" href="javascript:void(0)" aria-disabled="true">به‌زودی…</a>
+
+          <div class="note">
+            اگر دوست داری اطلاع‌رسانی انتشار iOS را دریافت کنی، از صفحه
+            <a href="/contact.html">تماس</a>
+            پیام بده تا راه ارتباطی ثبت شود.
+          </div>
         </div>
+      </div>
+
+      <div class="cta-row">
+        <a class="btn btn-ghost" href="/">بازگشت به صفحه اصلی</a>
+        <a class="btn btn-primary" href="/#inside">داخل اشتراک چه هست؟</a>
       </div>
     </section>
   </main>
@@ -544,12 +591,10 @@
       </div>
 
       <div class="trust-row">
-        <!-- Zarinpal -->
         <div id="zarinpal">
           <script src="https://www.zarinpal.com/webservice/TrustCode" type="text/javascript"></script>
         </div>
 
-        <!-- Enamad -->
         <a
           referrerpolicy="origin"
           target="_blank"
