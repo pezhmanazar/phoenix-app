@@ -1,44 +1,44 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme, useFocusEffect } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
+import { Audio } from "expo-av";
+import * as ImagePicker from "expo-image-picker";
 import {
-  useLocalSearchParams,
-  useRouter,
-  useNavigation,
   Stack,
+  useLocalSearchParams,
+  useNavigation,
+  useRouter,
 } from "expo-router";
 import React, {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  useLayoutEffect,
 } from "react";
+import type { ViewStyle } from "react-native";
 import {
+  ActivityIndicator,
+  Animated,
+  Easing,
   I18nManager,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
   Linking,
+  Modal,
+  PanResponder,
+  Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  View,
-  Image,
-  TouchableOpacity,
-  Modal,
-  Pressable,
-  Animated,
-  Easing,
-  PanResponder,
   TextInput,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Keyboard,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { Audio } from "expo-av";
-import * as ImagePicker from "expo-image-picker";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { ViewStyle } from "react-native";
 import BACKEND_URL from "../../../constants/backend";
 import { useUser } from "../../../hooks/useUser";
 import { getPlanStatus, PRO_FLAG_KEY } from "../../../lib/plan";
@@ -82,6 +82,33 @@ type UserIdentity = {
   phone?: string;
   fullName?: string | null;
 };
+
+/* ===== پاک کردن تاریخچه فقط سمت کلاینت (برای هر تیکت جدا) ===== */
+const clearKey = (ticketId: string) => `chat_cleared_at:${ticketId}`;
+
+async function loadClearedAt(ticketId: string): Promise<number> {
+  try {
+    const raw = await AsyncStorage.getItem(clearKey(ticketId));
+    const n = raw ? Number(raw) : 0;
+    return Number.isFinite(n) ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function saveClearedAt(ticketId: string, ts: number) {
+  try {
+    await AsyncStorage.setItem(clearKey(ticketId), String(ts));
+  } catch {}
+}
+
+function msgTimeMs(m: Message): number {
+  const s = m.ts || m.createdAt || "";
+  if (!s) return 0;
+  const d = new Date(s);
+  const t = d.getTime();
+  return Number.isFinite(t) ? t : 0;
+}
 
 /* تشخیص نوع پیام بر اساس mime یا url */
 function detectType(m?: string | null, url?: string | null): MessageType {
@@ -581,6 +608,28 @@ function Composer({
     }
   };
 
+  const stopRecording = useCallback(
+    async (auto = false) => {
+      if (!recording) return;
+      try {
+        await recording.stopAndUnloadAsync();
+        const uri = recording.getURI();
+        setRecURI(uri || null);
+      } catch {}
+      setRecording(null);
+
+      // اگر به سقف رسید، به کاربر واضح بگو
+      if (auto) {
+        onError("ضبط به سقف مجاز رسید: محدودیت ویس در هر بار ضبط، ۵ دقیقه‌ست.");
+      }
+
+      try {
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      } catch {}
+    },
+    [recording, onError]
+  );
+
   const startRecording = async () => {
     if (planGuard()) return;
     Keyboard.dismiss();
@@ -598,12 +647,18 @@ function Composer({
       await rec.prepareToRecordAsync(
         Audio.RecordingOptionsPresets.HIGH_QUALITY
       );
+
       rec.setOnRecordingStatusUpdate((st) => {
         if (!st.canRecord) return;
         const ms = st.durationMillis ?? 0;
         setRecMs(ms);
-        if (ms >= MAX_VOICE_MS) stopRecording(true).catch(() => {});
+
+        // ✅ قفل واقعی: اگر رسید به 5 دقیقه، همونجا stop
+        if (ms >= MAX_VOICE_MS) {
+          stopRecording(true).catch(() => {});
+        }
       });
+
       await rec.startAsync();
       setRecording(rec);
       setRecURI(null);
@@ -611,17 +666,6 @@ function Composer({
     } catch {
       onError("شروع ضبط ناموفق بود.");
     }
-  };
-
-  const stopRecording = async (auto = false) => {
-    if (!recording) return;
-    try {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      setRecURI(uri || null);
-    } catch {}
-    setRecording(null);
-    if (!auto) await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
   };
 
   const resetAttachments = () => {
@@ -734,7 +778,8 @@ function Composer({
       fd.append("file", file);
       fd.append("attachment", file);
     } else if (recURI) {
-      const durationSec = Math.round(recMs / 1000);
+      // ✅ حداکثر 5 دقیقه (۳۰۰ ثانیه) داخل UI هم enforce می‌کنیم
+      const durationSec = Math.min(300, Math.round(recMs / 1000));
       const file: any = {
         uri: recURI,
         name: `voice_${Date.now()}.m4a`,
@@ -800,24 +845,26 @@ function Composer({
       resetAttachments();
       onSent(updatedTicket);
     } catch (e: any) {
-      onError(extractErrorMessage(e, "خطا در ارسال فایل/ویس"));
+      onError(extractErrorMessage(e, "خطا در ارسال فایل یا ویس"));
     } finally {
       setSending(false);
     }
   };
+
 
   return (
     <View style={styles.composerWrap} onLayout={onLayout}>
       <TextInput
         value={text}
         onChangeText={setText}
-        placeholder="پیام خود را بنویسید…"
+        placeholder="پیام خودت رو بفرست در اسرع وقت بهت جواب میدیم…"
         placeholderTextColor="rgba(231,238,247,.55)"
         style={styles.composerInput}
         multiline
         textAlignVertical="top"
         scrollEnabled
       />
+
 
       {image || recURI ? (
         <View style={styles.previewRow}>
@@ -828,7 +875,13 @@ function Composer({
             />
           ) : null}
           {recURI ? (
-            <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 6 }}>
+            <View
+              style={{
+                flexDirection: "row-reverse",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
               <Ionicons name="mic" size={16} color="#E5E7EB" />
               <Text style={{ color: "#E5E7EB", fontWeight: "900", fontSize: 12 }}>
                 {Math.min(300, Math.round(recMs / 1000))}s
@@ -859,11 +912,23 @@ function Composer({
         <View style={{ flex: 1 }} />
 
         {recording ? (
-          <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+          <View
+            style={{
+              flexDirection: "row-reverse",
+              alignItems: "center",
+              gap: 10,
+            }}
+          >
+            {/* ✅ هنگام ضبط هم یادآوری کوتاه */}
+            <Text style={styles.recHint}>حداکثر ۵:۰۰</Text>
+
             <Text style={styles.recTimer}>{fmt(recMs)}</Text>
             <TouchableOpacity
               onPress={() => stopRecording(false)}
-              style={[styles.roundBtn, { backgroundColor: "#ef4444", borderColor: "#991b1b" }]}
+              style={[
+                styles.roundBtn,
+                { backgroundColor: "#ef4444", borderColor: "#991b1b" },
+              ]}
               activeOpacity={0.85}
             >
               <Ionicons name="stop" size={18} color="#fff" />
@@ -984,6 +1049,10 @@ export default function TicketDetail() {
   const msgPositions = useRef<Record<string, number>>({});
   const [pins, setPins] = useState<string[]>([]);
 
+  // ✅ پاکسازی محلی هر تیکت
+  const [clearedAtMs, setClearedAtMs] = useState<number>(0);
+  const [clearModal, setClearModal] = useState(false);
+
   useEffect(() => {
     const show = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
@@ -1046,6 +1115,12 @@ export default function TicketDetail() {
       syncPlanView();
     }, [syncPlanView])
   );
+
+  // ✅ load clearedAt for THIS ticket (هر تیکت جدا: فنی/درمانگر جدا)
+  useEffect(() => {
+    if (!id) return;
+    loadClearedAt(String(id)).then(setClearedAtMs).catch(() => setClearedAtMs(0));
+  }, [id]);
 
   const fetchTicket = useCallback(
     async (silent: boolean = false) => {
@@ -1112,6 +1187,9 @@ export default function TicketDetail() {
         setTicket(t);
         loadPins(t.id).then(setPins).catch(() => {});
         router.replace(`/support/tickets/${t.id}`);
+
+        // ✅ اینجا هم برای تیکت جدید clearedAt جدا load شود
+        loadClearedAt(String(t.id)).then(setClearedAtMs).catch(() => setClearedAtMs(0));
       }
     } catch (e: any) {
       pushError(extractErrorMessage(e, "خطا در آماده‌سازی گفتگو"));
@@ -1185,12 +1263,29 @@ export default function TicketDetail() {
       ? "چت با درمانگر ققنوس"
       : "چت با پشتیبانی فنی ققنوس";
 
+  const doClearLocal = useCallback(async () => {
+    if (!id) return;
+    const now = Date.now();
+    await saveClearedAt(String(id), now);
+    setClearedAtMs(now);
+    setClearModal(false);
+
+    // پین‌ها هم محلی‌اند؛ بعد از پاکسازی بهتره پاک شوند تا حسِ “تاریخچه پاک شد” واقعی باشد
+    try {
+      await AsyncStorage.removeItem(pinKey(String(id)));
+      setPins([]);
+    } catch {}
+
+    pushError("تاریخچه این گفتگو در گوشیت پاک شد.");
+    requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: false }));
+  }, [id, pushError]);
+
   /* حالت قفلِ چت درمانگر وقتی پلن PRO نیست */
   if (planLoaded && isTherapyChat && !isProPlan) {
     const isExpiredView = planView === "expired";
     return (
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={{ flex: 1, backgroundColor: "#0b0f14" }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <Stack.Screen options={{ headerShown: false }} />
@@ -1199,7 +1294,7 @@ export default function TicketDetail() {
           <View pointerEvents="none" style={styles.bgGlowTop} />
           <View pointerEvents="none" style={styles.bgGlowBottom} />
 
-          {/* ✅ Header مثل index: back + title + badge */}
+          {/* ✅ Header مثل index: back + title + badge + trash */}
           <View style={[styles.headerBar, { paddingTop: 10 }]}>
             <TouchableOpacity
               style={styles.backBtn}
@@ -1216,7 +1311,17 @@ export default function TicketDetail() {
             </View>
 
             <View style={styles.headerLeft}>
-              <PlanStatusBadge me={me} showExpiringText />
+              <View style={styles.headerLeftRow}>
+                <PlanStatusBadge me={me} showExpiringText />
+                <TouchableOpacity
+                  onPress={() => setClearModal(true)}
+                  activeOpacity={0.85}
+                  style={styles.clearBtn}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="trash-outline" size={18} color="#E5E7EB" />
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
 
@@ -1243,6 +1348,29 @@ export default function TicketDetail() {
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* ✅ مودال پاکسازی */}
+          <Modal visible={clearModal} transparent animationType="fade" onRequestClose={() => setClearModal(false)}>
+            <Pressable style={styles.modalOverlay} onPress={() => setClearModal(false)}>
+              <Pressable style={styles.modalCard} onPress={() => {}}>
+                <View style={styles.modalIcon}>
+                  <Ionicons name="trash" size={20} color="#ef4444" />
+                </View>
+                <Text style={styles.modalTitle}>پاک کردن تاریخچه گفتگو</Text>
+                <Text style={styles.modalBody}>
+                  این کار پیام‌ها رو در گوشی تو پاک میکنه.
+                </Text>
+                <View style={styles.modalRow}>
+                  <TouchableOpacity onPress={() => setClearModal(false)} activeOpacity={0.9} style={styles.modalBtnGhost}>
+                    <Text style={styles.modalBtnGhostText}>انصراف</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={doClearLocal} activeOpacity={0.9} style={styles.modalBtnDanger}>
+                    <Text style={styles.modalBtnDangerText}>پاک کن</Text>
+                  </TouchableOpacity>
+                </View>
+              </Pressable>
+            </Pressable>
+          </Modal>
         </SafeAreaView>
       </KeyboardAvoidingView>
     );
@@ -1250,7 +1378,10 @@ export default function TicketDetail() {
 
   if (typeFromParam && checkingExisting) {
     return (
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <KeyboardAvoidingView
+        style={{ flex: 1, backgroundColor: "#0b0f14" }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
         <Stack.Screen options={{ headerShown: false }} />
         <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
           <View pointerEvents="none" style={styles.bgGlowTop} />
@@ -1266,7 +1397,10 @@ export default function TicketDetail() {
 
   if (!typeFromParam && loading && !ticket) {
     return (
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <KeyboardAvoidingView
+        style={{ flex: 1, backgroundColor: "#0b0f14" }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
         <Stack.Screen options={{ headerShown: false }} />
         <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
           <View pointerEvents="none" style={styles.bgGlowTop} />
@@ -1310,7 +1444,10 @@ export default function TicketDetail() {
           <Text style={[styles.msgWho, { color: textColor }]}>
             {isAdmin ? "پاسخ پشتیبانی" : "شما"}
           </Text>
-          <TouchableOpacity onPress={() => togglePin(m.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <TouchableOpacity
+            onPress={() => togglePin(m.id)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <Ionicons
               name={isPinned ? "star" : "star-outline"}
               size={15}
@@ -1365,17 +1502,24 @@ export default function TicketDetail() {
     );
   };
 
-  const hasMessages = !!ticket?.messages?.length;
+  // ✅ پیام‌ها بعد از clearedAt فقط نمایش داده شوند
+  const visibleMessages =
+    !clearedAtMs ? (ticket?.messages || []) : (ticket?.messages || []).filter((m) => msgTimeMs(m) >= clearedAtMs);
+
+  const hasMessages = visibleMessages.length > 0;
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+    <KeyboardAvoidingView
+  style={{ flex: 1, backgroundColor: "#0b0f14" }}
+  behavior={Platform.OS === "ios" ? "padding" : "padding"}
+>
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
         <View pointerEvents="none" style={styles.bgGlowTop} />
         <View pointerEvents="none" style={styles.bgGlowBottom} />
 
-        {/* ✅ Header مثل index: back + title + badge */}
+        {/* ✅ Header مثل index: back + title + badge + trash */}
         <View style={[styles.headerBar, { paddingTop: 10 }]}>
           <TouchableOpacity
             style={styles.backBtn}
@@ -1392,7 +1536,17 @@ export default function TicketDetail() {
           </View>
 
           <View style={styles.headerLeft}>
-            <PlanStatusBadge me={me} showExpiringText />
+            <View style={styles.headerLeftRow}>
+              <PlanStatusBadge me={me} showExpiringText />
+              <TouchableOpacity
+                onPress={() => setClearModal(true)}
+                activeOpacity={0.85}
+                style={styles.clearBtn}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="trash-outline" size={18} color="#E5E7EB" />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -1433,6 +1587,7 @@ export default function TicketDetail() {
 
         <ScrollView
           ref={scrollRef}
+          style={{ backgroundColor: "#0b0f14" }} // ✅ جلوگیری از سفید شدن پایین/خالی
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{
             paddingHorizontal: 14,
@@ -1449,7 +1604,17 @@ export default function TicketDetail() {
             }
           }}
         >
-          {hasMessages ? ticket!.messages.map(renderMessage) : <View />}
+          {hasMessages ? visibleMessages.map(renderMessage) : <View style={{ paddingTop: 40 }} />}
+          {!hasMessages ? (
+            <View style={styles.emptyWrap}>
+              <Ionicons name="chatbubble-ellipses-outline" size={18} color="rgba(231,238,247,.65)" />
+              <Text style={styles.emptyText}>
+                {clearedAtMs
+                  ? "تاریخچه این گفتگو در گوشی شما پاک شده. پیام‌های جدید از اینجا به بعد نمایش داده می‌شن."
+                  : "هنوز پیامی در این گفتگو ثبت نشده."}
+              </Text>
+            </View>
+          ) : null}
         </ScrollView>
 
         <View style={[styles.composerDock, { paddingBottom: Math.max(10, insets.bottom + 8) }]} pointerEvents="box-none">
@@ -1471,6 +1636,10 @@ export default function TicketDetail() {
               if (fullTicket) setTicket(fullTicket);
               else fetchTicket(true);
               loadPins(newId).then(setPins);
+
+              // ✅ برای تیکت تازه ساخته‌شده clearedAt جدا را صفر کن
+              saveClearedAt(String(newId), 0).catch(() => {});
+              setClearedAtMs(0);
             }}
             onSent={(updatedTicket) => {
               if (updatedTicket) setTicket(updatedTicket);
@@ -1483,6 +1652,29 @@ export default function TicketDetail() {
         {viewerUri ? (
           <ImageLightbox uri={viewerUri} visible={viewerVisible} onClose={() => setViewerVisible(false)} />
         ) : null}
+
+        {/* ✅ مودال پاکسازی (سمت کاربر) */}
+        <Modal visible={clearModal} transparent animationType="fade" onRequestClose={() => setClearModal(false)}>
+          <Pressable style={styles.modalOverlay} onPress={() => setClearModal(false)}>
+            <Pressable style={styles.modalCard} onPress={() => {}}>
+              <View style={styles.modalIcon}>
+                <Ionicons name="trash" size={20} color="#ef4444" />
+              </View>
+              <Text style={styles.modalTitle}>پاک کردن تاریخچه گفتگو</Text>
+              <Text style={styles.modalBody}>
+                با این کار پیام‌های ارسالی و دریافتی در گوشیت پاک میشه .
+              </Text>
+              <View style={styles.modalRow}>
+                <TouchableOpacity onPress={() => setClearModal(false)} activeOpacity={0.9} style={styles.modalBtnGhost}>
+                  <Text style={styles.modalBtnGhostText}>انصراف</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={doClearLocal} activeOpacity={0.9} style={styles.modalBtnDanger}>
+                  <Text style={styles.modalBtnDangerText}>پاک کن</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
       </SafeAreaView>
     </KeyboardAvoidingView>
   );
@@ -1553,9 +1745,24 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
   },
   headerLeft: {
-    width: 140,
+    width: 160, // کمی بیشتر تا دکمه سطل جا شود
     alignItems: "flex-start",
     justifyContent: "flex-end",
+  },
+  headerLeftRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+  },
+  clearBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.10)",
   },
 
   /* banner */
@@ -1661,6 +1868,30 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
 
+  /* empty */
+  emptyWrap: {
+    marginTop: 8,
+    alignSelf: "center",
+    maxWidth: 320,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.10)",
+    backgroundColor: "rgba(255,255,255,.03)",
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+  },
+  emptyText: {
+    flex: 1,
+    color: "rgba(231,238,247,.72)",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 18,
+    textAlign: "right",
+  },
+
   /* lightbox */
   lbBackdrop: {
     flex: 1,
@@ -1732,6 +1963,36 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.04)",
     borderColor: "rgba(255,255,255,0.10)",
     color: "#E5E7EB",
+  },
+  voiceLimitRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.03)",
+  },
+  voiceLimitText: {
+    flex: 1,
+    color: "rgba(231,238,247,.72)",
+    fontSize: 11,
+    fontWeight: "800",
+    textAlign: "right",
+    lineHeight: 16,
+  },
+  recHint: {
+    color: "rgba(231,238,247,.70)",
+    fontSize: 11,
+    fontWeight: "900",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.04)",
   },
   composerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
   iconBtn: {
@@ -1847,4 +2108,77 @@ const styles = StyleSheet.create({
     borderColor: "rgba(212,175,55,.30)",
   },
   lockBtnText: { color: "#E5E7EB", fontSize: 12, fontWeight: "900" },
+
+  /* modal (clear history) */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 18,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 520,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.12)",
+    backgroundColor: "rgba(3,7,18,0.96)",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  modalIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    alignSelf: "center",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(239,68,68,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.25)",
+    marginBottom: 10,
+  },
+  modalTitle: {
+    color: "#F9FAFB",
+    fontSize: 14,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  modalBody: {
+    marginTop: 8,
+    color: "rgba(231,238,247,.72)",
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  modalRow: {
+    marginTop: 14,
+    flexDirection: "row-reverse",
+    gap: 10,
+    justifyContent: "center",
+  },
+  modalBtnGhost: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.12)",
+    backgroundColor: "rgba(255,255,255,.04)",
+    minWidth: 120,
+    alignItems: "center",
+  },
+  modalBtnGhostText: { color: "#E5E7EB", fontWeight: "900", fontSize: 12 },
+  modalBtnDanger: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.35)",
+    backgroundColor: "rgba(239,68,68,0.16)",
+    minWidth: 120,
+    alignItems: "center",
+  },
+  modalBtnDangerText: { color: "#FECACA", fontWeight: "900", fontSize: 12 },
 });

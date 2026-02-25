@@ -7,7 +7,7 @@ import React, { useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Linking, // ✅ NEW
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -153,11 +153,17 @@ type NoticeState = null | { type: NoticeType; title: string; message?: string };
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { dark } = useTheme(); // فقط برای StatusBar، تم ما ثابتِ onboarding است
+  const { dark } = useTheme(); // فقط برای StatusBar
 
   const [rawPhone, setRawPhone] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // ✅ قوانین
   const [agree, setAgree] = useState(false);
+
+  // ✅ NEW: تایید خاموش بودن VPN
+  const [vpnOff, setVpnOff] = useState(false);
+
   const [showTerms, setShowTerms] = useState(false);
 
   // نوتیف تم‌دار (جای Alert)
@@ -211,8 +217,19 @@ export default function LoginScreen() {
     if (!agree) {
       showNotice({
         type: "error",
-        title: "تأیید قوانین لازم است",
-        message: "برای ادامه، باید شرایط استفاده و حریم خصوصی را بپذیری.",
+        title: "تأیید قوانین لازمه",
+        message: "برای ادامه، باید شرایط استفاده و حریم خصوصی رو بپذیری.",
+      });
+      return;
+    }
+
+    // ✅ NEW: شرط VPN خاموش
+    if (!vpnOff) {
+      showNotice({
+        type: "warn",
+        title: "قبل از ورود، فیلترشکن رو خاموش کن",
+        message:
+          "برای اینکه همهٔ بخش‌ها (پرداخت، مدیا، پشتیبانی و ...) درست کار کنند، قبل از ورود VPN/Proxy رو خاموش کن؛ بعدش ادامه رو بزن.",
       });
       return;
     }
@@ -269,7 +286,8 @@ export default function LoginScreen() {
     }
   }
 
-  const disableButton = loading || !isValid || !agree;
+  // ✅ NEW: دکمه فقط با قوانین + VPN خاموش فعال می‌شود
+  const disableButton = loading || !isValid || !agree || !vpnOff;
 
   // پالت ثابت مثل onboarding
   const BG = "#0b0f14";
@@ -318,17 +336,14 @@ export default function LoginScreen() {
   const helperColor =
     rawPhone.length === 0 || isValid ? "rgba(231,238,247,.65)" : "rgba(248,113,113,.95)";
 
-  // ✅ NEW: لینک رسمی قوانین
+  // ✅ لینک رسمی قوانین
   const TERMS_URL = "https://qoqnoos.app/terms.html";
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: BG }}>
       <StatusBar style={dark ? "light" : "light"} />
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={{ flex: 1 }}>
           {/* گلوها */}
           <View
@@ -354,15 +369,7 @@ export default function LoginScreen() {
             }}
           />
 
-          <View
-            style={{
-              flex: 1,
-              paddingHorizontal: 18,
-              paddingTop: 18,
-              paddingBottom: 18,
-              gap: 14,
-            }}
-          >
+          <View style={{ flex: 1, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 18, gap: 14 }}>
             {/* هدر */}
             <View style={{ alignItems: "center", gap: 6, marginTop: 6 }}>
               <View
@@ -380,14 +387,7 @@ export default function LoginScreen() {
                 <Ionicons name="flame-outline" size={26} color={GOLD} />
               </View>
 
-              <Text
-                style={{
-                  color: TEXT,
-                  fontSize: 20,
-                  fontWeight: "900",
-                  textAlign: "center",
-                }}
-              >
+              <Text style={{ color: TEXT, fontSize: 20, fontWeight: "900", textAlign: "center" }}>
                 ورود | ثبت‌نام
               </Text>
 
@@ -438,24 +438,13 @@ export default function LoginScreen() {
                     {notice.title}
                   </Text>
                   {!!notice.message && (
-                    <Text
-                      style={{
-                        color: "rgba(231,238,247,.78)",
-                        fontSize: 12.5,
-                        lineHeight: 20,
-                        textAlign: "right",
-                      }}
-                    >
+                    <Text style={{ color: "rgba(231,238,247,.78)", fontSize: 12.5, lineHeight: 20, textAlign: "right" }}>
                       {notice.message}
                     </Text>
                   )}
                 </View>
 
-                <Pressable
-                  onPress={() => setNotice(null)}
-                  hitSlop={10}
-                  style={{ padding: 2 }}
-                >
+                <Pressable onPress={() => setNotice(null)} hitSlop={10} style={{ padding: 2 }}>
                   <Ionicons name="close" size={18} color="rgba(231,238,247,.75)" />
                 </Pressable>
               </View>
@@ -475,16 +464,7 @@ export default function LoginScreen() {
             >
               {/* فیلد شماره */}
               <View style={{ gap: 8 }}>
-                <Text
-                  style={{
-                    color: MUTED,
-                    fontSize: 12,
-                    fontWeight: "800",
-                    textAlign: "right",
-                  }}
-                >
-                  شماره موبایل
-                </Text>
+                <Text style={{ color: MUTED, fontSize: 12, fontWeight: "800", textAlign: "right" }}>شماره موبایل</Text>
 
                 <View
                   style={{
@@ -499,16 +479,12 @@ export default function LoginScreen() {
                     height: 52,
                   }}
                 >
-                  <Ionicons
-                    name="call-outline"
-                    size={20}
-                    color="rgba(231,238,247,.75)"
-                  />
+                  <Ionicons name="call-outline" size={20} color="rgba(231,238,247,.75)" />
                   <TextInput
                     value={rawPhone}
                     onChangeText={(t) => {
                       setRawPhone(toEnDigits(t));
-                      if (notice) setNotice(null); // با تایپ کردن پیام‌ها جمع شوند
+                      if (notice) setNotice(null);
                     }}
                     keyboardType="phone-pad"
                     placeholder="مثلاً 09123456789"
@@ -516,28 +492,16 @@ export default function LoginScreen() {
                     maxLength={14}
                     onSubmitEditing={onSend}
                     returnKeyType="done"
-                    style={{
-                      flex: 1,
-                      color: TEXT,
-                      fontSize: 14,
-                      textAlign: "right",
-                      paddingVertical: 0,
-                    }}
+                    style={{ flex: 1, color: TEXT, fontSize: 14, textAlign: "right", paddingVertical: 0 }}
                   />
                 </View>
 
-                <Text
-                  style={{
-                    color: helperColor,
-                    fontSize: 11.5,
-                    textAlign: "right",
-                  }}
-                >
+                <Text style={{ color: helperColor, fontSize: 11.5, textAlign: "right" }}>
                   شماره باید ۱۱ رقم و با 09 شروع بشه.
                 </Text>
               </View>
 
-              {/* قوانین */}
+              {/* قوانین + VPN */}
               <View
                 style={{
                   borderRadius: 18,
@@ -546,61 +510,59 @@ export default function LoginScreen() {
                   backgroundColor: "rgba(255,255,255,.02)",
                   paddingHorizontal: 12,
                   paddingVertical: 10,
-                  gap: 8,
+                  gap: 10,
                 }}
               >
+                {/* ✅ قوانین */}
                 <Pressable
                   onPress={() => {
                     setAgree((p) => !p);
                     if (notice) setNotice(null);
                   }}
-                  style={{
-                    flexDirection: "row-reverse",
-                    alignItems: "center",
-                    gap: 10,
-                  }}
+                  style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}
                 >
                   <Ionicons
                     name={agree ? "checkbox-outline" : "square-outline"}
                     size={20}
                     color={agree ? OK : "rgba(231,238,247,.70)"}
                   />
-                  <Text
-                    style={{
-                      flex: 1,
-                      color: TEXT,
-                      fontSize: 11.5,
-                      lineHeight: 18,
-                      textAlign: "right",
-                    }}
-                  >
+                  <Text style={{ flex: 1, color: TEXT, fontSize: 11.5, lineHeight: 18, textAlign: "right" }}>
                     تأیید می‌کنم که شرایط استفاده، محدودیت‌ها و حریم خصوصی اپ ققنوس رو خوندم و می‌پذیرم.
                   </Text>
                 </Pressable>
 
                 <Pressable
                   onPress={() => setShowTerms(true)}
-                  style={{
-                    flexDirection: "row-reverse",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
+                  style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}
                 >
-                  <Ionicons
-                    name="document-text-outline"
-                    size={18}
-                    color={GOLD}
-                  />
-                  <Text
-                    style={{
-                      color: GOLD,
-                      fontSize: 12.5,
-                      fontWeight: "900",
-                      textAlign: "right",
-                    }}
-                  >
+                  <Ionicons name="document-text-outline" size={18} color={GOLD} />
+                  <Text style={{ color: GOLD, fontSize: 12.5, fontWeight: "900", textAlign: "right" }}>
                     مشاهده متن کامل
                   </Text>
+                </Pressable>
+
+                {/* ✅ NEW: تیک VPN خاموش */}
+                <View style={{ height: 1, backgroundColor: "rgba(255,255,255,.06)" }} />
+
+                <Pressable
+                  onPress={() => {
+                    setVpnOff((p) => !p);
+                    if (notice) setNotice(null);
+                  }}
+                  style={{ flexDirection: "row-reverse", alignItems: "flex-start", gap: 10 }}
+                >
+                  <Ionicons
+                    name={vpnOff ? "checkbox-outline" : "square-outline"}
+                    size={20}
+                    color={vpnOff ? OK : "rgba(231,238,247,.70)"}
+                    style={{ marginTop: 1 }}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: TEXT, fontSize: 11.5, lineHeight: 18, textAlign: "right" }}>
+                      قبل از ورود به اپ، فیلترشکن رو خاموش می‌کنم تا همهٔ بخش‌ها درست کار کنه.
+                    </Text>
+                    
+                  </View>
                 </Pressable>
               </View>
 
@@ -613,9 +575,7 @@ export default function LoginScreen() {
                   borderRadius: 18,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: disableButton
-                    ? "rgba(255,255,255,.06)"
-                    : "rgba(212,175,55,.16)",
+                  backgroundColor: disableButton ? "rgba(255,255,255,.06)" : "rgba(212,175,55,.16)",
                   borderWidth: 1,
                   borderColor: disableButton ? LINE : "rgba(212,175,55,.35)",
                 }}
@@ -623,39 +583,14 @@ export default function LoginScreen() {
                 {loading ? (
                   <ActivityIndicator color={TEXT} />
                 ) : (
-                  <View
-                    style={{
-                      flexDirection: "row-reverse",
-                      alignItems: "center",
-                      gap: 10,
-                    }}
-                  >
-                    <Ionicons
-                      name="arrow-forward-outline"
-                      size={18}
-                      color={TEXT}
-                    />
-                    <Text
-                      style={{
-                        color: TEXT,
-                        fontSize: 14,
-                        fontWeight: "900",
-                      }}
-                    >
-                      ادامه
-                    </Text>
+                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+                    <Ionicons name="arrow-forward-outline" size={18} color={TEXT} />
+                    <Text style={{ color: TEXT, fontSize: 14, fontWeight: "900" }}>ادامه</Text>
                   </View>
                 )}
               </Pressable>
 
-              <Text
-                style={{
-                  color: "rgba(231,238,247,.55)",
-                  fontSize: 11,
-                  lineHeight: 18,
-                  textAlign: "center",
-                }}
-              >
+              <Text style={{ color: "rgba(231,238,247,.55)", fontSize: 11, lineHeight: 18, textAlign: "center" }}>
                 با ادامه دادن، وارد مرحله دریافت کد تأیید می‌شی.
               </Text>
             </View>
@@ -664,11 +599,7 @@ export default function LoginScreen() {
       </KeyboardAvoidingView>
 
       {/* مودال قوانین */}
-      <Modal
-        visible={showTerms}
-        animationType="slide"
-        onRequestClose={() => setShowTerms(false)}
-      >
+      <Modal visible={showTerms} animationType="slide" onRequestClose={() => setShowTerms(false)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: BG }}>
           <View
             style={{
@@ -682,17 +613,9 @@ export default function LoginScreen() {
               backgroundColor: "rgba(255,255,255,.03)",
             }}
           >
-            <View
-              style={{
-                flexDirection: "row-reverse",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
+            <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
               <Ionicons name="shield-checkmark" size={20} color={GOLD} />
-              <Text style={{ fontSize: 16, fontWeight: "900", color: TEXT }}>
-                شرایط استفاده و حریم خصوصی
-              </Text>
+              <Text style={{ fontSize: 16, fontWeight: "900", color: TEXT }}>شرایط استفاده و حریم خصوصی</Text>
             </View>
 
             <Pressable onPress={() => setShowTerms(false)} style={{ padding: 6 }}>
@@ -734,14 +657,7 @@ export default function LoginScreen() {
                       {`${idx + 1}) ${item.title}`}
                     </Text>
 
-                    <Text
-                      style={{
-                        color: MUTED,
-                        fontSize: 12.5,
-                        lineHeight: 21,
-                        textAlign: "right",
-                      }}
-                    >
+                    <Text style={{ color: MUTED, fontSize: 12.5, lineHeight: 21, textAlign: "right" }}>
                       {bodyWithoutUrl}
                     </Text>
 
@@ -766,14 +682,7 @@ export default function LoginScreen() {
                         })}
                       >
                         <Ionicons name="link-outline" size={18} color={GOLD} />
-                        <Text
-                          style={{
-                            color: GOLD,
-                            fontSize: 12.5,
-                            fontWeight: "900",
-                            textAlign: "center",
-                          }}
-                        >
+                        <Text style={{ color: GOLD, fontSize: 12.5, fontWeight: "900", textAlign: "center" }}>
                           مشاهده نسخه رسمی قوانین
                         </Text>
                       </Pressable>
@@ -797,9 +706,7 @@ export default function LoginScreen() {
                 borderColor: "rgba(212,175,55,.35)",
               }}
             >
-              <Text style={{ color: TEXT, fontSize: 14, fontWeight: "900" }}>
-                بستن
-              </Text>
+              <Text style={{ color: TEXT, fontSize: 14, fontWeight: "900" }}>بستن</Text>
             </Pressable>
           </View>
         </SafeAreaView>

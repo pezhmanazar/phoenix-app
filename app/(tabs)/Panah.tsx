@@ -1,21 +1,25 @@
 // app/(tabs)/Panah.tsx
-import React, { useEffect, useState, useCallback } from "react";
+
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect, useNavigation, useTheme } from "@react-navigation/native";
+import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import {
-  View,
+  ActivityIndicator,
+  Dimensions,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
   Text,
   TouchableOpacity,
-  StyleSheet,
-  Dimensions,
-  ActivityIndicator,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useTheme, useFocusEffect, useNavigation } from "@react-navigation/native";
-import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useUser } from "../../hooks/useUser";
-import BACKEND_URL from "../../constants/backend";
 import PlanStatusBadge from "../../components/PlanStatusBadge";
+import BACKEND_URL from "../../constants/backend";
+import { useUser } from "../../hooks/useUser";
 
 const { height } = Dimensions.get("window");
 
@@ -41,10 +45,7 @@ function getOpenedById(me: any) {
   return String(phone || id || "").trim();
 }
 
-async function countUnreadForType(
-  type: "tech" | "therapy",
-  openedById: string
-): Promise<number> {
+async function countUnreadForType(type: "tech" | "therapy", openedById: string): Promise<number> {
   try {
     if (!openedById) return 0;
     const qs: string[] = [];
@@ -86,6 +87,56 @@ async function countUnreadForType(
   }
 }
 
+/* ------------------------------ Modal تم‌دار (بدون Alert) ------------------------------ */
+
+function ThemedSoonModal({
+  visible,
+  onClose,
+}: {
+  visible: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      {/* Backdrop */}
+      <Pressable style={styles.modalBackdrop} onPress={onClose}>
+        {/* Stop propagation */}
+        <Pressable style={styles.modalCard} onPress={() => {}}>
+
+          {/* Glow */}
+          <View pointerEvents="none" style={styles.modalGlowGold} />
+          <View pointerEvents="none" style={styles.modalGlowOrange} />
+
+          <View style={styles.modalHeaderRow}>
+            <View style={styles.modalIconWrap}>
+              <Ionicons name="sparkles" size={18} color="#D4AF37" />
+            </View>
+
+            <View style={{ flex: 1 }}>
+              <Text style={styles.modalTitle}>به‌زودی</Text>
+              <Text style={styles.modalSubtitle}>
+                پشتیبان هوشمند، در آپدیت‌های آینده فعال میشه.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.modalDivider} />
+
+          <TouchableOpacity activeOpacity={0.9} onPress={onClose} style={styles.modalBtn}>
+            <Text style={styles.modalBtnText}>باشه</Text>
+          </TouchableOpacity>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export default function Panah() {
   const { colors } = useTheme();
   const router = useRouter();
@@ -93,6 +144,9 @@ export default function Panah() {
   const insets = useSafeAreaInsets();
   const { me } = useUser();
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // ✅ NEW: مودال تم‌دار برای AI
+  const [soonOpen, setSoonOpen] = useState(false);
 
   /** هر بار فوکوس → تعداد پیام‌های نخوانده (ادمین) را حساب کن و در unreadCount بگذار */
   useFocusEffect(
@@ -112,6 +166,7 @@ export default function Panah() {
           setUnreadCount(therapyUnread + techUnread);
         }
       };
+
       loadUnread();
       return () => {
         cancelled = true;
@@ -140,6 +195,9 @@ export default function Panah() {
     );
   }
 
+  // ✅ NEW: فعلاً AI غیرفعال → مودال تم‌دار
+  const onPressAI = () => setSoonOpen(true);
+
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: "#0b0f14" }]} edges={["top"]}>
       <View style={styles.root}>
@@ -147,30 +205,24 @@ export default function Panah() {
         <View pointerEvents="none" style={styles.bgGlow1} />
         <View pointerEvents="none" style={styles.bgGlow2} />
 
+        {/* ✅ مودال تم‌دار */}
+        <ThemedSoonModal visible={soonOpen} onClose={() => setSoonOpen(false)} />
+
         {/* Header — عنوان سمت راست، بج سمت چپ */}
         <View style={[styles.header, { paddingTop: Math.max(10, insets.top * 0.15) }]}>
           <Text style={styles.headerTitle}>پنــــــــاه</Text>
-
-          {/* ✅ فقط از خود PlanStatusBadge متن نزدیک انقضا را بگیر (بدون expiringText سفارشی) */}
           <PlanStatusBadge me={me} showExpiringText />
         </View>
 
         {/* دو کارت بزرگ */}
-        <View
-          style={[
-            styles.fullArea,
-            { height: height - (insets.top + insets.bottom + 140) },
-          ]}
-        >
+        <View style={[styles.fullArea, { height: height - (insets.top + insets.bottom + 140) }]}>
           {/* کارت پشتیبان واقعی */}
           <TouchableOpacity
             activeOpacity={0.92}
             style={[styles.card, styles.cardReal]}
             onPress={() => router.push("/support/real")}
           >
-            {/* هایلایت داخلی */}
             <View pointerEvents="none" style={styles.cardHighlight} />
-            {/* شیپ گوشه‌ای */}
             <View pointerEvents="none" style={[styles.cardShape, styles.cardShapeReal]} />
 
             <View style={styles.cardIconWrap}>
@@ -178,9 +230,7 @@ export default function Panah() {
             </View>
 
             <Text style={styles.cardTitle}>پشتیبان واقعی</Text>
-            <Text style={styles.cardSubtitle}>
-              ارتباط با تیم پشتیبانی، پیگیری مشکلات و سوالات تخصصی.
-            </Text>
+            <Text style={styles.cardSubtitle}>ارتباط با تیم پشتیبانی، پیگیری مشکلات و سوالات تخصصی.</Text>
 
             <View style={styles.cardCtaRow}>
               <Text style={styles.cardCtaText}>ورود</Text>
@@ -192,7 +242,7 @@ export default function Panah() {
           <TouchableOpacity
             activeOpacity={0.92}
             style={[styles.card, styles.cardAI]}
-            onPress={() => router.push("../support/ai")}
+            onPress={onPressAI}
           >
             <View pointerEvents="none" style={styles.cardHighlight} />
             <View pointerEvents="none" style={[styles.cardShape, styles.cardShapeAI]} />
@@ -202,12 +252,10 @@ export default function Panah() {
             </View>
 
             <Text style={styles.cardTitle}>پشتیبان هوشمند (AI)</Text>
-            <Text style={styles.cardSubtitle}>
-              پاسخ سریع، تمرین‌های کوتاه و راهنمایی لحظه‌ای.
-            </Text>
+            <Text style={styles.cardSubtitle}>پاسخ سریع، تمرین‌های کوتاه و راهنمایی لحظه‌ای.</Text>
 
             <View style={styles.cardCtaRow}>
-              <Text style={styles.cardCtaText}>شروع</Text>
+              <Text style={styles.cardCtaText}>به‌زودی</Text>
               <Ionicons name="arrow-back" size={18} color="#F9FAFB" />
             </View>
           </TouchableOpacity>
@@ -241,7 +289,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(233,138,21,.10)",
   },
 
-  /* ✅ هدر: هم‌خانواده Verify/EditProfile + خوانایی نوار وضعیت */
+  /* ✅ هدر */
   header: {
     borderBottomWidth: 1,
     borderColor: "rgba(255,255,255,.10)",
@@ -265,7 +313,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
 
-  /* ✅ کارت‌ها: شیشه‌ای + رنک بهتر */
+  /* ✅ کارت‌ها */
   card: {
     flex: 1,
     borderRadius: 26,
@@ -353,5 +401,98 @@ const styles = StyleSheet.create({
     color: "#F9FAFB",
     fontSize: 12,
     fontWeight: "900",
+  },
+
+  /* ---------------- Modal theme ---------------- */
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 18,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 520,
+    borderRadius: 18,
+    padding: 14,
+    backgroundColor: "rgba(3,7,18,.95)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.10)",
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: Platform.OS === "android" ? 0.35 : 0.22,
+    shadowOffset: { width: 0, height: 14 },
+    shadowRadius: 22,
+    elevation: 10,
+  },
+  modalGlowGold: {
+    position: "absolute",
+    top: -120,
+    left: -120,
+    width: 260,
+    height: 260,
+    borderRadius: 999,
+    backgroundColor: "rgba(212,175,55,.16)",
+  },
+  modalGlowOrange: {
+    position: "absolute",
+    bottom: -140,
+    right: -140,
+    width: 320,
+    height: 320,
+    borderRadius: 999,
+    backgroundColor: "rgba(233,138,21,.10)",
+  },
+  modalHeaderRow: {
+    flexDirection: "row-reverse",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  modalIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.10)",
+    marginTop: 2,
+  },
+  modalTitle: {
+    color: "#F9FAFB",
+    fontSize: 14,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  modalSubtitle: {
+    marginTop: 6,
+    color: "rgba(231,238,247,.78)",
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 18,
+    textAlign: "right",
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,.08)",
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  modalBtn: {
+    alignSelf: "stretch",
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: "center",
+    backgroundColor: "rgba(212,175,55,.92)",
+    borderWidth: 1,
+    borderColor: "rgba(212,175,55,.35)",
+  },
+  modalBtnText: {
+    color: "#0b0f14",
+    fontWeight: "900",
+    fontSize: 13,
   },
 });

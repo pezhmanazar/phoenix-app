@@ -1,57 +1,103 @@
 // lib/panahgah/techniques/sawEx.ts
-import type { ScenarioModule, Plan } from "../types";
+import { AUDIO_KEYS } from "@/constants/media";
+import type { ScenarioModule } from "../types";
 
-// سه طرحِ مرحله برای مراجعه‌های 1، 2، 3
-const plan1: Plan = [
-  { type: "voice", title: "اول گوش بده", uri: require("../../../assets/audio/voice.mp3") },
-  {
-    type: "form",
-    title: "پایش افکار (نسخه کوتاه)",
-    fields: [
-      { key: "situation", label: "چه دیدی/چه شد؟" },
-      { key: "autoThought", label: "فکر خودکار چی بود؟" },
-      { key: "evidence", label: "شواهد موافق/مخالف؟ (کوتاه)" },
-    ],
-  },
-  { type: "breath", title: "بازگشت به خط پایه", seconds: 90, hints: ["دم ۴ث", "حبس 2ث", "بازدم ۶ث"] },
-];
+/* ---------- Seeded pick (رندوم پایدار) ---------- */
+function hashSeed(s: string) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return Math.abs(h);
+}
 
-const plan2: Plan = [
-  { type: "voice", title: "گوش بده (نوبت دوم)", uri: require("../../../assets/audio/voice.mp3") },
-  {
-    type: "form",
-    title: "بازسازی شناختی (خلاصه)",
-    fields: [
-      { key: "distortion", label: "خطای شناختی محتمل؟" },
-      { key: "reframe", label: "بازقالب‌بندی سالم‌تر چیست؟" },
-    ],
-  },
-  { type: "breath", title: "تنفس جعبه‌ای", seconds: 120, hints: ["۴-۴-۴-۴"] },
-];
+const VOICE_KEYS = [
+  AUDIO_KEYS.panahgahTechniques.sawEx01,
+] as const;
 
-const plan3: Plan = [
-  { type: "voice", title: "گوش بده (نوبت سوم)", uri: require("../../../assets/audio/voice.mp3") },
-  {
-    type: "form",
-    title: "پلان عمل کوچک",
-    fields: [
-      { key: "urge", label: "الان چه میلی داری؟" },
-      { key: "alt", label: "جایگزین سالم ۲ دقیقه‌ای؟" },
-    ],
-  },
-  { type: "breath", title: "مدیتیشن هدایت‌شده کوتاه", seconds: 150 },
-];
+function pickVoiceKey(seed: string): string {
+  const h = hashSeed(seed);
+  return VOICE_KEYS[h % VOICE_KEYS.length];
+}
 
 const module: ScenarioModule = {
   id: "saw-ex",
   title: "الان اکسم رو دیدم",
+
   getPlanForVisit: (visitIndex: number) => {
-    if (visitIndex <= 0) return plan1;
-    if (visitIndex === 1) return plan2;
-    if (visitIndex === 2) return plan3;
-    // 3 به بعد → رندوم از بین سه‌تای بالا
-    const arr = [plan1, plan2, plan3];
-    return arr[Math.floor(Math.random() * arr.length)];
+    const voiceKey = pickVoiceKey(`saw-ex:${visitIndex}`);
+
+    return [
+      // 1) checkin
+      {
+        type: "checkin",
+        title: "الان شدت حال بدت چقدره؟",
+        hint: "فقط یک عدد انتخاب کن. قرار نیست دقیق باشه.",
+        min: 0,
+        max: 10,
+      },
+
+      // 2) voice
+      {
+        type: "voice",
+        title: "این ویس رو گوش بده تا شوکِ دیدن اکست فروکش کنه و تصمیم اشتباه نگیری",
+        uri: voiceKey, // KEY نه URL
+      },
+
+      // 3) form
+      {
+        type: "form",
+        title: "این موارد رو پر کن تا ذهنت خالی بشه",
+        fields: [
+          {
+            key: "where_how",
+            label: "کجا و چطور دیدیش؟",
+          },
+          {
+            key: "body_signal",
+            label: "بدنت دقیقاً چه واکنشی نشون داد؟ (تپش قلب، گلو درد، معده درد، لرزش بدن، گرگرفتگی، تنگی نفس و غیره)",
+          },
+          {
+            key: "first_thought",
+            label: "اولین جمله‌ای که تو ذهنت اومد چی بود؟ همون فکر رو بنویس.",
+          },
+          {
+            key: "worst_story",
+            label: "بدترین سناریویی که ذهنت سریع ساخت چی بود؟ (مثلاً «منو فراموش کرده؟»)",
+          },
+          {
+            key: "urge",
+            label: "الان وسوسه یا میلِ فوری‌ت چیه؟ ( مثل چک کردن، پیام دادن، رفتن سمتش، فرار کردن)",
+          },
+          {
+            key: "if_i_do_it",
+            label: "اگه همین الآن اون کار رو انجام بدی، احتمالاً بعدش چه حسی پیدا می‌کنی؟ (پشیمونی، سبک شدن یا بدتر شدن…)",
+          },
+          {
+            key: "pause_sentence",
+            label: "اگه می‌خواستی باهاش حرف بزنی موقعی که دیدیش، دوست داشتی بهش چی بگی؟",
+          },
+        ],
+      },
+
+      // 4) breath
+      {
+        type: "breath",
+      },
+
+      // 5) action
+      {
+        type: "action",
+        title: "برای تثبیت حالت، یک اقدام خیلی ساده رو انجام بده",
+      },
+
+      // 6) done
+      {
+        type: "done",
+        title: "بعد از انجام تکنیک‌ها بگو الان حالت چطوره؟",
+      },
+    ] as any;
   },
 };
 

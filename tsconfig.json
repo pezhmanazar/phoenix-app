@@ -10,19 +10,20 @@
     }
   },
   "include": [
-    "app/**/*.ts",
-    "app/**/*.tsx",
-    "components/**/*.ts",
-    "components/**/*.tsx",
-    "hooks/**/*.ts",
-    "hooks/**/*.tsx",
-    "lib/**/*.ts",
-    "lib/**/*.tsx",
-    "constants/**/*.ts",
-    "constants/**/*.tsx",
-    ".expo/types/**/*.ts",
-    "expo-env.d.ts"
-  ],
+  "app/**/*.ts",
+  "app/**/*.tsx",
+  "components/**/*.ts",
+  "components/**/*.tsx",
+  "hooks/**/*.ts",
+  "hooks/**/*.tsx",
+  "lib/**/*.ts",
+  "lib/**/*.tsx",
+  "constants/**/*.ts",
+  "constants/**/*.tsx",
+  ".expo/types/**/*.ts",
+  "expo-env.d.ts",
+  "types/**/*.d.ts"
+],
   "exclude": [
     "node_modules",
     "**/node_modules/*",

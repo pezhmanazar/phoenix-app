@@ -9,7 +9,9 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -292,6 +294,9 @@ export default function Panahgah() {
   const [expiringDaysLeft, setExpiringDaysLeft] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // ✅ Guide modal
+  const [guideOpen, setGuideOpen] = useState(false);
+
   const isProPlan = planView === "pro" || planView === "expiring";
 
   const AUDIO_URL = useMemo(() => mediaUrl(AUDIO_KEYS.panahgahIntro), []);
@@ -387,10 +392,10 @@ export default function Panahgah() {
       style={[styles.card, { borderColor: "rgba(255,255,255,.08)", backgroundColor: "rgba(255,255,255,.04)" }]}
     >
       <View style={styles.row}>
-        <Ionicons name="heart" size={18} color={palette.gold} />
+        <Ionicons name="shield-checkmark" size={18} color={palette.gold} />
         <Text style={[styles.title, { color: palette.text }]}>{item.title}</Text>
         <Ionicons
-          name="chevron-back"
+          name="chevron-forward"
           size={18}
           color="#E5E7EB"
           style={{ transform: [{ scaleX: -1 }], opacity: 0.7 }}
@@ -525,6 +530,51 @@ export default function Panahgah() {
         </View>
       ) : (
         <>
+          {/* ✅ Guide Modal (فقط در حالت پرو نمایش داده میشه چون این صفحه لیست بازه) */}
+          <Modal
+            visible={guideOpen}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setGuideOpen(false)}
+          >
+            <Pressable style={styles.modalBackdrop} onPress={() => setGuideOpen(false)}>
+              <Pressable style={styles.modalCard} onPress={() => {}}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>راهنما</Text>
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => setGuideOpen(false)}
+                    style={styles.modalClose}
+                  >
+                    <Ionicons name="close" size={18} color={palette.text} />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView contentContainerStyle={{ paddingBottom: 6 }}>
+  {/* ✅ جمله اول بولدتر + رنگ طلایی/قرمز + فونت بزرگتر */}
+  <Text style={styles.modalLead}>این تکنیک‌ها یکبار مصرف نیستن.</Text>
+
+  {/* ✅ متن ادامه */}
+  <Text style={styles.modalText}>
+    {"\n"}
+    هر بار که در یک موقعیت مشابه قرار می‌گیری، باید دوباره وارد همون سناریو بشی و تمرین رو تکرار کنی.{"\n\n"}
+    مغز با «تکرار امن» یاد می‌گیره که اون موقعیت دیگه خطرناک نیست و هر بار اجرا کردن، شدت واکنش هیجانی رو کمتر می‌کنه.{"\n\n"}
+    اگر باز هم حالت بد شد، یعنی تمرین اشتباه نبوده بلکه یعنی مغزت هنوز نیاز به تکرار داره.{"\n\n"}
+    پس هر موجی که اومد، برگرد اینجا.
+  </Text>
+</ScrollView>
+
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => setGuideOpen(false)}
+                  style={styles.modalPrimaryBtn}
+                >
+                  <Text style={styles.modalPrimaryBtnText}>فهمیدم</Text>
+                </TouchableOpacity>
+              </Pressable>
+            </Pressable>
+          </Modal>
+
           <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 }}>
             <View style={styles.searchBox}>
               <Ionicons name="search" size={18} color="#E5E7EB" style={{ opacity: 0.6 }} />
@@ -536,6 +586,20 @@ export default function Panahgah() {
                 style={{ flex: 1, textAlign: "right", color: palette.text, fontWeight: "800" }}
               />
             </View>
+
+            {/* ✅ Guide block (مثل بقیه بلاک‌ها) */}
+            <TouchableOpacity activeOpacity={0.9} onPress={() => setGuideOpen(true)} style={styles.guideCard}>
+              <View style={styles.row}>
+                <Ionicons name="information-circle-outline" size={18} color={palette.gold} />
+                <Text style={[styles.title, { color: palette.text }]}>راهنما</Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color="#E5E7EB"
+                  style={{ transform: [{ scaleX: -1 }], opacity: 0.7 }}
+                />
+              </View>
+            </TouchableOpacity>
           </View>
 
           <FlatList
@@ -600,6 +664,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 8,
+    borderColor: "rgba(255,255,255,.08)",
+    backgroundColor: "rgba(255,255,255,.04)",
+  },
+
+  guideCard: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
     borderColor: "rgba(255,255,255,.08)",
     backgroundColor: "rgba(255,255,255,.04)",
   },
@@ -724,4 +797,79 @@ const styles = StyleSheet.create({
     height: "100%",
     borderRadius: 999,
   },
+
+  /* ---------------- Guide Modal styles ---------------- */
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+
+  modalCard: {
+    width: "100%",
+    maxWidth: 520,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.10)",
+    backgroundColor: "rgba(3,7,18,.96)",
+    borderRadius: 18,
+    padding: 14,
+  },
+
+  modalHeader: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+
+  modalTitle: {
+    color: palette.text,
+    fontWeight: "900",
+    fontSize: 15,
+    textAlign: "right",
+  },
+
+  modalClose: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.10)",
+  },
+
+  modalPrimaryBtn: {
+    marginTop: 12,
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: "center",
+    backgroundColor: "rgba(212,175,55,.92)",
+    borderWidth: 1,
+    borderColor: "rgba(212,175,55,.35)",
+  },
+
+  modalPrimaryBtnText: {
+    color: palette.bg,
+    fontWeight: "900",
+    fontSize: 13,
+  },
+  modalLead: {
+  color: palette.gold, 
+  fontSize: 16,      
+  fontWeight: "900",
+  textAlign: "right",
+  lineHeight: 26,
+},
+modalText: {
+  color: "rgba(231,238,247,.82)",
+  fontSize: 13,
+  lineHeight: 22,
+  fontWeight: "700",
+  textAlign: "right",
+},
 });

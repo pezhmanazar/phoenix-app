@@ -27,8 +27,9 @@ type PlanOption = {
   key: PlanKey;
   title: string;
   subtitle: string;
-  price: string;
-  amount?: number;
+  price: string;        // قیمت نهایی
+  oldPrice?: string;    // قیمت قبل (خط‌خورده)
+  amount?: number;      // مبلغ نهایی برای پرداخت
   badge?: string;
   badgeType?: "best" | "value" | "premium";
 };
@@ -47,28 +48,30 @@ const plans: PlanOption[] = [
   {
     key: "p30",
     title: "اشتراک ۳۰ روزه",
-    subtitle: "یک ماه همراهی کامل ققنوس",
-    price: "۱,۰۰۰ تومان (تست)",
-    amount: 1000,
-    badge: "پرفروش‌ترین",
+    subtitle: "برای عبور اولیه از رابطه قبلی",
+    price: "۳۹۹,۰۰۰ تومان",
+    amount: 399000,
+    badge: "پیشنهادی",
     badgeType: "best",
   },
   {
     key: "p90",
     title: "اشتراک ۹۰ روزه",
-    subtitle: "سه ماه مسیر عمیق‌تر درمان",
-    price: "۲,۰۰۰ تومان (تست)",
-    amount: 2000,
-    badge: "به‌صرفه‌ترین",
+    subtitle: "برای عبور عمیق‌تر و تثبیت تغییر رفتاری",
+    oldPrice: "۱,۱۹۷,۰۰۰ تومان",
+    price: "۸۹۹,۰۰۰ تومان",
+    amount: 899000,
+    badge: "پرفروش‌ترین",
     badgeType: "value",
   },
   {
     key: "p180",
     title: "اشتراک ۱۸۰ روزه",
-    subtitle: "شش ماه برنامه‌ی کامل ققنوس",
-    price: "۳,۰۰۰ تومان (تست)",
-    amount: 3000,
-    badge: "کامل‌ترین",
+    subtitle: "برای بازسازی کامل و مسیر بی‌وقفه تا انتها",
+    oldPrice: "۲,۳۹۴,۰۰۰ تومان",
+    price: "۱,۴۹۹,۰۰۰ تومان",
+    amount: 1499000,
+    badge: "بیشترین صرفه اقتصادی",
     badgeType: "premium",
   },
 ];
@@ -121,6 +124,9 @@ export default function SubscriptionScreen() {
   });
   const handledFromPayRef = useRef(false);
   const [waitingForPayRefresh, setWaitingForPayRefresh] = useState(false);
+
+  const [showMoreChanges, setShowMoreChanges] = useState(false);
+  const [showMoreAccess, setShowMoreAccess] = useState(false);
 
   // هر بار ورود به تب → فقط از سرور می‌خوانیم
   useFocusEffect(
@@ -401,32 +407,129 @@ export default function SubscriptionScreen() {
             </View>
           </View>
 
-          {/* باکس ارزش اشتراک */}
-          <View style={[styles.glassCard, { marginTop: 16, borderRadius: 22, padding: 16 }]}>
-            <View style={styles.sectionTitleRow}>
-              <Ionicons name="sparkles" size={16} color="#E98A15" />
-              <Text style={styles.sectionTitle}>با اشتراک ققنوس به چه چیزهایی می‌رسی؟</Text>
-            </View>
+         {/* باکس ارزش اشتراک */}
+<View style={[styles.glassCard, { marginTop: 16, borderRadius: 22, padding: 16 }]}>
 
-            {[
-              "دسترسی کامل به تمام دوره‌ها و تکنیک‌ها",
-              "مدیتیشن‌ها و پاکسازی‌های اختصاصی",
-              "برنامه‌های روزانه و مسیر درمان قدم‌به‌قدم",
-              "تست‌های روانشناسی و تحلیل‌های تخصصی",
-              "امکان ارتباط و پشتیبانی با درمانگر واقعی",
-              "ردیابی پیشرفت و استریک تمرین‌ها",
-            ].map((item) => (
-              <View key={item} style={styles.bulletRow}>
-                <Ionicons
-                  name="checkmark-circle"
-                  size={18}
-                  color="#10B981"
-                  style={{ marginLeft: 6 }}
-                />
-                <Text style={styles.bulletText}>{item}</Text>
-              </View>
-            ))}
+  {/* بخش اول: تغییر واقعی */}
+  <View style={styles.sectionTitleRow}>
+    <Ionicons name="sparkles" size={16} color="#E98A15" />
+    <Text style={styles.sectionTitle}>
+      با اشتراک ققنوس چه تغییری در تو آغاز می‌شه؟
+    </Text>
+  </View>
+
+  {(() => {
+    const items = [
+      "شروع واقعی عبور از وابستگی عاطفی، نه فقط تلاش‌های مقطعی برای فراموش کردن",
+      "شکستن چرخه برگشت‌های مکرر و کاهش وسوسه تماس یا چک کردن",
+      "کاهش نشخوار فکری و آزاد شدن ذهن از درگیری دائمی با گذشته",
+      "بازگشت تدریجی ثبات هیجانی و کنترل تصمیم‌های احساسی",
+      "کاهش آشفتگی ذهنی و بازگشت نظم به خواب، تمرکز و برنامه روزانه",
+      "تقویت حس ارزشمندی و توانایی ساختن آینده بدون وابستگی به رابطه قبلی",
+      "افزایش امید، انگیزه و توان شروع دوباره",
+    ];
+
+    const visible = showMoreChanges ? items : items.slice(0, 2);
+
+    return (
+      <>
+        {visible.map((item) => (
+          <View key={item} style={styles.bulletRow}>
+            <Ionicons
+              name="arrow-up-circle"
+              size={18}
+              color="#D4AF37"
+              style={{ marginLeft: 6 }}
+            />
+            <Text style={styles.bulletText}>{item}</Text>
           </View>
+        ))}
+
+        {items.length > 2 && (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => setShowMoreChanges((v) => !v)}
+            style={styles.moreRow}
+          >
+            <Ionicons
+              name={showMoreChanges ? "remove-circle" : "add-circle"}
+              size={18}
+              color="#E98A15"
+              style={{ marginLeft: 6 }}
+            />
+            <Text style={styles.moreText}>
+              {showMoreChanges ? "بستن موارد بیشتر" : "دیدن موارد بیشتر"}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </>
+    );
+  })()}
+
+  <View style={{ height: 18 }} />
+
+  {/* بخش دوم: ابزار و دسترسی‌ها */}
+  <View style={styles.sectionTitleRow}>
+    {/* ✅ به جای lock-open (ممکنه تو Ionicons تایپی گیر بده) */}
+    <Ionicons name="key" size={16} color="#10B981" />
+    <Text style={styles.sectionTitle}>
+      با اشتراک ققنوس به چه چیزهایی دسترسی داری؟
+    </Text>
+  </View>
+
+  {(() => {
+    const items = [
+      "باز شدن کامل مسیر «پلکان» یعنی مسیر هفت‌مرحله‌ای بازسازی بعد از جدایی با ساختار روزمحور",
+      "تکنیک‌های «پناهگاه» برای مدیریت فوری موج‌های وسوسه، خشم، اضطراب و دلتنگی",
+      "محتوا‌های تخصصی «مشعل» برای بازسازی شناختی و اصلاح الگوهای تکراری رابطه",
+      "امکان پیام مستقیم و نامحدود به درمانگر واقعی برای دریافت راهنمایی شخصی‌سازی‌شده",
+      "سیستم پیشرفت و امتیازدهی برای تثبیت تغییر رفتاری و استمرار تمرین‌ها",
+    ];
+
+    const visible = showMoreAccess ? items : items.slice(0, 2);
+
+    return (
+      <>
+        {visible.map((item) => (
+          <View key={item} style={styles.bulletRow}>
+            <Ionicons
+              name="checkmark-circle"
+              size={18}
+              color="#10B981"
+              style={{ marginLeft: 6 }}
+            />
+            <Text style={styles.bulletText}>{item}</Text>
+          </View>
+        ))}
+
+        {items.length > 2 && (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => setShowMoreAccess((v) => !v)}
+            style={styles.moreRow}
+          >
+            <Ionicons
+              name={showMoreAccess ? "remove-circle" : "add-circle"}
+              size={18}
+              color="#10B981"
+              style={{ marginLeft: 6 }}
+            />
+            <Text style={styles.moreText}>
+              {showMoreAccess ? "بستن موارد بیشتر" : "دیدن موارد بیشتر"}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </>
+    );
+  })()}
+
+  <View style={{ marginTop: 16 }}>
+    <Text style={styles.subscriptionStrong}>
+      ققنوس برای ماندن در گذشته طراحی نشده؛ برای عبور ساختارمند از اون ساخته شده.
+    </Text>
+  </View>
+
+</View>
 
           {/* پلن‌ها */}
           <View style={{ marginTop: 18 }}>
@@ -463,7 +566,7 @@ export default function SubscriptionScreen() {
               let ctaLabel = "شروع اشتراک";
               if (p.amount) {
                 if (planView === "pro" || planView === "expiring") {
-                  ctaLabel = "تغییر / تمدید اشتراک";
+                  ctaLabel = "تغییر  یا  تمدید اشتراک";
                 } else if (planView === "expired") {
                   ctaLabel = "تمدید اشتراک";
                 } else {
@@ -472,6 +575,8 @@ export default function SubscriptionScreen() {
               } else {
                 ctaLabel = "به‌زودی";
               }
+
+              const showOld = !!p.oldPrice && p.oldPrice !== p.price;
 
               return (
                 <View
@@ -553,16 +658,23 @@ export default function SubscriptionScreen() {
                       justifyContent: "space-between",
                     }}
                   >
-                    <Text
-                      style={{
-                        color: p.amount ? "#FBBF24" : "#9CA3AF",
-                        fontSize: 14,
-                        fontWeight: "900",
-                        textAlign: "right",
-                      }}
-                    >
-                      {p.price}
-                    </Text>
+                    {/* ✅ قیمت: قدیمی خط‌خورده + جدید */}
+                    <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
+                      {showOld && (
+                        <Text style={styles.oldPriceText}>
+                          {p.oldPrice}
+                        </Text>
+                      )}
+
+                      <Text
+                        style={[
+                          styles.priceText,
+                          { color: p.amount ? "#FBBF24" : "#9CA3AF" },
+                        ]}
+                      >
+                        {p.price}
+                      </Text>
+                    </View>
 
                     <TouchableOpacity
                       activeOpacity={0.85}
@@ -825,4 +937,45 @@ const styles = StyleSheet.create({
     textAlign: "right",
     flex: 1,
   },
+
+  // ✅ قیمت خط‌خورده / قیمت نهایی
+  oldPriceText: {
+    color: "#9CA3AF",
+    fontSize: 12,
+    textDecorationLine: "line-through",
+  },
+  priceText: {
+    fontSize: 14,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+
+  subscriptionNote: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 20,
+    color: "#9CA3AF",
+    textAlign: "right",
+  },
+
+  subscriptionStrong: {
+    marginTop: 4,
+    fontSize: 14,
+    lineHeight: 22,
+    color: "#E98A15",
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  moreRow: {
+  marginTop: 6,
+  flexDirection: "row-reverse",
+  alignItems: "center",
+},
+
+moreText: {
+  color: "#9CA3AF",
+  fontSize: 12,
+  fontWeight: "800",
+  textAlign: "right",
+},
 });

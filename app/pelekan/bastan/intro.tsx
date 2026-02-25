@@ -35,8 +35,8 @@ export default function BastanIntroScreen() {
   const apiBase = "https://api.qoqnoos.app";
 
   const AUDIO_URL = useMemo(() => {
-  return mediaUrl(AUDIO_KEYS.introOverall);
-}, []);
+    return mediaUrl(AUDIO_KEYS.introOverall);
+  }, []);
 
   const STORAGE_POS_KEY = useMemo(() => `bastan_intro_pos_ms:${phone || "no_phone"}`, [phone]);
 
@@ -45,6 +45,10 @@ export default function BastanIntroScreen() {
 
   const [introDone, setIntroDone] = useState(false);
   const [paywallAfterIntro, setPaywallAfterIntro] = useState(false);
+
+  // ✅ NEW (حداقلی و لازم): وضعیت پلن برای تصمیم‌گیری paywall در همان کلیک اول
+  const [planStatus, setPlanStatus] = useState<"free" | "pro" | "expiring" | "expired">("free");
+  const isPro = planStatus === "pro" || planStatus === "expiring";
 
   // Player state
   const soundRef = useRef<Audio.Sound | null>(null);
@@ -66,7 +70,8 @@ export default function BastanIntroScreen() {
   // ✅ NEW: prevent double complete
   const completingRef = useRef(false);
 
-  const canContinue = introDone;
+  // ✅ تغییر اصلی: دکمه همیشه فعال
+  const canContinue = true;
 
   const fetchIntroState = useCallback(async () => {
     if (!phone) {
@@ -94,6 +99,9 @@ export default function BastanIntroScreen() {
         return;
       }
 
+      // ✅ NEW: plan status را ذخیره کن تا paywall همان بار اول درست تصمیم‌گیری شود
+      setPlanStatus(json.data.user?.planStatus ?? "free");
+
       const completedAt = json.data.start?.completedAt ?? json.data.intro?.completedAt ?? null;
 
       const paywall =
@@ -104,7 +112,14 @@ export default function BastanIntroScreen() {
       setIntroDone(!!completedAt);
       setPaywallAfterIntro(!!paywall);
 
-      console.log("[bastan-intro] completedAt=", completedAt, "paywallAfterIntro=", !!paywall);
+      console.log(
+        "[bastan-intro] planStatus=",
+        json.data.user?.planStatus,
+        "completedAt=",
+        completedAt,
+        "paywallAfterIntro=",
+        !!paywall
+      );
     } catch (e: any) {
       setErr(String(e?.message || e));
     } finally {
@@ -229,10 +244,8 @@ export default function BastanIntroScreen() {
 
         // ✅ ذخیره‌ی پوزیشن (هر چند ثانیه، سبک)
         if (!introDone && duration > 0) {
-          // فقط وقتی واقعاً حرکت کرده و در حال پخش/یا seek شده
           if (position > 0) {
             try {
-              // ذخیره‌ی سبک: هر ~3 ثانیه یکبار
               if (position % 3000 < 250) {
                 await AsyncStorage.setItem(STORAGE_POS_KEY, String(position));
               }
@@ -257,11 +270,9 @@ export default function BastanIntroScreen() {
   }, [AUDIO_URL, introDone, phone, STORAGE_POS_KEY, markIntroComplete]);
 
   const togglePlay = useCallback(async () => {
-    // ✅ اگر در حال بافرینگ هستیم، UX: دوباره کلیک نکن
     if (isBuffering) return;
 
     try {
-      // ✅ اگر هنوز لود نشده، بافرینگ را روشن کن تا آیکن تغییر کند
       if (!soundRef.current) setIsBuffering(true);
 
       await loadIfNeeded();
@@ -277,7 +288,6 @@ export default function BastanIntroScreen() {
         return;
       }
 
-      // ✅ وقتی به اینجا رسیدیم یعنی آماده‌ایم
       setIsBuffering(false);
 
       if (st.isPlaying) {
@@ -291,7 +301,6 @@ export default function BastanIntroScreen() {
     }
   }, [loadIfNeeded, isBuffering]);
 
-  // ✅ NEW: tap-to-seek on progress bar
   const seekTo = useCallback(
     async (ms: number) => {
       try {
@@ -306,7 +315,6 @@ export default function BastanIntroScreen() {
         const clamped = Math.max(0, Math.min(ms, Math.max(1, d)));
         await s.setPositionAsync(clamped);
 
-        // ✅ اگر کاربر خودش برد نزدیک پایان، همونجا کامل حساب کنیم
         if (!introDone && d > 0 && d - clamped <= 800) {
           try {
             await markIntroComplete();
@@ -343,7 +351,6 @@ export default function BastanIntroScreen() {
 
   return (
     <SafeAreaView style={[styles.root, { paddingTop: insets.top }]} edges={["top", "left", "right"]}>
-      {/* Glow ها */}
       <View pointerEvents="none" style={styles.glowTop} />
       <View pointerEvents="none" style={styles.glowBottom} />
 
@@ -357,7 +364,6 @@ export default function BastanIntroScreen() {
       ) : null}
 
       <View style={styles.content}>
-        {/* ✅ پلی بزرگ */}
         <TouchableOpacity activeOpacity={0.9} onPress={togglePlay} style={styles.bigPlayWrap}>
           {isBuffering ? (
             <ActivityIndicator color="#0b0f14" />
@@ -372,11 +378,14 @@ export default function BastanIntroScreen() {
         </TouchableOpacity>
 
         <Text style={styles.title}>شروع درمان</Text>
+
+        {/* ✅ تغییر اصلی متن: دیگر نگوییم دکمه قفل می‌شود */}
         <Text style={styles.desc}>
-          {introDone ? "این ویس کامل شده. هر وقت خواستی دوباره گوش کن." : "ویس رو کامل گوش کن تا دکمه «ادامه» فعال بشه."}
+          {introDone
+            ? "این ویس ثبت شده. هر وقت خواستی دوباره بهش گوش کن."
+            : " پیشنهاد میشه این بخش رو برای شناخت مسیر، کامل گوش کنی."}
         </Text>
 
-        {/* ✅ Progress (Tap-to-seek) */}
         <View style={styles.progressTrack} onLayout={(e) => setTrackW(e?.nativeEvent?.layout?.width ?? 0)}>
           <TouchableOpacity
             activeOpacity={0.9}
@@ -396,30 +405,37 @@ export default function BastanIntroScreen() {
           {fmt(posMs)} / {fmt(durMs)}
         </Text>
 
-        {/* ✅ ادامه */}
+        {/* ✅ ادامه (همیشه فعال) */}
         <TouchableOpacity
           activeOpacity={0.9}
           disabled={!canContinue}
           style={[styles.continueBtn, !canContinue && styles.continueBtnDisabled]}
-          onPress={() => {
-            if (!introDone) return;
+          onPress={async () => {
+            // ✅ با هر بار زدن ادامه، intro را complete کن (ولی مانع UX نشو)
+            try {
+              if (!introDone) {
+                await markIntroComplete();
+              }
+            } catch (e: any) {
+              setErr(String(e?.message || e));
+              return;
+            }
 
-            if (paywallAfterIntro) {
+            // ✅ شرط ساده و دقیق: اگر پرو نیست → paywall ؛ اگر پرو هست → ادامه پلکان
+            if (!isPro) {
               router.push("/(tabs)/Subscription" as any);
               return;
             }
 
-            // هر صفحه‌ای که بعد از intro می‌خوای
             router.replace("/(tabs)/Pelekan" as any);
           }}
         >
           <Text style={[styles.continueText, !canContinue && styles.continueTextDisabled]}>ادامه</Text>
         </TouchableOpacity>
 
-        {!canContinue ? (
-          <Text style={styles.warningText}>تا ویس رو کامل گوش نکردی، دکمه ادامه فعال نمی‌شه.</Text>
-        ) : paywallAfterIntro ? (
-          <Text style={styles.warningText}>برای ادامه‌ی مسیر، باید پرو داشته باشی.</Text>
+        {/* ✅ پیام فقط وقتی پرو نیست */}
+        {!isPro ? (
+          <Text style={styles.warningText}>برای ادامه‌ی مسیر، باید اشتراک پرو داشته باشی.</Text>
         ) : null}
       </View>
     </SafeAreaView>
