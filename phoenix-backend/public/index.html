@@ -2,244 +2,536 @@
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <title>اپلیکیشن ققنوس | درمان شکست عشقی و بازسازی خود</title>
+  <title>اپلیکیشن ققنوس | بازسازی بعد از شکست عشقی</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="/static/img/favicon.png" />
 
+  <!-- Font -->
+  <link href="https://cdn.jsdelivr.net/npm/vazirmatn@33.003/Vazirmatn-font-face.css" rel="stylesheet">
+
   <style>
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #050816;
-      color: #e5e7eb;
+    :root{
+      --bg:#0b0f14;
+      --text:#e8ecf1;
+      --muted:#9aa4b2;
+      --gold:#D4AF37;
+      --orange:#E98A15;
+
+      --glass: rgba(255,255,255,0.05);
+      --glass2: rgba(255,255,255,0.03);
+      --border: rgba(255,255,255,0.10);
+      --border2: rgba(255,255,255,0.06);
+      --shadow: 0 20px 60px rgba(0,0,0,0.35);
     }
 
-    header {
-      padding: 16px 24px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid #1f2937;
-      background: #020617;
+    *{box-sizing:border-box}
+    html,body{height:100%}
+
+    body{
+      margin:0;
+      font-family: Vazirmatn, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow-x:hidden;
     }
 
-    .logo {
+    /* Background glows */
+    .bg{
+      position: fixed;
+      inset: 0;
+      pointer-events:none;
+      z-index:-1;
+    }
+    .glow{
+      position:absolute;
+      width: 520px;
+      height: 520px;
+      border-radius: 999px;
+      filter: blur(70px);
+      opacity: .22;
+      transform: translateZ(0);
+    }
+    .glow.gold{
+      background: radial-gradient(circle, var(--gold), transparent 60%);
+      right:-160px;
+      top:-120px;
+    }
+    .glow.orange{
+      background: radial-gradient(circle, var(--orange), transparent 60%);
+      left:-180px;
+      bottom:-160px;
+      opacity:.18;
+    }
+
+    .container{
+      width: min(1100px, 92%);
+      margin: 0 auto;
+    }
+
+    /* Utilities */
+    .mt-14{ margin-top:14px; }
+    .w-100{ width:100%; }
+
+    /* Header */
+     header{
+       position: sticky;
+       top:0;
+       z-index:50;
+       background: rgba(11,15,20,0.78);
+       -webkit-backdrop-filter: blur(14px);
+       backdrop-filter: blur(14px);
+       border-bottom: 1px solid var(--border2);
+     }
+    .nav{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding: 14px 0;
+      gap: 14px;
+    }
+    .brand{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      min-width: 180px;
+    }
+    .brand img{
+      height: 40px;
+      display:block;
+    }
+    .brand-title{
       font-weight: 900;
-      font-size: 18px;
-      color: #fbbf24;
-      display: flex;
-      align-items: center;
-    }
-
-    .logo-img {
-      height: 42px;
-      display: block;
-    }
-
-    nav a {
-      margin-left: 16px;
-      color: #9ca3af;
-      text-decoration: none;
+      letter-spacing: -0.2px;
+      color: var(--text);
       font-size: 14px;
+      line-height: 1.2;
+    }
+    .brand-title span{
+      display:block;
+      color: rgba(212,175,55,0.92);
+      font-size: 12px;
+      font-weight: 700;
+      margin-top: 2px;
     }
 
-    nav a:hover {
-      color: #f9fafb;
-    }
-
-    .hero {
-      max-width: 960px;
-      margin: 40px auto;
-      padding: 0 16px;
-      text-align: center;
-    }
-
-    .hero h1 {
-      font-size: 28px;
-      margin-bottom: 12px;
-      color: #f9fafb;
-    }
-
-    .hero p {
-      font-size: 14px;
-      line-height: 2;
-      color: #9ca3af;
-    }
-
-    .cta-group {
-      margin-top: 24px;
-      display: flex;
+    .nav-links{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      flex-wrap: wrap;
       justify-content: center;
-      gap: 12px;
+    }
+    .nav-links a{
+      text-decoration:none;
+      color: var(--muted);
+      font-size: 13px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      transition: .2s ease;
+      white-space: nowrap;
+    }
+    .nav-links a:hover{
+      color: var(--text);
+      border-color: rgba(212,175,55,0.28);
+      background: rgba(212,175,55,0.06);
+    }
+
+    .nav-cta{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      min-width: 180px;
+      justify-content: flex-end;
+    }
+
+    /* Buttons */
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      cursor:pointer;
+      font-size: 13px;
+      text-decoration:none;
+      transition: .2s ease;
+      white-space: nowrap;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .btn-primary{
+      background: linear-gradient(135deg, rgba(212,175,55,0.95), rgba(233,138,21,0.95));
+      color: #101419;
+      border-color: rgba(255,255,255,0.08);
+      box-shadow: 0 14px 35px rgba(212,175,55,0.14);
+      font-weight: 900;
+    }
+    .btn-primary:hover{ transform: translateY(-1px); }
+
+    .btn-ghost{
+      background: rgba(255,255,255,0.04);
+      border-color: var(--border2);
+      color: var(--text);
+    }
+    .btn-ghost:hover{
+      border-color: rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+    }
+
+    /* Hero */
+    .hero{
+      padding: 56px 0 28px;
+    }
+    .hero-grid{
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 18px;
+      align-items: stretch;
+    }
+    .hero-card{
+      background: linear-gradient(180deg, var(--glass), var(--glass2));
+      border: 1px solid var(--border2);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      padding: 26px 22px;
+      position: relative;
+      overflow:hidden;
+    }
+    .hero-card::before{
+      content:"";
+      position:absolute;
+      inset:-60px -80px auto auto;
+      width: 260px;
+      height: 260px;
+      background: radial-gradient(circle, rgba(212,175,55,0.22), transparent 60%);
+      filter: blur(20px);
+      opacity: .9;
+    }
+    .kicker{
+      color: rgba(212,175,55,0.95);
+      font-weight: 800;
+      font-size: 13px;
+      letter-spacing: .2px;
+    }
+    .hero h1{
+      margin: 10px 0 12px;
+      font-size: 34px;
+      line-height: 1.35;
+      letter-spacing: -0.3px;
+    }
+    .hero p{
+      margin: 0;
+      color: var(--muted);
+      line-height: 2;
+      font-size: 14px;
+      max-width: 56ch;
+    }
+    .hero-actions{
+      margin-top: 18px;
+      display:flex;
+      gap: 10px;
       flex-wrap: wrap;
     }
+    .hero-actions-tight{ margin: 14px 0 0; }
 
-    .btn {
-      padding: 10px 18px;
-      border-radius: 999px;
-      border: none;
-      cursor: pointer;
+    .side-card{
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      border: 1px solid var(--border2);
+      border-radius: 24px;
+      padding: 22px;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.32);
+      display:flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .metric{
+      display:flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .metric .title{
+      font-weight: 900;
       font-size: 14px;
-      text-decoration: none;
-      display: inline-block;
+      color: var(--text);
     }
-
-    .btn-primary {
-      background: #2563eb;
-      color: #f9fafb;
-    }
-
-    .btn-outline {
-      background: transparent;
-      color: #e5e7eb;
-      border: 1px solid #4b5563;
-    }
-
-    .section {
-      max-width: 960px;
-      margin: 40px auto;
-      padding: 0 16px 24px;
-      border-top: 1px solid #111827;
-    }
-
-    .section h2 {
-      font-size: 20px;
-      margin-bottom: 12px;
-      color: #f9fafb;
-    }
-
-    .section ul {
-      text-align: right;
-      padding-right: 20px;
+    .metric .desc{
+      color: var(--muted);
+      font-size: 13px;
       line-height: 2;
-      font-size: 14px;
-      color: #d1d5db;
     }
-
-    .download-note {
-      font-size: 14px;
-      line-height: 2;
-      color: #9ca3af;
-      margin: 0;
+    .pill-row{
+      margin-top: 12px;
+      display:flex;
+      gap: 8px;
+      flex-wrap: wrap;
     }
-
-    footer {
-      border-top: 1px solid #111827;
-      padding: 24px 16px 40px;
-      text-align: center;
+    .pill{
       font-size: 12px;
-      color: #6b7280;
-      background: #020617;
-      margin-top: 40px;
+      color: rgba(232,236,241,0.9);
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.03);
+      padding: 6px 10px;
+      border-radius: 999px;
     }
 
-    .enamad-wrapper {
-      margin-top: 20px;
-      display: flex;
-      justify-content: center;
+    /* Sections */
+    .section{
+      padding: 18px 0 6px;
+    }
+    .section-title{
+      display:flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 18px 0 12px;
+      flex-wrap: wrap;
+    }
+    .section-title h2{
+      margin: 0;
+      font-size: 18px;
+      font-weight: 900;
+      letter-spacing: -0.2px;
+    }
+    .section-title p{
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
     }
 
-    .enamad-img {
-      cursor: pointer;
-      display: block;
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
     }
-    .trust-row {
-  margin-top: 20px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 24px;
-  flex-wrap: wrap;
-}
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02));
+      border: 1px solid var(--border2);
+      border-radius: 20px;
+      padding: 16px 16px;
+    }
+    .item{
+      display:flex;
+      gap: 10px;
+      align-items:flex-start;
+      color: rgba(232,236,241,0.92);
+      font-size: 13px;
+      line-height: 1.95;
+      margin: 10px 0;
+    }
+    .dot{
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      margin-top: 8px;
+      background: linear-gradient(135deg, rgba(212,175,55,0.95), rgba(233,138,21,0.95));
+      flex: 0 0 10px;
+      box-shadow: 0 10px 24px rgba(212,175,55,0.18);
+    }
 
-#zarinpal img {
-  width: 90px;
-}
+    /* Footer + Trust */
+    footer{
+      margin-top: 26px;
+      padding: 22px 0 38px;
+      border-top: 1px solid var(--border2);
+      background: rgba(255,255,255,0.02);
+    }
+    .footer-top{
+      display:flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.8;
+      padding-bottom: 12px;
+    }
+    .trust-row{
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      gap: 18px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    #zarinpal img{ width: 92px; }
+    .enamad-img{ width: 92px; display:block; }
 
-.enamad-img {
-  width: 90px;
-}
+    /* Responsive */
+    @media (max-width: 900px){
+      .hero-grid{ grid-template-columns: 1fr; }
+      .brand{ min-width: auto; }
+      .nav-cta{ min-width: auto; }
+      .grid{ grid-template-columns: 1fr; }
+      .hero h1{ font-size: 28px; }
+    }
   </style>
 </head>
 
 <body>
-  <header>
-    <div class="logo">
-      <img class="logo-img" src="/static/img/logo.png" alt="لوگوی ققنوس" />
-    </div>
+  <div class="bg">
+    <div class="glow gold"></div>
+    <div class="glow orange"></div>
+  </div>
 
-    <nav>
-      <a href="/store.html">فروشگاه / اشتراک‌ها</a>
-      <a href="/contact.html">تماس با ما</a>
-      <a href="/terms.html">قوانین و حریم خصوصی</a>
-    </nav>
+  <header>
+    <div class="container">
+      <div class="nav">
+        <div class="brand">
+          <img src="/static/img/logo.png" alt="لوگوی ققنوس">
+          <div class="brand-title">
+            ققنوس
+            <span>بازسازی بعد از شکست عشقی</span>
+          </div>
+        </div>
+
+        <nav class="nav-links">
+          <a href="/">خانه</a>
+          <a href="#changes">تغییرات</a>
+          <a href="#inside">داخل اشتراک</a>
+          <a href="/download.html">دانلود</a>
+          <a href="/contact.html">تماس</a>
+        </nav>
+
+        <div class="nav-cta">
+          <a class="btn btn-ghost" href="#inside">ببین داخلش چیه</a>
+          <a class="btn btn-primary" href="/download.html">دانلود اپ</a>
+        </div>
+      </div>
+    </div>
   </header>
 
-  <main>
+  <main class="container">
+    <!-- HERO -->
     <section class="hero">
-      <h1>اپلیکیشن ققنوس؛ همراه تخصصی برای درمان شکست عشقی</h1>
-      <p>
-        ققنوس یک اپلیکیشن کمک‌درمانی است که بر پایه روان‌شناسی علمی،
-        نوروساینس و تجربه‌ی درمانگر واقعی طراحی شده تا به شما کمک کند
-        از زخم جدایی، خیانت و طلاق عبور کنید و خودتان را دوباره بسازید.
-      </p>
+      <div class="hero-grid">
+        <div class="hero-card">
+          <div class="kicker">مسیر علمی، ساختارمند، روزمحور</div>
+          <h1>بازسازی بعد از شکست عشقی، نه فقط فراموش کردن</h1>
+          <p>
+            ققنوس یک اپلیکیشن کمک‌درمانی است که بر پایه روان‌شناسی علمی و نوروساینس طراحی شده
+            تا به شما کمک کند از وابستگی، نشخوار فکری و وسوسه‌ی برگشت عبور کنید و دوباره خودتان را بسازید.
+          </p>
 
-      <div class="cta-group">
-        <a class="btn btn-primary" href="#download">دانلود و شروع استفاده</a>
-        <a class="btn btn-outline" href="/store.html">مشاهده اشتراک‌ها</a>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="/download.html">شروع بازسازی و دانلود</a>
+            <a class="btn btn-ghost" href="#changes">چه تغییری ایجاد می‌کند؟</a>
+          </div>
+        </div>
+
+        <div class="side-card">
+          <div class="metric">
+            <div class="title">سه ستون اصلی ققنوس</div>
+            <div class="desc">
+              پلکان (مسیر ۷ مرحله‌ای) + پناهگاه (تکنیک‌های فوری) + مشعل (بازسازی شناختی)
+            </div>
+            <div class="pill-row">
+              <div class="pill">روزانه و قدم‌به‌قدم</div>
+              <div class="pill">تمرین‌های عملی</div>
+              <div class="pill">همراه درمانگر</div>
+            </div>
+          </div>
+
+          <div class="mt-14">
+            <a class="btn btn-ghost w-100" href="/download.html">رفتن به صفحه دانلود</a>
+          </div>
+        </div>
       </div>
     </section>
 
-    <section class="section">
-      <h2>ققنوس چه کمکی می‌کند؟</h2>
-      <ul>
-        <li>برنامه‌ی روزانه‌ی قدم‌به‌قدم برای عبور از شکست عشقی</li>
-        <li>درس‌ها و تمرین‌ها بر اساس CBT، طرحواره‌درمانی و نوروساینس</li>
-        <li>پاکسازی‌های صوتی، مدیتیشن‌ها و تمرین‌های نوشتاری راهنما</li>
-        <li>ردیابی پیشرفت و استریک تمرین‌ها</li>
-        <li>امکان گفتگو با درمانگر واقعی (در پلن‌های ویژه)</li>
-      </ul>
+    <!-- CHANGES -->
+    <section class="section" id="changes">
+      <div class="section-title">
+        <h2>با ققنوس چه تغییری در تو آغاز می‌شود؟</h2>
+        <p>خلاصه‌ی آن چیزی که باید “واقعاً” اتفاق بیفتد</p>
+      </div>
+
+      <div class="card">
+        <div class="item"><span class="dot"></span>شروع واقعی عبور از وابستگی عاطفی، نه فقط تلاش‌های مقطعی برای فراموش کردن</div>
+        <div class="item"><span class="dot"></span>شکستن چرخه برگشت‌های مکرر و کاهش وسوسه تماس یا چک کردن</div>
+        <div class="item"><span class="dot"></span>کاهش نشخوار فکری و آزاد شدن ذهن از درگیری دائمی با گذشته</div>
+        <div class="item"><span class="dot"></span>بازگشت تدریجی ثبات هیجانی و کنترل تصمیم‌های احساسی</div>
+        <div class="item"><span class="dot"></span>کاهش آشفتگی ذهنی و بازگشت نظم به خواب، تمرکز و برنامه روزانه</div>
+        <div class="item"><span class="dot"></span>تقویت حس ارزشمندی و توانایی ساختن آینده بدون وابستگی به رابطه قبلی</div>
+        <div class="item"><span class="dot"></span>افزایش امید، انگیزه و توان شروع دوباره</div>
+      </div>
     </section>
 
-    <section class="section" id="download">
-      <h2>دانلود اپلیکیشن ققنوس</h2>
-      <p class="download-note">
-        به‌زودی لینک دانلود از مارکت‌های رسمی (Google Play / کافه‌بازار) در این قسمت قرار می‌گیرد.
-        فعلاً می‌توانید نسخه‌ی آزمایشی را از طریق لینک ارسال‌شده توسط تیم ققنوس دریافت کنید.
-      </p>
+    <!-- INSIDE -->
+    <section class="section" id="inside">
+      <div class="section-title">
+        <h2>داخل اشتراک ققنوس چه چیزی در اختیار توست؟</h2>
+        <p>به‌جای حرف‌های قشنگ، ابزار و مسیر</p>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <div class="item"><span class="dot"></span>باز شدن کامل مسیر «پلکان»؛ مسیر هفت‌مرحله‌ای بازسازی بعد از جدایی با ساختار روزمحور</div>
+          <div class="item"><span class="dot"></span>سیستم پیشرفت و امتیازدهی برای تثبیت تغییر رفتاری و استمرار تمرین‌ها</div>
+        </div>
+
+        <div class="card">
+          <div class="item"><span class="dot"></span>تکنیک‌های «پناهگاه» برای مدیریت فوری موج‌های وسوسه، خشم، اضطراب و دلتنگی</div>
+          <div class="item"><span class="dot"></span>محتواهای تخصصی «مشعل» برای بازسازی شناختی و اصلاح الگوهای تکراری رابطه</div>
+        </div>
+
+        <div class="card">
+          <div class="item"><span class="dot"></span>امکان پیام مستقیم و نامحدود به درمانگر واقعی برای دریافت راهنمایی شخصی‌سازی‌شده</div>
+          <div class="item"><span class="dot"></span>تمرین‌های نوشتاری و صوتی برای قطع وابستگی و بازسازی هیجانی</div>
+        </div>
+
+        <div class="card">
+          <div class="item"><span class="dot"></span>یک مسیر واضح: امروز دقیقاً چه کار کنم؟ فردا چه می‌شود؟</div>
+          <div class="item"><span class="dot"></span>کمک به عبور از جدایی، خیانت و طلاق با رویکرد علمی و کاربردی</div>
+        </div>
+      </div>
+
+      <div class="hero-actions hero-actions-tight">
+        <a class="btn btn-primary" href="/download.html">دانلود اپلیکیشن</a>
+        <a class="btn btn-ghost" href="/terms.html">قوانین استفاده</a>
+      </div>
     </section>
+
   </main>
 
   <footer>
-    © تمامی حقوق برای ققنوس محفوظ است.
+    <div class="container">
+      <div class="footer-top">
+        <div>© تمامی حقوق برای ققنوس محفوظ است.</div>
+        <div>پرداخت امن از طریق زرین‌پال • دارای نماد اعتماد الکترونیکی</div>
+      </div>
 
-    <div class="trust-row">
+      <div class="trust-row">
 
-  <!-- Zarinpal -->
-  <div id="zarinpal">
-    <script src="https://www.zarinpal.com/webservice/TrustCode" type="text/javascript"></script>
-  </div>
+        <!-- Zarinpal -->
+        <div id="zarinpal">
+          <script src="https://www.zarinpal.com/webservice/TrustCode" type="text/javascript"></script>
+        </div>
 
-  <!-- Enamad -->
-  <a
-    referrerpolicy="origin"
-    target="_blank"
-    rel="noopener"
-    aria-label="مشاهده نشان اعتماد اینماد ققنوس"
-    href="https://trustseal.enamad.ir/?id=683249&Code=kNJsbo2Cym96iOqBtjSeWJjYDW3nFd98"
-  >
-    <img
-      class="enamad-img"
-      referrerpolicy="origin"
-      src="https://trustseal.enamad.ir/logo.aspx?id=683249&Code=kNJsbo2Cym96iOqBtjSeWJjYDW3nFd98"
-      alt="نشان اعتماد اینماد"
-      code="kNJsbo2Cym96iOqBtjSeWJjYDW3nFd98"
-    />
-  </a>
+        <!-- Enamad -->
+        <a
+          referrerpolicy="origin"
+          target="_blank"
+          rel="noopener"
+          aria-label="مشاهده نشان اعتماد اینماد ققنوس"
+          href="https://trustseal.enamad.ir/?id=683249&Code=kNJsbo2Cym96iOqBtjSeWJjYDW3nFd98"
+        >
+          <img
+            class="enamad-img"
+            referrerpolicy="origin"
+            src="https://trustseal.enamad.ir/logo.aspx?id=683249&Code=kNJsbo2Cym96iOqBtjSeWJjYDW3nFd98"
+            alt="نشان اعتماد اینماد"
+            code="kNJsbo2Cym96iOqBtjSeWJjYDW3nFd98"
+          />
+        </a>
 
-</div>
+      </div>
+    </div>
   </footer>
 </body>
 </html>
