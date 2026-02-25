@@ -382,21 +382,22 @@
 
       .nav{
         display:grid;
-        grid-template-columns: 44px 1fr auto;
+        grid-template-columns: 44px 1fr 44px;
         align-items:center;
         gap: 10px;
       }
 
-      /* hamburger: right */
-      .hamburger{ display:flex; justify-self: start; }
+      .hamburger{
+      justify-self: start;   /* در RTL یعنی سمت راست */
+      }
 
-      /* logo: center */
-      .brand{ min-width:auto; justify-self:center; }
-      .brand-title{ display:none; }
-      .brand img{ height: 38px; }
+.brand{
+  justify-self: center;  /* دقیقاً وسط */
+}
 
-      /* download: left */
-      .mobile-cta{ display:inline-flex; justify-self:end; }
+.mobile-cta{
+  justify-self: end;     /* در RTL یعنی سمت چپ */
+}
 
       /* Dropdown */
       .mobile-menu{
