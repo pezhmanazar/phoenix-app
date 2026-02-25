@@ -406,9 +406,7 @@
 
   /* download: left (RTL) - make it 44x44 so it doesn't break centering */
 .mobile-cta{
-  display:flex;              /* تغییر مهم */
-  align-items:center;        /* وسط عمودی */
-  justify-content:center;    /* وسط افقی */
+  position: relative;       /* مهم */
   justify-self:end;
 
   width:44px;
@@ -416,14 +414,18 @@
   padding:0;
   border-radius:14px;
 
-  font-size:0; /* متن مخفی */
+  display:block;            /* مهم: ساده و قابل کنترل */
+  font-size:0;              /* متن مخفی */
 }
 
 .mobile-cta::before{
   content:"⬇";
+  position:absolute;        /* مهم */
+  left:50%;
+  top:50%;
+  transform: translate(-50%, -50%);  /* دقیقاً وسط */
   font-size:16px;
   line-height:1;
-  display:block;
 }
 
   /* Dropdown */
