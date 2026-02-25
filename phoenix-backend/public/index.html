@@ -279,6 +279,86 @@
       border-radius: 999px;
     }
 
+    /* --- Mobile Header Fix (hamburger) --- */
+.menu-toggle { display: none; }
+
+.hamburger{
+  display:none;
+  width:44px;
+  height:44px;
+  border-radius: 12px;
+  border: 1px solid var(--border2);
+  background: rgba(255,255,255,0.04);
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+}
+
+.hamburger span{
+  display:block;
+  width:18px;
+  height:2px;
+  background: rgba(232,236,241,0.9);
+  border-radius: 999px;
+  position: relative;
+}
+.hamburger span::before,
+.hamburger span::after{
+  content:"";
+  position:absolute;
+  left:0;
+  width:18px;
+  height:2px;
+  background: rgba(232,236,241,0.9);
+  border-radius: 999px;
+}
+.hamburger span::before{ top:-6px; }
+.hamburger span::after{ top:6px; }
+
+.mobile-cta{ display:none; }
+
+@media (max-width: 900px){
+  .nav{ gap: 10px; }
+
+  .nav-links,
+  .nav-cta{ display:none; }
+
+  .brand{ min-width: auto; }
+  .brand-title{ display:none; } /* موبایل فقط لوگو */
+  .brand img{ height: 38px; }
+
+  .hamburger{ display:flex; }
+  .mobile-cta{ display:inline-flex; }
+
+  /* Dropdown */
+  .mobile-menu{
+    display:none;
+    padding: 10px 0 14px;
+    border-top: 1px solid var(--border2);
+  }
+
+  .mobile-menu a{
+    display:block;
+    padding: 12px 12px;
+    margin: 6px 0;
+    border-radius: 14px;
+    color: var(--text);
+    text-decoration:none;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.03);
+    font-size: 14px;
+  }
+  .mobile-menu a:active{
+    background: rgba(212,175,55,0.08);
+    border-color: rgba(212,175,55,0.22);
+  }
+
+  /* Toggle open */
+  .menu-toggle:checked ~ .mobile-menu{
+    display:block;
+  }
+}
+
     /* Sections */
     .section{
       padding: 18px 0 6px;
@@ -380,31 +460,33 @@
   </div>
 
   <header>
-    <div class="container">
-      <div class="nav">
-        <div class="brand">
-          <img src="/static/img/logo.png" alt="لوگوی ققنوس">
-          <div class="brand-title">
-            ققنوس
-            <span>بازسازی بعد از شکست عشقی</span>
-          </div>
-        </div>
-
-        <nav class="nav-links">
-          <a href="/">خانه</a>
-          <a href="#changes">تغییرات</a>
-          <a href="#inside">داخل اشتراک</a>
-          <a href="/download.html">دانلود</a>
-          <a href="/contact.html">تماس</a>
-        </nav>
-
-        <div class="nav-cta">
-          <a class="btn btn-ghost" href="#inside">ببین داخلش چیه</a>
-          <a class="btn btn-primary" href="/download.html">دانلود اپ</a>
-        </div>
+  <div class="container">
+    <div class="nav">
+      <div class="brand">
+        <img src="/static/img/logo.png" alt="لوگوی ققنوس">
       </div>
+
+      <!-- Mobile CTA -->
+      <a class="btn btn-primary mobile-cta" href="/download.html">دانلود اپ</a>
+
+      <!-- Hamburger toggle -->
+      <label class="hamburger" for="menuToggle" aria-label="باز کردن منو">
+        <span></span>
+      </label>
     </div>
-  </header>
+
+    <input class="menu-toggle" type="checkbox" id="menuToggle" />
+
+    <nav class="mobile-menu" aria-label="منوی موبایل">
+      <a href="/">خانه</a>
+      <a href="#changes" onclick="document.getElementById('menuToggle').checked=false;">تغییرات</a>
+      <a href="#inside" onclick="document.getElementById('menuToggle').checked=false;">داخل اشتراک</a>
+      <a href="/download.html">دانلود</a>
+      <a href="/contact.html">تماس</a>
+      <a href="/terms.html">قوانین استفاده</a>
+    </nav>
+  </div>
+</header>
 
   <main class="container">
     <!-- HERO -->
