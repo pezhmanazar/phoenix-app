@@ -70,6 +70,56 @@
       margin: 0 auto;
     }
 
+    /* ===== Loader (مثل index) ===== */
+    #pageLoader{
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(11,15,20,0.92);
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity .25s ease, visibility .25s ease;
+    }
+    #pageLoader.hidden{
+      opacity: 0;
+      visibility: hidden;
+    }
+    .loader-card{
+      width: min(420px, 86%);
+      border-radius: 24px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+      box-shadow: 0 25px 70px rgba(0,0,0,0.45);
+      padding: 18px 16px;
+      display:flex;
+      align-items:center;
+      gap: 14px;
+    }
+    .loader-mark{
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(212,175,55,0.28), rgba(233,138,21,0.10));
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      border: 1px solid rgba(255,255,255,0.10);
+    }
+    .spinner{
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: 2px solid rgba(232,236,241,0.25);
+      border-top-color: rgba(212,175,55,0.95);
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader-text .t1{ font-weight: 900; font-size: 13px; color: rgba(232,236,241,0.95); }
+    .loader-text .t2{ margin-top: 3px; font-size: 12px; color: rgba(154,164,178,0.95); }
+
     /* Header */
     header{
       position: sticky;
@@ -188,7 +238,7 @@
       background: rgba(255,255,255,0.06);
     }
 
-    /* Mobile Header (same pattern as index) */
+    /* Mobile Header */
     .menu-toggle{ display:none; }
     .hamburger{ display:none; }
     .mobile-cta{ display:none; }
@@ -225,28 +275,11 @@
     .hamburger span::before{ top:-6px; }
     .hamburger span::after{ top:6px; }
 
-    .mobile-cta{
-      width:44px;
-      height:44px;
-      padding:0;
-      border-radius:14px;
-      display:none;
-      align-items:center;
-      justify-content:center;
-      line-height: 44px;
-      font-size: 16px;
-    }
-    .mobile-cta::before{
-      content:"⬇";
-      line-height: 1;
-      display:block;
-      transform: translateY(-1px);
-    }
-
     @media (max-width: 900px){
       .nav-links,
       .nav-cta{ display:none; }
 
+      /* ✅ دقیقاً: همبرگر راست (RTL=start) + لوگو وسط + دانلود چپ (RTL=end) */
       .nav{
         display:grid;
         grid-template-columns: 44px 1fr 44px;
@@ -262,8 +295,24 @@
       .brand-title{ display:none; }
       .brand img{ height: 38px; }
 
-      /* left */
-      .mobile-cta{ display:inline-flex; justify-self:end; }
+      /* left: icon from /static/img/download.png */
+      .mobile-cta{
+        display:flex;
+        justify-self:end;
+        width:44px;
+        height:44px;
+        padding:0;
+        border-radius:14px;
+        align-items:center;
+        justify-content:center;
+        font-size:0;
+        line-height:0;
+      }
+      .mobile-cta img{
+        width:18px;
+        height:18px;
+        display:block;
+      }
 
       .mobile-menu{
         display:none;
@@ -286,23 +335,25 @@
         border-color: rgba(212,175,55,0.22);
       }
 
-      .menu-toggle:checked ~ .mobile-menu{
-        display:block;
-      }
+      .menu-toggle:checked ~ .mobile-menu{ display:block; }
     }
 
     /* Page */
     .page{
       padding: 34px 0 12px;
     }
+
+    /* ✅ بلاک باقی‌مانده وسط صفحه: تک‌ستونه */
     .page-grid{
       display:grid;
-      grid-template-columns: 1.15fr .85fr;
+      grid-template-columns: 1fr;
+      justify-items: center;
+      align-items: start;
       gap: 14px;
-      align-items: stretch;
     }
 
     .card{
+      width: min(820px, 100%);
       background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02));
       border: 1px solid var(--border2);
       border-radius: 24px;
@@ -391,49 +442,14 @@
       line-height: 2;
     }
 
+    /* ✅ دکمه‌های بالای فوتر (CTA همین صفحه) وسط‌چین */
     .cta-row{
       margin-top: 14px;
       display:flex;
       gap:10px;
       flex-wrap:wrap;
-    }
-
-    /* Side */
-    .side-card{
-      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
-      border: 1px solid var(--border2);
-      border-radius: 24px;
-      padding: 18px;
-      box-shadow: 0 18px 50px rgba(0,0,0,0.32);
-      display:flex;
-      flex-direction: column;
-      justify-content: space-between;
-      gap: 14px;
-    }
-    .side-title{
-      font-weight: 900;
-      font-size: 14px;
-      margin: 0;
-    }
-    .side-desc{
-      margin: 8px 0 0;
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 2;
-    }
-    .pill-row{
-      margin-top: 10px;
-      display:flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-    .pill{
-      font-size: 12px;
-      color: rgba(232,236,241,0.9);
-      border: 1px solid rgba(255,255,255,0.10);
-      background: rgba(255,255,255,0.03);
-      padding: 6px 10px;
-      border-radius: 999px;
+      justify-content:center;
+      align-items:center;
     }
 
     /* Footer + Trust */
@@ -467,13 +483,23 @@
 
     /* Responsive */
     @media (max-width: 900px){
-      .page-grid{ grid-template-columns: 1fr; }
       h1{ font-size: 24px; }
     }
   </style>
 </head>
 
 <body>
+  <!-- Loader -->
+  <div id="pageLoader" aria-label="در حال بارگذاری">
+    <div class="loader-card">
+      <div class="loader-mark"><div class="spinner"></div></div>
+      <div class="loader-text">
+        <div class="t1">ققنوس</div>
+        <div class="t2">در حال آماده‌سازی...</div>
+      </div>
+    </div>
+  </div>
+
   <div class="bg">
     <div class="glow gold"></div>
     <div class="glow orange"></div>
@@ -482,6 +508,11 @@
   <header>
     <div class="container">
       <div class="nav">
+
+        <!-- Mobile: left download icon -->
+        <a class="btn btn-primary mobile-cta" href="/download.html" aria-label="دانلود اپلیکیشن">
+          <img src="/static/img/download.png" alt="">
+        </a>
 
         <!-- Brand (logo click -> home) -->
         <div class="brand">
@@ -504,10 +535,7 @@
           <a class="btn btn-primary" href="/download.html">دانلود اپ</a>
         </div>
 
-        <!-- Mobile CTA (icon button) -->
-        <a class="btn btn-primary mobile-cta" href="/download.html" aria-label="دانلود اپلیکیشن"></a>
-
-        <!-- Hamburger -->
+        <!-- Hamburger (mobile: right) -->
         <label class="hamburger" for="menuToggle" aria-label="باز کردن منو">
           <span></span>
         </label>
@@ -604,5 +632,15 @@
       </div>
     </div>
   </footer>
+
+  <script>
+    // Loader fade out
+    window.addEventListener("load", function () {
+      const el = document.getElementById("pageLoader");
+      if (!el) return;
+      el.classList.add("hidden");
+      setTimeout(() => el.remove(), 350);
+    });
+  </script>
 </body>
 </html>

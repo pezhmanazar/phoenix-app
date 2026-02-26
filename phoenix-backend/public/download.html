@@ -67,6 +67,56 @@
       opacity:.18;
     }
 
+    /* ===== Loader (مثل index) ===== */
+    #pageLoader{
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(11,15,20,0.92);
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity .25s ease, visibility .25s ease;
+    }
+    #pageLoader.hidden{
+      opacity: 0;
+      visibility: hidden;
+    }
+    .loader-card{
+      width: min(420px, 86%);
+      border-radius: 24px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+      box-shadow: 0 25px 70px rgba(0,0,0,0.45);
+      padding: 18px 16px;
+      display:flex;
+      align-items:center;
+      gap: 14px;
+    }
+    .loader-mark{
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(212,175,55,0.28), rgba(233,138,21,0.10));
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      border: 1px solid rgba(255,255,255,0.10);
+    }
+    .spinner{
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: 2px solid rgba(232,236,241,0.25);
+      border-top-color: rgba(212,175,55,0.95);
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader-text .t1{ font-weight: 900; font-size: 13px; color: rgba(232,236,241,0.95); }
+    .loader-text .t2{ margin-top: 3px; font-size: 12px; color: rgba(154,164,178,0.95); }
+
     /* Header */
     header{
       position: sticky;
@@ -180,6 +230,30 @@
       background: rgba(255,255,255,0.06);
     }
 
+    /* iOS "به‌زودی" سبز */
+    .btn-soon{
+      width: 100%;
+      justify-content: center;
+      padding: 14px 14px;
+      border-radius: 18px;
+      font-size: 14px;
+      font-weight: 900;
+      color: #07110b;
+      background: linear-gradient(135deg, rgba(34,197,94,0.95), rgba(16,185,129,0.95));
+      border: 1px solid rgba(255,255,255,0.10);
+      box-shadow: 0 14px 38px rgba(34,197,94,0.14);
+      cursor: default;
+    }
+    .btn-soon:hover{ transform: none; }
+
+    /* لینک طلایی داخل note */
+    .gold-link{
+      color: rgba(212,175,55,0.98);
+      font-weight: 900;
+      text-decoration: none;
+    }
+    .gold-link:hover{ text-decoration: underline; }
+
     /* Mobile header */
     .menu-toggle { display: none; }
     .hamburger{ display:none; }
@@ -234,24 +308,23 @@
       .brand-title{ display:none; }
       .brand img{ height: 38px; }
 
+      /* ✅ موبایل: دکمه دانلود با تصویر دانلود.png (بدون فلش) */
       .mobile-cta{
-        display:block;
+        display:flex;
         justify-self:end;
         width:44px;
         height:44px;
         padding:0;
         border-radius:14px;
-        position:relative;
+        align-items:center;
+        justify-content:center;
         font-size:0;
+        line-height:0;
       }
-      .mobile-cta::before{
-        content:"⬇";
-        position:absolute;
-        left:50%;
-        top:50%;
-        transform: translate(-50%, -50%);
-        font-size:16px;
-        line-height:1;
+      .mobile-cta img{
+        width:18px;
+        height:18px;
+        display:block;
       }
 
       .mobile-menu{
@@ -386,11 +459,14 @@
       font-size: 12px;
     }
 
+    /* ✅ دکمه‌های بالای فوتر (cta-row) وسط‌چین */
     .cta-row{
-     margin-top:14px;
-     display:flex;
-     gap:10px;
-     flex-wrap:wrap;
+      margin-top:14px;
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      justify-content:center;
+      align-items:center;
     }
 
     .label-muted{
@@ -449,6 +525,17 @@
 </head>
 
 <body>
+  <!-- Loader -->
+  <div id="pageLoader" aria-label="در حال بارگذاری">
+    <div class="loader-card">
+      <div class="loader-mark"><div class="spinner"></div></div>
+      <div class="loader-text">
+        <div class="t1">ققنوس</div>
+        <div class="t2">در حال آماده‌سازی...</div>
+      </div>
+    </div>
+  </div>
+
   <div class="bg">
     <div class="glow gold"></div>
     <div class="glow orange"></div>
@@ -474,13 +561,16 @@
         <nav class="nav-links" aria-label="منوی اصلی">
           <a href="/">خانه</a>
           <a href="/#changes">تاثیرات اپ</a>
-          <a href="#inside">ویژگی‌های اشتراک</a>
+          <a href="/#inside">ویژگی‌های اشتراک</a>
           <a href="/store.html">راهنمای اشتراک</a>
           <a href="/contact.html"> تماس با ما</a>
           <a href="/terms.html">قوانین استفاده</a>
         </nav>
 
-        <a class="btn btn-primary mobile-cta" href="#get" aria-label="رفتن به بخش دانلود">دانلود</a>
+        <!-- ✅ mobile download icon from /static/img/download.png -->
+        <a class="btn btn-primary mobile-cta" href="#get" aria-label="رفتن به بخش دانلود">
+          <img src="/static/img/download.png" alt="">
+        </a>
 
         <div class="nav-cta">
           <a class="btn btn-ghost" href="/terms.html">قوانین</a>
@@ -544,7 +634,7 @@
             <!--span class="badge">برای مواقع ضروری</span-->
           </div>
           <p class="label label-muted">
-            اگه مارکت‌ها در دسترس نبودند، می‌تونی فایل نصب اپ رو مستقیم دریافت کنی.
+            اگه مارکت‌ها در دسترس نبودند، می‌تونی فایل نصبی اپ رو مستقیم دریافت کنی.
           </p>
 
           <div class="direct-row">
@@ -553,7 +643,7 @@
 
           <div class="note">
             <strong>نکته:</strong> اگه دانلود مستقیم انجام دادی و گوشی برای نصب خطا داد، طبیعیه.
-           برای همین فقط کافیه به مرورگر اجازه نصب اپ رو بدی.
+            برای همین فقط کافیه به مرورگر اجازه نصب اپ رو بدی.
           </div>
         </div>
 
@@ -567,19 +657,21 @@
             نسخه iPhone در حال آماده‌سازیه. این بخش به محض انتشار فعال می‌شه.
           </p>
 
-          <a class="btn btn-ghost" href="javascript:void(0)" aria-disabled="true">به‌زودی…</a>
+          <!-- ✅ سبز + بزرگ + تمام عرض -->
+          <a class="btn btn-soon" href="javascript:void(0)" aria-disabled="true">به‌زودی…</a>
 
           <div class="note">
             اگه دوست داری اطلاع‌رسانی انتشار نسخه iOS رو دریافت کنی، از صفحه
-            <a href="/contact.html">تماس</a>
+            <a class="gold-link" href="/contact.html">تماس</a>
             به ما پیام بده تا راه ارتباطیت ثبت بشه.
           </div>
         </div>
       </div>
 
+      <!-- ✅ وسط‌چین شد -->
       <div class="cta-row">
         <a class="btn btn-ghost" href="/">بازگشت به صفحه اصلی</a>
-        <a class="btn btn-primary" href="/#inside">ویژگی‌های اشتراک  ققنوس</a>
+        <a class="btn btn-primary" href="/#inside">ویژگی‌های اشتراک ققنوس</a>
         <a class="btn btn-ghost" href="/store.html">نحوه فعال‌سازی اشتراک</a>
       </div>
     </section>
@@ -615,5 +707,15 @@
       </div>
     </div>
   </footer>
+
+  <script>
+    // Loader fade out
+    window.addEventListener("load", function () {
+      const el = document.getElementById("pageLoader");
+      if (!el) return;
+      el.classList.add("hidden");
+      setTimeout(() => el.remove(), 350);
+    });
+  </script>
 </body>
 </html>

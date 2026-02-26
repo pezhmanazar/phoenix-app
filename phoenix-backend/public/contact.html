@@ -43,6 +43,53 @@
       margin: 0 auto;
     }
 
+    /* ===== Loader (مثل index) ===== */
+    #pageLoader{
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(11,15,20,0.92);
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity .25s ease, visibility .25s ease;
+    }
+    #pageLoader.hidden{ opacity: 0; visibility: hidden; }
+    .loader-card{
+      width: min(420px, 86%);
+      border-radius: 24px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+      box-shadow: 0 25px 70px rgba(0,0,0,0.45);
+      padding: 18px 16px;
+      display:flex;
+      align-items:center;
+      gap: 14px;
+    }
+    .loader-mark{
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(212,175,55,0.28), rgba(233,138,21,0.10));
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      border: 1px solid rgba(255,255,255,0.10);
+    }
+    .spinner{
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: 2px solid rgba(232,236,241,0.25);
+      border-top-color: rgba(212,175,55,0.95);
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader-text .t1{ font-weight: 900; font-size: 13px; color: rgba(232,236,241,0.95); }
+    .loader-text .t2{ margin-top: 3px; font-size: 12px; color: rgba(154,164,178,0.95); }
+
     /* Background glows */
     .bg{
       position: fixed;
@@ -102,10 +149,7 @@
       text-decoration:none;
       color: inherit;
     }
-    .brand img{
-      height: 40px;
-      display:block;
-    }
+    .brand img{ height: 40px; display:block; }
     .brand-title{
       font-weight: 900;
       letter-spacing: -0.2px;
@@ -231,42 +275,36 @@
 
       .nav{
         display:grid;
-        grid-template-columns: 44px 1fr 44px;
+        grid-template-columns: 44px 1fr 44px; /* همبرگر راست / لوگو وسط / دانلود چپ */
         align-items:center;
         gap: 10px;
       }
 
-      .hamburger{
-        display:flex;
-        justify-self: start;
-      }
+      /* right */
+      .hamburger{ display:flex; justify-self: start; }
 
-      .brand{
-        min-width:auto;
-        justify-self:center;
-      }
+      /* center */
+      .brand{ min-width:auto; justify-self:center; }
       .brand-title{ display:none; }
       .brand img{ height: 38px; }
 
+      /* left: icon button */
       .mobile-cta{
-        display:block;
+        display:flex;
         justify-self:end;
-
         width:44px;
         height:44px;
         padding:0;
         border-radius:14px;
-        position:relative;
+        align-items:center;
+        justify-content:center;
         font-size:0;
+        line-height:0;
       }
-      .mobile-cta::before{
-        content:"⬇";
-        position:absolute;
-        left:50%;
-        top:50%;
-        transform: translate(-50%, -50%);
-        font-size:16px;
-        line-height:1;
+      .mobile-cta img{
+        width:18px;
+        height:18px;
+        display:block;
       }
 
       .mobile-menu{
@@ -297,19 +335,6 @@
     .page{
       padding: 34px 0 6px;
     }
-    .page-title{
-      margin: 10px 0 16px;
-      font-size: 22px;
-      font-weight: 900;
-      letter-spacing: -0.2px;
-    }
-    .page-sub{
-      margin: 0 0 18px;
-      color: var(--muted);
-      font-size: 13px;
-      max-width: 70ch;
-      line-height: 2;
-    }
 
     .card{
       background: linear-gradient(180deg, var(--glass), var(--glass2));
@@ -318,6 +343,31 @@
       box-shadow: var(--shadow);
       padding: 18px 16px;
       overflow:hidden;
+    }
+
+    .page-title{
+      margin: 10px 0 6px;
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: -0.2px;
+    }
+
+    /* ✅ متن توضیحی: یک‌خطه روی دسکتاپ */
+    .page-sub{
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    @media (max-width: 900px){
+      .page-sub{
+        white-space: normal; /* موبایل آزاد */
+        overflow: visible;
+        text-overflow: clip;
+      }
     }
 
     .grid{
@@ -336,6 +386,7 @@
       border-radius: 18px;
       padding: 14px 14px;
     }
+
     .info-title{
       display:flex;
       align-items:center;
@@ -344,6 +395,7 @@
       font-size: 14px;
       margin: 0 0 6px;
     }
+
     .icon{
       width: 30px;
       height: 30px;
@@ -357,19 +409,75 @@
       font-size: 14px;
       flex: 0 0 30px;
     }
+
     .info-body{
       color: rgba(232,236,241,0.92);
       font-size: 13px;
       line-height: 2;
     }
+
     .info-body a{
       color: rgba(212,175,55,0.95);
       text-decoration:none;
       border-bottom: 1px dashed rgba(212,175,55,0.35);
     }
-    .info-body a:hover{
-      border-bottom-color: rgba(212,175,55,0.65);
+    .info-body a:hover{ border-bottom-color: rgba(212,175,55,0.65); }
+
+    /* ✅ تلگرام: چپ‌چین + آیکن + کلیک باز کند */
+    .tg-link{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      direction: ltr;
+      justify-content: flex-start;
+      border-bottom: none !important;
     }
+    .tg-link img{
+      width: 18px;
+      height: 18px;
+      display:block;
+      opacity: .95;
+      transform: translateY(1px);
+    }
+    .tg-text{
+      font-weight: 900;
+      color: rgba(232,236,241,0.95);
+    }
+
+    /* ✅ شبکه‌های اجتماعی: فقط آیکن‌ها + لینک‌ها */
+    .social-row{
+      margin-top: 6px;
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items:center;
+    }
+    .social-btn{
+      width: 46px;
+      height: 46px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      transition: .2s ease;
+      text-decoration:none;
+    }
+    .social-btn:hover{
+      background: rgba(255,255,255,0.05);
+      border-color: rgba(212,175,55,0.22);
+      transform: translateY(-1px);
+    }
+    .social-btn img{
+      width: 20px;
+      height: 20px;
+      display:block;
+      opacity: .95;
+    }
+
+    /* ✅ آدرس پستی: در دسکتاپ کل عرض را بگیرد تا حس خالی بودن ندهد */
+    .info-full{ grid-column: 1 / -1; }
 
     .note{
       margin-top: 14px;
@@ -415,11 +523,24 @@
       display:flex;
       gap: 10px;
       flex-wrap: wrap;
+      justify-content: center;  /* ✅ دکمه‌های بالای فوتر وسط‌چین */
+      align-items: center;
     }
   </style>
 </head>
 
 <body>
+  <!-- Loader -->
+  <div id="pageLoader" aria-label="در حال بارگذاری">
+    <div class="loader-card">
+      <div class="loader-mark"><div class="spinner"></div></div>
+      <div class="loader-text">
+        <div class="t1">ققنوس</div>
+        <div class="t2">در حال آماده‌سازی...</div>
+      </div>
+    </div>
+  </div>
+
   <div class="bg">
     <div class="glow gold"></div>
     <div class="glow orange"></div>
@@ -428,6 +549,7 @@
   <header>
     <div class="container">
       <div class="nav">
+        <!-- Hamburger (mobile right) -->
         <label class="hamburger" for="menuToggle" aria-label="باز کردن منو">
           <span></span>
         </label>
@@ -444,15 +566,18 @@
 
         <nav class="nav-links" aria-label="منوی اصلی">
           <a href="/">خانه</a>
-          <a href="#changes">تغییرات</a>
-          <a href="#inside">ویژگی‌های اشتراک</a>
+          <a href="/#changes">تغییرات</a>
+          <a href="/#inside">ویژگی‌های اشتراک</a>
           <a href="/store.html">راهنمای اشتراک</a>
           <a href="/download.html">دانلود</a>
           <a href="/terms.html">قوانین استفاده</a>
           <a href="/contact.html">تماس با ما</a>
         </nav>
 
-        <a class="btn btn-primary mobile-cta" href="/download.html" aria-label="دانلود اپ">دانلود</a>
+        <!-- Mobile CTA (download icon from static) -->
+        <a class="btn btn-primary mobile-cta" href="/download.html" aria-label="دانلود اپ">
+          <img src="/static/img/download.png" alt="">
+        </a>
 
         <div class="nav-cta">
           <a class="btn btn-primary" href="/download.html">دانلود اپ</a>
@@ -462,13 +587,13 @@
       <input class="menu-toggle" type="checkbox" id="menuToggle" />
 
       <nav class="mobile-menu" aria-label="منوی موبایل">
-        <a href="/">خانه</a>
-        <a href="#changes">تاثیرات اپ</a>
-        <a href="#inside">ویژگی‌های اشتراک</a>
-        <a href="/store.html">راهنمای اشتراک</a>
-        <a href="/download.html">دانلود</a>
-        <a href="/contact.html">تماس با ما</a>
-        <a href="/terms.html">قوانین استفاده</a>
+        <a href="/" onclick="document.getElementById('menuToggle').checked=false;">خانه</a>
+        <a href="/#changes" onclick="document.getElementById('menuToggle').checked=false;">تاثیرات اپ</a>
+        <a href="/#inside" onclick="document.getElementById('menuToggle').checked=false;">ویژگی‌های اشتراک</a>
+        <a href="/store.html" onclick="document.getElementById('menuToggle').checked=false;">راهنمای اشتراک</a>
+        <a href="/download.html" onclick="document.getElementById('menuToggle').checked=false;">دانلود</a>
+        <a href="/contact.html" onclick="document.getElementById('menuToggle').checked=false;">تماس با ما</a>
+        <a href="/terms.html" onclick="document.getElementById('menuToggle').checked=false;">قوانین استفاده</a>
       </nav>
     </div>
   </header>
@@ -478,34 +603,48 @@
       <div class="card">
         <h1 class="page-title">تماس با ققنوس</h1>
         <p class="page-sub">
-          اگه دربارهٔ اشتراک ققنوس، محتوای آموزشی، یا مسائل فنی سوالی داری،
-          از یکی از روش‌های زیر می‌تونی با ما در ارتباط باشی.
+          اگه دربارهٔ اشتراک ققنوس، محتوای آموزشی، یا مسائل فنی سوالی داری، از یکی از روش‌های زیر می‌تونی با ما در ارتباط باشی.
         </p>
 
         <div class="grid">
+          <!-- Telegram ID -->
           <div class="info">
             <div class="info-title"><span class="icon">✉</span> آیدی تلگرام</div>
             <div class="info-body">
-              <a href="telegram_id">@qpezhman_support</a>
+              <a class="tg-link" href="https://t.me/qpezhman_support" target="_blank" rel="noopener" aria-label="باز کردن تلگرام (آیدی)">
+                <img src="/static/img/telegram.png" alt="Telegram">
+                <span class="tg-text">@qpezhman_support</span>
+              </a>
             </div>
           </div>
 
+          <!-- Telegram Phone -->
           <div class="info">
-            <div class="info-title"><span class="icon">📱</span>شماره تلگرام</div>
+            <div class="info-title"><span class="icon">📱</span> شماره تلگرام</div>
             <div class="info-body">
-              <a href="tel:+989960329893">09960329893</a>
+              <a class="tg-link" href="https://t.me/+989960329893" target="_blank" rel="noopener" aria-label="باز کردن تلگرام (شماره)">
+                <img src="/static/img/telegram.png" alt="Telegram">
+                <span class="tg-text">+98 996 032 9893</span>
+              </a>
             </div>
           </div>
 
+          <!-- Social icons -->
           <div class="info">
             <div class="info-title"><span class="icon">🌐</span> شبکه‌های اجتماعی</div>
             <div class="info-body">
-              اینستاگرام و تلگرام:
-              <a href="https://instagram.com/pezhman_azar" target="_blank" rel="noopener">instagram.com/qoqnoos.app</a>
-              <a href="https://tel.me/qoqnoos_app" target="_blank" rel="noopener">tel.me/qoqnoos_app</a>
+              <div class="social-row" aria-label="لینک شبکه‌های اجتماعی">
+                <a class="social-btn" href="https://instagram.com/pezhman_azar" target="_blank" rel="noopener" aria-label="اینستاگرام">
+                  <img src="/static/img/instagram.png" alt="Instagram">
+                </a>
+                <a class="social-btn" href="https://t.me/qoqnoos_app" target="_blank" rel="noopener" aria-label="تلگرام">
+                  <img src="/static/img/telegram.png" alt="Telegram">
+                </a>
+              </div>
             </div>
           </div>
 
+          <!-- Hours -->
           <div class="info">
             <div class="info-title"><span class="icon">⏱</span> ساعات پاسخ‌گویی</div>
             <div class="info-body">
@@ -513,6 +652,7 @@
             </div>
           </div>
 
+          <!-- Address full width -->
           <div class="info info-full">
             <div class="info-title"><span class="icon">📍</span> آدرس پستی</div>
             <div class="info-body">
@@ -571,5 +711,15 @@
       </div>
     </div>
   </footer>
+
+  <script>
+    // Loader fade out
+    window.addEventListener("load", function () {
+      const el = document.getElementById("pageLoader");
+      if (!el) return;
+      el.classList.add("hidden");
+      setTimeout(() => el.remove(), 350);
+    });
+  </script>
 </body>
 </html>
