@@ -1,6 +1,6 @@
 // components/PlanStatusBadge.tsx
 import React, { useMemo } from "react";
-import { View, Text } from "react-native";
+import { Text, View } from "react-native";
 import { getPlanStatus } from "../lib/plan";
 
 type PlanView = "free" | "pro" | "expiring" | "expired";
@@ -91,7 +91,7 @@ export default function PlanStatusBadge({
 
   const expText =
     typeof daysRemaining === "number"
-      ? expiringText?.(daysRemaining) ?? `تا انقضا ${toFaNum(daysRemaining)} روز`
+      ? expiringText?.(daysRemaining) ?? ` ${toFaNum(daysRemaining)} روز`
       : "";
 
   return (
