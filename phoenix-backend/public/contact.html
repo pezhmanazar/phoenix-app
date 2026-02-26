@@ -352,7 +352,7 @@
       letter-spacing: -0.2px;
     }
 
-    /* ✅ متن توضیحی: یک‌خطه روی دسکتاپ */
+    /* متن توضیحی: یک‌خطه روی دسکتاپ */
     .page-sub{
       margin: 0 0 18px;
       color: var(--muted);
@@ -364,7 +364,7 @@
     }
     @media (max-width: 900px){
       .page-sub{
-        white-space: normal; /* موبایل آزاد */
+        white-space: normal;
         overflow: visible;
         text-overflow: clip;
       }
@@ -423,7 +423,7 @@
     }
     .info-body a:hover{ border-bottom-color: rgba(212,175,55,0.65); }
 
-    /* ✅ تلگرام: چپ‌چین + آیکن + کلیک باز کند */
+    /* تلگرام: چپ‌چین + آیکن + کلیک باز کند */
     .tg-link{
       display:flex;
       align-items:center;
@@ -444,13 +444,15 @@
       color: rgba(232,236,241,0.95);
     }
 
-    /* ✅ شبکه‌های اجتماعی: فقط آیکن‌ها + لینک‌ها */
+    /* شبکه‌های اجتماعی: آیکن‌ها وسط‌چین */
     .social-row{
       margin-top: 6px;
       display:flex;
       gap: 10px;
       flex-wrap: wrap;
       align-items:center;
+      justify-content: center;   /* ✅ وسط چین */
+      width: 100%;
     }
     .social-btn{
       width: 46px;
@@ -476,8 +478,35 @@
       opacity: .95;
     }
 
-    /* ✅ آدرس پستی: در دسکتاپ کل عرض را بگیرد تا حس خالی بودن ندهد */
+    /* آدرس پستی: در دسکتاپ کل عرض را بگیرد */
     .info-full{ grid-column: 1 / -1; }
+
+    /* ✅ شماره داخل آدرس: مثل تلگرام چپ‌چین، سفید، جدا */
+    .phone-row{
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed rgba(255,255,255,0.10);
+    }
+    .phone-label{
+      color: rgba(154,164,178,0.95);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+    .phone-link{
+      display:inline-flex;
+      align-items:center;
+      gap: 10px;
+      direction: ltr;
+      justify-content: flex-start;
+      border-bottom: none !important;
+      color: rgba(232,236,241,0.98) !important;
+      font-weight: 900;
+    }
+    .phone-link:hover{ opacity: .95; }
+    .phone-num{
+      letter-spacing: .6px;
+      font-variant-numeric: tabular-nums;
+    }
 
     .note{
       margin-top: 14px;
@@ -486,6 +515,16 @@
       line-height: 2;
       border-top: 1px solid rgba(255,255,255,0.06);
       padding-top: 12px;
+    }
+
+    /* Buttons row */
+    .links-row{
+      margin-top: 16px;
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
     }
 
     /* Footer + Trust */
@@ -516,16 +555,6 @@
     }
     #zarinpal img{ width: 92px; }
     .enamad-img{ width: 92px; display:block; }
-
-    /* Small helpers */
-    .links-row{
-      margin-top: 16px;
-      display:flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      justify-content: center;  /* ✅ دکمه‌های بالای فوتر وسط‌چین */
-      align-items: center;
-    }
   </style>
 </head>
 
@@ -549,7 +578,6 @@
   <header>
     <div class="container">
       <div class="nav">
-        <!-- Hamburger (mobile right) -->
         <label class="hamburger" for="menuToggle" aria-label="باز کردن منو">
           <span></span>
         </label>
@@ -574,7 +602,6 @@
           <a href="/contact.html">تماس با ما</a>
         </nav>
 
-        <!-- Mobile CTA (download icon from static) -->
         <a class="btn btn-primary mobile-cta" href="/download.html" aria-label="دانلود اپ">
           <img src="/static/img/download.png" alt="">
         </a>
@@ -607,7 +634,6 @@
         </p>
 
         <div class="grid">
-          <!-- Telegram ID -->
           <div class="info">
             <div class="info-title"><span class="icon">✉</span> آیدی تلگرام</div>
             <div class="info-body">
@@ -618,7 +644,6 @@
             </div>
           </div>
 
-          <!-- Telegram Phone -->
           <div class="info">
             <div class="info-title"><span class="icon">📱</span> شماره تلگرام</div>
             <div class="info-body">
@@ -629,7 +654,6 @@
             </div>
           </div>
 
-          <!-- Social icons -->
           <div class="info">
             <div class="info-title"><span class="icon">🌐</span> شبکه‌های اجتماعی</div>
             <div class="info-body">
@@ -644,7 +668,6 @@
             </div>
           </div>
 
-          <!-- Hours -->
           <div class="info">
             <div class="info-title"><span class="icon">⏱</span> ساعات پاسخ‌گویی</div>
             <div class="info-body">
@@ -652,14 +675,19 @@
             </div>
           </div>
 
-          <!-- Address full width -->
           <div class="info info-full">
             <div class="info-title"><span class="icon">📍</span> آدرس پستی</div>
             <div class="info-body">
               استان: آذربایجان غربی - شهرستان: ارومیه - بخش: مرکزی - شهر: ارومیه - محله: بل مدرس
-              کوچه (اول) - خیابان همافر ۲ - پلاک: ۱۱ - طبقه: -۱
-              <br>
-              تلفن: <a href="tel:+983536248440">03536248440</a>
+              کوچه (اول) - خیابان همافر ۲ - پلاک: ۱۱ - طبقه: منفی یک
+
+              <!-- ✅ شماره تلفن مثل تلگرام: چپ‌چین/سفید/جدا -->
+              <div class="phone-row">
+                <div class="phone-label">Phone</div>
+                <a class="phone-link" href="tel:+983536248440" aria-label="تماس تلفنی">
+                  <span class="phone-num">0353 624 8440</span>
+                </a>
+              </div>
             </div>
 
             <div class="note">
@@ -687,12 +715,10 @@
       </div>
 
       <div class="trust-row">
-        <!-- Zarinpal -->
         <div id="zarinpal">
           <script src="https://www.zarinpal.com/webservice/TrustCode" type="text/javascript"></script>
         </div>
 
-        <!-- Enamad -->
         <a
           referrerpolicy="origin"
           target="_blank"
@@ -713,7 +739,6 @@
   </footer>
 
   <script>
-    // Loader fade out
     window.addEventListener("load", function () {
       const el = document.getElementById("pageLoader");
       if (!el) return;

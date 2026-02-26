@@ -230,19 +230,27 @@
       background: rgba(255,255,255,0.06);
     }
 
-    /* iOS "به‌زودی" سبز */
-    .btn-soon{
+    /* ✅ CTA استاندارد داخل کارت (برای هم‌شکل شدن APK و به‌زودی) */
+    .cta-btn{
       width: 100%;
-      justify-content: center;
+      min-height: 56px;
       padding: 14px 14px;
       border-radius: 18px;
       font-size: 14px;
       font-weight: 900;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+    }
+
+    /* iOS "به‌زودی" سبز (هم‌اندازه با APK) */
+    .btn-soon{
+      cursor: default;
       color: #07110b;
       background: linear-gradient(135deg, rgba(34,197,94,0.95), rgba(16,185,129,0.95));
       border: 1px solid rgba(255,255,255,0.10);
       box-shadow: 0 14px 38px rgba(34,197,94,0.14);
-      cursor: default;
     }
     .btn-soon:hover{ transform: none; }
 
@@ -308,7 +316,6 @@
       .brand-title{ display:none; }
       .brand img{ height: 38px; }
 
-      /* ✅ موبایل: دکمه دانلود با تصویر دانلود.png (بدون فلش) */
       .mobile-cta{
         display:flex;
         justify-self:end;
@@ -607,7 +614,6 @@
         <div class="card">
           <div class="card-title">
             <h2>دانلود از کافه‌بازار</h2>
-            <!--span class="badge">پیشنهادی</span-->
           </div>
           <a class="store-btn" href="https://example.com/BAZAAR_LINK" target="_blank" rel="noopener" aria-label="دانلود ققنوس از کافه‌بازار">
             <img src="/static/img/bazaar.png" alt="دریافت از بازار">
@@ -619,7 +625,6 @@
         <div class="card">
           <div class="card-title">
             <h2>دانلود از مایکت</h2>
-            <!--span class="badge">رسمی</span-->
           </div>
           <a class="store-btn" href="https://example.com/MAYKET_LINK" target="_blank" rel="noopener" aria-label="دانلود ققنوس از مایکت">
             <img src="/static/img/mayket.png" alt="دریافت از مایکت">
@@ -631,14 +636,16 @@
         <div class="card">
           <div class="card-title">
             <h2>دانلود مستقیم (Android)</h2>
-            <!--span class="badge">برای مواقع ضروری</span-->
           </div>
           <p class="label label-muted">
             اگه مارکت‌ها در دسترس نبودند، می‌تونی فایل نصبی اپ رو مستقیم دریافت کنی.
           </p>
 
           <div class="direct-row">
-            <a class="btn btn-primary" href="https://example.com/DIRECT_APK" target="_blank" rel="noopener" aria-label="دانلود مستقیم فایل APK">دانلود APK</a>
+            <!-- ✅ هم‌اندازه/هم‌شکل با "به‌زودی" -->
+            <a class="btn btn-primary cta-btn" href="https://example.com/DIRECT_APK" target="_blank" rel="noopener" aria-label="دانلود مستقیم فایل APK">
+              دانلود APK
+            </a>
           </div>
 
           <div class="note">
@@ -651,14 +658,13 @@
         <div class="card">
           <div class="card-title">
             <h2>نسخه iOS</h2>
-            <span class="badge">به‌زودی</span>
           </div>
           <p class="label label-muted">
             نسخه iPhone در حال آماده‌سازیه. این بخش به محض انتشار فعال می‌شه.
           </p>
 
-          <!-- ✅ سبز + بزرگ + تمام عرض -->
-          <a class="btn btn-soon" href="javascript:void(0)" aria-disabled="true">به‌زودی…</a>
+          <!-- ✅ هم‌اندازه/هم‌شکل با APK -->
+          <a class="btn btn-soon cta-btn" href="javascript:void(0)" aria-disabled="true">به‌زودی…</a>
 
           <div class="note">
             اگه دوست داری اطلاع‌رسانی انتشار نسخه iOS رو دریافت کنی، از صفحه
@@ -668,7 +674,6 @@
         </div>
       </div>
 
-      <!-- ✅ وسط‌چین شد -->
       <div class="cta-row">
         <a class="btn btn-ghost" href="/">بازگشت به صفحه اصلی</a>
         <a class="btn btn-primary" href="/#inside">ویژگی‌های اشتراک ققنوس</a>
@@ -709,7 +714,6 @@
   </footer>
 
   <script>
-    // Loader fade out
     window.addEventListener("load", function () {
       const el = document.getElementById("pageLoader");
       if (!el) return;
