@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "phoenixapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -17,8 +16,6 @@
     "android": {
       "package": "com.pezhman.phoenix",
       "versionCode": 1,
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
         "backgroundColor": "#0b0f14",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -41,7 +38,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/logo-splash.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#0b0f14",
