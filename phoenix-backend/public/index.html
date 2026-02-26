@@ -28,6 +28,7 @@
 
     *{box-sizing:border-box}
     html,body{height:100%}
+    html{ scroll-behavior:smooth; }
 
     body{
       margin:0;
@@ -292,11 +293,12 @@
       max-width: 56ch;
     }
     .hero-actions{
-     display:flex;
-     justify-content:center; 
-     align-items:center;
-     gap:12px;
-     flex-wrap:wrap;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      gap:12px;
+      flex-wrap:wrap;
+      margin-top: 18px;
     }
     .hero-actions-tight{ margin: 14px 0 0; }
 
@@ -307,7 +309,7 @@
       padding: 22px;
       box-shadow: 0 18px 50px rgba(0,0,0,0.32);
       display:flex;
-      text-align:center; 
+      text-align:center;
       flex-direction: column;
       justify-content: space-between;
     }
@@ -329,7 +331,7 @@
     .pill-row{
       margin-top: 12px;
       display:flex;
-      justify-content:center;  
+      justify-content:center;
       gap: 8px;
       flex-wrap: wrap;
     }
@@ -343,122 +345,114 @@
     }
 
     /* --- Mobile Header: hamburger right, logo center, download left --- */
+    .menu-toggle { display: none; }
+    .hamburger{ display:none; }
+    .mobile-cta{ display:none; }
+    .mobile-menu{ display:none; }
 
-.menu-toggle { display: none; }
-.hamburger{ display:none; }
-.mobile-cta{ display:none; }
-.mobile-menu{ display:none; }
+    .hamburger{
+      width:44px;
+      height:44px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.04);
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+    }
+    .hamburger span{
+      display:block;
+      width:18px;
+      height:2px;
+      background: rgba(232,236,241,0.9);
+      border-radius: 999px;
+      position: relative;
+    }
+    .hamburger span::before,
+    .hamburger span::after{
+      content:"";
+      position:absolute;
+      left:0;
+      width:18px;
+      height:2px;
+      background: rgba(232,236,241,0.9);
+      border-radius: 999px;
+    }
+    .hamburger span::before{ top:-6px; }
+    .hamburger span::after{ top:6px; }
 
-.hamburger{
-  width:44px;
-  height:44px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.04);
-  align-items:center;
-  justify-content:center;
-  cursor:pointer;
-}
+    @media (max-width: 900px){
+      .nav-links,
+      .nav-cta{ display:none; }
 
-.hamburger span{
-  display:block;
-  width:18px;
-  height:2px;
-  background: rgba(232,236,241,0.9);
-  border-radius: 999px;
-  position: relative;
-}
+      .nav{
+        display:grid;
+        grid-template-columns: 44px 1fr 44px; /* دو طرف برابر تا لوگو دقیق وسط شود */
+        align-items:center;
+        gap: 10px;
+      }
 
-.hamburger span::before,
-.hamburger span::after{
-  content:"";
-  position:absolute;
-  left:0;
-  width:18px;
-  height:2px;
-  background: rgba(232,236,241,0.9);
-  border-radius: 999px;
-}
-.hamburger span::before{ top:-6px; }
-.hamburger span::after{ top:6px; }
+      /* hamburger: right (RTL) */
+      .hamburger{
+        display:flex;
+        justify-self: start;
+      }
 
-@media (max-width: 900px){
-  .nav-links,
-  .nav-cta{ display:none; }
+      /* logo: center */
+      .brand{
+        min-width:auto;
+        justify-self:center;
+      }
+      .brand-title{ display:none; }
+      .brand img{ height: 38px; }
 
-  .nav{
-    display:grid;
-    grid-template-columns: 44px 1fr 44px; /* ✅ دو طرف برابر تا لوگو دقیق وسط شود */
-    align-items:center;
-    gap: 10px;
-  }
+      /* download: left (RTL) -> icon image */
+      .mobile-cta{
+        justify-self:end;
 
-  /* hamburger: right (RTL) */
-  .hamburger{
-    display:flex;
-    justify-self: start;
-  }
+        width:44px;
+        height:44px;
+        padding:0;
+        border-radius:14px;
 
-  /* logo: center */
-  .brand{
-    min-width:auto;
-    justify-self:center;
-  }
-  .brand-title{ display:none; }
-  .brand img{ height: 38px; }
+        display:flex;
+        align-items:center;
+        justify-content:center;
 
-  /* download: left (RTL) - make it 44x44 so it doesn't break centering */
-.mobile-cta{
-  position: relative;       /* مهم */
-  justify-self:end;
+        font-size:0; /* متن مخفی */
+        line-height:0;
+      }
+      .mobile-cta img{
+        width: 18px;
+        height: 18px;
+        display:block;
+      }
 
-  width:44px;
-  height:44px;
-  padding:0;
-  border-radius:14px;
-
-  display:block;            /* مهم: ساده و قابل کنترل */
-  font-size:0;              /* متن مخفی */
-}
-
-.mobile-cta::before{
-  content:"⬇";
-  position:absolute;        /* مهم */
-  left:50%;
-  top:50%;
-  transform: translate(-50%, -50%);  /* دقیقاً وسط */
-  font-size:16px;
-  line-height:1;
-}
-
-  /* Dropdown */
-  .mobile-menu{
-    display:none;
-    padding: 10px 0 14px;
-    border-top: 1px solid rgba(255,255,255,0.06);
-  }
-
-  .mobile-menu a{
-    display:block;
-    padding: 12px 12px;
-    margin: 6px 0;
-    border-radius: 14px;
-    color: var(--text);
-    text-decoration:none;
-    border: 1px solid rgba(255,255,255,0.06);
-    background: rgba(255,255,255,0.03);
-    font-size: 14px;
-  }
-
-  .mobile-menu a:active{
-    background: rgba(212,175,55,0.08);
-    border-color: rgba(212,175,55,0.22);
-  }
-
-  .menu-toggle:checked ~ .mobile-menu{
-    display:block;
-  }
-}
+      /* Dropdown */
+      .mobile-menu{
+        display:none;
+        padding: 10px 0 14px;
+        border-top: 1px solid rgba(255,255,255,0.06);
+      }
+      .mobile-menu a{
+        display:block;
+        padding: 12px 12px;
+        margin: 6px 0;
+        border-radius: 14px;
+        color: var(--text);
+        text-decoration:none;
+        border: 1px solid rgba(255,255,255,0.06);
+        background: rgba(255,255,255,0.03);
+        font-size: 14px;
+      }
+      .mobile-menu a:active{
+        background: rgba(212,175,55,0.08);
+        border-color: rgba(212,175,55,0.22);
+      }
+      .menu-toggle:checked ~ .mobile-menu{
+        display:block;
+      }
+    }
 
     /* Sections */
     .section{
@@ -593,14 +587,17 @@
           <a href="/">خانه</a>
           <a href="#changes">تاثیرات اپ</a>
           <a href="#inside">ویژگی‌های اشتراک</a>
+          <a href="#diff">تفاوت با تراپی/دوره</a>
           <a href="/store.html">راهنمای اشتراک</a>
           <a href="/download.html">دانلود</a>
           <a href="/terms.html">قوانین استفاده</a>
           <a href="/contact.html">تماس با ما</a>
         </nav>
 
-        <!-- Mobile CTA -->
-        <a class="btn btn-primary mobile-cta" href="/download.html">دانلود اپ</a>
+        <!-- Mobile CTA (icon) -->
+        <a class="btn btn-primary mobile-cta" href="/download.html" aria-label="دانلود اپ">
+          <img src="/static/img/download.png" alt="">
+        </a>
 
         <!-- Desktop CTA -->
         <div class="nav-cta">
@@ -614,6 +611,7 @@
         <a href="/">خانه</a>
         <a href="#changes">تاثیرات اپ</a>
         <a href="#inside">ویژگی‌های اشتراک</a>
+        <a href="#diff">تفاوت با تراپی/دوره</a>
         <a href="/store.html">راهنمای اشتراک</a>
         <a href="/download.html">دانلود</a>
         <a href="/contact.html">تماس با ما</a>
@@ -636,7 +634,8 @@
 
           <div class="hero-actions">
             <a class="btn btn-primary" href="/download.html">شروع بازسازی و دانلود</a>
-            <a class="btn btn-ghost" href="#changes">تفاوت ققنوس با تراپی و دوره آموزشی</a>
+            <!-- ✅ می‌برد به سکشن جدید بعد از inside -->
+            <a class="btn btn-ghost" href="#diff">تفاوت ققنوس با تراپی و دوره آموزشی</a>
           </div>
         </div>
 
@@ -706,6 +705,37 @@
           <div class="item"><span class="dot"></span>کمک به عبور از جدایی، خیانت و طلاق با رویکرد علمی و کاربردی</div>
         </div>
       </div>
+    </section>
+
+    <!-- ✅ NEW: DIFFERENCE (after INSIDE) -->
+    <section class="section" id="diff">
+      <div class="section-title">
+        <h2>تفاوت ققنوس با تراپی و دوره آموزشی</h2>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <div class="item"><span class="dot"></span><strong>تراپی</strong> یک رابطه‌ی درمانی تخصصی و عمیقه، اما محدود به زمان جلسه‌ست و متاسفانه هزینه بالایی داره.</div>
+          <div class="item"><span class="dot"></span><strong>ققنوس</strong>  با اینکه جایگزین تراپی نیست اما همیشه در کنار توئه و با پلکان روزانه و اقدامات قدم به قدم تو رو در مسیر درمان نگه می‌داره.</div>
+        </div>
+
+        <div class="card">
+          <div class="item"><span class="dot"></span><strong>دوره آموزشی</strong> معمولاً محتوامحور و یک‌طرفه‌ست: یعنی می‌بینی یا می‌شنوی و تموم میشه.</div>
+          <div class="item"><span class="dot"></span><strong>ققنوس</strong> تمرین‌محوره: یعنی مسیر داری، اقدام داری، پیگیری مشخص داری، و عادات رفتاری سالم برات می‌سازه.</div>
+        </div>
+
+        <div class="card">
+          <div class="item"><span class="dot"></span>در ققنوس «امروز دقیقاً چیکار کنم؟» واضحه؛ نه اینکه فقط بدونی «چیکار باید بکنی».</div>
+          <div class="item"><span class="dot"></span>برای لحظه‌های سخت، ابزارهای فوری داری (پناهگاه) تا از موج‌های ناراحتی و وسوسه رد بشی.</div>
+          <div class="item"><span class="dot"></span>امکان ارتباط با متخصص شکست عشقی رو داریکه در هر لحظه مسیر بازسازیت رو بهتر کنه</div>
+
+        </div>
+
+        <div class="card">
+          <div class="item"><span class="dot"></span>هدف ققنوس: تبدیل فهم به عمل، و عمل به ثباته.</div>
+          <div class="item"><span class="dot"></span>چیزی که با تراپی هم امکان پذیره ولی هزینه‌بر و طوانی مدته اما ققنوس می‌تونه با هزینه کم و زمان کوتاه‌تر این رو برات بسازه.</div>
+        </div>
+      </div>
 
       <div class="hero-actions hero-actions-tight">
         <a class="btn btn-primary" href="/download.html">دانلود اپلیکیشن</a>
@@ -723,7 +753,6 @@
       </div>
 
       <div class="trust-row">
-
         <!-- Zarinpal -->
         <div id="zarinpal">
           <script src="https://www.zarinpal.com/webservice/TrustCode" type="text/javascript"></script>
@@ -745,7 +774,6 @@
             code="kNJsbo2Cym96iOqBtjSeWJjYDW3nFd98"
           />
         </a>
-
       </div>
     </div>
   </footer>
