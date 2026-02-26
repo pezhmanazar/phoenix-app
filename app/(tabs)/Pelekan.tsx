@@ -676,7 +676,7 @@ export default function PelekanTab() {
         <View style={styles.center}>
           <ActivityIndicator color="#D4AF37" />
           <Text style={{ color: "#E5E7EB", marginTop: 8, fontSize: 12 }}>
-            در حال بارگذاری…
+            در حال بارگذاری
           </Text>
         </View>
       </SafeAreaView>

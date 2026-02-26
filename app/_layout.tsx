@@ -5,22 +5,24 @@ import {
   Theme,
   ThemeProvider,
 } from "@react-navigation/native";
+import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useMemo } from "react";
-import { Text, TextInput } from "react-native";
-import { useFonts } from "expo-font";
-import * as SplashScreen from "expo-splash-screen";
-import { PhoenixProvider, usePhoenix } from "../hooks/PhoenixContext";
+import { StyleSheet, Text, TextInput } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { PhoenixProvider, usePhoenix } from "../hooks/PhoenixContext";
 
 // 🔌 Context modules
 import * as AuthModule from "../hooks/useAuth";
-import * as UserModule from "../hooks/useUser";
 import * as PlanModule from "../hooks/usePlanStatus";
+import * as UserModule from "../hooks/useUser";
 
 /* ---------------- Providers ---------------- */
-const AuthProviderWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const AuthProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const Comp =
     (AuthModule as any).AuthProvider ??
     (AuthModule as any).default ??
@@ -28,7 +30,9 @@ const AuthProviderWrapper: React.FC<{ children: React.ReactNode }> = ({ children
   return <Comp>{children}</Comp>;
 };
 
-const UserProviderWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const UserProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const Comp =
     (UserModule as any).UserProvider ??
     (UserModule as any).default ??
@@ -36,7 +40,9 @@ const UserProviderWrapper: React.FC<{ children: React.ReactNode }> = ({ children
   return <Comp>{children}</Comp>;
 };
 
-const PlanStatusProviderWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const PlanStatusProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const Comp =
     (PlanModule as any).PlanStatusProvider ??
     (PlanModule as any).default ??
@@ -92,21 +98,48 @@ export default function RootLayout() {
   useEffect(() => {
     if (!fontsLoaded) return;
 
-    const oldTextRender = (Text as any).render;
-    (Text as any).render = function (...args: any[]) {
-      const origin = oldTextRender.call(this, ...args);
-      return React.cloneElement(origin, {
-        style: [{ fontFamily: "Anjoman-Regular" }, origin.props.style],
-      });
+    const pickFamily = (style: any) => {
+      const s = StyleSheet.flatten(style) || {};
+      const fw = String(s.fontWeight ?? "").trim();
+
+      // اگر جایی fontFamily دستی ست شده، دست نزن
+      if (s.fontFamily) return { family: s.fontFamily, forceNormalWeight: false };
+
+      const w = parseInt(fw, 10);
+      if (!Number.isNaN(w)) {
+        if (w >= 700) return { family: "Anjoman-Bold", forceNormalWeight: true };
+        if (w >= 500) return { family: "Anjoman-Medium", forceNormalWeight: true };
+        return { family: "Anjoman-Regular", forceNormalWeight: true };
+      }
+
+      if (fw === "bold") return { family: "Anjoman-Bold", forceNormalWeight: true };
+
+      return { family: "Anjoman-Regular", forceNormalWeight: true };
     };
 
-    const oldInputRender = (TextInput as any).render;
-    (TextInput as any).render = function (...args: any[]) {
-      const origin = oldInputRender.call(this, ...args);
-      return React.cloneElement(origin, {
-        style: [{ fontFamily: "Anjoman-Regular" }, origin.props.style],
-      });
+    const patchRender = (Comp: any) => {
+      const oldRender = Comp.render;
+      Comp.render = function (...args: any[]) {
+        const origin = oldRender.call(this, ...args);
+        const { family, forceNormalWeight } = pickFamily(origin?.props?.style);
+
+        return React.cloneElement(origin, {
+          style: [
+            origin.props.style,
+            {
+              fontFamily: family,
+              ...(forceNormalWeight ? { fontWeight: "normal" } : null),
+            },
+          ],
+        });
+      };
     };
+
+    patchRender(Text as any);
+    patchRender(TextInput as any);
+
+    // چون خودت prevent کردی، بعد از لود فونت‌ها آزادش کن
+    SplashScreen.hideAsync().catch(() => {});
   }, [fontsLoaded]);
 
   if (!fontsLoaded) return null;

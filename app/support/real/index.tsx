@@ -1,21 +1,21 @@
 // app/support/real/index.tsx
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect, useTheme } from "@react-navigation/native";
+import { Stack, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useTheme, useFocusEffect } from "@react-navigation/native";
-import { useRouter, Stack } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import PlanStatusBadge from "../../../components/PlanStatusBadge";
 import BACKEND_URL from "../../../constants/backend";
 import { useUser } from "../../../hooks/useUser";
-import PlanStatusBadge from "../../../components/PlanStatusBadge";
 
 const DEFAULT_TITLES = {
   tech: "پشتیبانی فنی ققنوس",
@@ -345,7 +345,7 @@ export default function RealSupport() {
           <PlanStatusBadge
             me={me}
             showExpiringText
-            expiringText={(d) => `تا انقضا ${String(d).replace(/\d/g, (x) => "۰۱۲۳۴۵۶۷۸۹"[Number(x)])} روز`}
+            expiringText={(d) => ` ${String(d).replace(/\d/g, (x) => "۰۱۲۳۴۵۶۷۸۹"[Number(x)])} روز`}
           />
         </View>
       </View>

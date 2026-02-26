@@ -1210,8 +1210,8 @@ export default function TicketDetail() {
     if (!titleType) return;
     const title =
       titleType === "therapy"
-        ? "چت با درمانگر ققنوس"
-        : "چت با پشتیبانی فنی ققنوس";
+        ? "درمانگر ققنوس"
+        : "پشتیبان فنی";
     // @ts-ignore
     (navigation as any)?.setOptions?.({ title });
   }, [ticket, navigation, typeFromParam]);
@@ -1260,8 +1260,8 @@ export default function TicketDetail() {
   const isProPlan = planView === "pro" || planView === "expiring";
   const headerTitle =
     chatType === "therapy"
-      ? "چت با درمانگر ققنوس"
-      : "چت با پشتیبانی فنی ققنوس";
+      ? "درمانگر ققنوس"
+      : "پشتیبانی فنی ققنوس";
 
   const doClearLocal = useCallback(async () => {
     if (!id) return;
@@ -1306,7 +1306,7 @@ export default function TicketDetail() {
 
             <View style={styles.headerCenter}>
               <Text style={styles.headerTitle} numberOfLines={1}>
-                چت با درمانگر ققنوس
+               درمانگر ققنوس
               </Text>
             </View>
 
