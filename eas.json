@@ -24,25 +24,27 @@
       }
     },
     "bazaar": {
-      "distribution": "internal",
-      "android": {
-        "buildType": "apk"
-      },
-      "env": {
-        "PAYMENT_PROVIDER": "bazaar"
-      }
-    },
+  "distribution": "internal",
+  "android": {
+    "buildType": "apk"
+  },
+  "env": {
+    "PAYMENT_PROVIDER": "bazaar",
+    "EXPO_PUBLIC_BAZAAR_RSA_PUBLIC_KEY": "MIHNMA0GCSqGSIb3DQEBAQUAA4G7ADCBtwKBrwDXSLtTuSSfDXd/0LNrqatPKF7AWgr/vQ6gRXh5pVh9acJRFD5zeH+lbNLJLDvIGW2tKlW26eU5ie97JmAMwv0ekh3c0RRYHJN2/RDfZZ+1+lwm7+Ea7ibnV2U0ZFQPHt4feaeL1mPhrDZ6OX7bOYRMoYNWz2kigMEkikv0pwMhqvGSaVTnHidZsCOIqOoSAqJWAzcHDZFiYW0x1PozcuxrYrModFr5Ns1pl9eeve0CAwEAAQ=="
+  }
+},
 
     "bazaar-dev": {
-      "developmentClient": true,
-      "distribution": "internal",
-      "android": {
-        "buildType": "apk"
-      },
-      "env": {
-        "PAYMENT_PROVIDER": "bazaar"
-      }
-    },
+  "developmentClient": true,
+  "distribution": "internal",
+  "android": {
+    "buildType": "apk"
+  },
+  "env": {
+    "PAYMENT_PROVIDER": "bazaar",
+    "EXPO_PUBLIC_BAZAAR_RSA_PUBLIC_KEY": "MIHNMA0GCSqGSIb3DQEBAQUAA4G7ADCBtwKBrwDXSLtTuSSfDXd/0LNrqatPKF7AWgr/vQ6gRXh5pVh9acJRFD5zeH+lbNLJLDvIGW2tKlW26eU5ie97JmAMwv0ekh3c0RRYHJN2/RDfZZ+1+lwm7+Ea7ibnV2U0ZFQPHt4feaeL1mPhrDZ6OX7bOYRMoYNWz2kigMEkikv0pwMhqvGSaVTnHidZsCOIqOoSAqJWAzcHDZFiYW0x1PozcuxrYrModFr5Ns1pl9eeve0CAwEAAQ=="
+  }
+},
 
     "production": {
       "autoIncrement": true
