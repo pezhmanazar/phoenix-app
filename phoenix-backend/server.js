@@ -16,6 +16,7 @@ import announcementsRouter from "./routes/announcements.js";
 import authRouter from "./routes/auth.js"; // 🔹 روتر جدید احراز هویت / OTP
 import mediaRouter from "./routes/media.js";
 import payRouter from "./routes/pay.js"; // 🔹 روتر پرداخت / زرین‌پال (جدید)
+import payBazaarRouter from "./routes/payBazaar.js"; // ✅ روتر پرداخت بازار (جدید)
 import paymentsRouter from "./routes/payments.js";
 import pelekanRouter from "./routes/pelekan.js";
 import pelekanReviewRoutes from "./routes/pelekanReview.js";
@@ -337,6 +338,10 @@ app.use("/api/auth", authRouter);
 
 // 🔹 پرداخت / زرین‌پال
 app.use("/api/pay", payRouter);
+
+// 🔹 پرداخت / بازار
+
+app.use("/api/pay-bazaar", payBazaarRouter);
 
 // تمام مسیرهای عمومی
 app.use("/api/public", publicRouter);

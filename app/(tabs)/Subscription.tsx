@@ -51,7 +51,7 @@ const plans: PlanOption[] = [
     title: "اشتراک ۳۰ روزه",
     subtitle: "برای عبور اولیه از رابطه قبلی",
     price: "۳۹۹,۰۰۰ تومان",
-    amount: 399000,
+    amount: 1000,
     badge: "پیشنهادی",
     badgeType: "best",
   },
@@ -205,13 +205,31 @@ export default function SubscriptionScreen() {
     try {
       // ✅ تعیین مسیر پرداخت بر اساس بیلد (Bazaar vs Zarinpal)
       const provider = await getPaymentProvider();
-      if (provider.id === "bazaar") {
-        Alert.alert(
-          "پرداخت بازار",
-          "این نسخه مخصوص کافه‌بازار است و پرداخت زرین‌پال در آن غیرفعال شده. (پرداخت بازار هنوز پیاده‌سازی نشده)"
-        );
-        return;
-      }
+
+if (provider.id === "bazaar") {
+  // 1) اول مطمئن شو Poolakey وصل است
+  const ok = await provider.isAvailable();
+  if (!ok) {
+    Alert.alert("بازار", "اتصال به کافه‌بازار برقرار نشد.");
+    return;
+  }
+
+  // 2) مپ PlanKey → SubSku
+  const sku =
+    option.key === "p30" ? "sub_30" :
+    option.key === "p90" ? "sub_90" :
+    "sub_180";
+    
+// 3) شروع خرید اشتراک بازار
+await provider.purchaseSubscription(sku as any, phone!);
+
+// 4) بعد از verify، حتماً یوزر رو force refresh کن
+await refresh({ force: true });
+
+// (اختیاری) پیام
+Alert.alert("بازار", "خرید ثبت شد. اشتراک به‌روزرسانی شد.");
+return;
+}
 
       // --- ۱) شروع پرداخت ---
       const months =

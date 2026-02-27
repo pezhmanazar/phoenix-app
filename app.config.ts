@@ -1,18 +1,27 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
 export default ({ config }: ConfigContext): ExpoConfig => {
-  const raw = process.env.PAYMENT_PROVIDER;
+  const rawProvider = process.env.PAYMENT_PROVIDER;
   const provider =
-    raw && raw.toLowerCase().trim() === "bazaar" ? "bazaar" : "zarinpal";
+    rawProvider && rawProvider.toLowerCase().trim() === "bazaar"
+      ? "bazaar"
+      : "zarinpal";
+
+  const bazaarRsa = (process.env.EXPO_PUBLIC_BAZAAR_RSA_PUBLIC_KEY || "").trim();
 
   return {
+    ...config,
+
     name: config.name ?? "qoqnoos",
     slug: config.slug ?? "phoenix-app",
     version: config.version ?? "1.0.0",
-    ...config,
+
     extra: {
       ...(config.extra || {}),
       PAYMENT_PROVIDER: provider,
+
+      // ✅ اینو اضافه کردیم تا داخل Constants.expoConfig.extra بیاد
+      EXPO_PUBLIC_BAZAAR_RSA_PUBLIC_KEY: bazaarRsa,
     },
   };
 };

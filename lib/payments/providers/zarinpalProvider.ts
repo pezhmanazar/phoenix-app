@@ -1,14 +1,14 @@
-import type { PaymentApi } from "../getPaymentProvider";
+import type { PaymentApi, SubSku } from "../getPaymentProvider";
 
 export const zarinpalProvider: PaymentApi = {
   id: "zarinpal",
   async isAvailable() {
     return true;
   },
-  async purchaseSubscription() {
+  async purchaseSubscription(_sku: SubSku, _phone: string) {
     throw new Error("Zarinpal provider not wired in this provider yet.");
   },
-  async restorePurchases() {
+  async restorePurchases(_phone: string) {
     // no-op
   },
 };

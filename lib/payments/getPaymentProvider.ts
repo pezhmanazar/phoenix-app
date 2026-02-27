@@ -6,8 +6,8 @@ export type SubSku = "sub_30" | "sub_90" | "sub_180";
 export type PaymentApi = {
   id: PaymentProviderId;
   isAvailable(): Promise<boolean>;
-  purchaseSubscription(sku: SubSku): Promise<void>;
-  restorePurchases(): Promise<void>;
+  purchaseSubscription(sku: SubSku, phone: string): Promise<any>;
+  restorePurchases(phone: string): Promise<void>;
 };
 
 export async function getPaymentProvider(): Promise<PaymentApi> {
