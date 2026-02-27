@@ -14,7 +14,6 @@
         "buildType": "apk"
       }
     },
-
     "site": {
       "distribution": "internal",
       "android": {
@@ -25,6 +24,17 @@
       }
     },
     "bazaar": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "PAYMENT_PROVIDER": "bazaar"
+      }
+    },
+
+    "bazaar-dev": {
+      "developmentClient": true,
       "distribution": "internal",
       "android": {
         "buildType": "apk"

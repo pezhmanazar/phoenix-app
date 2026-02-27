@@ -19,6 +19,7 @@ import { useUser } from "../../hooks/useUser";
 import * as WebBrowser from "expo-web-browser";
 import { toJalaali } from "jalaali-js";
 import { startPay } from "../../api/pay"; // ✅ فقط startPay
+import { getPaymentProvider } from "../../lib/payments/getPaymentProvider";
 import { getPlanStatus } from "../../lib/plan";
 
 type PlanKey = "trial15" | "p30" | "p90" | "p180";
@@ -202,6 +203,16 @@ export default function SubscriptionScreen() {
     setPayingKey(option.key);
 
     try {
+      // ✅ تعیین مسیر پرداخت بر اساس بیلد (Bazaar vs Zarinpal)
+      const provider = await getPaymentProvider();
+      if (provider.id === "bazaar") {
+        Alert.alert(
+          "پرداخت بازار",
+          "این نسخه مخصوص کافه‌بازار است و پرداخت زرین‌پال در آن غیرفعال شده. (پرداخت بازار هنوز پیاده‌سازی نشده)"
+        );
+        return;
+      }
+
       // --- ۱) شروع پرداخت ---
       const months =
         option.key === "p30" ? 1 :
