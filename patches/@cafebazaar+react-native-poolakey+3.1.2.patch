@@ -1,0 +1,26 @@
+diff --git a/node_modules/@cafebazaar/react-native-poolakey/android/src/main/java/com/cafebazaar/reactnativepoolakey/ReactNativePoolakeyModule.kt b/node_modules/@cafebazaar/react-native-poolakey/android/src/main/java/com/cafebazaar/reactnativepoolakey/ReactNativePoolakeyModule.kt
+index a9aa802..b3e7831 100644
+--- a/node_modules/@cafebazaar/react-native-poolakey/android/src/main/java/com/cafebazaar/reactnativepoolakey/ReactNativePoolakeyModule.kt
++++ b/node_modules/@cafebazaar/react-native-poolakey/android/src/main/java/com/cafebazaar/reactnativepoolakey/ReactNativePoolakeyModule.kt
+@@ -96,8 +96,8 @@ class ReactNativePoolakeyModule(reactContext: ReactApplicationContext) : ReactCo
+     promise: Promise
+   ) {
+ 
+-    check(currentActivity != null) {
+-      "currentActivity is null"
++    check(getCurrentActivity() != null) {
++      "activity is null"
+     }
+ 
+     runIfPaymentInitialized(promise) {
+@@ -120,8 +120,8 @@ class ReactNativePoolakeyModule(reactContext: ReactApplicationContext) : ReactCo
+     promise: Promise
+   ) {
+ 
+-    check(currentActivity != null) {
+-      "currentActivity is null"
++    check(getCurrentActivity() != null) {
++      "activity is null"
+     }
+ 
+     runIfPaymentInitialized(promise) {
