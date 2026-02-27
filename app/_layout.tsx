@@ -18,6 +18,7 @@ import { PhoenixProvider, usePhoenix } from "../hooks/PhoenixContext";
 import * as AuthModule from "../hooks/useAuth";
 import * as PlanModule from "../hooks/usePlanStatus";
 import * as UserModule from "../hooks/useUser";
+import { getPaymentProvider } from "../lib/payments/getPaymentProvider";
 
 /* ---------------- Providers ---------------- */
 const AuthProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
@@ -93,6 +94,13 @@ export default function RootLayout() {
   useEffect(() => {
     SplashScreen.preventAutoHideAsync().catch(() => {});
     console.log("🟢 SPLASH PREVENT (SAFE)");
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      const p = await getPaymentProvider();
+      console.log("💳 Active provider:", p.id);
+    })();
   }, []);
 
   useEffect(() => {
