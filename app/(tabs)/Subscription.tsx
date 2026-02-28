@@ -5,7 +5,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -28,9 +27,9 @@ type PlanOption = {
   key: PlanKey;
   title: string;
   subtitle: string;
-  price: string;        // قیمت نهایی
-  oldPrice?: string;    // قیمت قبل (خط‌خورده)
-  amount?: number;      // مبلغ نهایی برای پرداخت
+  price: string; // قیمت نهایی
+  oldPrice?: string; // قیمت قبل (خط‌خورده)
+  amount?: number; // مبلغ نهایی برای پرداخت
   badge?: string;
   badgeType?: "best" | "value" | "premium";
 };
@@ -129,6 +128,28 @@ export default function SubscriptionScreen() {
   const [showMoreChanges, setShowMoreChanges] = useState(false);
   const [showMoreAccess, setShowMoreAccess] = useState(false);
 
+  function openPayModal(opts: {
+    success: boolean;
+    message?: string | null;
+    refId?: string | null;
+  }) {
+    setPayResult({
+      visible: true,
+      success: !!opts.success,
+      refId: opts.refId ?? null,
+      message: opts.message ?? null,
+    });
+  }
+
+  async function forceRefreshUser() {
+    setWaitingForPayRefresh(true);
+    try {
+      await refresh({ force: true });
+    } finally {
+      setWaitingForPayRefresh(false);
+    }
+  }
+
   // هر بار ورود به تب → فقط از سرور می‌خوانیم
   useFocusEffect(
     useCallback(() => {
@@ -190,11 +211,17 @@ export default function SubscriptionScreen() {
 
   async function handleBuy(option: PlanOption) {
     if (!option.amount) {
-      Alert.alert("به‌زودی", "این پلن هنوز فعال نشده است.");
+      openPayModal({
+        success: false,
+        message: "این پلن هنوز فعال نشده.",
+      });
       return;
     }
     if (!isAuthenticated || !phone) {
-      Alert.alert("نیاز به ورود", "اول با شماره موبایل وارد اپ شو.");
+      openPayModal({
+        success: false,
+        message: "اول با شماره موبایل وارد اپ شو.",
+      });
       return;
     }
     if (payingRef.current) return;
@@ -206,57 +233,82 @@ export default function SubscriptionScreen() {
       // ✅ تعیین مسیر پرداخت بر اساس بیلد (Bazaar vs Zarinpal)
       const provider = await getPaymentProvider();
 
-if (provider.id === "bazaar") {
-  // 1) اول مطمئن شو Poolakey وصل است
-  const ok = await provider.isAvailable();
-  if (!ok) {
-    Alert.alert("بازار", "اتصال به کافه‌بازار برقرار نشد.");
-    return;
-  }
+      if (provider.id === "bazaar") {
+        try {
+          // 1) اول مطمئن شو Poolakey وصل است
+          const ok = await provider.isAvailable();
+          if (!ok) {
+            openPayModal({
+              success: false,
+              message:
+                "اتصال به کافه‌بازار برقرار نشد. اینترنت خودت رو چک کن و دوباره تلاش کن.",
+            });
+            return;
+          }
 
-  // 2) مپ PlanKey → SubSku
-  const sku =
-    option.key === "p30" ? "sub_30" :
-    option.key === "p90" ? "sub_90" :
-    "sub_180";
-    
-// 3) شروع خرید اشتراک بازار
-await provider.purchaseSubscription(sku as any, phone!);
+          // 2) مپ PlanKey → SubSku
+          const sku =
+            option.key === "p30"
+              ? "sub_30"
+              : option.key === "p90"
+              ? "sub_90"
+              : "sub_180";
 
-// 4) بعد از verify، حتماً یوزر رو force refresh کن
-await refresh({ force: true });
+          // 3) شروع خرید اشتراک بازار (داخلش verify سرور انجام میشه)
+          await provider.purchaseSubscription(sku as any, phone!);
 
-// (اختیاری) پیام
-Alert.alert("بازار", "خرید ثبت شد. اشتراک به‌روزرسانی شد.");
-return;
-}
+          // 4) بعد از verify، حتماً یوزر رو force refresh کن (همون لحظه)
+          await forceRefreshUser();
+
+          openPayModal({
+            success: true,
+            message: "خرید ثبت شد و اشتراک تو به‌روزرسانی شد اگه تاریخ انقضا عوض نشد یکبار اپ رو ببند و مجدد وارد شو.",
+          });
+          return;
+        } catch (e: any) {
+          openPayModal({
+            success: false,
+            message:
+              e?.message ||
+              "در خرید از بازار مشکلی پیش اومد. اگه مبلغ از حسابت کم شده، چند دقیقه بعد دوباره وضعیت اشتراک رو چک کن.",
+          });
+          return;
+        }
+      }
 
       // --- ۱) شروع پرداخت ---
       const months =
-        option.key === "p30" ? 1 :
-        option.key === "p90" ? 3 :
-        option.key === "p180" ? 6 : 1;
+        option.key === "p30" ? 1 : option.key === "p90" ? 3 : option.key === "p180" ? 6 : 1;
 
       const start = await startPay({
         phone: phone!,
         amount: option.amount,
-        months,        // ✅ خیلی مهم
-        plan: "pro",   // ✅ صریح
+        months, // ✅ خیلی مهم
+        plan: "pro", // ✅ صریح
       });
 
       if (!start.ok) {
-        Alert.alert("خطا", start.error || "در اتصال به سرور مشکلی پیش آمد.");
+        openPayModal({
+          success: false,
+          message: start.error || "در اتصال به سرور مشکلی پیش آمد.",
+        });
         return;
       }
 
       if (!start.data) {
-        Alert.alert("خطا", "در اتصال به سرور مشکلی پیش آمد.");
+        openPayModal({
+          success: false,
+          message: "در اتصال به سرور مشکلی پیش آمد.",
+        });
         return;
       }
 
       const { gatewayUrl, authority } = start.data;
       if (!gatewayUrl || !authority) {
-        Alert.alert("خطا", "اطلاعات درگاه پرداخت ناقص است.");
+        openPayModal({
+          success: false,
+          message: "اطلاعات درگاه پرداخت ناقص است.",
+        });
         return;
       }
 
@@ -274,7 +326,6 @@ return;
       );
 
       return;
-
     } catch (e: any) {
       setPayResult({
         visible: true,
@@ -321,7 +372,10 @@ return;
       : "FREE";
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: headerBg }} edges={["top", "left", "right", "bottom"]}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: headerBg }}
+      edges={["top", "left", "right", "bottom"]}
+    >
       <View style={{ flex: 1 }}>
         {/* گلو شبیه تب‌های دیگه */}
         <View pointerEvents="none" style={styles.bgGlow1} />
@@ -356,9 +410,7 @@ return;
         >
           {/* کارت معرفی */}
           <View style={[styles.glassCard, { borderRadius: 22, padding: 16 }]}>
-            <Text style={styles.heroSubtitle}>
-              برای رهایی، برای بازسازی، برای شروع دوباره.
-            </Text>
+            <Text style={styles.heroSubtitle}>برای رهایی، برای بازسازی، برای شروع دوباره.</Text>
 
             {/* وضعیت فعلی اشتراک */}
             <View style={styles.statusCard}>
@@ -400,9 +452,7 @@ return;
                   </>
                 ) : planView === "expired" ? (
                   <>
-                    <Text style={[styles.statusTitle, { color: "#F97373" }]}>
-                      اشتراک منقضی شده
-                    </Text>
+                    <Text style={[styles.statusTitle, { color: "#F97373" }]}>اشتراک منقضی شده</Text>
                     {niceExpireText && (
                       <Text style={[styles.smallText, { color: "#FCA5A5" }]}>
                         تاریخ انقضا: {niceExpireText}
@@ -436,129 +486,123 @@ return;
             </View>
           </View>
 
-         {/* باکس ارزش اشتراک */}
-<View style={[styles.glassCard, { marginTop: 16, borderRadius: 22, padding: 16 }]}>
+          {/* باکس ارزش اشتراک */}
+          <View style={[styles.glassCard, { marginTop: 16, borderRadius: 22, padding: 16 }]}>
+            {/* بخش اول: تغییر واقعی */}
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="sparkles" size={16} color="#E98A15" />
+              <Text style={styles.sectionTitle}>با اشتراک ققنوس چه تغییری در تو آغاز می‌شه؟</Text>
+            </View>
 
-  {/* بخش اول: تغییر واقعی */}
-  <View style={styles.sectionTitleRow}>
-    <Ionicons name="sparkles" size={16} color="#E98A15" />
-    <Text style={styles.sectionTitle}>
-      با اشتراک ققنوس چه تغییری در تو آغاز می‌شه؟
-    </Text>
-  </View>
+            {(() => {
+              const items = [
+                "شروع واقعی عبور از وابستگی عاطفی، نه فقط تلاش‌های مقطعی برای فراموش کردن",
+                "شکستن چرخه برگشت‌های مکرر و کاهش وسوسه تماس یا چک کردن",
+                "کاهش نشخوار فکری و آزاد شدن ذهن از درگیری دائمی با گذشته",
+                "بازگشت تدریجی ثبات هیجانی و کنترل تصمیم‌های احساسی",
+                "کاهش آشفتگی ذهنی و بازگشت نظم به خواب، تمرکز و برنامه روزانه",
+                "تقویت حس ارزشمندی و توانایی ساختن آینده بدون وابستگی به رابطه قبلی",
+                "افزایش امید، انگیزه و توان شروع دوباره",
+              ];
 
-  {(() => {
-    const items = [
-      "شروع واقعی عبور از وابستگی عاطفی، نه فقط تلاش‌های مقطعی برای فراموش کردن",
-      "شکستن چرخه برگشت‌های مکرر و کاهش وسوسه تماس یا چک کردن",
-      "کاهش نشخوار فکری و آزاد شدن ذهن از درگیری دائمی با گذشته",
-      "بازگشت تدریجی ثبات هیجانی و کنترل تصمیم‌های احساسی",
-      "کاهش آشفتگی ذهنی و بازگشت نظم به خواب، تمرکز و برنامه روزانه",
-      "تقویت حس ارزشمندی و توانایی ساختن آینده بدون وابستگی به رابطه قبلی",
-      "افزایش امید، انگیزه و توان شروع دوباره",
-    ];
+              const visible = showMoreChanges ? items : items.slice(0, 2);
 
-    const visible = showMoreChanges ? items : items.slice(0, 2);
+              return (
+                <>
+                  {visible.map((item) => (
+                    <View key={item} style={styles.bulletRow}>
+                      <Ionicons
+                        name="arrow-up-circle"
+                        size={18}
+                        color="#D4AF37"
+                        style={{ marginLeft: 6 }}
+                      />
+                      <Text style={styles.bulletText}>{item}</Text>
+                    </View>
+                  ))}
 
-    return (
-      <>
-        {visible.map((item) => (
-          <View key={item} style={styles.bulletRow}>
-            <Ionicons
-              name="arrow-up-circle"
-              size={18}
-              color="#D4AF37"
-              style={{ marginLeft: 6 }}
-            />
-            <Text style={styles.bulletText}>{item}</Text>
+                  {items.length > 2 && (
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => setShowMoreChanges((v) => !v)}
+                      style={styles.moreRow}
+                    >
+                      <Ionicons
+                        name={showMoreChanges ? "remove-circle" : "add-circle"}
+                        size={18}
+                        color="#E98A15"
+                        style={{ marginLeft: 6 }}
+                      />
+                      <Text style={styles.moreText}>
+                        {showMoreChanges ? "بستن موارد بیشتر" : "دیدن موارد بیشتر"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              );
+            })()}
+
+            <View style={{ height: 18 }} />
+
+            {/* بخش دوم: ابزار و دسترسی‌ها */}
+            <View style={styles.sectionTitleRow}>
+              {/* ✅ به جای lock-open (ممکنه تو Ionicons تایپی گیر بده) */}
+              <Ionicons name="key" size={16} color="#10B981" />
+              <Text style={styles.sectionTitle}>با اشتراک ققنوس به چه چیزهایی دسترسی داری؟</Text>
+            </View>
+
+            {(() => {
+              const items = [
+                "باز شدن کامل مسیر «پلکان» یعنی مسیر هفت‌مرحله‌ای بازسازی بعد از جدایی با ساختار روزمحور",
+                "تکنیک‌های «پناهگاه» برای مدیریت فوری موج‌های وسوسه، خشم، اضطراب و دلتنگی",
+                "محتوا‌های تخصصی «مشعل» برای بازسازی شناختی و اصلاح الگوهای تکراری رابطه",
+                "امکان پیام مستقیم و نامحدود به درمانگر واقعی برای دریافت راهنمایی شخصی‌سازی‌شده",
+                "سیستم پیشرفت و امتیازدهی برای تثبیت تغییر رفتاری و استمرار تمرین‌ها",
+              ];
+
+              const visible = showMoreAccess ? items : items.slice(0, 2);
+
+              return (
+                <>
+                  {visible.map((item) => (
+                    <View key={item} style={styles.bulletRow}>
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={18}
+                        color="#10B981"
+                        style={{ marginLeft: 6 }}
+                      />
+                      <Text style={styles.bulletText}>{item}</Text>
+                    </View>
+                  ))}
+
+                  {items.length > 2 && (
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => setShowMoreAccess((v) => !v)}
+                      style={styles.moreRow}
+                    >
+                      <Ionicons
+                        name={showMoreAccess ? "remove-circle" : "add-circle"}
+                        size={18}
+                        color="#10B981"
+                        style={{ marginLeft: 6 }}
+                      />
+                      <Text style={styles.moreText}>
+                        {showMoreAccess ? "بستن موارد بیشتر" : "دیدن موارد بیشتر"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              );
+            })()}
+
+            <View style={{ marginTop: 16 }}>
+              <Text style={styles.subscriptionStrong}>
+                ققنوس برای ماندن در گذشته طراحی نشده؛ برای عبور ساختارمند از اون ساخته شده.
+              </Text>
+            </View>
           </View>
-        ))}
-
-        {items.length > 2 && (
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={() => setShowMoreChanges((v) => !v)}
-            style={styles.moreRow}
-          >
-            <Ionicons
-              name={showMoreChanges ? "remove-circle" : "add-circle"}
-              size={18}
-              color="#E98A15"
-              style={{ marginLeft: 6 }}
-            />
-            <Text style={styles.moreText}>
-              {showMoreChanges ? "بستن موارد بیشتر" : "دیدن موارد بیشتر"}
-            </Text>
-          </TouchableOpacity>
-        )}
-      </>
-    );
-  })()}
-
-  <View style={{ height: 18 }} />
-
-  {/* بخش دوم: ابزار و دسترسی‌ها */}
-  <View style={styles.sectionTitleRow}>
-    {/* ✅ به جای lock-open (ممکنه تو Ionicons تایپی گیر بده) */}
-    <Ionicons name="key" size={16} color="#10B981" />
-    <Text style={styles.sectionTitle}>
-      با اشتراک ققنوس به چه چیزهایی دسترسی داری؟
-    </Text>
-  </View>
-
-  {(() => {
-    const items = [
-      "باز شدن کامل مسیر «پلکان» یعنی مسیر هفت‌مرحله‌ای بازسازی بعد از جدایی با ساختار روزمحور",
-      "تکنیک‌های «پناهگاه» برای مدیریت فوری موج‌های وسوسه، خشم، اضطراب و دلتنگی",
-      "محتوا‌های تخصصی «مشعل» برای بازسازی شناختی و اصلاح الگوهای تکراری رابطه",
-      "امکان پیام مستقیم و نامحدود به درمانگر واقعی برای دریافت راهنمایی شخصی‌سازی‌شده",
-      "سیستم پیشرفت و امتیازدهی برای تثبیت تغییر رفتاری و استمرار تمرین‌ها",
-    ];
-
-    const visible = showMoreAccess ? items : items.slice(0, 2);
-
-    return (
-      <>
-        {visible.map((item) => (
-          <View key={item} style={styles.bulletRow}>
-            <Ionicons
-              name="checkmark-circle"
-              size={18}
-              color="#10B981"
-              style={{ marginLeft: 6 }}
-            />
-            <Text style={styles.bulletText}>{item}</Text>
-          </View>
-        ))}
-
-        {items.length > 2 && (
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={() => setShowMoreAccess((v) => !v)}
-            style={styles.moreRow}
-          >
-            <Ionicons
-              name={showMoreAccess ? "remove-circle" : "add-circle"}
-              size={18}
-              color="#10B981"
-              style={{ marginLeft: 6 }}
-            />
-            <Text style={styles.moreText}>
-              {showMoreAccess ? "بستن موارد بیشتر" : "دیدن موارد بیشتر"}
-            </Text>
-          </TouchableOpacity>
-        )}
-      </>
-    );
-  })()}
-
-  <View style={{ marginTop: 16 }}>
-    <Text style={styles.subscriptionStrong}>
-      ققنوس برای ماندن در گذشته طراحی نشده؛ برای عبور ساختارمند از اون ساخته شده.
-    </Text>
-  </View>
-
-</View>
 
           {/* پلن‌ها */}
           <View style={{ marginTop: 18 }}>
@@ -570,7 +614,7 @@ return;
 
             {plans.map((p) => {
               const isLoading = payingKey === p.key;
-              const disabled = !p.amount || isLoading;
+              const disabled = !p.amount || isLoading || waitingForPayRefresh;
 
               // ✅ رنگ دور باکس‌ها حفظ شد
               const borderColor =
@@ -675,7 +719,14 @@ return;
                     )}
                   </View>
 
-                  <Text style={{ color: "#9CA3AF", fontSize: 12, marginTop: 4, textAlign: "right" }}>
+                  <Text
+                    style={{
+                      color: "#9CA3AF",
+                      fontSize: 12,
+                      marginTop: 4,
+                      textAlign: "right",
+                    }}
+                  >
                     {p.subtitle}
                   </Text>
 
@@ -689,11 +740,7 @@ return;
                   >
                     {/* ✅ قیمت: قدیمی خط‌خورده + جدید */}
                     <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
-                      {showOld && (
-                        <Text style={styles.oldPriceText}>
-                          {p.oldPrice}
-                        </Text>
-                      )}
+                      {showOld && <Text style={styles.oldPriceText}>{p.oldPrice}</Text>}
 
                       <Text
                         style={[
@@ -740,16 +787,12 @@ return;
           <View style={[styles.glassCard, { marginTop: 18, borderRadius: 22, padding: 14, gap: 8 }]}>
             <View style={{ flexDirection: "row-reverse", alignItems: "center" }}>
               <Ionicons name="shield-checkmark" size={18} color="#22C55E" />
-              <Text style={styles.trustText}>
-                حریم خصوصی و اطلاعاتت داخل ققنوس کاملاً محرمانه‌ست.
-              </Text>
+              <Text style={styles.trustText}>حریم خصوصی و اطلاعاتت داخل ققنوس کاملاً محرمانه‌ست.</Text>
             </View>
 
             <View style={{ flexDirection: "row-reverse", alignItems: "center" }}>
               <Ionicons name="lock-closed" size={18} color="#60A5FA" />
-              <Text style={styles.trustText}>
-                پرداخت از طریق درگاه امن و معتبر انجام میشه.
-              </Text>
+              <Text style={styles.trustText}>پرداخت از طریق درگاه امن و معتبر انجام میشه.</Text>
             </View>
 
             <View style={{ flexDirection: "row-reverse", alignItems: "center" }}>
@@ -763,7 +806,7 @@ return;
           <View style={{ height: 80 }} />
         </ScrollView>
 
-        {/* بنر نتیجه پرداخت (همون قبلی—فقط برای خطاهای شبکه) */}
+        {/* بنر نتیجه پرداخت (همون قبلی—حالا برای بازار هم استفاده میشه) */}
         {payResult.visible && (
           <View
             style={{
@@ -793,7 +836,15 @@ return;
                   color={payResult.success ? "#22C55E" : "#F97373"}
                   style={{ marginLeft: 8 }}
                 />
-                <Text style={{ color: "#F9FAFB", fontSize: 18, fontWeight: "900", textAlign: "right", flex: 1 }}>
+                <Text
+                  style={{
+                    color: "#F9FAFB",
+                    fontSize: 18,
+                    fontWeight: "900",
+                    textAlign: "right",
+                    flex: 1,
+                  }}
+                >
                   {payResult.success ? "پرداخت موفق" : "پرداخت ناموفق"}
                 </Text>
               </View>
@@ -801,7 +852,15 @@ return;
               {payResult.refId && (
                 <View style={{ marginTop: 4 }}>
                   <Text style={{ color: "#9CA3AF", fontSize: 12, textAlign: "right" }}>کد رهگیری:</Text>
-                  <Text style={{ color: "#E5E7EB", fontSize: 14, fontWeight: "800", marginTop: 2, textAlign: "left" }}>
+                  <Text
+                    style={{
+                      color: "#E5E7EB",
+                      fontSize: 14,
+                      fontWeight: "800",
+                      marginTop: 2,
+                      textAlign: "left",
+                    }}
+                  >
                     {payResult.refId}
                   </Text>
                 </View>
@@ -824,9 +883,7 @@ return;
                   backgroundColor: "#4B5563",
                 }}
               >
-                <Text style={{ color: "#E5E7EB", fontSize: 13, fontWeight: "800" }}>
-                  بستن
-                </Text>
+                <Text style={{ color: "#E5E7EB", fontSize: 13, fontWeight: "800" }}>بستن</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -996,15 +1053,15 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   moreRow: {
-  marginTop: 6,
-  flexDirection: "row-reverse",
-  alignItems: "center",
-},
+    marginTop: 6,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+  },
 
-moreText: {
-  color: "#9CA3AF",
-  fontSize: 12,
-  fontWeight: "800",
-  textAlign: "right",
-},
+  moreText: {
+    color: "#9CA3AF",
+    fontSize: 12,
+    fontWeight: "800",
+    textAlign: "right",
+  },
 });

@@ -116,7 +116,7 @@ export const bazaarProvider: PaymentApi = {
     }
   },
 
-  async purchaseSubscription(sku: SubSku, phone: string) {
+  async purchaseSubscription(sku: SubSku, phone: string): Promise<any> {
     const pk = getPk();
     const productId = mapSkuToProductId(sku);
 
@@ -140,18 +140,19 @@ export const bazaarProvider: PaymentApi = {
 
     console.log("[bazaar] purchase result =", result);
 
-    // 3) verify روی سرور
-    await verifyOnServer({
-      phone,
-      productId: result?.productId || productId,
-      purchaseToken: result?.purchaseToken,
-      orderId: result?.orderId,
-      packageName: result?.packageName,
-      purchaseTime: result?.purchaseTime,
-    });
+    
+// 3) verify روی سرور
+const verified = await verifyOnServer({
+  phone,
+  productId: result?.productId || productId,
+  purchaseToken: result?.purchaseToken,
+  orderId: result?.orderId,
+  packageName: result?.packageName,
+  purchaseTime: result?.purchaseTime,
+});
 
-    // 4) برگردوندن نتیجه برای UI (اگه خواستی)
-    return result;
+// 4) خروجی کامل برگرده تا UI بتونه refresh کنه
+return { result, verified };
   },
 
   async restorePurchases(_phone: string) {
