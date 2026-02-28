@@ -1,4 +1,5 @@
 // phoenix-backend/routes/payBazaar.js
+
 import { PrismaClient } from "@prisma/client";
 import express from "express";
 
@@ -6,6 +7,7 @@ const router = express.Router();
 const prisma = new PrismaClient();
 
 /* ------------------------------ helpers ------------------------------ */
+
 function setCORS(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
@@ -42,12 +44,20 @@ function toDateSafe(v) {
   return isNaN(d.getTime()) ? null : d;
 }
 
-// ✅ authority باید unique باشه.
-// ✅ فیکس مهم: authority باید پایدار باشه تا idempotent واقعی بشه.
-// از این به بعد: فقط بر اساس purchaseToken
-function buildAuthority({ purchaseToken }) {
+// ✅ authority باید هم یکتا باشه هم برای retry پایدار بمونه.
+// ✅ قاعده:
+// - اگر orderId داریم: authority = BAZAAR_<orderId>
+// - اگر نداریم: authority = BAZAAR_<purchaseToken>_<purchaseTimeMs>
+function buildAuthority({ purchaseToken, orderId, purchaseTime }) {
+  const oid = String(orderId || "").trim();
+  if (oid) return `BAZAAR_${oid}`;
+
   const t = String(purchaseToken || "").trim();
-  return t ? `BAZAAR_${t}` : "";
+  if (!t) return "";
+
+  const pt = toDateSafe(purchaseTime);
+  const ms = pt ? pt.getTime() : Date.now();
+  return `BAZAAR_${t}_${ms}`;
 }
 
 const BACKEND_URL = (process.env.BACKEND_URL || "http://127.0.0.1:4000").trim();
@@ -115,17 +125,6 @@ router.get("/status", async (req, res) => {
 
 /**
  * POST /api/pay-bazaar/verify
- * body: {
- *   phone: string,
- *   productId: "phoenix_pro_1m"|"phoenix_pro_3m"|"phoenix_pro_6m",
- *   purchaseToken: string,
- *   orderId?: string,
- *   packageName?: string,
- *   purchaseTime?: string|number
- * }
- *
- * ✅ فعلاً: تایید سمت سرور بر اساس receipt ارسالی از اپ (Dev-friendly)
- * 🔒 بعداً: verify واقعی با API بازار
  */
 router.post("/verify", async (req, res) => {
   setCORS(res);
@@ -133,6 +132,7 @@ router.post("/verify", async (req, res) => {
 
   try {
     const body = req.body || {};
+
     const phone = normalizeIranPhone(String(body.phone || ""));
     const productId = String(body.productId || "").trim();
     const purchaseToken = String(body.purchaseToken || "").trim();
@@ -149,8 +149,9 @@ router.post("/verify", async (req, res) => {
 
     const purchaseTime = toDateSafe(purchaseTimeRaw) || new Date();
 
-    // ✅ authority پایدار
-    const authority = buildAuthority({ purchaseToken });
+    // ✅ authority ضدگلوله
+    // (اگر orderId داریم => پایدار و یکتا؛ اگر نداریم => purchaseToken + purchaseTimeMs پایدار)
+    const authority = buildAuthority({ purchaseToken, orderId, purchaseTime });
     if (!authority) return res.status(400).json({ ok: false, error: "INVALID_AUTHORITY" });
 
     // ✅ user upsert
@@ -160,46 +161,33 @@ router.post("/verify", async (req, res) => {
       create: { phone, plan: "free", profileCompleted: true },
     });
 
-    // ✅ idempotency واقعی:
-    // اگر همین purchaseToken قبلاً ثبت شده (حتی با authority قدیمیِ timestampدار)،
-    // هیچ تمدیدی انجام نده و همون قبلی رو برگردون.
-    const existingByToken = await prisma.subscription.findFirst({
-      where: {
-        provider: "bazaar",
-        OR: [
-          // حالت جدید (authority پایدار)
-          { authority },
-          // حالت‌های قدیمی (authority با timestamp)
-          { authority: { startsWith: `BAZAAR_${purchaseToken}_` } },
-          // حالت قوی: خود توکن داخل metaJson
-          { metaJson: { path: ["purchaseToken"], equals: purchaseToken } },
-        ],
-      },
+    // ✅ idempotency درست: فقط بر اساس authority محاسبه‌شده
+    const existing = await prisma.subscription.findFirst({
+      where: { provider: "bazaar", authority },
       include: { user: true },
-      orderBy: { paidAt: "desc" },
     });
 
-    if (existingByToken && existingByToken.status === "active") {
+    if (existing && existing.status === "active") {
       return res.json({
         ok: true,
         data: {
-          authority: existingByToken.authority,
+          authority: existing.authority,
           status: "active",
-          plan: existingByToken.plan,
-          months: existingByToken.months,
-          planExpiresAt: existingByToken.expiresAt ? new Date(existingByToken.expiresAt).toISOString() : null,
-          provider: existingByToken.provider,
-          metaJson: existingByToken.metaJson ?? null,
-          userPlan: existingByToken.user?.plan ?? null,
-          userPlanExpiresAt: existingByToken.user?.planExpiresAt
-            ? new Date(existingByToken.user.planExpiresAt).toISOString()
+          plan: existing.plan,
+          months: existing.months,
+          planExpiresAt: existing.expiresAt ? new Date(existing.expiresAt).toISOString() : null,
+          provider: existing.provider,
+          metaJson: existing.metaJson ?? null,
+          userPlan: existing.user?.plan ?? null,
+          userPlanExpiresAt: existing.user?.planExpiresAt
+            ? new Date(existing.user.planExpiresAt).toISOString()
             : null,
           idempotent: true,
         },
       });
     }
 
-    // ✅ تمدید تجمعی مثل زرین‌پال (فقط وقتی خرید واقعاً جدید باشد)
+    // ✅ تمدید تجمعی (فقط وقتی خرید واقعاً جدید است)
     const now = new Date();
     const userCurrentExpire = user.planExpiresAt ? new Date(user.planExpiresAt) : null;
     const base =
@@ -212,7 +200,6 @@ router.post("/verify", async (req, res) => {
     const plan = "pro";
     const planExpiresAtDate = calcPlanExpiresAtFromBase(base, months);
 
-    // ✅ metaJson: همه دیتای بازار اینجا ذخیره میشه
     const metaJson = {
       productId,
       purchaseToken,
@@ -221,36 +208,69 @@ router.post("/verify", async (req, res) => {
       purchaseTime: purchaseTime.toISOString(),
     };
 
-    // ✅ اتمیک: هم Subscription و هم User با هم آپدیت شوند
-    // نکته: create با authority پایدار، تا از این به بعد رکوردها یکتا و قابل idempotency باشند.
-    await prisma.$transaction(async (tx) => {
-      await tx.subscription.create({
-        data: {
-          user: { connect: { id: user.id } },
-          phone,
-          authority,
-          refId: orderId || purchaseToken || "BAZAAR_PAID",
-          amount: 0,
-          months,
-          plan,
-          status: "active",
-          expiresAt: planExpiresAtDate,
-          paidAt: now,
-          provider: "bazaar",
-          metaJson,
-        },
-      });
+    // ✅ اتمیک + ضد-race: اگر همزمان دو درخواست بیاد، یکی create میشه و یکی unique fail می‌خوره
+    // ما اون unique fail رو به idempotent تبدیل می‌کنیم.
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.subscription.create({
+          data: {
+            user: { connect: { id: user.id } },
+            phone,
+            authority,
+            refId: orderId || purchaseToken || "BAZAAR_PAID",
+            amount: 0,
+            months,
+            plan,
+            status: "active",
+            expiresAt: planExpiresAtDate,
+            paidAt: now,
+            provider: "bazaar",
+            metaJson,
+          },
+        });
 
-      await tx.user.update({
-        where: { id: user.id },
-        data: {
-          plan,
-          planExpiresAt: planExpiresAtDate,
-        },
+        await tx.user.update({
+          where: { id: user.id },
+          data: { plan, planExpiresAt: planExpiresAtDate },
+        });
       });
-    });
+    } catch (e) {
+      const isUnique =
+        e?.code === "P2002" ||
+        String(e?.message || "").toLowerCase().includes("unique") ||
+        String(e?.message || "").toLowerCase().includes("constraint");
 
-    // این همون کاریه که زرین‌پال می‌کرد؛ بدرد سازگاری می‌خوره
+      if (isUnique) {
+        const ex = await prisma.subscription.findFirst({
+          where: { provider: "bazaar", authority },
+          include: { user: true },
+        });
+
+        if (ex && ex.status === "active") {
+          return res.json({
+            ok: true,
+            data: {
+              authority: ex.authority,
+              status: "active",
+              plan: ex.plan,
+              months: ex.months,
+              planExpiresAt: ex.expiresAt ? new Date(ex.expiresAt).toISOString() : null,
+              provider: ex.provider,
+              metaJson: ex.metaJson ?? null,
+              userPlan: ex.user?.plan ?? null,
+              userPlanExpiresAt: ex.user?.planExpiresAt
+                ? new Date(ex.user.planExpiresAt).toISOString()
+                : null,
+              idempotent: true,
+              raceRecovered: true,
+            },
+          });
+        }
+      }
+
+      throw e;
+    }
+
     await upsertUserPlanOnServer({ phone, plan, planExpiresAt: planExpiresAtDate.toISOString() });
 
     return res.json({
