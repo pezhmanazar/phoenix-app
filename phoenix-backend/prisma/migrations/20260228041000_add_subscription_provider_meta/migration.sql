@@ -1,5 +1,3 @@
--- add provider + metaJson to Subscription (safe, non-destructive)
-
 ALTER TABLE "Subscription"
 ADD COLUMN IF NOT EXISTS "provider" TEXT NOT NULL DEFAULT 'zarinpal';
 
