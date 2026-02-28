@@ -186,6 +186,9 @@ model Subscription {
   createdAt DateTime  @default(now())
   paidAt    DateTime?
 
+  provider String @default("zarinpal")
+  metaJson Json?
+
   @@index([userId])
   @@index([phone])
 }
