@@ -228,25 +228,28 @@ router.post("/verify", async (req, res) => {
     // ✅ اگر رکورد وجود ندارد بساز pending
     if (!existing) {
       await prisma.subscription.create({
-        data: {
-          userId: user.id,
-          phone,
-          authority,
-          refId: orderId || purchaseToken || "BAZAAR_PAID",
-          amount: 0,
-          months,
-          plan,
-          status: "pending",
-          expiresAt: planExpiresAtDate,
-          paidAt: now,
+      data: {
+    // ❌ userId نداریم
+    // ✅ اتصال درست به یوزر
+    user: { connect: { id: user.id } },
 
-          // ✅ ذخیره متادیتا
-          productId,
-          orderId: orderId || null,
-          packageName: packageName || null,
-          purchaseTime: purchaseTimeMs ? new Date(purchaseTimeMs) : null,
-        },
-      });
+    phone,
+    authority,
+    refId: orderId || purchaseToken || "BAZAAR_PAID",
+    amount: 0,
+    months,
+    plan,
+    status: "pending",
+    expiresAt: planExpiresAtDate,
+    paidAt: now,
+
+    // meta
+    productId,
+    orderId: orderId || null,
+    packageName: packageName || null,
+    purchaseTime: purchaseTimeMs ? new Date(purchaseTimeMs) : null,
+  },
+});
     }
 
     // ✅ finalize فقط اگر pending بود
