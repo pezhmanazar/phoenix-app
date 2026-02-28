@@ -132,7 +132,6 @@ router.post("/verify", async (req, res) => {
 
   try {
     const body = req.body || {};
-
     const phone = normalizeIranPhone(String(body.phone || ""));
     const productId = String(body.productId || "").trim();
     const purchaseToken = String(body.purchaseToken || "").trim();
@@ -148,10 +147,15 @@ router.post("/verify", async (req, res) => {
     if (!months) return res.status(400).json({ ok: false, error: "UNKNOWN_PRODUCT" });
 
     const purchaseTime = toDateSafe(purchaseTimeRaw) || new Date();
+    const purchaseTimeMs = purchaseTime.getTime();
 
-    // ✅ authority ضدگلوله
-    // (اگر orderId داریم => پایدار و یکتا؛ اگر نداریم => purchaseToken + purchaseTimeMs پایدار)
-    const authority = buildAuthority({ purchaseToken, orderId, purchaseTime });
+    // ✅ authority پایدار:
+    // اگر orderId داریم، بهترین کلید یکتای "تراکنش" همونه.
+    // اگر نداریم، token+ptimeMs پایدار می‌مونه (برای retry همان رسید).
+    const authority = orderId
+      ? `BAZAAR_${orderId}`
+      : `BAZAAR_${purchaseToken}_${purchaseTimeMs}`;
+
     if (!authority) return res.status(400).json({ ok: false, error: "INVALID_AUTHORITY" });
 
     // ✅ user upsert
@@ -161,28 +165,77 @@ router.post("/verify", async (req, res) => {
       create: { phone, plan: "free", profileCompleted: true },
     });
 
-    // ✅ idempotency درست: فقط بر اساس authority محاسبه‌شده
-    const existing = await prisma.subscription.findFirst({
+    // ✅ ضدگلوله‌ترین idempotency:
+    // اول بر اساس purchaseToken (حتی اگر authority تغییر کرده باشد)
+    const existingByToken = await prisma.subscription.findFirst({
+      where: {
+        provider: "bazaar",
+        metaJson: { path: ["purchaseToken"], equals: purchaseToken },
+      },
+      include: { user: true },
+      orderBy: { paidAt: "desc" },
+    });
+
+    if (existingByToken && existingByToken.status === "active") {
+      // (اختیاری ولی مفید) اگر به هر دلیل یوزر عقب‌تر بود، سینک کن؛ اما تمدید جدید نزن
+      try {
+        const subExp = existingByToken.expiresAt ? new Date(existingByToken.expiresAt) : null;
+        const uExp = existingByToken.user?.planExpiresAt ? new Date(existingByToken.user.planExpiresAt) : null;
+        if (subExp && (!uExp || subExp.getTime() > uExp.getTime())) {
+          await prisma.user.update({
+            where: { id: existingByToken.userId || user.id },
+            data: { plan: existingByToken.plan, planExpiresAt: subExp },
+          });
+        }
+      } catch {}
+
+      return res.json({
+        ok: true,
+        data: {
+          authority: existingByToken.authority,
+          status: "active",
+          plan: existingByToken.plan,
+          months: existingByToken.months,
+          planExpiresAt: existingByToken.expiresAt
+            ? new Date(existingByToken.expiresAt).toISOString()
+            : null,
+          provider: existingByToken.provider,
+          metaJson: existingByToken.metaJson ?? null,
+          userPlan: existingByToken.user?.plan ?? null,
+          userPlanExpiresAt: existingByToken.user?.planExpiresAt
+            ? new Date(existingByToken.user.planExpiresAt).toISOString()
+            : null,
+          idempotent: true,
+          reason: "EXISTING_BY_PURCHASE_TOKEN",
+        },
+      });
+    }
+
+    // ✅ idempotency ثانویه: اگر همین authority قبلاً active شده (retry همان تراکنش)
+    const existingByAuthority = await prisma.subscription.findFirst({
       where: { provider: "bazaar", authority },
       include: { user: true },
     });
 
-    if (existing && existing.status === "active") {
+    if (existingByAuthority && existingByAuthority.status === "active") {
       return res.json({
         ok: true,
         data: {
-          authority: existing.authority,
+          authority: existingByAuthority.authority,
           status: "active",
-          plan: existing.plan,
-          months: existing.months,
-          planExpiresAt: existing.expiresAt ? new Date(existing.expiresAt).toISOString() : null,
-          provider: existing.provider,
-          metaJson: existing.metaJson ?? null,
-          userPlan: existing.user?.plan ?? null,
-          userPlanExpiresAt: existing.user?.planExpiresAt
-            ? new Date(existing.user.planExpiresAt).toISOString()
+          plan: existingByAuthority.plan,
+          months: existingByAuthority.months,
+          planExpiresAt: existingByAuthority.expiresAt
+            ? new Date(existingByAuthority.expiresAt).toISOString()
+            : null,
+          provider: existingByAuthority.provider,
+          metaJson: existingByAuthority.metaJson ?? null,
+          userPlan: existingByAuthority.user?.plan ?? null,
+          userPlanExpiresAt: existingByAuthority.user?.planExpiresAt
+            ? new Date(existingByAuthority.user.planExpiresAt).toISOString()
             : null,
           idempotent: true,
+          reason: "EXISTING_BY_AUTHORITY",
         },
       });
     }
@@ -208,8 +261,7 @@ router.post("/verify", async (req, res) => {
       purchaseTime: purchaseTime.toISOString(),
     };
 
-    // ✅ اتمیک + ضد-race: اگر همزمان دو درخواست بیاد، یکی create میشه و یکی unique fail می‌خوره
-    // ما اون unique fail رو به idempotent تبدیل می‌کنیم.
+    // ✅ تراکنش + هندل race روی unique(authority)
     try {
       await prisma.$transaction(async (tx) => {
         await tx.subscription.create({
@@ -235,39 +287,31 @@ router.post("/verify", async (req, res) => {
         });
       });
     } catch (e) {
-      const isUnique =
-        e?.code === "P2002" ||
-        String(e?.message || "").toLowerCase().includes("unique") ||
-        String(e?.message || "").toLowerCase().includes("constraint");
-
-      if (isUnique) {
-        const ex = await prisma.subscription.findFirst({
-          where: { provider: "bazaar", authority },
-          include: { user: true },
+      // اگر به خاطر unique(authority) خورد به دیوار، یعنی همزمان ثبت شده؛ همون رو برگردون
+      const again = await prisma.subscription.findFirst({
+        where: { provider: "bazaar", authority },
+        include: { user: true },
+      });
+      if (again && again.status === "active") {
+        return res.json({
+          ok: true,
+          data: {
+            authority: again.authority,
+            status: "active",
+            plan: again.plan,
+            months: again.months,
+            planExpiresAt: again.expiresAt ? new Date(again.expiresAt).toISOString() : null,
+            provider: again.provider,
+            metaJson: again.metaJson ?? null,
+            userPlan: again.user?.plan ?? null,
+            userPlanExpiresAt: again.user?.planExpiresAt
+              ? new Date(again.user.planExpiresAt).toISOString()
+              : null,
+            idempotent: true,
+            reason: "RACE_UNIQUE_AUTHORITY",
+          },
         });
-
-        if (ex && ex.status === "active") {
-          return res.json({
-            ok: true,
-            data: {
-              authority: ex.authority,
-              status: "active",
-              plan: ex.plan,
-              months: ex.months,
-              planExpiresAt: ex.expiresAt ? new Date(ex.expiresAt).toISOString() : null,
-              provider: ex.provider,
-              metaJson: ex.metaJson ?? null,
-              userPlan: ex.user?.plan ?? null,
-              userPlanExpiresAt: ex.user?.planExpiresAt
-                ? new Date(ex.user.planExpiresAt).toISOString()
-                : null,
-              idempotent: true,
-              raceRecovered: true,
-            },
-          });
-        }
       }
-
       throw e;
     }
 
