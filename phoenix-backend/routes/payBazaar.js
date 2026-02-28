@@ -42,13 +42,12 @@ function toDateSafe(v) {
   return isNaN(d.getTime()) ? null : d;
 }
 
-// ✅ authority باید unique باشه. تو بازار ممکنه purchaseToken تکرار/یا رفتار متفاوت داشته باشه
-// پس ما token + purchaseTimeMs می‌زنیم تا هم unique باشه هم قابل ردگیری.
-function buildAuthority({ purchaseToken, purchaseTime }) {
+// ✅ authority باید unique باشه.
+// ✅ فیکس مهم: authority باید پایدار باشه تا idempotent واقعی بشه.
+// از این به بعد: فقط بر اساس purchaseToken
+function buildAuthority({ purchaseToken }) {
   const t = String(purchaseToken || "").trim();
-  const pt = toDateSafe(purchaseTime);
-  const ms = pt ? pt.getTime() : Date.now();
-  return t ? `BAZAAR_${t}_${ms}` : "";
+  return t ? `BAZAAR_${t}` : "";
 }
 
 const BACKEND_URL = (process.env.BACKEND_URL || "http://127.0.0.1:4000").trim();
@@ -134,7 +133,6 @@ router.post("/verify", async (req, res) => {
 
   try {
     const body = req.body || {};
-
     const phone = normalizeIranPhone(String(body.phone || ""));
     const productId = String(body.productId || "").trim();
     const purchaseToken = String(body.purchaseToken || "").trim();
@@ -150,8 +148,9 @@ router.post("/verify", async (req, res) => {
     if (!months) return res.status(400).json({ ok: false, error: "UNKNOWN_PRODUCT" });
 
     const purchaseTime = toDateSafe(purchaseTimeRaw) || new Date();
-    const authority = buildAuthority({ purchaseToken, purchaseTime });
 
+    // ✅ authority پایدار
+    const authority = buildAuthority({ purchaseToken });
     if (!authority) return res.status(400).json({ ok: false, error: "INVALID_AUTHORITY" });
 
     // ✅ user upsert
@@ -161,30 +160,52 @@ router.post("/verify", async (req, res) => {
       create: { phone, plan: "free", profileCompleted: true },
     });
 
-    // ✅ idempotency: اگر همین authority قبلاً active شده، همون رو برگردون
-    const existing = await prisma.subscription.findFirst({ where: { authority }, include: { user: true } });
-    if (existing && existing.status === "active") {
+    // ✅ idempotency واقعی:
+    // اگر همین purchaseToken قبلاً ثبت شده (حتی با authority قدیمیِ timestampدار)،
+    // هیچ تمدیدی انجام نده و همون قبلی رو برگردون.
+    const existingByToken = await prisma.subscription.findFirst({
+      where: {
+        provider: "bazaar",
+        OR: [
+          // حالت جدید (authority پایدار)
+          { authority },
+          // حالت‌های قدیمی (authority با timestamp)
+          { authority: { startsWith: `BAZAAR_${purchaseToken}_` } },
+          // حالت قوی: خود توکن داخل metaJson
+          { metaJson: { path: ["purchaseToken"], equals: purchaseToken } },
+        ],
+      },
+      include: { user: true },
+      orderBy: { paidAt: "desc" },
+    });
+
+    if (existingByToken && existingByToken.status === "active") {
       return res.json({
         ok: true,
         data: {
-          authority,
+          authority: existingByToken.authority,
           status: "active",
-          plan: existing.plan,
-          months: existing.months,
-          planExpiresAt: existing.expiresAt ? new Date(existing.expiresAt).toISOString() : null,
-          provider: existing.provider,
-          metaJson: existing.metaJson ?? null,
-          userPlan: existing.user?.plan ?? null,
-          userPlanExpiresAt: existing.user?.planExpiresAt ? new Date(existing.user.planExpiresAt).toISOString() : null,
+          plan: existingByToken.plan,
+          months: existingByToken.months,
+          planExpiresAt: existingByToken.expiresAt ? new Date(existingByToken.expiresAt).toISOString() : null,
+          provider: existingByToken.provider,
+          metaJson: existingByToken.metaJson ?? null,
+          userPlan: existingByToken.user?.plan ?? null,
+          userPlanExpiresAt: existingByToken.user?.planExpiresAt
+            ? new Date(existingByToken.user.planExpiresAt).toISOString()
+            : null,
+          idempotent: true,
         },
       });
     }
 
-    // ✅ تمدید تجمعی مثل زرین‌پال
+    // ✅ تمدید تجمعی مثل زرین‌پال (فقط وقتی خرید واقعاً جدید باشد)
     const now = new Date();
     const userCurrentExpire = user.planExpiresAt ? new Date(user.planExpiresAt) : null;
     const base =
-      userCurrentExpire && !isNaN(userCurrentExpire.getTime()) && userCurrentExpire.getTime() > now.getTime()
+      userCurrentExpire &&
+      !isNaN(userCurrentExpire.getTime()) &&
+      userCurrentExpire.getTime() > now.getTime()
         ? userCurrentExpire
         : now;
 
@@ -201,8 +222,8 @@ router.post("/verify", async (req, res) => {
     };
 
     // ✅ اتمیک: هم Subscription و هم User با هم آپدیت شوند
+    // نکته: create با authority پایدار، تا از این به بعد رکوردها یکتا و قابل idempotency باشند.
     await prisma.$transaction(async (tx) => {
-      // create subscription (active)
       await tx.subscription.create({
         data: {
           user: { connect: { id: user.id } },
@@ -220,7 +241,6 @@ router.post("/verify", async (req, res) => {
         },
       });
 
-      // update user plan cumulative
       await tx.user.update({
         where: { id: user.id },
         data: {
