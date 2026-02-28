@@ -45,10 +45,10 @@ const BACKEND_URL = (process.env.BACKEND_URL || "http://127.0.0.1:4000").trim();
 
 async function upsertUserPlanOnServer({ phone, plan, planExpiresAt }) {
   if (!phone || !plan || !planExpiresAt) return;
+
   try {
     const base = BACKEND_URL.replace(/\/+$/, "");
     const targetUrl = `${base}/api/users/upsert`;
-
     const body = { phone, plan, planExpiresAt, profileCompleted: true };
 
     const resp = await fetch(targetUrl, {
@@ -71,16 +71,16 @@ async function upsertUserPlanOnServer({ phone, plan, planExpiresAt }) {
 /**
  * POST /api/pay-bazaar/verify
  * body: {
- *  phone: string,
- *  productId: "phoenix_pro_1m"|"phoenix_pro_3m"|"phoenix_pro_6m",
- *  purchaseToken: string,
- *  orderId?: string,
- *  packageName?: string,
- *  purchaseTime?: number|string
+ *   phone: string,
+ *   productId: "phoenix_pro_1m"|"phoenix_pro_3m"|"phoenix_pro_6m",
+ *   purchaseToken: string,
+ *   orderId?: string,
+ *   packageName?: string,
+ *   purchaseTime?: number|string
  * }
  *
- * ✅ فعلاً: فعال‌سازی بر اساس receipt اپ (dev-friendly)
- * 🔒 قدم بعد: verify واقعی بازار در سرور
+ * ✅ فعلاً dev-friendly: فعال‌سازی بر اساس receipt اپ
+ * 🔒 قدم بعد: verify واقعی با سرور/SDK بازار
  */
 router.post("/verify", async (req, res) => {
   setCORS(res);
@@ -88,6 +88,7 @@ router.post("/verify", async (req, res) => {
 
   try {
     const body = req.body || {};
+
     const phone = normalizeIranPhone(String(body.phone || ""));
     const productId = String(body.productId || "").trim();
     const purchaseToken = String(body.purchaseToken || "").trim();
@@ -104,14 +105,21 @@ router.post("/verify", async (req, res) => {
     const authority = buildBazaarAuthority(purchaseToken);
     if (!authority) return res.status(400).json({ ok: false, error: "INVALID_AUTHORITY" });
 
-    const user = await prisma.user.upsert({
+    const plan = "pro"; // ✅ فعلاً همه محصولات بازار = pro
+
+    // ✅ یوزر رو بساز/بگیر
+    const userRow = await prisma.user.upsert({
       where: { phone },
       update: {},
       create: { phone, plan: "free", profileCompleted: true },
     });
 
-    // ✅ اگر قبلاً همین receipt فعال شده، همون رو بده
-    const existing = await prisma.subscription.findFirst({ where: { authority }, include: { user: true } });
+    // ✅ اگر قبلاً همین receipt فعال شده، همان نتیجه را بده
+    const existing = await prisma.subscription.findFirst({
+      where: { authority },
+      include: { user: true },
+    });
+
     if (existing && existing.status === "active") {
       return res.json({
         ok: true,
@@ -122,26 +130,31 @@ router.post("/verify", async (req, res) => {
           plan: existing.plan,
           months: existing.months,
           expiresAt: existing.expiresAt ? new Date(existing.expiresAt).toISOString() : null,
+          productId: existing.productId || productId,
+          packageName: existing.packageName || packageName || null,
         },
       });
     }
 
-    // ✅ تمدید درست
+    // ✅ تمدید تجمعی (core fix)
     const now = new Date();
-    const userCurrentExpire = user.planExpiresAt ? new Date(user.planExpiresAt) : null;
+
+    // اگر این verify روی یک user قدیمی هست، planExpiresAt باید از DB خوانده شود (userRow کافی است)
+    const userCurrentExpire = userRow.planExpiresAt ? new Date(userRow.planExpiresAt) : null;
     const base =
-      userCurrentExpire && !isNaN(userCurrentExpire.getTime()) && userCurrentExpire.getTime() > now.getTime()
+      userCurrentExpire &&
+      !isNaN(userCurrentExpire.getTime()) &&
+      userCurrentExpire.getTime() > now.getTime()
         ? userCurrentExpire
         : now;
 
-    const plan = "pro";
     const planExpiresAtDate = calcPlanExpiresAtFromBase(base, months);
 
-    // ✅ اگر رکورد وجود ندارد بساز (pending)
+    // ✅ رکورد سابسکریپشن اگر وجود ندارد بساز (pending)
     if (!existing) {
       await prisma.subscription.create({
         data: {
-          userId: user.id,
+          userId: userRow.id,
           phone,
           authority, // BAZAAR_<token>
           refId: orderId || purchaseToken || "BAZAAR_PAID",
@@ -151,11 +164,16 @@ router.post("/verify", async (req, res) => {
           status: "pending",
           expiresAt: planExpiresAtDate,
           paidAt: now,
+
+          // اگر ستون‌ها در Subscription دارید:
+          productId,
+          orderId: orderId || null,
+          packageName: packageName || null,
         },
       });
     }
 
-    // ✅ finalize فقط اگر pending بود
+    // ✅ finalize فقط اگر pending بود (idempotent)
     const upd = await prisma.subscription.updateMany({
       where: { authority, status: "pending" },
       data: {
@@ -163,11 +181,30 @@ router.post("/verify", async (req, res) => {
         refId: orderId || purchaseToken || "BAZAAR_PAID",
         expiresAt: planExpiresAtDate,
         paidAt: now,
+
+        // اگر ستون‌ها دارید:
+        productId,
+        orderId: orderId || null,
+        packageName: packageName || null,
       },
     });
 
+    // ✅ فقط اگر همین بار finalize شد، پلن کاربر را جلو ببر
     if (upd.count > 0) {
-      await upsertUserPlanOnServer({ phone, plan, planExpiresAt: planExpiresAtDate.toISOString() });
+      await prisma.user.update({
+        where: { id: userRow.id },
+        data: {
+          plan,
+          planExpiresAt: planExpiresAtDate,
+          profileCompleted: true,
+        },
+      });
+
+      await upsertUserPlanOnServer({
+        phone,
+        plan,
+        planExpiresAt: planExpiresAtDate.toISOString(),
+      });
     }
 
     return res.json({
@@ -189,14 +226,41 @@ router.post("/verify", async (req, res) => {
   }
 });
 
-// ✅ GET /api/pay-bazaar/status
+/**
+ * GET /api/pay-bazaar/status
+ * - بدون authority: health
+ * - با authority: وضعیت خرید
+ */
 router.get("/status", async (req, res) => {
   setCORS(res);
   try {
+    const authority = String(req.query.authority || "").trim();
+
+    if (!authority) {
+      return res.json({ ok: true, service: "pay-bazaar", time: Date.now() });
+    }
+
+    const sub = await prisma.subscription.findFirst({
+      where: { authority },
+      include: { user: true },
+    });
+
+    if (!sub) return res.status(404).json({ ok: false, error: "SUBSCRIPTION_NOT_FOUND" });
+
     return res.json({
       ok: true,
-      service: "pay-bazaar",
-      time: Date.now(),
+      data: {
+        authority: sub.authority,
+        status: sub.status,
+        plan: sub.plan,
+        months: sub.months,
+        planExpiresAt: sub.expiresAt ? new Date(sub.expiresAt).toISOString() : null,
+        productId: sub.productId || null,
+        orderId: sub.orderId || null,
+        packageName: sub.packageName || null,
+        userPlan: sub.user?.plan || null,
+        userPlanExpiresAt: sub.user?.planExpiresAt ? new Date(sub.user.planExpiresAt).toISOString() : null,
+      },
     });
   } catch (e) {
     console.error("PAY_BAZAAR_STATUS_ERR", e);
