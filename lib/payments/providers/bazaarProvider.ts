@@ -1,5 +1,4 @@
 // lib/payments/providers/bazaarProvider.ts
-
 import * as PoolakeyNS from "@cafebazaar/react-native-poolakey";
 import Constants from "expo-constants";
 import type { PaymentApi, SubSku } from "../getPaymentProvider";
@@ -67,6 +66,21 @@ async function ensureConnected(): Promise<void> {
   throw new Error("POOLAEKY_CONNECT_METHOD_NOT_FOUND");
 }
 
+function isBazaarCancelError(e: any): boolean {
+  const msg = String(e?.message || e || "").toLowerCase();
+
+  // متن‌های رایجِ Poolakey/Android
+  return (
+    msg.includes("purchase cancelled") ||
+    msg.includes("purchase canceled") ||
+    msg.includes("purchase cancelled") ||
+    msg.includes("user canceled") ||
+    msg.includes("user cancelled") ||
+    msg.includes("cancelled") ||
+    msg.includes("canceled")
+  );
+}
+
 async function verifyOnServer(params: {
   phone: string;
   productId: string;
@@ -83,6 +97,7 @@ async function verifyOnServer(params: {
 
   const text = await res.text();
   let json: any = null;
+
   try {
     json = text ? JSON.parse(text) : null;
   } catch {
@@ -127,32 +142,38 @@ export const bazaarProvider: PaymentApi = {
     // 1) کانکت
     await ensureConnected();
 
-    // 2) خرید
+    // 2) خرید (با هندل لغو توسط کاربر)
     let result: any = null;
-
-    if (typeof pk.subscribeProduct === "function") {
-      result = await pk.subscribeProduct(productId, null, null);
-    } else if (typeof pk.purchaseProduct === "function") {
-      result = await pk.purchaseProduct(productId, null, null);
-    } else {
-      throw new Error("POOLAEKY_PURCHASE_METHOD_NOT_FOUND");
+    try {
+      if (typeof pk.subscribeProduct === "function") {
+        result = await pk.subscribeProduct(productId, null, null);
+      } else if (typeof pk.purchaseProduct === "function") {
+        result = await pk.purchaseProduct(productId, null, null);
+      } else {
+        throw new Error("POOLAEKY_PURCHASE_METHOD_NOT_FOUND");
+      }
+    } catch (e: any) {
+      // ✅ لغو خرید توسط کاربر → کد استاندارد برای UI
+      if (isBazaarCancelError(e)) {
+        throw new Error("BAZAAR_CANCELLED");
+      }
+      throw e;
     }
 
     console.log("[bazaar] purchase result =", result);
 
-    
-// 3) verify روی سرور
-const verified = await verifyOnServer({
-  phone,
-  productId: result?.productId || productId,
-  purchaseToken: result?.purchaseToken,
-  orderId: result?.orderId,
-  packageName: result?.packageName,
-  purchaseTime: result?.purchaseTime,
-});
+    // 3) verify روی سرور
+    const verified = await verifyOnServer({
+      phone,
+      productId: result?.productId || productId,
+      purchaseToken: result?.purchaseToken,
+      orderId: result?.orderId,
+      packageName: result?.packageName,
+      purchaseTime: result?.purchaseTime,
+    });
 
-// 4) خروجی کامل برگرده تا UI بتونه refresh کنه
-return { result, verified };
+    // 4) خروجی کامل برگرده تا UI بتونه refresh کنه
+    return { result, verified };
   },
 
   async restorePurchases(_phone: string) {

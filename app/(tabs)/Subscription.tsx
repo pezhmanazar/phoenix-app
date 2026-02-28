@@ -34,9 +34,11 @@ type PlanOption = {
   badgeType?: "best" | "value" | "premium";
 };
 
+type PayResultKind = "success" | "failed" | "cancelled";
+
 type PayResultState = {
   visible: boolean;
-  success: boolean;
+  kind: PayResultKind;
   refId?: string | null;
   message?: string | null;
 };
@@ -118,7 +120,7 @@ export default function SubscriptionScreen() {
 
   const [payResult, setPayResult] = useState<PayResultState>({
     visible: false,
-    success: false,
+    kind: "failed",
     refId: null,
     message: null,
   });
@@ -129,13 +131,13 @@ export default function SubscriptionScreen() {
   const [showMoreAccess, setShowMoreAccess] = useState(false);
 
   function openPayModal(opts: {
-    success: boolean;
+    kind: PayResultKind;
     message?: string | null;
     refId?: string | null;
   }) {
     setPayResult({
       visible: true,
-      success: !!opts.success,
+      kind: opts.kind,
       refId: opts.refId ?? null,
       message: opts.message ?? null,
     });
@@ -182,7 +184,10 @@ export default function SubscriptionScreen() {
   let expireAt: string | null = status.rawExpiresAt ?? null;
 
   // اگر پلن قبلاً پرو بوده و الان تاریخش گذشته ⇒ expired
-  if (status.isExpired && (status.rawPlan === "pro" || status.rawPlan === "vip")) {
+  if (
+    status.isExpired &&
+    (status.rawPlan === "pro" || status.rawPlan === "vip")
+  ) {
     planView = "expired";
     daysRemaining = 0;
   } else if (status.isPro) {
@@ -212,14 +217,14 @@ export default function SubscriptionScreen() {
   async function handleBuy(option: PlanOption) {
     if (!option.amount) {
       openPayModal({
-        success: false,
+        kind: "failed",
         message: "این پلن هنوز فعال نشده.",
       });
       return;
     }
     if (!isAuthenticated || !phone) {
       openPayModal({
-        success: false,
+        kind: "failed",
         message: "اول با شماره موبایل وارد اپ شو.",
       });
       return;
@@ -239,7 +244,7 @@ export default function SubscriptionScreen() {
           const ok = await provider.isAvailable();
           if (!ok) {
             openPayModal({
-              success: false,
+              kind: "failed",
               message:
                 "اتصال به کافه‌بازار برقرار نشد. اینترنت خودت رو چک کن و دوباره تلاش کن.",
             });
@@ -261,15 +266,27 @@ export default function SubscriptionScreen() {
           await forceRefreshUser();
 
           openPayModal({
-            success: true,
-            message: "خرید ثبت شد و اشتراک تو به‌روزرسانی شد اگه تاریخ انقضا عوض نشد یکبار اپ رو ببند و مجدد وارد شو.",
+            kind: "success",
+            message:
+              "خرید ثبت شد و اشتراک تو به‌روزرسانی شد. اگر تاریخ انقضا عوض نشد یکبار اپ رو ببند و مجدد وارد شو.",
           });
           return;
         } catch (e: any) {
+          const msg = String(e?.message || "");
+
+          // ✅ لغو توسط کاربر (فرق دارد با ناموفق)
+          if (msg === "BAZAAR_CANCELLED") {
+            openPayModal({
+              kind: "cancelled",
+              message: "پرداخت رو لغو کردی و هیچ مبلغی از حسابت کم نشد.",
+            });
+            return;
+          }
+
           openPayModal({
-            success: false,
+            kind: "failed",
             message:
-              e?.message ||
+              msg ||
               "در خرید از بازار مشکلی پیش اومد. اگه مبلغ از حسابت کم شده، چند دقیقه بعد دوباره وضعیت اشتراک رو چک کن.",
           });
           return;
@@ -278,7 +295,13 @@ export default function SubscriptionScreen() {
 
       // --- ۱) شروع پرداخت ---
       const months =
-        option.key === "p30" ? 1 : option.key === "p90" ? 3 : option.key === "p180" ? 6 : 1;
+        option.key === "p30"
+          ? 1
+          : option.key === "p90"
+          ? 3
+          : option.key === "p180"
+          ? 6
+          : 1;
 
       const start = await startPay({
         phone: phone!,
@@ -289,7 +312,7 @@ export default function SubscriptionScreen() {
 
       if (!start.ok) {
         openPayModal({
-          success: false,
+          kind: "failed",
           message: start.error || "در اتصال به سرور مشکلی پیش آمد.",
         });
         return;
@@ -297,7 +320,7 @@ export default function SubscriptionScreen() {
 
       if (!start.data) {
         openPayModal({
-          success: false,
+          kind: "failed",
           message: "در اتصال به سرور مشکلی پیش آمد.",
         });
         return;
@@ -306,7 +329,7 @@ export default function SubscriptionScreen() {
       const { gatewayUrl, authority } = start.data;
       if (!gatewayUrl || !authority) {
         openPayModal({
-          success: false,
+          kind: "failed",
           message: "اطلاعات درگاه پرداخت ناقص است.",
         });
         return;
@@ -327,10 +350,8 @@ export default function SubscriptionScreen() {
 
       return;
     } catch (e: any) {
-      setPayResult({
-        visible: true,
-        success: false,
-        refId: null,
+      openPayModal({
+        kind: "failed",
         message:
           e?.message ||
           "در اتصال به درگاه مشکلی پیش اومد. اگه مبلغ از حسابت کم شده، وضعیت اشتراک رو بعد از چند دقیقه دوباره چک کن.",
@@ -371,6 +392,27 @@ export default function SubscriptionScreen() {
       ? "PRO"
       : "FREE";
 
+  const modalTitle =
+    payResult.kind === "success"
+      ? "پرداخت موفق"
+      : payResult.kind === "cancelled"
+      ? "پرداخت لغو شد"
+      : "پرداخت ناموفق";
+
+  const modalIcon =
+    payResult.kind === "success"
+      ? "checkmark-circle"
+      : payResult.kind === "cancelled"
+      ? "remove-circle"
+      : "close-circle";
+
+  const modalIconColor =
+    payResult.kind === "success"
+      ? "#22C55E"
+      : payResult.kind === "cancelled"
+      ? "#FBBF24"
+      : "#F97373";
+
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: headerBg }}
@@ -410,7 +452,9 @@ export default function SubscriptionScreen() {
         >
           {/* کارت معرفی */}
           <View style={[styles.glassCard, { borderRadius: 22, padding: 16 }]}>
-            <Text style={styles.heroSubtitle}>برای رهایی، برای بازسازی، برای شروع دوباره.</Text>
+            <Text style={styles.heroSubtitle}>
+              برای رهایی، برای بازسازی، برای شروع دوباره.
+            </Text>
 
             {/* وضعیت فعلی اشتراک */}
             <View style={styles.statusCard}>
@@ -452,7 +496,9 @@ export default function SubscriptionScreen() {
                   </>
                 ) : planView === "expired" ? (
                   <>
-                    <Text style={[styles.statusTitle, { color: "#F97373" }]}>اشتراک منقضی شده</Text>
+                    <Text style={[styles.statusTitle, { color: "#F97373" }]}>
+                      اشتراک منقضی شده
+                    </Text>
                     {niceExpireText && (
                       <Text style={[styles.smallText, { color: "#FCA5A5" }]}>
                         تاریخ انقضا: {niceExpireText}
@@ -479,7 +525,9 @@ export default function SubscriptionScreen() {
                   backgroundColor: badgeBg,
                 }}
               >
-                <Text style={{ color: badgeTextColor, fontSize: 13, fontWeight: "900" }}>
+                <Text
+                  style={{ color: badgeTextColor, fontSize: 13, fontWeight: "900" }}
+                >
                   {badgeLabel}
                 </Text>
               </View>
@@ -487,11 +535,15 @@ export default function SubscriptionScreen() {
           </View>
 
           {/* باکس ارزش اشتراک */}
-          <View style={[styles.glassCard, { marginTop: 16, borderRadius: 22, padding: 16 }]}>
+          <View
+            style={[styles.glassCard, { marginTop: 16, borderRadius: 22, padding: 16 }]}
+          >
             {/* بخش اول: تغییر واقعی */}
             <View style={styles.sectionTitleRow}>
               <Ionicons name="sparkles" size={16} color="#E98A15" />
-              <Text style={styles.sectionTitle}>با اشتراک ققنوس چه تغییری در تو آغاز می‌شه؟</Text>
+              <Text style={styles.sectionTitle}>
+                با اشتراک ققنوس چه تغییری در تو آغاز می‌شه؟
+              </Text>
             </View>
 
             {(() => {
@@ -546,9 +598,10 @@ export default function SubscriptionScreen() {
 
             {/* بخش دوم: ابزار و دسترسی‌ها */}
             <View style={styles.sectionTitleRow}>
-              {/* ✅ به جای lock-open (ممکنه تو Ionicons تایپی گیر بده) */}
               <Ionicons name="key" size={16} color="#10B981" />
-              <Text style={styles.sectionTitle}>با اشتراک ققنوس به چه چیزهایی دسترسی داری؟</Text>
+              <Text style={styles.sectionTitle}>
+                با اشتراک ققنوس به چه چیزهایی دسترسی داری؟
+              </Text>
             </View>
 
             {(() => {
@@ -606,7 +659,6 @@ export default function SubscriptionScreen() {
 
           {/* پلن‌ها */}
           <View style={{ marginTop: 18 }}>
-            {/* ✅ آیکن سمت راست + عنوان */}
             <View style={styles.sectionTitleRow}>
               <Ionicons name="list" size={16} color="#D4AF37" />
               <Text style={styles.sectionTitle}>انتخاب پلن اشتراک</Text>
@@ -616,7 +668,6 @@ export default function SubscriptionScreen() {
               const isLoading = payingKey === p.key;
               const disabled = !p.amount || isLoading || waitingForPayRefresh;
 
-              // ✅ رنگ دور باکس‌ها حفظ شد
               const borderColor =
                 p.badgeType === "best"
                   ? "#F97316"
@@ -626,7 +677,6 @@ export default function SubscriptionScreen() {
                   ? "#C8A951"
                   : border;
 
-              // فقط کمی شیشه‌ای‌تر مثل تب‌های دیگه
               const bgHighlight =
                 p.badgeType === "best"
                   ? "rgba(17,24,39,.70)"
@@ -738,7 +788,6 @@ export default function SubscriptionScreen() {
                       justifyContent: "space-between",
                     }}
                   >
-                    {/* ✅ قیمت: قدیمی خط‌خورده + جدید */}
                     <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
                       {showOld && <Text style={styles.oldPriceText}>{p.oldPrice}</Text>}
 
@@ -787,12 +836,16 @@ export default function SubscriptionScreen() {
           <View style={[styles.glassCard, { marginTop: 18, borderRadius: 22, padding: 14, gap: 8 }]}>
             <View style={{ flexDirection: "row-reverse", alignItems: "center" }}>
               <Ionicons name="shield-checkmark" size={18} color="#22C55E" />
-              <Text style={styles.trustText}>حریم خصوصی و اطلاعاتت داخل ققنوس کاملاً محرمانه‌ست.</Text>
+              <Text style={styles.trustText}>
+                حریم خصوصی و اطلاعاتت داخل ققنوس کاملاً محرمانه‌ست.
+              </Text>
             </View>
 
             <View style={{ flexDirection: "row-reverse", alignItems: "center" }}>
               <Ionicons name="lock-closed" size={18} color="#60A5FA" />
-              <Text style={styles.trustText}>پرداخت از طریق درگاه امن و معتبر انجام میشه.</Text>
+              <Text style={styles.trustText}>
+                پرداخت از طریق درگاه امن و معتبر انجام میشه.
+              </Text>
             </View>
 
             <View style={{ flexDirection: "row-reverse", alignItems: "center" }}>
@@ -806,7 +859,7 @@ export default function SubscriptionScreen() {
           <View style={{ height: 80 }} />
         </ScrollView>
 
-        {/* بنر نتیجه پرداخت (همون قبلی—حالا برای بازار هم استفاده میشه) */}
+        {/* بنر نتیجه پرداخت (برای بازار و خطاهای شبکه) */}
         {payResult.visible && (
           <View
             style={{
@@ -831,9 +884,9 @@ export default function SubscriptionScreen() {
             >
               <View style={{ flexDirection: "row-reverse", alignItems: "center", marginBottom: 8 }}>
                 <Ionicons
-                  name={payResult.success ? "checkmark-circle" : "close-circle"}
+                  name={modalIcon as any}
                   size={28}
-                  color={payResult.success ? "#22C55E" : "#F97373"}
+                  color={modalIconColor}
                   style={{ marginLeft: 8 }}
                 />
                 <Text
@@ -845,13 +898,15 @@ export default function SubscriptionScreen() {
                     flex: 1,
                   }}
                 >
-                  {payResult.success ? "پرداخت موفق" : "پرداخت ناموفق"}
+                  {modalTitle}
                 </Text>
               </View>
 
               {payResult.refId && (
                 <View style={{ marginTop: 4 }}>
-                  <Text style={{ color: "#9CA3AF", fontSize: 12, textAlign: "right" }}>کد رهگیری:</Text>
+                  <Text style={{ color: "#9CA3AF", fontSize: 12, textAlign: "right" }}>
+                    کد رهگیری:
+                  </Text>
                   <Text
                     style={{
                       color: "#E5E7EB",
@@ -1027,7 +1082,7 @@ const styles = StyleSheet.create({
   // ✅ قیمت خط‌خورده / قیمت نهایی
   oldPriceText: {
     color: "#9CA3AF",
-    fontSize: 12,
+    fontSize: 10,
     textDecorationLine: "line-through",
   },
   priceText: {
