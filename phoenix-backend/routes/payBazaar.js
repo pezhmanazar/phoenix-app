@@ -189,4 +189,19 @@ router.post("/verify", async (req, res) => {
   }
 });
 
+// ✅ GET /api/pay-bazaar/status
+router.get("/status", async (req, res) => {
+  setCORS(res);
+  try {
+    return res.json({
+      ok: true,
+      service: "pay-bazaar",
+      time: Date.now(),
+    });
+  } catch (e) {
+    console.error("PAY_BAZAAR_STATUS_ERR", e);
+    return res.status(500).json({ ok: false, error: e?.message || "SERVER_ERROR" });
+  }
+});
+
 export default router;
