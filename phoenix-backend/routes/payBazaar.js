@@ -147,14 +147,11 @@ router.post("/verify", async (req, res) => {
     if (!months) return res.status(400).json({ ok: false, error: "UNKNOWN_PRODUCT" });
 
     const purchaseTime = toDateSafe(purchaseTimeRaw) || new Date();
-    const purchaseTimeMs = purchaseTime.getTime();
-
-    // ✅ authority پایدار:
-    // اگر orderId داریم، بهترین کلید یکتای "تراکنش" همونه.
-    // اگر نداریم، token+ptimeMs پایدار می‌مونه (برای retry همان رسید).
-    const authority = orderId
-      ? `BAZAAR_${orderId}`
-      : `BAZAAR_${purchaseToken}_${purchaseTimeMs}`;
+    const authority = buildAuthority({
+      purchaseToken,
+      orderId,
+      purchaseTime,
+    });
 
     if (!authority) return res.status(400).json({ ok: false, error: "INVALID_AUTHORITY" });
 
@@ -164,52 +161,6 @@ router.post("/verify", async (req, res) => {
       update: {},
       create: { phone, plan: "free", profileCompleted: true },
     });
-
-    // ✅ ضدگلوله‌ترین idempotency:
-    // اول بر اساس purchaseToken (حتی اگر authority تغییر کرده باشد)
-    const existingByToken = await prisma.subscription.findFirst({
-      where: {
-        provider: "bazaar",
-        metaJson: { path: ["purchaseToken"], equals: purchaseToken },
-      },
-      include: { user: true },
-      orderBy: { paidAt: "desc" },
-    });
-
-    if (existingByToken && existingByToken.status === "active") {
-      // (اختیاری ولی مفید) اگر به هر دلیل یوزر عقب‌تر بود، سینک کن؛ اما تمدید جدید نزن
-      try {
-        const subExp = existingByToken.expiresAt ? new Date(existingByToken.expiresAt) : null;
-        const uExp = existingByToken.user?.planExpiresAt ? new Date(existingByToken.user.planExpiresAt) : null;
-        if (subExp && (!uExp || subExp.getTime() > uExp.getTime())) {
-          await prisma.user.update({
-            where: { id: existingByToken.userId || user.id },
-            data: { plan: existingByToken.plan, planExpiresAt: subExp },
-          });
-        }
-      } catch {}
-
-      return res.json({
-        ok: true,
-        data: {
-          authority: existingByToken.authority,
-          status: "active",
-          plan: existingByToken.plan,
-          months: existingByToken.months,
-          planExpiresAt: existingByToken.expiresAt
-            ? new Date(existingByToken.expiresAt).toISOString()
-            : null,
-          provider: existingByToken.provider,
-          metaJson: existingByToken.metaJson ?? null,
-          userPlan: existingByToken.user?.plan ?? null,
-          userPlanExpiresAt: existingByToken.user?.planExpiresAt
-            ? new Date(existingByToken.user.planExpiresAt).toISOString()
-            : null,
-          idempotent: true,
-          reason: "EXISTING_BY_PURCHASE_TOKEN",
-        },
-      });
-    }
 
     // ✅ idempotency ثانویه: اگر همین authority قبلاً active شده (retry همان تراکنش)
     const existingByAuthority = await prisma.subscription.findFirst({
