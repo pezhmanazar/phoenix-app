@@ -198,6 +198,10 @@ const guardNoContent = (req, res, next) => {
 app.get("/", (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
+// ----------  (health cheak) ----------
+app.get("/health", (_req, res) => {
+  res.status(200).json({ ok: true });
+});
 
 // 🔹 صفحه‌ی پرداخت تستی روی خود qoqnoos.app
 app.get("/mock-pay", (req, res) => {
