@@ -2,7 +2,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useTheme } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -18,6 +18,7 @@ import { useUser } from "../../hooks/useUser";
 import * as WebBrowser from "expo-web-browser";
 import { toJalaali } from "jalaali-js";
 import { startPay } from "../../api/pay"; // ✅ فقط startPay
+import { SUBSCRIPTION_PRICING } from "../../config/subscriptionPricing";
 import { getPaymentProvider } from "../../lib/payments/getPaymentProvider";
 import { getPlanStatus } from "../../lib/plan";
 
@@ -46,37 +47,6 @@ type PayResultState = {
 // نمای نمایش پلن برای UI (هم‌راستا با تب پلکان / ققنوس)
 type PlanView = "free" | "pro" | "expiring" | "expired";
 
-const plans: PlanOption[] = [
-  {
-    key: "p30",
-    title: "اشتراک ۳۰ روزه",
-    subtitle: "برای عبور اولیه از رابطه قبلی",
-    price: "۳۹۹,۰۰۰ تومان",
-    amount: 1000,
-    badge: "پیشنهادی",
-    badgeType: "best",
-  },
-  {
-    key: "p90",
-    title: "اشتراک ۹۰ روزه",
-    subtitle: "برای عبور عمیق‌تر و تثبیت تغییر رفتاری",
-    oldPrice: "۱,۱۹۷,۰۰۰ تومان",
-    price: "۸۹۹,۰۰۰ تومان",
-    amount: 899000,
-    badge: "پرفروش‌ترین",
-    badgeType: "value",
-  },
-  {
-    key: "p180",
-    title: "اشتراک ۱۸۰ روزه",
-    subtitle: "برای بازسازی کامل و مسیر بی‌وقفه تا انتها",
-    oldPrice: "۲,۳۹۴,۰۰۰ تومان",
-    price: "۱,۴۹۹,۰۰۰ تومان",
-    amount: 1499000,
-    badge: "بیشترین صرفه اقتصادی",
-    badgeType: "premium",
-  },
-];
 
 function formatJalaliDate(iso?: string | null): string | null {
   if (!iso) return null;
@@ -111,6 +81,62 @@ export default function SubscriptionScreen() {
   const params = useLocalSearchParams();
   const { phone, isAuthenticated } = useAuth();
   const { me, refresh, refreshing } = useUser() as any;
+  const [providerKey, setProviderKey] = useState<"bazaar" | "zarinpal">("zarinpal");
+  const providerPrices = SUBSCRIPTION_PRICING[providerKey];
+
+
+      useEffect(() => {
+    let mounted = true;
+
+    getPaymentProvider()
+      .then((provider) => {
+        if (!mounted) return;
+        setProviderKey(provider.id === "bazaar" ? "bazaar" : "zarinpal");
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setProviderKey("zarinpal");
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const plans: PlanOption[] = [
+  {
+    key: "p30",
+    title: "اشتراک ۳۰ روزه",
+    subtitle: "برای عبور اولیه از رابطه قبلی",
+    price: providerPrices.p30.price,
+    oldPrice: providerPrices.p30.oldPrice,
+    amount: providerPrices.p30.amount,
+    badge: "پیشنهادی",
+    badgeType: "best",
+  },
+  {
+    key: "p90",
+    title: "اشتراک ۹۰ روزه",
+    subtitle: "برای عبور عمیق‌تر و تثبیت تغییر رفتاری",
+    oldPrice: providerPrices.p90.oldPrice,
+    price: providerPrices.p90.price,
+    amount: providerPrices.p90.amount,
+    badge: "پرفروش‌ترین",
+    badgeType: "value",
+  },
+  {
+    key: "p180",
+    title: "اشتراک ۱۸۰ روزه",
+    subtitle: "برای بازسازی کامل و مسیر بی‌وقفه تا انتها",
+    oldPrice: providerPrices.p180.oldPrice,
+    price: providerPrices.p180.price,
+    amount: providerPrices.p180.amount,
+    badge: "بیشترین صرفه اقتصادی",
+    badgeType: "premium",
+  },
+];
+
+
 
   const toFaNum = (n: number) =>
     String(n).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[Number(d)]);
@@ -788,7 +814,7 @@ export default function SubscriptionScreen() {
                       justifyContent: "space-between",
                     }}
                   >
-                    <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                       {showOld && <Text style={styles.oldPriceText}>{p.oldPrice}</Text>}
 
                       <Text
