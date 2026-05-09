@@ -173,7 +173,7 @@ model Subscription {
   user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   phone     String
-  authority String  @unique
+  authority String
   refId     String?
 
   amount Int
@@ -189,6 +189,7 @@ model Subscription {
   provider String @default("zarinpal")
   metaJson Json?
 
+  @@unique([provider, authority])
   @@index([userId])
   @@index([phone])
 }

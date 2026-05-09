@@ -3,6 +3,8 @@
 import { PrismaClient } from "@prisma/client";
 import express from "express";
 
+const { finalizeSubscription } = require("../utils/subscription");
+
 const router = express.Router();
 const prisma = new PrismaClient();
 
@@ -24,12 +26,6 @@ function normalizeIranPhone(v = "") {
   return "";
 }
 
-function calcPlanExpiresAtFromBase(baseDate, months) {
-  const d = new Date(baseDate);
-  d.setMonth(d.getMonth() + Number(months || 1));
-  return d;
-}
-
 function resolveMonthsFromBazaarProductId(productId = "") {
   const pid = String(productId || "").trim();
   if (pid === "phoenix_pro_1m") return 1;
@@ -44,66 +40,45 @@ function toDateSafe(v) {
   return isNaN(d.getTime()) ? null : d;
 }
 
-// ✅ authority باید هم یکتا باشه هم برای retry پایدار بمونه.
-// ✅ قاعده:
-// - اگر orderId داریم: authority = BAZAAR_<orderId>
-// - اگر نداریم: authority = BAZAAR_<purchaseToken>_<purchaseTimeMs>
+// authority باید برای retry پایدار باشد.
 function buildAuthority({ purchaseToken, orderId, purchaseTime }) {
   const t = String(purchaseToken || "").trim();
   if (!t) return "";
 
+  const oid = String(orderId || "").trim();
+  if (oid) return `BAZAAR_${oid}`;
+
   const pt = toDateSafe(purchaseTime);
   if (pt) return `BAZAAR_${t}_${pt.getTime()}`;
-
-  const oid = String(orderId || "").trim();
-  if (oid) return `BAZAAR_${t}_${oid}`;
 
   return `BAZAAR_${t}`;
 }
 
-
-const BACKEND_URL = (process.env.BACKEND_URL || "http://127.0.0.1:4000").trim();
-
-async function upsertUserPlanOnServer({ phone, plan, planExpiresAt }) {
-  if (!phone || !plan || !planExpiresAt) return;
-  try {
-    const base = BACKEND_URL.replace(/\/+$/, "");
-    const targetUrl = `${base}/api/users/upsert`;
-    const body = { phone, plan, planExpiresAt, profileCompleted: true };
-
-    const resp = await fetch(targetUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Requested-With": "phoenix-bazaar-verify",
-      },
-      body: JSON.stringify(body),
-    });
-
-    const text = await resp.text();
-    if (!resp.ok) console.error("[bazaar/verify] upsert non-OK:", resp.status, text);
-  } catch (e) {
-    console.error("[bazaar/verify] upsert error:", e);
-  }
-}
-
 /* ------------------------------ routes ------------------------------ */
 
-// ✅ health/status
 router.get("/status", async (req, res) => {
   setCORS(res);
+
   try {
     const authority = String(req.query.authority || "").trim();
+
     if (!authority) {
       return res.json({ ok: true, service: "pay-bazaar", time: Date.now() });
     }
 
-    const sub = await prisma.subscription.findFirst({
-      where: { authority },
+    const sub = await prisma.subscription.findUnique({
+      where: {
+        provider_authority: {
+          provider: "bazaar",
+          authority,
+        },
+      },
       include: { user: true },
     });
 
-    if (!sub) return res.status(404).json({ ok: false, error: "SUBSCRIPTION_NOT_FOUND" });
+    if (!sub) {
+      return res.status(404).json({ ok: false, error: "SUBSCRIPTION_NOT_FOUND" });
+    }
 
     return res.json({
       ok: true,
@@ -116,7 +91,9 @@ router.get("/status", async (req, res) => {
         provider: sub.provider,
         metaJson: sub.metaJson ?? null,
         userPlan: sub.user?.plan ?? null,
-        userPlanExpiresAt: sub.user?.planExpiresAt ? new Date(sub.user.planExpiresAt).toISOString() : null,
+        userPlanExpiresAt: sub.user?.planExpiresAt
+          ? new Date(sub.user.planExpiresAt).toISOString()
+          : null,
       },
     });
   } catch (e) {
@@ -134,6 +111,7 @@ router.post("/verify", async (req, res) => {
 
   try {
     const body = req.body || {};
+
     const phone = normalizeIranPhone(String(body.phone || ""));
     const productId = String(body.productId || "").trim();
     const purchaseToken = String(body.purchaseToken || "").trim();
@@ -141,70 +119,37 @@ router.post("/verify", async (req, res) => {
     const packageName = String(body.packageName || "").trim() || null;
     const purchaseTimeRaw = body.purchaseTime;
 
-    if (!phone) return res.status(400).json({ ok: false, error: "PHONE_INVALID" });
-    if (!productId) return res.status(400).json({ ok: false, error: "PRODUCT_ID_REQUIRED" });
-    if (!purchaseToken) return res.status(400).json({ ok: false, error: "PURCHASE_TOKEN_REQUIRED" });
+    if (!phone) {
+      return res.status(400).json({ ok: false, error: "PHONE_INVALID" });
+    }
+
+    if (!productId) {
+      return res.status(400).json({ ok: false, error: "PRODUCT_ID_REQUIRED" });
+    }
+
+    if (!purchaseToken) {
+      return res.status(400).json({ ok: false, error: "PURCHASE_TOKEN_REQUIRED" });
+    }
 
     const months = resolveMonthsFromBazaarProductId(productId);
-    if (!months) return res.status(400).json({ ok: false, error: "UNKNOWN_PRODUCT" });
+    if (!months) {
+      return res.status(400).json({ ok: false, error: "UNKNOWN_PRODUCT" });
+    }
 
+    const plan = "pro";
     const purchaseTime = toDateSafe(purchaseTimeRaw) || new Date();
+
     const authority = buildAuthority({
       purchaseToken,
       orderId,
       purchaseTime,
     });
 
-    if (!authority) return res.status(400).json({ ok: false, error: "INVALID_AUTHORITY" });
-
-    // ✅ user upsert
-    const user = await prisma.user.upsert({
-      where: { phone },
-      update: {},
-      create: { phone, plan: "free", profileCompleted: true },
-    });
-
-    // ✅ idempotency ثانویه: اگر همین authority قبلاً active شده (retry همان تراکنش)
-    const existingByAuthority = await prisma.subscription.findFirst({
-      where: { provider: "bazaar", authority },
-      include: { user: true },
-    });
-
-    if (existingByAuthority && existingByAuthority.status === "active") {
-      return res.json({
-        ok: true,
-        data: {
-          authority: existingByAuthority.authority,
-          status: "active",
-          plan: existingByAuthority.plan,
-          months: existingByAuthority.months,
-          planExpiresAt: existingByAuthority.expiresAt
-            ? new Date(existingByAuthority.expiresAt).toISOString()
-            : null,
-          provider: existingByAuthority.provider,
-          metaJson: existingByAuthority.metaJson ?? null,
-          userPlan: existingByAuthority.user?.plan ?? null,
-          userPlanExpiresAt: existingByAuthority.user?.planExpiresAt
-            ? new Date(existingByAuthority.user.planExpiresAt).toISOString()
-            : null,
-          idempotent: true,
-          reason: "EXISTING_BY_AUTHORITY",
-        },
-      });
+    if (!authority) {
+      return res.status(400).json({ ok: false, error: "INVALID_AUTHORITY" });
     }
 
-    // ✅ تمدید تجمعی (فقط وقتی خرید واقعاً جدید است)
     const now = new Date();
-    const userCurrentExpire = user.planExpiresAt ? new Date(user.planExpiresAt) : null;
-    const base =
-      userCurrentExpire &&
-      !isNaN(userCurrentExpire.getTime()) &&
-      userCurrentExpire.getTime() > now.getTime()
-        ? userCurrentExpire
-        : now;
-
-    const plan = "pro";
-    const planExpiresAtDate = calcPlanExpiresAtFromBase(base, months);
 
     const metaJson = {
       productId,
@@ -214,72 +159,35 @@ router.post("/verify", async (req, res) => {
       purchaseTime: purchaseTime.toISOString(),
     };
 
-    // ✅ تراکنش + هندل race روی unique(authority)
-    try {
-      await prisma.$transaction(async (tx) => {
-        await tx.subscription.create({
-          data: {
-            user: { connect: { id: user.id } },
-            phone,
-            authority,
-            refId: orderId || purchaseToken || "BAZAAR_PAID",
-            amount: 0,
-            months,
-            plan,
-            status: "active",
-            expiresAt: planExpiresAtDate,
-            paidAt: now,
-            provider: "bazaar",
-            metaJson,
-          },
-        });
-
-        await tx.user.update({
-          where: { id: user.id },
-          data: { plan, planExpiresAt: planExpiresAtDate },
-        });
-      });
-    } catch (e) {
-      // اگر به خاطر unique(authority) خورد به دیوار، یعنی همزمان ثبت شده؛ همون رو برگردون
-      const again = await prisma.subscription.findFirst({
-        where: { provider: "bazaar", authority },
-        include: { user: true },
-      });
-      if (again && again.status === "active") {
-        return res.json({
-          ok: true,
-          data: {
-            authority: again.authority,
-            status: "active",
-            plan: again.plan,
-            months: again.months,
-            planExpiresAt: again.expiresAt ? new Date(again.expiresAt).toISOString() : null,
-            provider: again.provider,
-            metaJson: again.metaJson ?? null,
-            userPlan: again.user?.plan ?? null,
-            userPlanExpiresAt: again.user?.planExpiresAt
-              ? new Date(again.user.planExpiresAt).toISOString()
-              : null,
-            idempotent: true,
-            reason: "RACE_UNIQUE_AUTHORITY",
-          },
-        });
-      }
-      throw e;
-    }
-
-    await upsertUserPlanOnServer({ phone, plan, planExpiresAt: planExpiresAtDate.toISOString() });
+    const result = await finalizeSubscription(prisma, {
+      phone,
+      provider: "bazaar",
+      authority,
+      refId: orderId || purchaseToken || "BAZAAR_PAID",
+      amount: 0,
+      months,
+      plan,
+      now,
+      metaJson,
+    });
 
     return res.json({
       ok: true,
       data: {
-        authority,
-        status: "active",
-        plan,
-        months,
-        planExpiresAt: planExpiresAtDate.toISOString(),
-        provider: "bazaar",
-        metaJson,
+        authority: result.authority,
+        provider: result.provider,
+        subscriptionId: result.subscriptionId,
+        userId: result.userId,
+        created: result.created,
+        updatedExisting: result.updatedExisting,
+        alreadyFinalized: result.alreadyFinalized,
+        plan: result.plan,
+        months: result.months,
+        amount: result.amount,
+        status: result.status,
+        planExpiresAt: result.planExpiresAt
+          ? new Date(result.planExpiresAt).toISOString()
+          : null,
       },
     });
   } catch (e) {
