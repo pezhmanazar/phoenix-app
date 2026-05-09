@@ -293,5 +293,3 @@ export async function finalizeSubscription(prisma, input) {
   });
 }
 
-export { finalizeSubscription };
-
