@@ -3,7 +3,7 @@
 import { PrismaClient } from "@prisma/client";
 import express from "express";
 
-const { finalizeSubscription } = require("../utils/subscription");
+import { finalizeSubscription } from "../utils/subscription.js";
 
 const router = express.Router();
 const prisma = new PrismaClient();
