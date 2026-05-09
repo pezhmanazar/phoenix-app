@@ -49,16 +49,18 @@ function toDateSafe(v) {
 // - اگر orderId داریم: authority = BAZAAR_<orderId>
 // - اگر نداریم: authority = BAZAAR_<purchaseToken>_<purchaseTimeMs>
 function buildAuthority({ purchaseToken, orderId, purchaseTime }) {
-  const oid = String(orderId || "").trim();
-  if (oid) return `BAZAAR_${oid}`;
-
   const t = String(purchaseToken || "").trim();
   if (!t) return "";
 
   const pt = toDateSafe(purchaseTime);
-  const ms = pt ? pt.getTime() : Date.now();
-  return `BAZAAR_${t}_${ms}`;
+  if (pt) return `BAZAAR_${t}_${pt.getTime()}`;
+
+  const oid = String(orderId || "").trim();
+  if (oid) return `BAZAAR_${t}_${oid}`;
+
+  return `BAZAAR_${t}`;
 }
+
 
 const BACKEND_URL = (process.env.BACKEND_URL || "http://127.0.0.1:4000").trim();
 
