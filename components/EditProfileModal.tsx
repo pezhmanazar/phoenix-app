@@ -5,7 +5,6 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  I18nManager,
   Image,
   Keyboard,
   KeyboardAvoidingView,
@@ -19,6 +18,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
@@ -1029,15 +1029,16 @@ setTimeout(() => {
                 </View>
 
                 <TextInput
-                  value={name}
-                  onChangeText={(t) => mountedRef.current && setName(t)}
-                  onFocus={onFocusScroll("name")}
-                  placeholder="نام شما"
-                  placeholderTextColor="rgba(231,238,247,.45)"
-                  style={[styles.input, { color: P.text }]}
-                  textAlign={I18nManager.isRTL ? "right" : "right"}
-                  returnKeyType="done"
-                />
+  value={name}
+  onChangeText={(t) => mountedRef.current && setName(t)}
+  onFocus={onFocusScroll("name")}
+  placeholder="نام شما"
+  placeholderTextColor="rgba(231,238,247,.45)"
+  style={[styles.input, { color: P.text }]}
+  textAlign="right"
+  returnKeyType="done"
+/>
+
               </View>
 
               {/* Photo buttons */}

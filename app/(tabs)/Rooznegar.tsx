@@ -4,7 +4,6 @@ import { toGregorian, toJalaali } from "jalaali-js";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
-  I18nManager,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -13,7 +12,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -978,7 +977,6 @@ function DateModal({
 
 /* ========================================================= */
 export default function Rooznegar() {
-  const rtl = I18nManager.isRTL;
   const insets = useSafeAreaInsets();
   const { setDayProgress } = usePhoenix();
 
@@ -1432,11 +1430,12 @@ export default function Rooznegar() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={{
-            paddingBottom: Math.max(24, insets.bottom + 24),
-            paddingHorizontal: 0,
-            rowGap: 14,
-            direction: rtl ? "rtl" : "ltr",
-          }}
+  paddingBottom: Math.max(24, insets.bottom + 24),
+  paddingHorizontal: 0,
+  rowGap: 14,
+  direction: "ltr",
+}}
+
           keyboardShouldPersistTaps="handled"
           removeClippedSubviews={false}
           showsVerticalScrollIndicator={false}
@@ -1468,24 +1467,24 @@ export default function Rooznegar() {
           <View style={{ paddingHorizontal: 16 }}>
             {tab === "today" ? (
               <TodayBlock
-                rtl={rtl}
-                items={filteredToday}
-                setItems={setTodayItems}
-                title={todayTitle}
-                setTitle={setTodayTitle}
-                time={todayTime}
-                onOpenTime={() => setShowTodayTime(true)}
-                onAdd={addTodayItem}
-                editingId={todayEditingId}
-                onEditItem={(it) => {
-                  setTodayEditingId(it.id);
-                  setTodayTitle(it.title);
-                  const [hh, mm] = it.time.split(":").map((x) => parseInt(x, 10));
-                  const d = new Date();
-                  d.setHours(hh || 0, mm || 0, 0, 0);
-                  setTodayTime(d);
-                  setTodayTags(it.tags ?? []);
-                }}
+  rtl={false}
+  items={filteredToday}
+  setItems={setTodayItems}
+  title={todayTitle}
+  setTitle={setTodayTitle}
+  time={todayTime}
+  onOpenTime={() => setShowTodayTime(true)}
+  onAdd={addTodayItem}
+  editingId={todayEditingId}
+  onEditItem={(it) => {
+    setTodayEditingId(it.id);
+    setTodayTitle(it.title);
+    const [hh, mm] = it.time.split(":").map((x) => parseInt(x, 10));
+    const d = new Date();
+    d.setHours(hh || 0, mm || 0, 0, 0);
+    setTodayTime(d);
+    setTodayTags(it.tags ?? []);
+  }}
                 todaySelectedTags={todayTags}
                 onAddTagToToday={(t: string) => {
                   const v = t.trim();
@@ -1507,16 +1506,16 @@ export default function Rooznegar() {
               />
             ) : (
               <ReminderBlock
-                rtl={rtl}
-                jy={jy}
-                jm={jm}
-                jd={jd}
-                setJy={setJy}
-                setJm={setJm}
-                setJd={setJd}
-                remTitle={remTitle}
-                setRemTitle={setRemTitle}
-                remTime={remTime}
+  rtl={false}
+  jy={jy}
+  jm={jm}
+  jd={jd}
+  setJy={setJy}
+  setJm={setJm}
+  setJd={setJd}
+  remTitle={remTitle}
+  setRemTitle={setRemTitle}
+  remTime={remTime}
                 onOpenDate={() => setShowDateModal(true)}
                 onOpenTime={() => setShowRemTime(true)}
                 items={filteredRem}

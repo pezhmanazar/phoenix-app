@@ -22,7 +22,6 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
-  I18nManager,
   Image,
   Keyboard,
   KeyboardAvoidingView,
@@ -1025,7 +1024,6 @@ export default function TicketDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const navigation = useNavigation();
-  const rtl = I18nManager.isRTL;
   const insets = useSafeAreaInsets();
 
   const { me } = useUser();
@@ -1586,24 +1584,25 @@ export default function TicketDetail() {
         ) : null}
 
         <ScrollView
-          ref={scrollRef}
-          style={{ backgroundColor: "#0b0f14" }} // ✅ جلوگیری از سفید شدن پایین/خالی
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{
-            paddingHorizontal: 14,
-            paddingTop: 12,
-            rowGap: 8,
-            direction: rtl ? "rtl" : "ltr",
-            paddingBottom: insets.bottom + 160,
-          }}
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => {
-            if (!didInitialScroll.current) {
-              scrollRef.current?.scrollToEnd({ animated: false });
-              didInitialScroll.current = true;
-            }
-          }}
-        >
+  ref={scrollRef}
+  style={{ backgroundColor: "#0b0f14" }}
+  keyboardShouldPersistTaps="handled"
+  contentContainerStyle={{
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    rowGap: 8,
+    direction: "ltr",
+    paddingBottom: insets.bottom + 160,
+  }}
+  showsVerticalScrollIndicator={false}
+  onContentSizeChange={() => {
+    if (!didInitialScroll.current) {
+      scrollRef.current?.scrollToEnd({ animated: false });
+      didInitialScroll.current = true;
+    }
+  }}
+>
+
           {hasMessages ? visibleMessages.map(renderMessage) : <View style={{ paddingTop: 40 }} />}
           {!hasMessages ? (
             <View style={styles.emptyWrap}>

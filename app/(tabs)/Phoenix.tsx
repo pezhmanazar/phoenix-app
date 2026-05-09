@@ -6,7 +6,6 @@ import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  I18nManager,
   Image,
   Linking,
   Modal,
@@ -181,7 +180,6 @@ function HalfStatCard({
 
 /* ================== Phoenix Screen ================== */
 export default function Phoenix() {
-  const rtl = I18nManager.isRTL;
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -358,13 +356,14 @@ export default function Phoenix() {
       <View pointerEvents="none" style={styles.bgGlow2} />
 
       <Screen
-        backgroundColor="#0b0f14"
-        contentContainerStyle={{
-          rowGap: 12,
-          direction: rtl ? "rtl" : "ltr",
-          paddingBottom: 18,
-        }}
-      >
+  backgroundColor="#0b0f14"
+  contentContainerStyle={{
+    rowGap: 12,
+    direction: "ltr",
+    paddingBottom: 18,
+  }}
+>
+
         {/* کارت پروفایل */}
         <View style={styles.profileCard}>
           <View style={styles.planBadgeLeftAligned}>

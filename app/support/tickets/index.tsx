@@ -6,7 +6,6 @@ import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  I18nManager,
   RefreshControl,
   StyleSheet,
   Text,
@@ -30,7 +29,6 @@ type Ticket = {
 export default function TicketList() {
   const { colors } = useTheme();
   const router = useRouter();
-  const rtl = I18nManager.isRTL;
 
   const [data, setData] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,8 +75,10 @@ export default function TicketList() {
         : item.status === "pending"
         ? "#F59E0B"
         : colors.primary;
+
     const typeLabel = item.type === "therapy" ? "درمانگر" : "فنی";
     const typeColor = item.type === "therapy" ? "#A855F7" : "#3B82F6";
+
     return (
       <TouchableOpacity
         onPress={() => router.push(`/support/tickets/${item.id}`)}
@@ -87,7 +87,7 @@ export default function TicketList() {
           {
             backgroundColor: colors.card,
             borderColor: colors.border,
-            flexDirection: rtl ? "row-reverse" : "row",
+            flexDirection: "row",
           },
         ]}
         activeOpacity={0.85}
@@ -106,20 +106,34 @@ export default function TicketList() {
         >
           <Ionicons name="pricetags-outline" size={18} color={colors.text} />
         </View>
+
         <View style={{ flex: 1 }}>
           <Text
-            style={{ color: colors.text, fontWeight: "800" }}
+            style={{
+              color: colors.text,
+              fontWeight: "800",
+              textAlign: "right",
+            }}
             numberOfLines={1}
           >
             {item.title}
           </Text>
-          <Text style={{ color: "#8E8E93", fontSize: 12 }} numberOfLines={1}>
+
+          <Text
+            style={{
+              color: "#8E8E93",
+              fontSize: 12,
+              textAlign: "right",
+            }}
+            numberOfLines={1}
+          >
             {item.description}
           </Text>
         </View>
+
         <View
           style={{
-            alignItems: rtl ? "flex-start" : "flex-end",
+            alignItems: "flex-end",
             gap: 6,
           }}
         >
@@ -142,6 +156,7 @@ export default function TicketList() {
                 : "بسته"}
             </Text>
           </View>
+
           {/* نوع تیکت */}
           <View
             style={{
@@ -163,7 +178,7 @@ export default function TicketList() {
   };
 
   const HeaderActions = () => (
-    <View style={[styles.actionsRow, { direction: rtl ? "rtl" : "ltr" }]}>
+    <View style={[styles.actionsRow, { direction: "ltr" }]}>
       <TouchableOpacity
         onPress={() => router.push("/support/tickets/tech")}
         style={[
@@ -175,6 +190,7 @@ export default function TicketList() {
         <Ionicons name="hardware-chip-outline" size={16} color="#93C5FD" />
         <Text style={styles.actionText}>پشتیبانی فنی</Text>
       </TouchableOpacity>
+
       <TouchableOpacity
         onPress={() => router.push("/support/tickets/therapy")}
         style={[
@@ -205,7 +221,7 @@ export default function TicketList() {
           contentContainerStyle={{
             padding: 16,
             gap: 10,
-            direction: rtl ? "rtl" : "ltr",
+            direction: "ltr",
           }}
           ListHeaderComponent={<HeaderActions />}
           data={data}
@@ -268,5 +284,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flex: 1,
   },
-  actionText: { color: "#E5E7EB", fontWeight: "800", fontSize: 13 },
+  actionText: {
+    color: "#E5E7EB",
+    fontWeight: "800",
+    fontSize: 13,
+    textAlign: "right",
+  },
 });

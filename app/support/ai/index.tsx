@@ -1,9 +1,19 @@
 // app/support/ai/index.tsx
-import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Clipboard from "expo-clipboard";
+import { Stack, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  I18nManager,
+  Alert,
+  Animated,
+  Easing,
+  Keyboard,
   KeyboardAvoidingView,
+  Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Platform,
   ScrollView,
   Share,
@@ -11,25 +21,14 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
-  Alert,
-  Modal,
-  Animated,
-  Easing,
-  Keyboard,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import * as Clipboard from "expo-clipboard";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import "react-native-get-random-values";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { v4 as uuidv4 } from "uuid";
+import PlanStatusBadge from "../../../components/PlanStatusBadge";
 import BACKEND_URL from "../../../constants/backend";
 import { useUser } from "../../../hooks/useUser";
-import { useRouter, Stack } from "expo-router";
 import { getPlanStatus, PRO_FLAG_KEY } from "../../../lib/plan";
-import PlanStatusBadge from "../../../components/PlanStatusBadge";
 
 type Msg = { id: string; role: "user" | "assistant"; content: string; ts: number };
 
@@ -185,7 +184,6 @@ function todayId() {
 type DailyUsage = { date: string; count: number };
 
 export default function AIChatSupport() {
-  const rtl = I18nManager.isRTL;
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -584,12 +582,11 @@ export default function AIChatSupport() {
         <ScrollView
           ref={scrollRef}
           contentContainerStyle={{
-            paddingHorizontal: 14,
-            // فضای کافی برای Dock پایین (بدون سفید شدن)
-            paddingBottom: insets.bottom + 140,
-            gap: 10,
-            direction: rtl ? "rtl" : "ltr",
-          }}
+  paddingHorizontal: 14,
+  paddingBottom: insets.bottom + 140,
+  gap: 10,
+  direction: "ltr",
+}}
           onContentSizeChange={() => {
             if (atBottomRef.current) scrollRef.current?.scrollToEnd({ animated: true });
           }}

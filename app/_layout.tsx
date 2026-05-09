@@ -11,7 +11,7 @@ import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useMemo } from "react";
-import { Pressable, StyleSheet, Text, TextInput } from "react-native";
+import { I18nManager, Pressable, StyleSheet, Text, TextInput } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { PhoenixProvider, usePhoenix } from "../hooks/PhoenixContext";
 // 🔌 Context modules
@@ -111,6 +111,15 @@ export default function RootLayout() {
     "Anjoman-Medium": require("../assets/fonts/Anjoman-Medium.ttf"),
     "Anjoman-Bold": require("../assets/fonts/Anjoman-Bold.ttf"),
   });
+  
+  useEffect(() => {
+  if (I18nManager.isRTL) {
+    I18nManager.allowRTL(false);
+    I18nManager.forceRTL(false);
+  }
+}, []);
+
+
   useEffect(() => {
     SplashScreen.preventAutoHideAsync().catch(() => {});
     console.log("🟢 SPLASH PREVENT (SAFE)");

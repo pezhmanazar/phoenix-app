@@ -7,7 +7,6 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   AppState,
   AppStateStatus,
-  I18nManager,
   Text,
   View,
 } from "react-native";
@@ -272,19 +271,20 @@ export default function TabsLayout() {
 
               {unreadCount > 0 && (
                 <View
-                  style={{
-                    position: "absolute",
-                    top: -4,
-                    ...(I18nManager.isRTL ? { left: -10 } : { right: -10 }),
-                    minWidth: 18,
-                    height: 18,
-                    borderRadius: 9,
-                    backgroundColor: "#EF4444",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    paddingHorizontal: 3,
-                  }}
-                >
+  style={{
+    position: "absolute",
+    top: -4,
+    right: -10,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#EF4444",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  }}
+>
+
                   <Text
                     style={{
                       color: "#fff",
