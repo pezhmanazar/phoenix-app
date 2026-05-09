@@ -27,7 +27,7 @@ import { computePlanExpiry } from "./plan.js";
  *   metaJson?: any
  * }} input
  */
-async function finalizeSubscription(prisma, input) {
+export async function finalizeSubscription(prisma, input) {
   const {
     phone,
     provider,
