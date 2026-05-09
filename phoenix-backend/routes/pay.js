@@ -209,6 +209,9 @@ router.post("/start", async (req, res) => {
 
     const authority = String(data.authority || "").trim();
     const gatewayUrl = `${ZP_GATEWAY_BASE}${authority}`;
+    const expiresAt = new Date();
+    expiresAt.setMonth(expiresAt.getMonth() + Number(months || 1));
+
 
     await prisma.subscription.create({
       data: {
@@ -219,6 +222,7 @@ router.post("/start", async (req, res) => {
         amount,
         months,
         plan,
+        expiresAt,
         status: "pending",
         provider: "zarinpal",
       },
