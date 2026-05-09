@@ -42,16 +42,21 @@ function toDateSafe(v) {
 
 // authority باید برای retry پایدار باشد.
 function buildAuthority({ purchaseToken, orderId, purchaseTime }) {
-  const t = String(purchaseToken || "").trim();
-  if (!t) return "";
+  const token = String(purchaseToken || "").trim();
+  if (!token) return "";
 
   const oid = String(orderId || "").trim();
-  if (oid) return `BAZAAR_${oid}`;
-
   const pt = toDateSafe(purchaseTime);
-  if (pt) return `BAZAAR_${t}_${pt.getTime()}`;
 
-  return `BAZAAR_${t}`;
+  if (oid && oid !== token) {
+    return `BAZAAR_ORDER_${oid}`;
+  }
+
+  if (pt) {
+    return `BAZAAR_TOKEN_${token}_${pt.getTime()}`;
+  }
+
+  return `BAZAAR_TOKEN_${token}`;
 }
 
 /* ------------------------------ routes ------------------------------ */
@@ -137,7 +142,14 @@ router.post("/verify", async (req, res) => {
     }
 
     const plan = "pro";
-    const purchaseTime = toDateSafe(purchaseTimeRaw) || new Date();
+    const purchaseTime = toDateSafe(purchaseTimeRaw);
+
+    if ((!orderId || orderId === purchaseToken) && !purchaseTime) {
+      return res.status(400).json({
+        ok: false,
+        error: "PURCHASE_TIME_REQUIRED_WHEN_ORDER_ID_IS_MISSING_OR_EQUALS_TOKEN",
+      });
+    }
 
     const authority = buildAuthority({
       purchaseToken,
@@ -156,7 +168,7 @@ router.post("/verify", async (req, res) => {
       purchaseToken,
       orderId,
       packageName,
-      purchaseTime: purchaseTime.toISOString(),
+      purchaseTime: purchaseTime ? purchaseTime.toISOString() : null,
     };
 
     const result = await finalizeSubscription(prisma, {
