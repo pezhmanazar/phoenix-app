@@ -67,11 +67,6 @@ export async function finalizeSubscription(prisma, input) {
     throw new Error("FINALIZE_SUBSCRIPTION_INVALID_NOW");
   }
 
-  const planExpiresAt = computePlanExpiry({
-    from: paidAt,
-    months: normalizedMonths,
-  });
-
   return prisma.$transaction(async (tx) => {
     // 1) کاربر را حتماً داشته باش
     const user = await tx.user.upsert({
@@ -84,7 +79,16 @@ export async function finalizeSubscription(prisma, input) {
       },
     });
 
-    // 2) اگر subscription با همین provider+authority هست، تعیین تکلیف کن
+    // 2) تاریخ انقضا را درست حساب کن:
+    // اگر اشتراک فعلی هنوز فعال است، از همان ادامه بده؛
+    // وگرنه از paidAt شروع کن.
+    const planExpiresAt = computePlanExpiry({
+      currentExpiresAt: user.planExpiresAt,
+      now: paidAt,
+      months: normalizedMonths,
+    });
+
+    // 3) اگر subscription با همین provider+authority هست، تعیین تکلیف کن
     const existing = await tx.subscription.findFirst({
       where: {
         provider: normalizedProvider,
@@ -95,11 +99,14 @@ export async function finalizeSubscription(prisma, input) {
     if (existing) {
       // اگر قبلاً active شده، idempotent رفتار کن
       if (existing.status === "active") {
+        const existingExpiresAt =
+          existing.expiresAt || user.planExpiresAt || planExpiresAt;
+
         await tx.user.update({
           where: { id: user.id },
           data: {
-            plan: normalizedPlan,
-            planExpiresAt,
+            plan: existing.plan || normalizedPlan,
+            planExpiresAt: existingExpiresAt,
           },
         });
 
@@ -111,11 +118,11 @@ export async function finalizeSubscription(prisma, input) {
           userId: user.id,
           authority: normalizedAuthority,
           provider: normalizedProvider,
-          plan: normalizedPlan,
-          months: normalizedMonths,
-          amount: normalizedAmount,
+          plan: existing.plan || normalizedPlan,
+          months: existing.months || normalizedMonths,
+          amount: existing.amount || normalizedAmount,
           status: existing.status,
-          planExpiresAt,
+          planExpiresAt: existingExpiresAt,
         };
       }
 
@@ -166,7 +173,7 @@ export async function finalizeSubscription(prisma, input) {
       throw new Error(`FINALIZE_SUBSCRIPTION_INVALID_STATE_${existing.status}`);
     }
 
-    // 3) اگر وجود ندارد، create active
+    // 4) اگر وجود ندارد، create active
     try {
       const createdSub = await tx.subscription.create({
         data: {
@@ -222,11 +229,14 @@ export async function finalizeSubscription(prisma, input) {
       if (!raced) throw err;
 
       if (raced.status === "active") {
+        const racedExpiresAt =
+          raced.expiresAt || user.planExpiresAt || planExpiresAt;
+
         await tx.user.update({
           where: { id: user.id },
           data: {
-            plan: normalizedPlan,
-            planExpiresAt,
+            plan: raced.plan || normalizedPlan,
+            planExpiresAt: racedExpiresAt,
           },
         });
 
@@ -238,11 +248,11 @@ export async function finalizeSubscription(prisma, input) {
           userId: user.id,
           authority: normalizedAuthority,
           provider: normalizedProvider,
-          plan: normalizedPlan,
-          months: normalizedMonths,
-          amount: normalizedAmount,
+          plan: raced.plan || normalizedPlan,
+          months: raced.months || normalizedMonths,
+          amount: raced.amount || normalizedAmount,
           status: raced.status,
-          planExpiresAt,
+          planExpiresAt: racedExpiresAt,
         };
       }
 
@@ -292,4 +302,3 @@ export async function finalizeSubscription(prisma, input) {
     }
   });
 }
-
