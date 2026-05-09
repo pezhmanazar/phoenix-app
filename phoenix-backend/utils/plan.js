@@ -19,7 +19,4 @@ function computePlanExpiry({ currentExpiresAt, now = new Date(), months }) {
   return addMonthsSafe(baseDate, months);
 }
 
-module.exports = {
-  addMonthsSafe,
-  computePlanExpiry,
-};
+export { addMonthsSafe, computePlanExpiry };

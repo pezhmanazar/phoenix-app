@@ -1,6 +1,6 @@
 // phoenix-app/phoenix-backend/utils/subscription.js
 
-const { computePlanExpiry } = require("./plan");
+import { computePlanExpiry } from "./plan.js";
 
 /**
  * نهایی‌سازی اشتراک به صورت اتمیک و idempotent
@@ -293,6 +293,5 @@ async function finalizeSubscription(prisma, input) {
   });
 }
 
-module.exports = {
-  finalizeSubscription,
-};
+export { finalizeSubscription };
+
