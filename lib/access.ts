@@ -25,6 +25,10 @@ function deny(reason: AccessReason): AccessResult {
   return { allowed: false, reason };
 }
 
+function hasPaidAccess(plan: PlanStatus): boolean {
+  return plan.isPro && !plan.isExpired;
+}
+
 /* ================== قوانین تب‌ها ================== */
 
 /**
@@ -37,7 +41,7 @@ export function canAccessPelekanDay(
 ): AccessResult {
   if (dayIndex <= 0) return ok(); // روز صفر همیشه باز
 
-  if (!plan.isActive || !plan.isPaid) {
+  if (!hasPaidAccess(plan)) {
     // پلن یا پولی نیست یا منقضی شده
     return deny("NEED_PRO");
   }
@@ -49,7 +53,7 @@ export function canAccessPelekanDay(
  * معرفی همیشه آزاد است، پس این فقط برای بخش‌های عمیق‌تر است.
  */
 export function canAccessPanahgahContent(plan: PlanStatus): AccessResult {
-  if (!plan.isActive || !plan.isPaid) return deny("NEED_PRO");
+  if (!hasPaidAccess(plan)) return deny("NEED_PRO");
   return ok();
 }
 
@@ -68,7 +72,7 @@ export function canAccessTechSupport(plan: PlanStatus): AccessResult {
 export function canAccessTherapistSupport(
   plan: PlanStatus
 ): AccessResult {
-  if (!plan.isActive || !plan.isPaid) return deny("NEED_PRO");
+  if (!hasPaidAccess(plan)) return deny("NEED_PRO");
   return ok();
 }
 
@@ -80,7 +84,7 @@ export function canAccessTherapistSupport(
  * pro/vip فعال → بی‌نهایت (عملاً 1000)
  */
 export function getDailyAiLimit(plan: PlanStatus): number {
-  if (!plan.isActive || !plan.isPaid) return 3;
+ if (!hasPaidAccess(plan)) return 3;
   // اگر پلن فعال است
   return 1000; // سقف عملی، برای محاسبه راحت‌تر از Infinity
 }

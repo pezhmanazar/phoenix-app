@@ -1,8 +1,9 @@
 // phoenix-app/components/PlanGate.tsx
-import React from "react";
-import { View, Text, ActivityIndicator, Pressable } from "react-native";
-import { useRouter } from "expo-router";
 import { useUser } from "@/hooks/useUser";
+import { getPlanStatus } from "@/lib/plan";
+import { useRouter } from "expo-router";
+import React from "react";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 
 type PlanGateProps = {
   children: React.ReactNode;
@@ -10,7 +11,13 @@ type PlanGateProps = {
 
 export default function PlanGate({ children }: PlanGateProps) {
   const router = useRouter();
-  const { loading, plan, isPro, isExpired, daysLeft } = useUser();
+
+  const { me, refreshing } = useUser();
+
+  const plan = getPlanStatus(me);
+  const { isPro, isExpired, daysLeft } = plan;
+
+  const loading = refreshing && !me;
 
   if (loading) {
     return (
