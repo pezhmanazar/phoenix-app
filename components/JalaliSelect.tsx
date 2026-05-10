@@ -1,13 +1,8 @@
 // phoenix-app/components/JalaliSelect.tsx
+import * as jalaali from "jalaali-js";
 import React, { useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  toJalaali,
-  toGregorian,
-  isValidJalaaliDate,
-  jalaaliMonthLength,
-} from "jalaali-js";
 
 type Props = {
   initial?: string; // yyyy-mm-dd (میلادی)
@@ -43,11 +38,30 @@ const monthNames = [
 
 // ✅ Wrapper های امن برای TS (حل خطای "Expected 1 arguments, but got 3")
 function toJalaliSafe(gy: number, gm: number, gd: number) {
-  return (toJalaali as any)(gy, gm, gd) as { jy: number; jm: number; jd: number };
+  return (jalaali as any).toJalaali(gy, gm, gd) as {
+    jy: number;
+    jm: number;
+    jd: number;
+  };
 }
+
 function toGregorianSafe(jy: number, jm: number, jd: number) {
-  return (toGregorian as any)(jy, jm, jd) as { gy: number; gm: number; gd: number };
+  return (jalaali as any).toGregorian(jy, jm, jd) as {
+    gy: number;
+    gm: number;
+    gd: number;
+  };
 }
+
+function isValidJalaaliDateSafe(jy: number, jm: number, jd: number) {
+  return (jalaali as any).isValidJalaaliDate(jy, jm, jd) as boolean;
+}
+
+function jalaaliMonthLengthSafe(jy: number, jm: number) {
+  return (jalaali as any).jalaaliMonthLength(jy, jm) as number;
+}
+
+
 
 export default function JalaliSelect({
   initial,
@@ -98,13 +112,12 @@ export default function JalaliSelect({
   const [open, setOpen] = useState<null | "year" | "month" | "day">(null);
 
   const daysInMonth = useMemo(
-    () =>
-      Array.from({ length: jalaaliMonthLength(jy, jm) }, (_, i) => i + 1),
-    [jy, jm]
-  );
+  () => Array.from({ length: jalaaliMonthLengthSafe(jy, jm) }, (_, i) => i + 1),
+  [jy, jm]
+);
 
   const commit = (jy0: number, jm0: number, jd0: number) => {
-    if (!isValidJalaaliDate(jy0, jm0, jd0)) return;
+    if (!isValidJalaaliDateSafe(jy0, jm0, jd0)) return;
     const g = toGregorianSafe(jy0, jm0, jd0);
     const iso = `${g.gy}-${pad(g.gm)}-${pad(g.gd)}`;
     onChange(iso);
@@ -222,7 +235,7 @@ export default function JalaliSelect({
                     <Pressable
                       key={yy}
                       onPress={() => {
-                        const safeDay = Math.min(jd, jalaaliMonthLength(yy, jm));
+                        const safeDay = Math.min(jd, jalaaliMonthLengthSafe(yy, jm));
                         setJy(yy);
                         setJd(safeDay);
                         setOpen(null);
@@ -281,7 +294,7 @@ export default function JalaliSelect({
                   <Pressable
                     key={mm}
                     onPress={() => {
-                      const safeDay = Math.min(jd, jalaaliMonthLength(jy, mm));
+                      const safeDay = Math.min(jd, jalaaliMonthLengthSafe(jy, mm));
                       setJm(mm);
                       setJd(safeDay);
                       setOpen(null);
