@@ -52,10 +52,9 @@ function loadSystemPrompt() {
       const txt = fs.readFileSync(PROMPT_PATH, "utf8").trim();
       if (txt.length > 0) return txt;
     }
-  } catch (e) {
-   console.warn("SYSTEM_PROMPT load warning:", e?.message || "unknown");
+    } catch (e) {
+    console.warn("SYSTEM_PROMPT load warning:", e?.message || "unknown");
   }
-
   return FALLBACK;
 }
 
@@ -150,18 +149,17 @@ router.post("/chat", async (req, res) => {
 
     const data = await r.json().catch(() => ({}));
 
-    if (!r.ok) {
-            console.error("[AI_CHAT][OPENAI_ERR]", {
+        if (!r.ok) {
+      console.error("[AI_CHAT][OPENAI_ERR]", {
         requestId,
         status: r.status,
         ms: Date.now() - t0,
       });
 
-      return res.status(502).json({
+            return res.status(502).json({
         ok: false,
         error: "llm_upstream_error",
         requestId,
-        detail: data?.error || r.statusText,
       });
     }
 
@@ -172,8 +170,8 @@ router.post("/chat", async (req, res) => {
     const reply = postProcessFa(raw);
 
     return res.json({ ok: true, reply, requestId });
-  } catch (e) {
-        console.error("[AI_CHAT][CRASH]", {
+    } catch (e) {
+    console.error("[AI_CHAT][CRASH]", {
       requestId,
       ms: Date.now() - t0,
       msg: e?.message || "unknown_error",
