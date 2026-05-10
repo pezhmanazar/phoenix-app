@@ -100,17 +100,6 @@ router.post("/chat", async (req, res) => {
   const t0 = Date.now();
 
   try {
-    // لاگ شروع (کم‌حجم ولی کاربردی)
-    console.log("[AI_CHAT][START]", {
-      requestId,
-      ip: req.ip,
-      xfwd: req.headers["x-forwarded-for"],
-      deviceId: req.headers["x-device-id"] || "",
-      hasKey: !!process.env.OPENAI_API_KEY,
-      hasFetch: typeof fetch === "function",
-      bodyKeys: Object.keys(req.body || {}),
-    });
-
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return res.status(500).json({ ok: false, error: "missing_api_key", requestId });
 
@@ -132,21 +121,12 @@ router.post("/chat", async (req, res) => {
       return res.status(413).json({ ok: false, error: "input_too_long", requestId });
     }
 
-    console.log("[AI_CHAT][INPUT]", {
-      requestId,
-      messagesLen: messages.length,
-      totalLen,
-      personaLen: persona ? String(persona).length : 0,
-    });
-
     // امکان افزودن اطلاعات شخصی‌سازی (دانش‌های من/پرسونا) به سیستم‌پرامپت
     const system =
       SYSTEM_PROMPT +
       (persona ? "\n\nاطلاعات تکمیلی درمانگر:\n" + String(persona).slice(0, 1500) : "");
 
     // فراخوانی OpenAI (بدون استریم برای سادگیِ قدم ۱)
-    console.log("[AI_CHAT][BEFORE_OPENAI]", { requestId, model: MODEL });
-
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -168,15 +148,13 @@ router.post("/chat", async (req, res) => {
       }),
     });
 
-    console.log("[AI_CHAT][OPENAI_STATUS]", { requestId, status: r.status, ms: Date.now() - t0 });
-
     const data = await r.json().catch(() => ({}));
 
     if (!r.ok) {
-      console.error("[AI_CHAT][OPENAI_ERR]", {
+            console.error("[AI_CHAT][OPENAI_ERR]", {
         requestId,
         status: r.status,
-        detail: data?.error || data || r.statusText,
+        ms: Date.now() - t0,
       });
 
       return res.status(502).json({
@@ -193,16 +171,14 @@ router.post("/chat", async (req, res) => {
     // ✅ اعمال اصلاحات سبک فارسی
     const reply = postProcessFa(raw);
 
-    console.log("[AI_CHAT][OK]", { requestId, outLen: reply.length, ms: Date.now() - t0 });
-
     return res.json({ ok: true, reply, requestId });
   } catch (e) {
-    console.error("[AI_CHAT][CRASH]", {
+        console.error("[AI_CHAT][CRASH]", {
       requestId,
       ms: Date.now() - t0,
-      msg: e?.message,
-      stack: e?.stack,
+      msg: e?.message || "unknown_error",
     });
+
     return res.status(500).json({ ok: false, error: "internal_error", requestId });
   }
 });
