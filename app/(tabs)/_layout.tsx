@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@react-navigation/native";
 import { Tabs } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   AppState,
   AppStateStatus,
@@ -50,7 +50,7 @@ async function countUnreadForType(
     const qs: string[] = [];
     qs.push(`type=${encodeURIComponent(type)}`);
     qs.push(`openedById=${encodeURIComponent(openedById)}`);
-    qs.push(`ts=${Date.now()}`);
+   //qs.push(`ts=${Date.now()}`);
 
     const url = `${BACKEND_URL}/api/public/tickets/open?${qs.join("&")}`;
 
@@ -153,9 +153,14 @@ export default function TabsLayout() {
   const { me } = useUser();
 
   const [unreadCount, setUnreadCount] = useState(0);
+  const isRefreshingRef = useRef(false);
 
   const refreshUnread = useCallback(async () => {
-    try {
+  if (isRefreshingRef.current) return;
+
+  isRefreshingRef.current = true;
+
+  try {
       const openedById = getOpenedById(me);
       if (!openedById) {
         setUnreadCount(0);
@@ -170,12 +175,14 @@ export default function TabsLayout() {
       const total = therapyUnread + techUnread;
 
       setUnreadCount((prev) => (prev !== total ? total : prev));
-    } catch (e) {
-      console.log("[tabs/_layout] refreshUnread error", e);
-    }
-  }, [me]);
+      } catch (e) {
+    console.log("[tabs/_layout] refreshUnread error", e);
+  } finally {
+    isRefreshingRef.current = false;
+  }
+}, [me]);
 
-  // mount + هر ۵ ثانیه + برگشت از background
+  // mount + هر 20 ثانیه + برگشت از background
   useEffect(() => {
     let cancelled = false;
     let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -186,22 +193,40 @@ export default function TabsLayout() {
       await refreshUnread();
     };
 
-    run();
-    intervalId = setInterval(run, 20000);
+    const stopInterval = () => {
+  if (intervalId) {
+    clearInterval(intervalId);
+    intervalId = null;
+  }
+};
 
-    const sub = AppState.addEventListener("change", (nextState) => {
-      const prevState = appState.current;
-      appState.current = nextState;
-      if (prevState.match(/inactive|background/) && nextState === "active") {
-        run();
-      }
-    });
+const startInterval = () => {
+  stopInterval();
+  intervalId = setInterval(run, 20000);
+};
+
+if (appState.current === "active") {
+  run();
+  startInterval();
+}
+
+const sub = AppState.addEventListener("change", (nextState) => {
+  const prevState = appState.current;
+  appState.current = nextState;
+
+  if (nextState === "active") {
+    run();
+    startInterval();
+  } else {
+    stopInterval();
+  }
+});
 
     return () => {
-      cancelled = true;
-      if (intervalId) clearInterval(intervalId);
-      sub.remove();
-    };
+  cancelled = true;
+  stopInterval();
+  sub.remove();
+};
   }, [refreshUnread]);
 
   useEffect(() => {
