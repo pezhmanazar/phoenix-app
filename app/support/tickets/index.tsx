@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import BACKEND_URL from "../../../constants/backend";
+import { BACKEND_URL } from "../../../constants/backend";
 
 type Ticket = {
   id: string;

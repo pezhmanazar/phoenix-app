@@ -10,7 +10,7 @@ import {
   Text,
   View,
 } from "react-native";
-import BACKEND_URL from "../../constants/backend";
+import { BACKEND_URL } from "../../constants/backend";
 
 type Props = {
   me: any;

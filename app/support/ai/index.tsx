@@ -26,7 +26,7 @@ import "react-native-get-random-values";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { v4 as uuidv4 } from "uuid";
 import PlanStatusBadge from "../../../components/PlanStatusBadge";
-import BACKEND_URL from "../../../constants/backend";
+import { BACKEND_URL } from "../../../constants/backend";
 import { useUser } from "../../../hooks/useUser";
 import { getPlanStatus, PRO_FLAG_KEY } from "../../../lib/plan";
 

@@ -18,7 +18,7 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import PlanStatusBadge from "../../components/PlanStatusBadge";
-import BACKEND_URL from "../../constants/backend";
+import { BACKEND_URL } from "../../constants/backend";
 import { useUser } from "../../hooks/useUser";
 
 const { height } = Dimensions.get("window");
