@@ -216,19 +216,12 @@ export default function ProfileWizard() {
           if (alive) setResolvedPhone(ss);
           return;
         }
-        const as = await AsyncStorage.getItem(SECURE_KEYS.OTP_PHONE);
-if (alive) setResolvedPhone(as || null);
-if (__DEV__)
-  console.log("[profile-wizard] resolvePhone", {
-    ctx: phone ?? null,
-    ss: ss ?? null,
-    as: as ?? null,
-    key: SECURE_KEYS.OTP_PHONE,
-  });
-} catch (e) {
-  if (__DEV__) console.log("[profile-wizard] resolvePhone error:", e);
-  if (alive) setResolvedPhone(null);
-}
+      const as = await AsyncStorage.getItem(SECURE_KEYS.OTP_PHONE);
+        if (alive) setResolvedPhone(as || null);
+      } catch {
+        if (alive) setResolvedPhone(null);
+      }
+
     })();
     return () => {
       alive = false;

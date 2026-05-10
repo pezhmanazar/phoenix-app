@@ -191,10 +191,9 @@ export default function LoginScreen() {
     });
   }
 
-  async function safePing() {
+    async function safePing() {
     try {
       const url = `${APP_API_URL}/api/ping`;
-      console.log("[ENV] APP_API_URL =", APP_API_URL, " → ", url);
       await withTimeout(fetch(url, { method: "GET" }), 3000).catch(() => {});
     } catch {}
   }
