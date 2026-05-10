@@ -80,11 +80,11 @@ export default function RealSupport() {
     router.push(`/support/tickets/${type}`);
   };
 
-  const getOpenedById = () => {
-    const phone = (me as any)?.phone;
-    const id = (me as any)?.id;
-    return String(phone || id || "").trim();
-  };
+  const getOpenedById = useCallback(() => {
+  const phone = (me as any)?.phone;
+  const id = (me as any)?.id;
+  return String(phone || id || "").trim();
+}, [me]);
 
   const fetchSummaryForType = useCallback(
     async (type: "tech" | "therapy"): Promise<TicketSummary | null> => {
@@ -166,7 +166,7 @@ export default function RealSupport() {
         return null;
       }
     },
-    [me]
+    [getOpenedById]
   );
 
   const loadSeenIds = useCallback(async () => {
