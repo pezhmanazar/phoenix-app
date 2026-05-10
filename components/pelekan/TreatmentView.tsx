@@ -252,13 +252,6 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
     setGuardOpen(true);
   }, []);
 
-  // ✅ فقط برای دیباگ، بفهمیم واقعاً state چی میگه
-  useEffect(() => {
-    // حواست باشه اسپم نشه؛ ولی همین الان برای تست خوبه
-    // اگر دیدی زیاد لاگ میده، پاکش کن.
-    console.log("[TreatmentView] bastanIntroDone=", bastanIntroDone, "completedAt=", bastanIntroCompletedAt);
-  }, [bastanIntroDone, bastanIntroCompletedAt]);
-
   // ✅ یک مودال برای همه آیتم‌ها (نه تکراری)
   const GuardModal = (
     <Modal transparent visible={guardOpen} animationType="fade" onRequestClose={() => setGuardOpen(false)}>
