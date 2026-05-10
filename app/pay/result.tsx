@@ -3,7 +3,7 @@ import { toApi } from "@/constants/env";
 import { useUser } from "@/hooks/useUser";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 
 type PayStatusResp =
@@ -45,70 +45,77 @@ export default function PayResultScreen() {
   const handledSuccessRef = useRef(false);
   const pollRef = useRef(0);
 
-  async function fetchStatus() {
-    if (!authority) {
-      setErr("AUTHORITY_MISSING");
+  const payOk = data?.ok === true;
+  const payStatus = payOk ? data.status : null;
+
+
+  const fetchStatus = useCallback(async () => {
+  if (!authority) {
+    setErr("AUTHORITY_MISSING");
+    setLoading(false);
+    return;
+  }
+
+  try {
+    setLoading(true);
+    setErr(null);
+
+    const url = toApi(`/api/pay/status?authority=${encodeURIComponent(authority)}`);
+    const r = await fetch(url, { method: "GET" });
+
+    const ct = r.headers.get("content-type") || "";
+    if (!ct.includes("application/json")) {
+      const text = await r.text();
+      console.log("[pay/result] NON_JSON_RESPONSE:", r.status, ct, text.slice(0, 200));
+      setErr("NON_JSON_RESPONSE");
       setLoading(false);
       return;
     }
-    try {
-      setLoading(true);
-      setErr(null);
 
-      const url = toApi(`/api/pay/status?authority=${encodeURIComponent(authority)}`);
-      const r = await fetch(url, { method: "GET" });
+    const j = (await r.json()) as PayStatusResp;
+    setData(j);
 
-      const ct = r.headers.get("content-type") || "";
-      if (!ct.includes("application/json")) {
-        const text = await r.text();
-        console.log("[pay/result] NON_JSON_RESPONSE:", r.status, ct, text.slice(0, 200));
-        setErr("NON_JSON_RESPONSE");
-        setLoading(false);
-        return;
-      }
-
-      const j = (await r.json()) as PayStatusResp;
-      setData(j);
-
-      if (!r.ok || !j || (j as any).ok !== true) {
-        setErr((j as any)?.error || `HTTP_${r.status}`);
-      }
-    } catch (e: any) {
-      setErr(e?.message || "NETWORK_ERROR");
-    } finally {
-      setLoading(false);
+    if (!r.ok || !j || (j as any).ok !== true) {
+      setErr((j as any)?.error || `HTTP_${r.status}`);
     }
+  } catch (e: any) {
+    setErr(e?.message || "NETWORK_ERROR");
+  } finally {
+    setLoading(false);
   }
+}, [authority]);
+
 
   useEffect(() => {
+  fetchStatus();
+}, [fetchStatus]);
+
+  useEffect(() => {
+  if (!payOk) return;
+  if (payStatus !== "pending") return;
+  if (pollRef.current >= 20) return;
+
+  pollRef.current += 1;
+
+  const t = setTimeout(() => {
     fetchStatus();
-  }, [authority]);
+  }, 3000);
+
+  return () => clearTimeout(t);
+}, [payOk, payStatus, fetchStatus]);
 
   useEffect(() => {
-    if (!data || data.ok !== true) return;
-    if (data.status !== "pending") return;
-    if (pollRef.current >= 20) return;
-    pollRef.current += 1;
+  if (!payOk) return;
+  if (payStatus !== "active") return;
+  if (handledSuccessRef.current) return;
 
-    const t = setTimeout(() => {
-      fetchStatus();
-    }, 3000);
-
-    return () => clearTimeout(t);
-  }, [data?.ok, (data as any)?.status]);
-
-  useEffect(() => {
-    if (!data || data.ok !== true) return;
-    if (data.status !== "active") return;
-    if (handledSuccessRef.current) return;
-
-    handledSuccessRef.current = true;
-    (async () => {
-      try {
-        await refresh({ force: true });
-      } catch {}
-    })();
-  }, [data, refresh]);
+  handledSuccessRef.current = true;
+  (async () => {
+    try {
+      await refresh({ force: true });
+    } catch {}
+  })();
+}, [payOk, payStatus, refresh]);
 
   const status = (() => {
     if (loading) return "loading";
