@@ -1,6 +1,6 @@
 // routes/public.js
-import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
+import { Router } from "express";
 import path from "path";
 
 const router = Router();
@@ -154,6 +154,78 @@ router.get("/tickets/open", async (req, res) => {
       .json({ ok: false, error: "internal_error" });
   }
 });
+
+/**
+ * GET /api/public/tickets/open-batch
+ * query: openedById? &/or contact?
+ *
+ * هر دو تیکت باز tech و therapy را یکجا برمی‌گرداند
+ */
+router.get("/tickets/open-batch", async (req, res) => {
+  try {
+    const { openedById, contact } = req.query || {};
+
+    const or = [];
+    if (openedById) or.push({ openedById: String(openedById) });
+    if (contact) or.push({ contact: String(contact) });
+
+    if (or.length === 0) {
+      return res.json({
+        ok: false,
+        error: "missing_identity",
+        tickets: {
+          tech: null,
+          therapy: null,
+        },
+      });
+    }
+
+    const [tech, therapy] = await Promise.all([
+      prisma.ticket.findFirst({
+        where: {
+          type: "tech",
+          status: { in: ["open", "pending"] },
+          OR: or,
+        },
+        orderBy: { createdAt: "desc" },
+        include: {
+          messages: { orderBy: { createdAt: "asc" } },
+        },
+      }),
+      prisma.ticket.findFirst({
+        where: {
+          type: "therapy",
+          status: { in: ["open", "pending"] },
+          OR: or,
+        },
+        orderBy: { createdAt: "desc" },
+        include: {
+          messages: { orderBy: { createdAt: "asc" } },
+        },
+      }),
+    ]);
+
+    const withDisplay = (t) =>
+      t
+        ? {
+            ...t,
+            displayTitle: t.openedByName || t.title,
+          }
+        : null;
+
+    return res.json({
+      ok: true,
+      tickets: {
+        tech: withDisplay(tech),
+        therapy: withDisplay(therapy),
+      },
+    });
+  } catch (e) {
+    console.error("public /tickets/open-batch error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
 
 /** GET /api/public/tickets/:id */
 router.get("/tickets/:id", async (req, res) => {
