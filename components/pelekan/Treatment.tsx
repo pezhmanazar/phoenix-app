@@ -117,8 +117,9 @@ function Pulsing({ children }: { children: React.ReactNode }) {
 /* ============================ MAIN ============================ */
 export default function TreatmentPelekan({ me, state }: Props) {
   const insets = useSafeAreaInsets();
-  const stages = state?.stages || [];
+  const stages = useMemo(() => state?.stages ?? [], [state?.stages]);
   const activeDayId = state?.progress?.activeDayId || null;
+
 
   // مهم: activeStageCode از backend (درست‌ترین)
   const activeStageCode = useMemo(() => {
