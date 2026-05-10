@@ -601,39 +601,39 @@ export default function ReviewResult() {
   const retryTimerRef = useRef<any>(null);
 
   useEffect(() => {
+  if (retryTimerRef.current) {
+    clearTimeout(retryTimerRef.current);
+    retryTimerRef.current = null;
+  }
+
+  if (loading || err) return;
+  if (!phone) return;
+
+  const rStatus = String(reviewSession?.status || "");
+  const chosen = String(reviewSession?.chosenPath || "");
+
+  const isDone = rStatus === "completed_locked" || rStatus === "unlocked";
+  if (isDone) {
+    retryRef.current = 0;
+    return;
+  }
+
+  if (chosen !== "review") return;
+  if (retryRef.current >= 6) return;
+
+  retryTimerRef.current = setTimeout(() => {
+    retryRef.current += 1;
+    fetchAll();
+  }, 700);
+
+  return () => {
     if (retryTimerRef.current) {
       clearTimeout(retryTimerRef.current);
       retryTimerRef.current = null;
     }
+  };
+}, [loading, err, phone, reviewSession?.status, reviewSession?.chosenPath, fetchAll]);
 
-    if (loading || err) return;
-    if (!phone) return;
-
-    const r = reviewSession;
-    const rStatus = String(r?.status || "");
-    const chosen = String(r?.chosenPath || "");
-
-    const isDone = rStatus === "completed_locked" || rStatus === "unlocked";
-    if (isDone) {
-      retryRef.current = 0;
-      return;
-    }
-
-    if (chosen !== "review") return;
-    if (retryRef.current >= 6) return;
-
-    retryTimerRef.current = setTimeout(() => {
-      retryRef.current += 1;
-      fetchAll();
-    }, 700);
-
-    return () => {
-      if (retryTimerRef.current) {
-        clearTimeout(retryTimerRef.current);
-        retryTimerRef.current = null;
-      }
-    };
-  }, [loading, err, phone, reviewSession?.status, reviewSession?.chosenPath, fetchAll]);
 
   // ✅ NEW: اگر مسیر skip_review بود، قبل رفتن به تست‌ها مسیر را review کن
   const goReviewTestsForceReviewPath = useCallback(async () => {
