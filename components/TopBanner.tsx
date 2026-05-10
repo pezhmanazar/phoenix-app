@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  View,
-  Text,
+  Animated,
+  Linking,
+  Modal,
+  Platform,
   Pressable,
   StyleSheet,
-  Platform,
-  Animated,
-  Modal,
-  Linking,
+  Text,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAnnouncements } from "../hooks/useAnnouncements";
@@ -22,7 +22,7 @@ const AnimatedView = Animated.View as unknown as React.ComponentType<any>;
 
 export default function TopBanner({ headerHeight = 64, enabled = false }: Props) {
   const insets = useSafeAreaInsets();
-  const { topBanners, markSeen, dismissLocal, loading, refresh } = useAnnouncements({ enabled });
+  const { topBanners, markSeen, dismissLocal, refresh } = useAnnouncements({ enabled });
 
   const banner = topBanners?.[0] ?? null;
 
@@ -44,10 +44,6 @@ export default function TopBanner({ headerHeight = 64, enabled = false }: Props)
 
   // ✅ مودال بازشونده
   const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (__DEV__) console.log("[TopBanner]", { enabled, loading, bannerId: banner?.id ?? null });
-  }, [enabled, loading, banner?.id]);
 
   useEffect(() => {
     if (!enabled) {

@@ -1,8 +1,8 @@
 // /hooks/useAudio.ts
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Audio, AVPlaybackStatusSuccess } from "expo-av";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Asset } from "expo-asset";
+import { Audio, AVPlaybackStatusSuccess } from "expo-av";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type UseAudioArgs = { id: string; uri: string | number; enabled?: boolean };
 type UseAudioReturn = {
@@ -92,7 +92,6 @@ export function useAudio({ id, uri, enabled = true }: UseAudioArgs): UseAudioRet
           playThroughEarpieceAndroid: false,
         });
       } catch (e) {
-        console.log("[useAudio] setAudioModeAsync error:", e);
       }
 
       if (soundRef.current) {
@@ -131,9 +130,7 @@ export function useAudio({ id, uri, enabled = true }: UseAudioArgs): UseAudioRet
           const asset = await Asset.fromModule(uri).downloadAsync();
           const local = asset.localUri ?? asset.uri;
           source = { uri: local };
-          console.log("[useAudio] local asset:", local);
         } catch (e) {
-          console.log("[useAudio] asset download error:", e);
           setLoading(false);
           return;
         }
@@ -142,7 +139,6 @@ export function useAudio({ id, uri, enabled = true }: UseAudioArgs): UseAudioRet
       }
 
       try {
-        console.log("[useAudio] loadAsync start");
         await sound.loadAsync(source as any, {
           shouldPlay: false, // ⬅️ خودکار پخش نکن
           positionMillis: initialPosRef.current || 0,
@@ -152,13 +148,11 @@ export function useAudio({ id, uri, enabled = true }: UseAudioArgs): UseAudioRet
           try { await sound.unloadAsync(); } catch {}
           return;
         }
-        console.log("[useAudio] loadAsync done");
         initialPosRef.current = null;
         setLoading(false);
         try { await sound.setRateAsync(rate, true); } catch {}
       } catch (e) {
         if (loadTokenRef.current !== myToken) return;
-        console.log("[useAudio] loadAsync error:", e);
         setLoading(false);
         try { await sound.unloadAsync(); } catch {}
         soundRef.current = null;
