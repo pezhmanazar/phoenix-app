@@ -161,8 +161,7 @@ export default function RealSupport() {
           lastAdminMsgAt: lastAdmin?.createdAt ?? null,
           lastMsgAt: last.createdAt ?? null,
         };
-      } catch (e) {
-        console.log("[real-support] fetchSummary error", type, e);
+           } catch {
         return null;
       }
     },
@@ -179,8 +178,8 @@ export default function RealSupport() {
         therapy: therapySeen || null,
         tech: techSeen || null,
       });
-    } catch (e) {
-      console.log("[real-support] loadSeenIds error", e);
+    } catch {
+      // silent fail
     }
   }, []);
 
@@ -212,8 +211,8 @@ export default function RealSupport() {
       try {
         await AsyncStorage.setItem(SEEN_KEY(type), summary.lastAdminMsgId);
         setLastSeenAdminIds((prev) => ({ ...prev, [type]: summary.lastAdminMsgId }));
-      } catch (e) {
-        console.log("[real-support] markSeen error", type, e);
+      } catch {
+        // silent fail
       }
     }
     goTo(type);

@@ -36,23 +36,11 @@ export function useAnnouncements(opts: Options = {}) {
   const dismissedRef = useRef<Set<string>>(new Set());
 
   const fetchAnnouncements = useCallback(async () => {
-    // ✅ لاگ بدون شرط برای قفل‌کردن «محیط واقعی اپ»
-    console.log("[ann] fetch:ctx →", {
-      enabled,
-      isAuthenticated,
-      phone: phone ? String(phone) : null,
-      API_BASE,
-    });
-
     if (!enabled) {
-      console.log("[ann] fetch:skip → enabled=false");
       return;
     }
+
     if (!isAuthenticated || !phone) {
-      console.log("[ann] fetch:skip → not authenticated or no phone", {
-        isAuthenticated,
-        phone: phone ? String(phone) : null,
-      });
       return;
     }
 
@@ -62,11 +50,6 @@ export function useAnnouncements(opts: Options = {}) {
       const qs = `?phone=${encodeURIComponent(String(phone))}`;
       const url = `${API_BASE}/api/announcements/active${qs}`;
 
-      // ✅ لاگ بدون شرط (همون چیزی که لازم داشتیم)
-      console.log("[ann] url =", url);
-
-      if (__DEV__) console.log("[ann] fetch →", url);
-
       const res = await fetch(url, {
         cache: "no-store",
         headers: { Accept: "application/json" },
@@ -75,25 +58,19 @@ export function useAnnouncements(opts: Options = {}) {
       const ct = res.headers.get("content-type") || "";
       const text = await res.text();
 
-      if (__DEV__) console.log("[ann] status =", res.status, "ct =", ct);
-
       if (!ct.includes("application/json")) {
-        if (__DEV__) console.warn("[ann] Non-JSON response:", text.slice(0, 160));
-        // اینجا “خالی کردن items” بدترین کاره چون UI را بی‌دلیل می‌پرونه
         return;
       }
 
       const json = JSON.parse(text) as ApiResponse;
 
       if (!res.ok || !json?.ok) {
-        if (__DEV__) console.warn("[ann] ok=false:", json?.error || `HTTP_${res.status}`);
         return;
       }
 
       setItems(json.data || []);
-      if (__DEV__) console.log("[ann] items =", (json.data || []).length);
-    } catch (e) {
-      console.warn("[ann] fetch failed", e);
+    } catch {
+      // silent fail
     } finally {
       setLoading(false);
     }
@@ -130,10 +107,8 @@ export function useAnnouncements(opts: Options = {}) {
           },
           body: JSON.stringify({ phone: String(phone), announcementId }),
         });
-
-        if (__DEV__) console.log("[ann] seen →", announcementId, "status=", res.status);
-      } catch (e) {
-        console.warn("[ann] markSeen failed", e);
+            } catch {
+        // silent fail
       }
     },
     [phone]

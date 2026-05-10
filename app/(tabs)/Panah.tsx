@@ -53,9 +53,8 @@ async function countUnreadForType(type: "tech" | "therapy", openedById: string):
     qs.push(`openedById=${encodeURIComponent(openedById)}`);
     qs.push(`ts=${Date.now()}`);
     const url = `${BACKEND_URL}/api/public/tickets/open?${qs.join("&")}`;
-    console.log("[panah] countUnread", type, url);
-
     const res = await fetch(url);
+
     let json: any = null;
     try {
       json = await res.json();
@@ -81,8 +80,7 @@ async function countUnreadForType(type: "tech" | "therapy", openedById: string):
 
     // تعداد پیام‌های بعد از آخرین پیام دیده‌شده
     return Math.max(0, adminMsgs.length - (idx + 1));
-  } catch (e) {
-    console.log("[panah] countUnread error", type, e);
+    } catch {
     return 0;
   }
 }

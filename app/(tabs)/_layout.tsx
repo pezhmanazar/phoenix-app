@@ -58,8 +58,7 @@ async function countUnreadBatch(
   openedById: string
 ): Promise<{ therapy: number; tech: number }> {
   try {
-    if (!openedById) {
-      console.log("[tabs/_layout] countUnreadBatch → no openedById");
+        if (!openedById) {
       return { therapy: 0, tech: 0 };
     }
 
@@ -92,8 +91,7 @@ async function countUnreadBatch(
       therapy: countUnreadFromTicket(therapyTicket, therapyLastSeenId),
       tech: countUnreadFromTicket(techTicket, techLastSeenId),
     };
-  } catch (e) {
-    console.log("[tabs/_layout] countUnreadBatch error", e);
+    } catch {
     return { therapy: 0, tech: 0 };
   }
 }
@@ -182,8 +180,8 @@ export default function TabsLayout() {
     const total = unread.therapy + unread.tech;
 
     setUnreadCount((prev) => (prev !== total ? total : prev));
-  } catch (e) {
-    console.log("[tabs/_layout] refreshUnread error", e);
+    } catch {
+    // silent fail
   } finally {
     isRefreshingRef.current = false;
   }
