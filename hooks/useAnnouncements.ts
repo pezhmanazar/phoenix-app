@@ -1,3 +1,4 @@
+import { APP_API_URL } from "@/constants/env";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "./useAuth";
 
@@ -18,11 +19,7 @@ export type Announcement = {
 
 type ApiResponse = { ok: boolean; data: Announcement[]; error?: string };
 
-const API_BASE =
-  (process.env.EXPO_PUBLIC_APP_API_URL && String(process.env.EXPO_PUBLIC_APP_API_URL).trim()) ||
-  (process.env.EXPO_PUBLIC_BACKEND_URL && String(process.env.EXPO_PUBLIC_BACKEND_URL).trim()) ||
-  "https://api.qoqnoos.app";
-  console.log("[ann] module loaded, API_BASE =", API_BASE);
+const API_BASE = APP_API_URL;
 
 type Options = {
   enabled?: boolean;
