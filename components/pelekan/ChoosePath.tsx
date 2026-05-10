@@ -71,20 +71,20 @@ export default function ChoosePath({ me, state, onRefresh }: Props) {
   }, [fade, slide]);
 
   const postJsonSafe = useCallback(async (url: string, body: any) => {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const text = await res.text();
-    let json: any = null;
-    try {
-      json = text ? JSON.parse(text) : null;
-    } catch {
-      json = null;
-    }
-    return { res, json, text };
-  }, []);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  let json: any = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = null;
+  }
+  return { res, json, text };
+}, []);
 
   // ✅ مسیر درست: review/choose
   const CHOOSE_URL = `${BACKEND_URL}/api/pelekan/review/choose`;
@@ -127,14 +127,15 @@ export default function ChoosePath({ me, state, onRefresh }: Props) {
 
         // 3) refresh parent (should move tabState to treating or review)
         await onRefresh?.();
-      } catch (e: any) {
-        setErr("ارتباط با سرور برقرار نشد.");
-      } finally {
-        setBusy(null);
-      }
-    },
-    [phone, postJsonSafe, CHOOSE_URL, startTreatment, onRefresh]
-  );
+} catch {
+  setErr("ارتباط با سرور برقرار نشد.");
+} finally {
+  setBusy(null);
+}
+},
+[phone, postJsonSafe, CHOOSE_URL, startTreatment, onRefresh]
+);
+
 
   const header = "انتخاب مسیر";
 
