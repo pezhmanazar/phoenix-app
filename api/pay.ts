@@ -66,11 +66,6 @@ function toUrl(path: string) {
   const base = getBackendBase().replace(/\/+$/, "");
   const p = path.startsWith("/") ? path : `/${path}`;
   const url = `${base}${p}`;
-
-  if (__DEV__) {
-    console.log("[pay.toUrl] base =", base, "path =", p, "url =", url);
-  }
-
   return url;
 }
 
