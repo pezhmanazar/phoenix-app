@@ -2,7 +2,7 @@
 import type { ActionItem } from "@/lib/panahgah/actions/models";
 import { pickActions } from "@/lib/panahgah/actions/models";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 const palette = {
@@ -51,14 +51,15 @@ export default function ActionStepCard({
 
   const options = useMemo(() => pickActions(seedBase, 6), [seedBase]);
 
-  const resetTimer = () => {
-    setT(timerSec);
-    setTimerArmed(false);
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-  };
+  const resetTimer = useCallback(() => {
+  setT(timerSec);
+  setTimerArmed(false);
+  if (intervalRef.current) {
+    clearInterval(intervalRef.current);
+    intervalRef.current = null;
+  }
+}, [timerSec]);
+
 
   const startTimer = () => {
     if (!selected) return;
@@ -89,7 +90,7 @@ export default function ActionStepCard({
 
     resetTimer();
     setPhase("done");
-  }, [t, phase, timerArmed]);
+  }, [t, phase, timerArmed, resetTimer]);
 
   const mm = String(Math.floor(t / 60)).padStart(2, "0");
   const ss = String(t % 60).padStart(2, "0");
