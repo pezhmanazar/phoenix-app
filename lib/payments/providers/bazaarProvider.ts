@@ -29,7 +29,6 @@ async function ensureConnected(): Promise<void> {
   const rsaKey = getRsa();
   const pk = getPk();
 
-  console.log("[bazaar] rsa len =", rsaKey.length);
   if (!rsaKey) throw new Error("BAZAAR_RSA_MISSING");
 
   // اگر نسخه‌ای isConnected داشت
@@ -73,7 +72,6 @@ function isBazaarCancelError(e: any): boolean {
   return (
     msg.includes("purchase cancelled") ||
     msg.includes("purchase canceled") ||
-    msg.includes("purchase cancelled") ||
     msg.includes("user canceled") ||
     msg.includes("user cancelled") ||
     msg.includes("cancelled") ||
@@ -105,11 +103,9 @@ async function verifyOnServer(params: {
   }
 
   if (!res.ok) {
-    console.log("[bazaar] verify non-ok:", res.status, text);
     throw new Error(json?.error || `VERIFY_HTTP_${res.status}`);
   }
 
-  console.log("[bazaar] server verify result =", json);
   return json;
 }
 
@@ -119,10 +115,8 @@ export const bazaarProvider: PaymentApi = {
   async isAvailable() {
     try {
       await ensureConnected();
-      console.log("[bazaar] connected = true");
       return true;
-    } catch (e) {
-      console.log("[bazaar] isAvailable error:", e);
+    } catch {
       try {
         const pk = getPk();
         if (typeof pk.disconnect === "function") await pk.disconnect();
@@ -136,8 +130,6 @@ export const bazaarProvider: PaymentApi = {
     const productId = mapSkuToProductId(sku);
 
     if (!phone) throw new Error("PHONE_MISSING");
-
-    console.log("[bazaar] purchasing productId =", productId);
 
     // 1) کانکت
     await ensureConnected();
@@ -159,8 +151,6 @@ export const bazaarProvider: PaymentApi = {
       }
       throw e;
     }
-
-    console.log("[bazaar] purchase result =", result);
 
     // 3) verify روی سرور
     const verified = await verifyOnServer({

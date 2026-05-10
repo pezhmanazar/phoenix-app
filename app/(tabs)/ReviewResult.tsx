@@ -514,24 +514,6 @@ export default function ReviewResult() {
       const b = stJson?.data?.baseline?.session ?? null;
       const r = stJson?.data?.review?.session ?? null;
 
-      // ✅ LOG 1: state snapshot
-      console.log("🧪 [ReviewResult] state snapshot", {
-        phone,
-        baselineStatus: String(b?.status || ""),
-        review: r
-          ? {
-              id: r?.id,
-              chosenPath: r?.chosenPath,
-              status: r?.status,
-              currentTest: r?.currentTest,
-              currentIndex: r?.currentIndex,
-              test1CompletedAt: r?.test1CompletedAt,
-              test2CompletedAt: r?.test2CompletedAt,
-              test2SkippedAt: r?.test2SkippedAt,
-            }
-          : null,
-      });
-
       if (mountedRef.current) {
         setBaselineSession(b);
         setReviewSession(r);
@@ -542,13 +524,6 @@ export default function ReviewResult() {
       const chosen = String(r?.chosenPath || "");
 
       const shouldFetchReviewResult = rStatus === "completed_locked" || rStatus === "unlocked";
-
-      // ✅ LOG 2: decision
-      console.log("🧪 [ReviewResult] decide fetch result", {
-        chosen,
-        rStatus,
-        shouldFetchReviewResult,
-      });
 
       if (!shouldFetchReviewResult) {
         if (mountedRef.current) {
@@ -564,16 +539,6 @@ export default function ReviewResult() {
       );
 
       if (!rrJson?.ok) throw new Error(rrJson?.error || "RESULT_FAILED");
-
-      // ✅ LOG 3: result payload
-      console.log("🧪 [ReviewResult] /review/result payload", {
-        ok: rrJson?.ok,
-        status: rrJson?.data?.status,
-        locked: rrJson?.data?.result?.locked,
-        didSkipTest2: rrJson?.data?.result?.meta?.didSkipTest2,
-        t1: Array.isArray(rrJson?.data?.result?.diagrams?.test1) ? rrJson.data!.result!.diagrams.test1.length : null,
-        t2: Array.isArray(rrJson?.data?.result?.diagrams?.test2) ? rrJson.data!.result!.diagrams.test2.length : null,
-      });
 
       if (mountedRef.current) {
         setReviewStatus(rrJson?.data?.status ?? null);
@@ -645,10 +610,8 @@ export default function ReviewResult() {
     }
 
     try {
-      const chosen = String(reviewSession?.chosenPath || "");
+            const chosen = String(reviewSession?.chosenPath || "");
       if (chosen === "skip_review") {
-        console.log("🧪 [ReviewResult] force choosePath -> review (was skip_review)", { phone });
-
         const cj = await postJsonWithFallback(`${API_REVIEW_PRIMARY}/choose`, `${API_REVIEW_FALLBACK}/choose`, {
           phone,
           choice: "review",
