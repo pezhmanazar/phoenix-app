@@ -37,24 +37,39 @@ function getOpenedById(me: any) {
   return String(phone || id || "").trim();
 }
 
-async function countUnreadForType(
-  type: "tech" | "therapy",
+function countUnreadFromTicket(
+  ticket: TicketWithMessages | null | undefined,
+  lastSeenId: string | null
+): number {
+  if (!ticket) return 0;
+
+  const msgs = Array.isArray(ticket.messages) ? ticket.messages : [];
+  const adminMsgs = msgs.filter((m) => m.sender === "admin");
+
+  if (!adminMsgs.length) return 0;
+  if (!lastSeenId) return adminMsgs.length;
+
+  const idx = adminMsgs.findIndex((m) => m.id === lastSeenId);
+  if (idx === -1) return adminMsgs.length;
+
+  return Math.max(0, adminMsgs.length - (idx + 1));
+}
+
+async function countUnreadBatch(
   openedById: string
-): Promise<number> {
+): Promise<{ therapy: number; tech: number }> {
   try {
     if (!openedById) {
-      console.log("[tabs/_layout] countUnread", type, "→ no openedById");
-      return 0;
+      console.log("[tabs/_layout] countUnreadBatch → no openedById");
+      return { therapy: 0, tech: 0 };
     }
 
-    const qs: string[] = [];
-    qs.push(`type=${encodeURIComponent(type)}`);
-    qs.push(`openedById=${encodeURIComponent(openedById)}`);
-   //qs.push(`ts=${Date.now()}`);
-
-    const url = `${BACKEND_URL}/api/public/tickets/open?${qs.join("&")}`;
+    const url = `${BACKEND_URL}/api/public/tickets/open-batch?openedById=${encodeURIComponent(
+      openedById
+    )}`;
 
     const res = await fetch(url);
+
     let json: any = null;
     try {
       json = await res.json();
@@ -62,30 +77,28 @@ async function countUnreadForType(
       json = null;
     }
 
-    if (!res.ok || !json?.ok || !json.ticket) {
-      return 0;
+    if (!res.ok || !json?.ok || !json?.tickets) {
+      return { therapy: 0, tech: 0 };
     }
 
-    const t: TicketWithMessages = json.ticket;
-    const msgs = Array.isArray(t.messages) ? t.messages : [];
-    const adminMsgs = msgs.filter((m) => m.sender === "admin");
+    const [therapyLastSeenId, techLastSeenId] = await Promise.all([
+      AsyncStorage.getItem(SEEN_KEY("therapy")),
+      AsyncStorage.getItem(SEEN_KEY("tech")),
+    ]);
 
-    const lastSeenId = await AsyncStorage.getItem(SEEN_KEY(type));
+    const therapyTicket = json.tickets.therapy as TicketWithMessages | null;
+    const techTicket = json.tickets.tech as TicketWithMessages | null;
 
-    const result = (() => {
-      if (!adminMsgs.length) return 0;
-      if (!lastSeenId) return adminMsgs.length;
-      const idx = adminMsgs.findIndex((m) => m.id === lastSeenId);
-      if (idx === -1) return adminMsgs.length;
-      return Math.max(0, adminMsgs.length - (idx + 1));
-    })();
-
-    return result;
+    return {
+      therapy: countUnreadFromTicket(therapyTicket, therapyLastSeenId),
+      tech: countUnreadFromTicket(techTicket, techLastSeenId),
+    };
   } catch (e) {
-    console.log("[tabs/_layout] countUnread error", type, e);
-    return 0;
+    console.log("[tabs/_layout] countUnreadBatch error", e);
+    return { therapy: 0, tech: 0 };
   }
 }
+
 
 /* ===== Background شیشه‌ای + گلو برای tabBar ===== */
 function TabBarGlassBackground() {
@@ -161,21 +174,17 @@ export default function TabsLayout() {
   isRefreshingRef.current = true;
 
   try {
-      const openedById = getOpenedById(me);
-      if (!openedById) {
-        setUnreadCount(0);
-        return;
-      }
+    const openedById = getOpenedById(me);
+    if (!openedById) {
+      setUnreadCount(0);
+      return;
+    }
 
-      const [therapyUnread, techUnread] = await Promise.all([
-        countUnreadForType("therapy", openedById),
-        countUnreadForType("tech", openedById),
-      ]);
+    const unread = await countUnreadBatch(openedById);
+    const total = unread.therapy + unread.tech;
 
-      const total = therapyUnread + techUnread;
-
-      setUnreadCount((prev) => (prev !== total ? total : prev));
-      } catch (e) {
+    setUnreadCount((prev) => (prev !== total ? total : prev));
+  } catch (e) {
     console.log("[tabs/_layout] refreshUnread error", e);
   } finally {
     isRefreshingRef.current = false;
