@@ -5,20 +5,20 @@ import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Image,
-    InteractionManager,
-    Keyboard,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    findNodeHandle,
+  ActivityIndicator,
+  Image,
+  InteractionManager,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  findNodeHandle,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -452,7 +452,7 @@ export default function UL1LetterWriteOrPhotoScreen() {
       onPrimary: closeModal,
     });
     return "fail";
-  }, [apiBase, closeModal, emotionLevel, images.length, mode, openModal, path, phone, token]);
+  }, [apiBase, closeModal, didRegulate90s, emotionLevel, images.length, mode, openModal, path, phone, token]);
 
   const doFinalize = useCallback(async () => {
     if (!step3Ok) return;
@@ -510,20 +510,20 @@ export default function UL1LetterWriteOrPhotoScreen() {
   }, [isReview, router]);
 
   /* ----------------------------- Timer hint ----------------------------- */
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    if (step !== 3) return;
-    if (isReview) return;
+  const [, setTick] = useState(0);
 
-    if (!startedAtRef.current) startedAtRef.current = Date.now();
-    const id = setInterval(() => setTick((x) => x + 1), 1000);
-    return () => clearInterval(id);
-  }, [isReview, step]);
+useEffect(() => {
+  if (step !== 3) return;
+  if (isReview) return;
 
-  const elapsedMin = useMemo(() => {
-    if (!startedAtRef.current) return 0;
-    return Math.floor((Date.now() - startedAtRef.current) / 60000);
-  }, [tick]);
+  if (!startedAtRef.current) startedAtRef.current = Date.now();
+  const id = setInterval(() => setTick((x) => x + 1), 1000);
+  return () => clearInterval(id);
+}, [isReview, step]);
+
+const elapsedMin = startedAtRef.current
+  ? Math.floor((Date.now() - startedAtRef.current) / 60000)
+  : 0;
 
   /* ----------------------------- UI pieces ----------------------------- */
   const StepPills = (
