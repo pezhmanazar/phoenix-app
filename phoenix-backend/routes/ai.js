@@ -53,7 +53,7 @@ function loadSystemPrompt() {
       if (txt.length > 0) return txt;
     }
   } catch (e) {
-    console.warn("SYSTEM_PROMPT load warning:", e);
+   console.warn("SYSTEM_PROMPT load warning:", e?.message || "unknown");
   }
 
   return FALLBACK;
