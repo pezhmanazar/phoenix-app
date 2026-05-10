@@ -335,7 +335,6 @@ export default function CR4CloseConfirmWithDate() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const headerNo = subtaskNumberFa(SUBTASK_KEY);
   const title = "پذیرش نهایی پایان این فصل";
 
   const { me } = useUser();

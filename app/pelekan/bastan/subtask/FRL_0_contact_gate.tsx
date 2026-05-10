@@ -4,16 +4,16 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    InteractionManager,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  InteractionManager,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -514,14 +514,6 @@ export default function FRL0ContactGateScreen() {
       setStep(3);
     }
   }, [canFinalize, closeModal, completeOnServer, openModal, persistFinalLocal, router]);
-
-  const onFinishPress = useCallback(() => {
-    if (isReview) {
-      router.back();
-      return;
-    }
-    setConfirmLockModal(true);
-  }, [isReview, router]);
 
   /* ----------------------------- Step Pills ----------------------------- */
   const StepPills = (

@@ -475,8 +475,6 @@ export default function CR3AfterFeelingScreen() {
 
   const step3Ok = stabilizeDoneIds.length === STABILIZE_CHECKLIST.length;
   const step4Ok = lockDoneIds.length === LOCK_CHECKLIST.length && cleanedNextAction.length >= 3;
-
-  const canGo2 = step1Ok;
   const canFinalize = step1Ok && step2Ok && step3Ok && step4Ok;
 
   /* ----------------------------- Load CR2 + CR3 FINAL ----------------------------- */

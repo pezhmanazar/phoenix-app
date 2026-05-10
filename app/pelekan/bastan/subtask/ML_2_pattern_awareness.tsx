@@ -4,16 +4,16 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    InteractionManager,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  InteractionManager,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -410,11 +410,7 @@ export default function ML2PatternAwarenessScreen() {
   const step2Ok = ruminationSigns.length >= 3;
   const step3Ok = interruptTools.length >= 2 && !!grounding && !!anchor;
   const step4Ok = agreeAntiRumination;
-
   const canGo2 = step1Ok;
-  const canGo3 = step1Ok && step2Ok;
-  const canGo4 = step1Ok && step2Ok && step3Ok;
-
   const canFinalize = step1Ok && step2Ok && step3Ok && step4Ok;
 
   /* ----------------------------- Derived texts ----------------------------- */

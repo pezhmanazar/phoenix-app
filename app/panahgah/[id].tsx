@@ -613,9 +613,6 @@ export default function Runner() {
                 lines.push(`شدت حال تو بعد از تکنیک: ${post} از ۱۰`);
                 lines.push(`میزان بهبود تو: ${improvement} درجه`);
                 lines.push(``);
-                
-// ✅ NEW: متن‌های نوشته‌شده هم به خلاصه و تاریخچه اضافه میشن
-type FormFieldEntry = { key: string; label: string; value: string };
 
 // ✅ NEW: متن‌های نوشته‌شده هم به خلاصه و تاریخچه اضافه میشن
 const formEntries: {

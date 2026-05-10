@@ -533,8 +533,6 @@ export default function ML3ValuesNextTimeScreen() {
   const step4Ok = String(commitmentText || "").trim().length >= 10 && !!agreeLocked;
 
   const canGo2 = step1Ok;
-  const canGo3 = step1Ok && step2Ok;
-  const canGo4 = step1Ok && step2Ok && step3Ok;
   const canFinalize = step1Ok && step2Ok && step3Ok && step4Ok;
 
   /* ----------------------------- Persist FINAL local ----------------------------- */

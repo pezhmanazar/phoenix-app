@@ -249,7 +249,6 @@ export default function CC1ReadContractScreen() {
 
   const step1Ok = true;
   const step2Ok = reachedEnd && readConfirmed;
-  const step3Ok = true;
 
   const canGo2 = step1Ok;
   const canGo3 = step2Ok;

@@ -31,7 +31,7 @@ export default function GosastanStageIntroScreen() {
 
   // player
   const soundRef = useRef<Audio.Sound | null>(null);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [, setIsLoaded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
 
   const [posMs, setPosMs] = useState(0);

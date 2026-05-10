@@ -372,7 +372,7 @@ export default function AIChatSupport() {
     });
 
   /* scroll helpers */
-  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
     const paddingToBottom = 24;
     const atBottom = contentOffset.y + layoutMeasurement.height + paddingToBottom >= contentSize.height;

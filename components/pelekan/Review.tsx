@@ -95,7 +95,7 @@ export default function Review({ me, state, onRefresh }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const [reviewState, setReviewState] = useState<ReviewStateResponse["data"] | null>(null);
-  const [questionSetId, setQuestionSetId] = useState<string | null>(null);
+  const [, setQuestionSetId] = useState<string | null>(null);
   const [test1, setTest1] = useState<ReviewQuestion[]>([]);
   const [test2, setTest2] = useState<ReviewQuestion[]>([]);
 
@@ -210,32 +210,6 @@ export default function Review({ me, state, onRefresh }: Props) {
 
     return json.data.questionSet.id;
   }, []);
-
-  const fetchResult = useCallback(async () => {
-    if (!phone) return null;
-
-    setResultLoading(true);
-    setResultError(null);
-
-    try {
-      const res = await fetch(`${API_BASE}/result?phone=${encodeURIComponent(phone)}`, {
-        headers: { "Cache-Control": "no-store" },
-      });
-
-      const json: ResultResponse = await res.json().catch(() => ({ ok: false } as any));
-      if (!json?.ok) throw new Error(json?.error || "RESULT_FAILED");
-
-      const r = json?.data?.result ?? null;
-      if (mountedRef.current) setResultData(r);
-
-      return r;
-    } catch (e: any) {
-      if (mountedRef.current) setResultError(String(e?.message || "RESULT_FAILED"));
-      return null;
-    } finally {
-      if (mountedRef.current) setResultLoading(false);
-    }
-  }, [phone]);
 
   // ✅ FIX (1): ناوبری نتیجه بدون query-string (رفع TS2872 و گیرهای محیطی)
   const goToResultPage = useCallback(() => {
@@ -680,40 +654,7 @@ export default function Review({ me, state, onRefresh }: Props) {
       setLoading(false);
       submitLockRef.current = false;
     }
-  }, [phone, session?.status, syncAndMaybeGoResult, openResultScreen]);
-
-  // ✅ FIX: حذف finish اضافه
-  const passTest2 = useCallback(async () => {
-    if (!phone) return;
-
-    if (session?.status !== "in_progress") {
-      await openResultScreen();
-      return;
-    }
-
-    if (submitLockRef.current) return;
-    submitLockRef.current = true;
-
-    setLoading(true);
-    try {
-      const s2 = await fetch(`${API_BASE}/skip-test2`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
-      }).then((r) => r.json());
-
-      if (!s2?.ok) {
-        setError(s2?.error || "SERVER_ERROR");
-        return;
-      }
-
-      // ✅ فقط sync
-      await syncAndMaybeGoResult();
-    } finally {
-      setLoading(false);
-      submitLockRef.current = false;
-    }
-  }, [phone, session?.status, syncAndMaybeGoResult, openResultScreen]);
+  }, [phone, session?.status, syncAndMaybeGoResult, openResultScreen]);  
 
   const manualReload = useCallback(() => {
     bootRef.current.done = false;

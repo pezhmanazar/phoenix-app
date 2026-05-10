@@ -1,7 +1,7 @@
 // app/support/real/index.tsx
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useFocusEffect, useTheme } from "@react-navigation/native";
+import { useFocusEffect } from "@react-navigation/native";
 import { Stack, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
@@ -64,7 +64,6 @@ function formatTime(input?: string | null) {
 }
 
 export default function RealSupport() {
-  const { colors } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { me } = useUser();

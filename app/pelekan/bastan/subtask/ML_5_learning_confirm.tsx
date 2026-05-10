@@ -5,17 +5,17 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    InteractionManager,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  InteractionManager,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -285,17 +285,7 @@ export default function ML5LearningConfirmScreen() {
     () => principles.map((x) => String(x || "").trim()).filter((x) => !!x),
     [principles]
   );
-
-  const activeDetail = useMemo(() => {
-    const it = completedItems.find((x) => x.key === selectedKeyForDetails) || null;
-    return it;
-  }, [completedItems, selectedKeyForDetails]);
-
-  const detailTitle = useMemo(() => {
-    const item = REVIEW_ITEMS.find((x) => x.key === selectedKeyForDetails);
-    return item?.title || "جزئیات";
-  }, [selectedKeyForDetails]);
-
+  
   /* ----------------------------- Load ML5 FINAL if any ----------------------------- */
 
   const loadFinalIfAny = useCallback(async () => {
@@ -507,7 +497,6 @@ export default function ML5LearningConfirmScreen() {
 
   const canGo2 = step1Ok;
   const canGo3 = step1Ok && step2Ok;
-  const canGo4 = step1Ok && step2Ok && step3Ok;
   const canFinalize = step1Ok && step2Ok && step3Ok && step4Ok;
 
   /* ----------------------------- Persist FINAL local ----------------------------- */

@@ -4,17 +4,17 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    InteractionManager,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  InteractionManager,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -421,8 +421,6 @@ export default function ML1WhatDidILearnScreen() {
   const step4Ok = agreeNoRumination && agreeNoIdealization && agreeNoSelfBlameLoop && agreeActOnLearning;
 
   const canGo2 = step1Ok;
-  const canGo3 = step1Ok && step2Ok;
-  const canGo4 = step1Ok && step2Ok && step3Ok;
 
   const canFinalize = step1Ok && step2Ok && step3Ok && step4Ok;
 
@@ -431,11 +429,6 @@ export default function ML1WhatDidILearnScreen() {
     const set = new Set(lessons);
     return LESSONS.filter((x) => set.has(x.key)).map((x) => x.title);
   }, [lessons]);
-
-  const selectedLines = useMemo(() => {
-    const set = new Set(lines);
-    return LINES.filter((x) => set.has(x.key)).map((x) => ({ title: x.title, text: x.text }));
-  }, [lines]);
 
   const selectedAnchorText = useMemo(() => {
     const f = ANCHORS.find((x) => x.key === anchor);

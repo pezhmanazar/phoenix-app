@@ -540,62 +540,6 @@ export default function AR4NoBlameConfirmScreen() {
     top3,
   ]);
 
-  const doFinalize = useCallback(async () => {
-    if (!step4Ok) return;
-    if (savingRef.current) return;
-    savingRef.current = true;
-
-    try {
-      setSaving(true);
-
-      // 1) server
-      const r = await completeOnServer();
-      if (r === "fail") return;
-
-      // 2) local
-      await persistFinalLocal();
-      await AsyncStorage.setItem(KEY_BASTAN_DIRTY, new Date().toISOString());
-
-      if (r === "already") {
-        openModal({
-          kind: "info",
-          title: "قبلا ثبت شده",
-          message: "این ریز اقدام قبلا ثبت شده و نیازی به ثبت دوباره نیست",
-          primaryText: "خروج",
-          onPrimary: () => {
-            closeModal();
-            router.back();
-          },
-        });
-        return;
-      }
-
-      openModal({
-        kind: "success",
-        title: "ثبت شد",
-        message: "این ریز اقدام قفل شد و قابل تغییر نیست",
-        primaryText: "خروج",
-        onPrimary: () => {
-          closeModal();
-          router.back();
-        },
-      });
-    } finally {
-      setSaving(false);
-      savingRef.current = false;
-      setIsReview(true);
-      setStep(4);
-    }
-  }, [closeModal, completeOnServer, openModal, persistFinalLocal, router, step4Ok]);
-
-  const onFinishPress = useCallback(() => {
-    if (isReview) {
-      router.back();
-      return;
-    }
-    setConfirmLockModal(true);
-  }, [isReview, router]);
-
   const title = "پذیرش بدون سرزنش";
 
   /* ----------------------------- UI pieces ----------------------------- */

@@ -5,17 +5,17 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    InteractionManager,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  InteractionManager,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -514,8 +514,6 @@ export default function CR2DoRitualScreen() {
     lockDoneIds.length === LOCK_CHECKLIST.length && cleanedNextAction.length >= 3;
 
   const canGo2 = step1Ok;
-  const canGo3 = step1Ok && step2Ok;
-  const canGo4 = step1Ok && step2Ok && step3Ok;
   const canFinalize = step1Ok && step2Ok && step3Ok && step4Ok;
 
   /* ----------------------------- Load CR1 + CR2 FINAL ----------------------------- */
