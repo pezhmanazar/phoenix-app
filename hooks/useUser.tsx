@@ -1,4 +1,5 @@
 // hooks/useUser.tsx
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, {
   createContext,
   useCallback,
@@ -22,6 +23,8 @@ type UserContextValue = {
 
 const UserCtx = createContext<UserContextValue | undefined>(undefined);
 
+const CACHE_TTL_MS = 2000;
+
 export function UserProvider({ children }: { children: React.ReactNode }) {
   const { phone, isAuthenticated, signOut } = useAuth();
 
@@ -31,30 +34,31 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const mountedRef = useRef(true);
   const loadingRef = useRef(false);
   const lastLoadedPhoneRef = useRef<string | null>(null);
-
-  // ✅ NEW: زمان آخرین fetch برای TTL کش
   const lastFetchAtRef = useRef<number>(0);
-  const CACHE_TTL_MS = 2000;
 
   useEffect(() => {
     mountedRef.current = true;
+
     return () => {
       mountedRef.current = false;
     };
+  }, []);
+
+  const resetUserState = useCallback(() => {
+    lastLoadedPhoneRef.current = null;
+    lastFetchAtRef.current = 0;
+
+    if (mountedRef.current) {
+      setMe(null);
+    }
   }, []);
 
   const refresh = useCallback(
     async (opts?: RefreshOptions) => {
       const force = opts?.force === true;
 
-      // اگر لاگین نیستیم، me رو پاک کن و کش رو ریست کن
       if (!isAuthenticated || !phone) {
-        if (__DEV__) {
-          console.log("[useUser.refresh] not authenticated or no phone, skip");
-        }
-        lastLoadedPhoneRef.current = null;
-        lastFetchAtRef.current = 0;
-        if (mountedRef.current) setMe(null);
+        resetUserState();
         return;
       }
 
@@ -65,110 +69,71 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         now - lastFetchAtRef.current < CACHE_TTL_MS;
 
       if (!force && cacheFresh) {
-        if (__DEV__) console.log("[useUser.refresh] skip (cached ttl)");
         return;
       }
 
       if (loadingRef.current) {
-        if (__DEV__) console.log("[useUser.refresh] skip (already loading)");
         return;
       }
 
       loadingRef.current = true;
-      if (mountedRef.current) setRefreshing(true);
+
+      if (mountedRef.current) {
+        setRefreshing(true);
+      }
 
       try {
-        if (__DEV__) console.log("[useUser.refresh] fetching me for", phone);
-
         const resp = await getMeByPhone(phone);
 
-        // ❗️ok:false
         if (!resp.ok) {
-          // ✅ USER_NOT_FOUND در onboarding طبیعی است → نباید signOut کند
           if (resp.error === "USER_NOT_FOUND") {
-  if (__DEV__) {
-    console.warn("[useUser.refresh] USER_NOT_FOUND with active session → signOut(keepPhone) + go wizard");
-  }
+            resetUserState();
 
-  lastLoadedPhoneRef.current = null;
-  lastFetchAtRef.current = 0;
-  if (mountedRef.current) setMe(null);
+            try {
+              await AsyncStorage.setItem("force_profile_wizard_v1", "1");
+              await AsyncStorage.setItem("force_profile_phone_v1", phone);
+            } catch {
+              // intentionally ignored
+            }
 
-  // ✅ یک فلگ برای اینکه روت‌لی‌آوت بفهمد باید برود ویزارد
-  try {
-    const AsyncStorage = require("@react-native-async-storage/async-storage").default;
-    await AsyncStorage.setItem("force_profile_wizard_v1", "1");
-  } catch {}
+            return;
+          }
 
-  // ✅ USER_NOT_FOUND در onboarding طبیعی است → نباید signOut کند
-if (resp.error === "USER_NOT_FOUND") {
-  if (__DEV__) {
-    console.warn("[useUser.refresh] USER_NOT_FOUND → set force_profile_wizard_v1 (NO signOut)");
-  }
-
-  lastLoadedPhoneRef.current = null;
-  lastFetchAtRef.current = 0;
-  if (mountedRef.current) setMe(null);
-
-  // ✅ فلگ: روت‌لی‌آوت/نویگیشن بفهمد باید ویزارد باز شود
-  try {
-    const AsyncStorage = require("@react-native-async-storage/async-storage").default;
-    await AsyncStorage.setItem("force_profile_wizard_v1", "1");
-    await AsyncStorage.setItem("force_profile_phone_v1", phone); // اختیاری ولی کمک‌کننده
-  } catch {}
-
-  // ❌ مهم: اینجا signOut نکن
-  return;
-}
-}
-
-          // ✅ فقط خطاهای احراز هویت → signOut
           if (
             resp.error === "UNAUTHORIZED" ||
             resp.error === "INVALID_SESSION" ||
             resp.error === "TOKEN_EXPIRED"
           ) {
-            if (__DEV__)
-              console.warn(
-                "[useUser.refresh] AUTH_ERROR → signOut",
-                resp.error
-              );
-            lastLoadedPhoneRef.current = null;
-            lastFetchAtRef.current = 0;
-            if (mountedRef.current) setMe(null);
+            resetUserState();
             await signOut();
             return;
           }
 
-          // سایر خطاها: me قبلی رو نگه می‌داریم (یا null می‌مونه)
-          if (__DEV__)
-            console.warn(
-              "[useUser.refresh] ERROR but keep previous me",
-              resp.error
-            );
           return;
         }
 
-        // ok:true
-        if (mountedRef.current) setMe(resp.data || null);
+        if (mountedRef.current) {
+          setMe(resp.data || null);
+        }
+
         lastLoadedPhoneRef.current = phone;
         lastFetchAtRef.current = Date.now();
-        if (__DEV__) console.log("[useUser.refresh] new me =", resp.data);
-      } catch (e) {
-        if (__DEV__)
-          console.warn("[useUser.refresh] EXCEPTION but keep previous me", e);
+      } catch {
+        // keep previous me on transient/network errors
       } finally {
         loadingRef.current = false;
-        if (mountedRef.current) setRefreshing(false);
+
+        if (mountedRef.current) {
+          setRefreshing(false);
+        }
       }
     },
-    [phone, me, isAuthenticated, signOut]
+    [phone, me, isAuthenticated, signOut, resetUserState]
   );
 
-  // هنگام تغییر auth → یک بار رفرش
   useEffect(() => {
     refresh({ force: false });
-  }, [isAuthenticated, phone]);
+  }, [refresh]);
 
   const value: UserContextValue = {
     me,
@@ -181,6 +146,10 @@ if (resp.error === "USER_NOT_FOUND") {
 
 export function useUser(): UserContextValue {
   const ctx = useContext(UserCtx);
-  if (!ctx) throw new Error("useUser must be used within <UserProvider>");
+
+  if (!ctx) {
+    throw new Error("useUser must be used within <UserProvider>");
+  }
+
   return ctx;
 }
