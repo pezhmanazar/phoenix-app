@@ -242,60 +242,6 @@ router.get("/tickets/:id", async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-/**
- * GET /api/public/tickets/open
- * query: ?type=tech|therapy & openedById=... &/or contact=...
- *
- * اگر تیکتی پیدا نشود → ۲۰۰ با { ok:false, error:"not_found", ticket:null }
- */
-router.get("/tickets/open", async (req, res) => {
-  try {
-    const { type, openedById, contact } = req.query;
-
-    const tType = String(type || "tech").toLowerCase();
-    if (tType !== "tech" && tType !== "therapy") {
-      return res.status(400).json({ ok: false, error: "invalid_type" });
-    }
-
-    const or = [];
-    if (openedById) or.push({ openedById: String(openedById) });
-    if (contact) or.push({ contact: String(contact) });
-
-    if (or.length === 0) {
-      return res.json({
-        ok: false,
-        error: "missing_identity",
-        ticket: null,
-      });
-    }
-
-    const t = await prisma.ticket.findFirst({
-      where: {
-        type: tType,
-        status: { in: ["open", "pending"] },
-        OR: or,
-      },
-      orderBy: { createdAt: "desc" },
-      include: {
-        messages: { orderBy: { createdAt: "asc" } },
-      },
-    });
-
-    if (!t) {
-      return res.json({ ok: false, error: "not_found", ticket: null });
-    }
-
-    const withDisplay = {
-      ...t,
-      displayTitle: t.openedByName || t.title,
-    };
-
-    return res.json({ ok: true, ticket: withDisplay });
-  } catch (e) {
-    console.error("public /tickets/open error:", e);
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
 
 /** GET /api/public/tickets
  *  optional filters: openedById, contact, type
@@ -315,46 +261,6 @@ router.get("/tickets", async (req, res) => {
     return res.json({ ok: true, tickets: list });
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-/**
- * GET /api/public/tickets/open
- * query: type=tech|therapy, openedById?, contact?
- * پیدا کردن تیکت باز (open/pending) برای این کاربر
- */
-router.get("/tickets/open", async (req, res) => {
-  try {
-    const { type, openedById, contact } = req.query || {};
-    const tType = String(type || "tech").toLowerCase();
-
-    if (tType !== "tech" && tType !== "therapy") {
-      return res.status(400).json({ ok: false, error: "invalid_type" });
-    }
-
-    if (!openedById && !contact) {
-      // اگر هیچ شناسه‌ای نداریم، منطقی نیست چیزی برگردونیم
-      return res.json({ ok: true, ticket: null });
-    }
-
-    const where = {
-      type: tType,
-      status: { in: ["open", "pending"] },
-      OR: [
-        openedById ? { openedById: String(openedById) } : undefined,
-        contact ? { contact: String(contact) } : undefined,
-      ].filter(Boolean),
-    };
-
-    const ticket = await prisma.ticket.findFirst({
-      where,
-      orderBy: { updatedAt: "desc" },
-      include: { messages: { orderBy: { createdAt: "asc" } } },
-    });
-
-    return res.json({ ok: true, ticket });
-  } catch (e) {
-    console.error("public /tickets/open error:", e);
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
