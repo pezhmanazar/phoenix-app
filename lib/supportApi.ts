@@ -1,7 +1,7 @@
 // lib/supportApi.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL?.trim() || "http://127.0.0.1:4000";
+const BASE_URL = (process.env.EXPO_PUBLIC_BACKEND_URL?.trim() || "https://qoqnoos.app").replace(/\/+$/, "");
 
 // کلیدها برای ذخیره IDها در حافظه‌ی دستگاه
 const KEY_USER_ID = "phoenix_user_id";
