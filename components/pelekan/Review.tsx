@@ -73,9 +73,6 @@ type ReviewStateResponse = {
 
 const API_BASE = "https://qoqnoos.app/api/pelekan/review";
 
-// ✅ NEW: timing helper (برای لاگ‌های پرفورمنس)
-const now = () => ((global as any)?.performance?.now ? performance.now() : Date.now());
-
 export default function Review({ me, state, onRefresh }: Props) {
   const router = useRouter();
   const phone = String(me?.phone || "").trim();
@@ -150,36 +147,19 @@ export default function Review({ me, state, onRefresh }: Props) {
   }, []);
 
   const fetchReviewState = useCallback(async () => {
-    if (!phone) return null;
+  if (!phone) return null;
 
-    const t0 = now();
-    console.log("🟦 [Review] fetchReviewState:start", { t0 });
+  const res = await fetch(`${API_BASE}/state?phone=${encodeURIComponent(phone)}`, {
+    headers: { "Cache-Control": "no-store" },
+  });
 
-    const res = await fetch(`${API_BASE}/state?phone=${encodeURIComponent(phone)}`, {
-      headers: { "Cache-Control": "no-store" },
-    });
+  const json: ReviewStateResponse = await res.json().catch(() => ({ ok: false } as any));
 
-    console.log("🟩 [Review] fetchReviewState:after_fetch", {
-      dt: now() - t0,
-      http: res.status,
-    });
+  if (!json?.ok) throw new Error(json?.error || "STATE_FAILED");
 
-    const json: ReviewStateResponse = await res.json().catch(() => ({ ok: false } as any));
-
-    console.log("🟩 [Review] fetchReviewState:after_json", {
-      dt: now() - t0,
-      ok: json?.ok,
-      err: json?.error,
-      status: json?.data?.session?.status,
-      test: json?.data?.session?.currentTest,
-      idx: json?.data?.session?.currentIndex,
-    });
-
-    if (!json?.ok) throw new Error(json?.error || "STATE_FAILED");
-
-    if (mountedRef.current) setReviewState(json.data || null);
-    return json.data || null;
-  }, [phone]);
+  if (mountedRef.current) setReviewState(json.data || null);
+  return json.data || null;
+}, [phone]);
 
   const fetchQuestionSet = useCallback(async () => {
     const res = await fetch(`${API_BASE}/question-set`, {
@@ -238,37 +218,33 @@ export default function Review({ me, state, onRefresh }: Props) {
   [fetchReviewState, goToResultPage]
 );
 
-  const ensureStarted = useCallback(
-    async (stData: ReviewStateResponse["data"] | null) => {
-      if (!phone) return;
+ const ensureStarted = useCallback(
+  async (stData: ReviewStateResponse["data"] | null) => {
+    if (!phone) return;
 
-      const st = stData?.session;
-      if (st?.questionSetId) return;
+    const st = stData?.session;
+    if (st?.questionSetId) return;
 
-      if (startLockRef.current) return;
-      startLockRef.current = true;
+    if (startLockRef.current) return;
+    startLockRef.current = true;
 
-      try {
-        const r = await fetch(`${API_BASE}/start`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phone }),
-        })
-          .then((x) => x.json())
-          .catch(() => null);
+    try {
+      await fetch(`${API_BASE}/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      });
 
-        console.log("[Review] start response", r);
+      await fetchReviewState();
+      onRefresh?.();
+    } finally {
+      startLockRef.current = false;
+    }
+  },
+  [phone, fetchReviewState, onRefresh]
+);
 
-        await fetchReviewState();
-        onRefresh?.();
-      } finally {
-        startLockRef.current = false;
-      }
-    },
-    [phone, fetchReviewState, onRefresh]
-  );
-
-  const bootstrap = useCallback(async () => {
+const bootstrap = useCallback(async () => {
   if (!phone) return;
 
   // ✅ single-flight: دوبار همزمان اجرا نشه
@@ -282,25 +258,18 @@ export default function Review({ me, state, onRefresh }: Props) {
   setQsLoading(true);
 
   try {
-    console.log("[Review] bootstrap begin", { phone, seq });
-
     // ✅ اول سوال‌ها (تا از qsLoading سریع خارج بشیم)
-    const qsid = await fetchQuestionSet();
-    console.log("[Review] question-set loaded", { qsid, seq });
+    await fetchQuestionSet();
 
     // ✅ بعد state
     const st = await fetchReviewState();
-    console.log("[Review] state", st);
 
     // ✅ اگر session questionSetId ندارد، start کن
     await ensureStarted(st);
 
     // ✅ بعد از start یکبار دوباره state بگیر تا questionSetId قطعاً sync شود
     await fetchReviewState();
-
-    console.log("[Review] ensureStarted done");
   } catch (e: any) {
-    console.log("[Review] bootstrap error", e?.message || e);
     if (mountedRef.current && bootSeqRef.current === seq) {
       setError(String(e?.message || "UNKNOWN_ERROR"));
     }
@@ -311,6 +280,7 @@ export default function Review({ me, state, onRefresh }: Props) {
     bootingRef.current = false;
   }
 }, [phone, fetchQuestionSet, fetchReviewState, ensureStarted]);
+
 
   useEffect(() => {
     if (bootRef.current.phone !== phone) {
@@ -428,103 +398,67 @@ export default function Review({ me, state, onRefresh }: Props) {
   );
 
   const submitAnswer = useCallback(
-    async (value: number) => {
-      if (!phone || !session) return;
+  async (value: number) => {
+    if (!phone || !session) return;
 
-      // ✅ اگر از in_progress خارج شده، اجازه نده
-      if (session?.status !== "in_progress") {
-        await openResultScreen();
+    // ✅ اگر از in_progress خارج شده، اجازه نده
+    if (session?.status !== "in_progress") {
+      await openResultScreen();
+      return;
+    }
+
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
+
+    const idx = session.currentIndex ?? 0;
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/answer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, testNo: currentTest, index: idx, value }),
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (!json?.ok) {
+        setError(json?.error || "SERVER_ERROR");
         return;
       }
 
-      if (submitLockRef.current) return;
-      submitLockRef.current = true;
+      // ✅ فوراً برو سوال بعدی (بدون sync شبکه)
+      optimisticAdvance(idx);
 
-      const idx = session.currentIndex ?? 0;
+      // ✅ SAFETY: هر ۵ سوال یک بار sync کن + آخر تست حتماً sync
+      const nextIdx = idx + 1;
+      const len = questions?.length || 0;
+      const isLast = nextIdx >= len;
+      const shouldPeriodicSync = nextIdx % 5 === 0;
 
-      const t0 = now();
-      console.log("🟦 [Review] NEXT tap", { testNo: currentTest, idx, t0 });
+      if (isLast || shouldPeriodicSync) {
+        const finished = await syncAndMaybeGoResult();
 
-      setLoading(true);
-      try {
-        console.log("🟨 [Review] before POST /answer", { dt: now() - t0 });
-
-        const res = await fetch(`${API_BASE}/answer`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phone, testNo: currentTest, index: idx, value }),
-        });
-
-        console.log("🟩 [Review] after fetch() /answer", {
-          dt: now() - t0,
-          http: res.status,
-        });
-
-        const json = await res.json().catch(() => null);
-
-        console.log("🟩 [Review] after json() /answer", {
-          dt: now() - t0,
-          ok: json?.ok,
-          error: json?.error,
-        });
-
-        if (!json?.ok) {
-          setError(json?.error || "SERVER_ERROR");
-          return;
-        }
-
-        // ✅ فوراً برو سوال بعدی (بدون sync شبکه)
-        optimisticAdvance(idx);
-
-        // ✅ SAFETY: هر ۵ سوال یک بار sync کن + آخر تست حتماً sync
-        const nextIdx = idx + 1;
-        const len = questions?.length || 0;
-        const isLast = nextIdx >= len;
-        const shouldPeriodicSync = nextIdx % 5 === 0;
-
-        if (isLast || shouldPeriodicSync) {
-          console.log("🟨 [Review] before syncAndMaybeGoResult", {
-            dt: now() - t0,
-            reason: isLast ? "last" : "periodic",
-            nextIdx,
-          });
-
-          const finished = await syncAndMaybeGoResult();
-
-          console.log("🟩 [Review] after syncAndMaybeGoResult", {
-            dt: now() - t0,
-            finished,
-          });
-
-          requestAnimationFrame(() => {
-            console.log("🟪 [Review] raf after sync", { dt: now() - t0 });
-          });
-
-          if (finished) return;
-        } else {
-          requestAnimationFrame(() => {
-            console.log("🟪 [Review] raf after optimistic advance", { dt: now() - t0 });
-          });
-        }
-      } catch (e: any) {
-        console.log("🟥 [Review] submitAnswer error", String(e?.message || e));
-        setError(e?.message || "SERVER_ERROR");
-      } finally {
-        console.log("⬛ [Review] submitAnswer finally", { dt: now() - t0 });
-        setLoading(false);
-        submitLockRef.current = false;
+        if (finished) return;
       }
-    },
-    [
-      phone,
-      session,
-      currentTest,
-      openResultScreen,
-      syncAndMaybeGoResult,
-      optimisticAdvance,
-      questions?.length,
-    ]
-  );
+    } catch (e: any) {
+      setError(e?.message || "SERVER_ERROR");
+    } finally {
+      setLoading(false);
+      submitLockRef.current = false;
+    }
+  },
+  [
+    phone,
+    session,
+    currentTest,
+    openResultScreen,
+    syncAndMaybeGoResult,
+    optimisticAdvance,
+    questions?.length,
+  ]
+);
+
 
   const goToTest2 = useCallback(async () => {
     if (!phone) return;
