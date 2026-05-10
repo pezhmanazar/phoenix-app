@@ -619,11 +619,11 @@ type FormFieldEntry = { key: string; label: string; value: string };
 type FormEntry = { stepIndex: number; title: string; fields: FormFieldEntry[] };
 
 // ✅ NEW: متن‌های نوشته‌شده هم به خلاصه و تاریخچه اضافه میشن
-const formEntries: Array<{
+const formEntries: {
   stepIndex: number;
   title: string;
-  fields: Array<{ key: string; label: string; value: string }>;
-}> = [];
+  fields: { key: string; label: string; value: string }[];
+}[] = [];
 
 if (steps?.length) {
   steps.forEach((s: any, si: number) => {
@@ -633,12 +633,12 @@ if (steps?.length) {
     if (!st) return;
 
     // ✅ هم حالت معمولی (fields) هم حالت جدول (table.columns)
-    const rawFields: Array<{ key: string; label?: string }> =
-      Array.isArray(s?.fields) && s.fields.length
-        ? s.fields
-        : Array.isArray(s?.table?.columns) && s.table.columns.length
-        ? s.table.columns
-        : [];
+    const rawFields: { key: string; label?: string }[] =
+  Array.isArray(s?.fields) && s.fields.length
+    ? s.fields
+    : Array.isArray(s?.table?.columns) && s.table.columns.length
+      ? s.table.columns
+      : [];
 
     if (!rawFields.length) return;
 
@@ -833,12 +833,12 @@ function FormStep({
 
   const fields: any[] = Array.isArray(stepAny?.fields) ? stepAny.fields : [];
 
-  const table = stepAny?.table as
-    | {
-        columns: Array<{ key: string; label: string }>;
-        rows?: Array<{ id: string }>;
-      }
-    | undefined;
+ const table = stepAny?.table as
+  | {
+      columns: { key: string; label: string }[];
+      rows?: { id: string }[];
+    }
+  | undefined;
 
   // ✅ required هم برای table و هم برای فرم معمولی
   const required: string[] = Array.isArray(stepAny?.required)
