@@ -127,14 +127,15 @@ export default function ChoosePath({ me, state, onRefresh }: Props) {
 
         // 3) refresh parent (should move tabState to treating or review)
         await onRefresh?.();
-} catch {
-  setErr("ارتباط با سرور برقرار نشد.");
-} finally {
-  setBusy(null);
-}
-},
-[phone, postJsonSafe, CHOOSE_URL, startTreatment, onRefresh]
+    } catch {
+      setErr("ارتباط با سرور برقرار نشد.");
+    } finally {
+      setBusy(null);
+    }
+  },
+  [phone, postJsonSafe, CHOOSE_URL, onRefresh]
 );
+
 
 
   const header = "انتخاب مسیر";
