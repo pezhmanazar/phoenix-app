@@ -93,39 +93,58 @@ function TabBarGlassBackground() {
     <View
       pointerEvents="none"
       style={{
-        flex: 1,
-        backgroundColor: "rgba(3,7,18,.94)",
-        borderTopWidth: 1,
-        borderTopColor: "rgba(255,255,255,.08)",
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(8,10,18,0.88)",
+        borderTopWidth: 0.7,
+        borderTopColor: "rgba(255,255,255,0.10)",
+        overflow: "hidden",
       }}
     >
-      {/* glow left/top */}
+      {/* glow طلایی سمت چپ */}
       <View
         style={{
           position: "absolute",
-          top: -40,
-          left: -70,
-          width: 170,
-          height: 170,
+          width: 140,
+          height: 140,
           borderRadius: 999,
-          backgroundColor: "rgba(212,175,55,.14)",
+          left: -45,
+          top: 4,
+          backgroundColor: "rgba(212,175,55,0.10)",
         }}
       />
-      {/* glow right/bottom */}
+
+      {/* glow نارنجی سمت راست */}
       <View
         style={{
           position: "absolute",
-          bottom: -60,
-          right: -90,
-          width: 240,
-          height: 240,
+          width: 180,
+          height: 180,
           borderRadius: 999,
-          backgroundColor: "rgba(233,138,21,.10)",
+          right: -70,
+          bottom: -65,
+          backgroundColor: "rgba(249,115,22,0.08)",
+        }}
+      />
+
+      {/* لایه‌ی شیشه‌ای خیلی ملایم */}
+      <View
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(255,255,255,0.025)",
         }}
       />
     </View>
   );
 }
+
 
 /* ===== خود layout تب‌ها ===== */
 export default function TabsLayout() {
@@ -193,37 +212,51 @@ export default function TabsLayout() {
   return (
     <Tabs
       initialRouteName="Pelekan"
-      screenOptions={{
-        headerShown: false,
-        tabBarHideOnKeyboard: true,
+      // تغییر سایز تب بار //
+     screenOptions={{
+  headerShown: false,
+  tabBarHideOnKeyboard: true,
 
-        // ✅ تم رنگی ثابت و هماهنگ با برند
-        tabBarActiveTintColor: "#D4AF37",
-        tabBarInactiveTintColor: "rgba(231,238,247,.55)",
+  tabBarActiveTintColor: "#ffffff",
+  tabBarInactiveTintColor: "rgba(255,255,255,0.45)",
 
-        // ✅ شیشه‌ای + گلو
-        tabBarBackground: () => <TabBarGlassBackground />,
+  tabBarBackground: () => <TabBarGlassBackground />,
 
-        tabBarStyle: {
-          backgroundColor: "transparent",
-          borderTopWidth: 0,
+  tabBarStyle: {
+  position: "absolute",
+  left: 0,
+  right: 0,
+  bottom: 0,
+  height: 62 + insets.bottom, // قبلاً 56 بود
+  paddingTop: 6,              // قبلاً 4 بود
+  paddingBottom: insets.bottom > 0 ? insets.bottom : 8, // قبلاً 6 بود
+  borderTopWidth: 0,
+  backgroundColor: "transparent",
+  elevation: 0,
+  shadowOpacity: 0,
+  overflow: "hidden",
+},
 
-          // ✅ FIX: حذف نوار اضافه
-          // فقط ارتفاع را با safe-area تنظیم می‌کنیم؛ paddingBottom را صفر می‌کنیم
-          height: 70 + insets.bottom,
-          paddingBottom: 0,
+tabBarItemStyle: {
+  height: 56, // قبلاً 50 بود
+  justifyContent: "center",
+  alignItems: "center",
+  paddingVertical: 0,
+  marginVertical: 0,
+},
 
-          paddingTop: 10,
-        },
+tabBarLabelStyle: {
+  fontSize: 10,
+  fontWeight: "600",
+  marginTop: 1,   // قبلاً 0 بود
+  marginBottom: 2,
+  lineHeight: 12,
+  textAlign: "center",
+},
 
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: "800",
-          marginTop: 2,
-          textAlign: "center",
-          writingDirection: "auto",
-        },
-      }}
+}}
+
+
     >
       <Tabs.Screen name="index" options={{ href: null }} />
 

@@ -20,16 +20,10 @@ import { usePhoenix } from "../../hooks/PhoenixContext";
 
 import {
   loadReminders,
-  loadTags,
   loadToday,
   saveReminders,
-  saveTags,
   saveToday,
 } from "../../lib/storage";
-
-/* +++ TAGS: ذخیره آیکن‌های تگ‌ها فقط داخل همین فایل */
-import AsyncStorage from "@react-native-async-storage/async-storage";
-const K_TAG_ICONS = "phoenix.tagicons.v1";
 
 /* +++ NOTIFS: اکسپو نوتیفیکیشن */
 import * as Notifications from "expo-notifications";
@@ -103,27 +97,22 @@ const jalaliLabel = (d: Date) => {
   return `${weekdays[d.getDay()]} ${toFa(jd)} ${months[jm - 1]} ${toFa(jy)}`;
 };
 
-/* +++ TAGS: افزودن فیلد اختیاری tags به مدل‌ها */
 type TodayItem = {
   id: string;
   title: string;
   time: string;
   done: boolean;
   createdAt: number;
-  tags?: string[];
 };
+
 type ReminderItem = {
   id: string;
   title: string;
   when: number;
   createdAt: number;
   done?: boolean;
-  tags?: string[];
   notificationId?: string;
 };
-
-/* +++ TAGS: تعریف نوع نمایش تگ با آیکن (فقط برای UI) */
-type TagDef = { name: string; icon: string };
 
 /* ===================== THEMED ALERT (replace raw Alert.alert) ===================== */
 function ThemedAlert({
@@ -186,56 +175,6 @@ function ProgressBar({
         }}
       />
     </View>
-  );
-}
-
-/* +++ TAGS: چپس کوچکِ برچسب */
-function TagChip({
-  label,
-  selected,
-  onPress,
-  onRemove,
-  iconName,
-}: {
-  label: string;
-  selected?: boolean;
-  onPress?: () => void;
-  onRemove?: () => void;
-  iconName?: string;
-}) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.85}
-      style={[styles.chip, selected ? styles.chipSelected : null]}
-    >
-      {iconName ? (
-        <Ionicons
-          name={iconName as any}
-          size={14}
-          color={selected ? "#111827" : UI.TEXT}
-          style={{ opacity: selected ? 1 : 0.9 }}
-        />
-      ) : null}
-
-      <Text style={{ color: selected ? "#111827" : UI.TEXT, fontWeight: "800" }}>
-        {label}
-      </Text>
-
-      {onRemove && (
-        <TouchableOpacity
-          onPress={onRemove}
-          style={{ marginStart: 2 }}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons
-            name="close"
-            size={14}
-            color={selected ? "#111827" : UI.TEXT}
-          />
-        </TouchableOpacity>
-      )}
-    </TouchableOpacity>
   );
 }
 
@@ -329,150 +268,6 @@ function ProgressCard({ value }: { value: number }) {
   );
 }
 
-/* +++ TAGS: مودال مدیریت/ویرایش تگ‌ها */
-function TagManagerModal({
-  visible,
-  onClose,
-  tags,
-  onChange,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  tags: TagDef[];
-  onChange: (next: TagDef[]) => void;
-}) {
-  const insets = useSafeAreaInsets();
-  const [list, setList] = useState<TagDef[]>(tags);
-
-  // ✅ فقط موقع باز شدن، لیست رو از بیرون sync کن (نه با هر رندر/تغییر tags)
-  useEffect(() => {
-    if (visible) setList(tags);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
-
-  const iconBank: string[] = [
-    "pricetag-outline",
-    "bookmark-outline",
-    "heart-outline",
-    "briefcase-outline",
-    "book-outline",
-    "fitness-outline",
-    "bicycle-outline",
-    "code-slash-outline",
-    "medkit-outline",
-    "musical-notes-outline",
-    "sparkles-outline",
-    "sunny-outline",
-  ];
-
-  const updateTag = (idx: number, patch: Partial<TagDef>) => {
-    setList((arr) => arr.map((t, i) => (i === idx ? { ...t, ...patch } : t)));
-  };
-  const addEmpty = () =>
-    setList((arr) => [...arr, { name: "", icon: "pricetag-outline" }]);
-  const removeAt = (idx: number) => setList((arr) => arr.filter((_, i) => i !== idx));
-  const persist = () => {
-    const cleaned = list
-      .map((t) => ({ name: t.name.trim(), icon: t.icon }))
-      .filter((t) => t.name);
-
-    const seen: Record<string, TagDef> = {};
-    cleaned.forEach((t) => {
-      seen[t.name] = t;
-    });
-
-    onChange(Object.values(seen));
-    onClose();
-  };
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalCard, { paddingBottom: (insets.bottom || 0) + 12 }]}>
-          <Text style={styles.modalTitle}>مدیریت برچسب‌ها</Text>
-
-          <ScrollView
-            style={{ maxHeight: 360 }}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            {list.map((t, idx) => (
-              // ✅ key پایدار: تغییر name باعث remount و پریدن کیبورد نشه
-              <View key={`tagrow-${idx}`} style={styles.modalItem}>
-                <View style={styles.inputBox}>
-                  <TextInput
-                    value={t.name}
-                    onChangeText={(v) => updateTag(idx, { name: v })}
-                    placeholder="نام تگ"
-                    placeholderTextColor={UI.PLACEHOLDER}
-                    style={{ color: UI.TEXT, textAlign: "right", fontWeight: "800" }}
-                  />
-                </View>
-
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                  {iconBank.map((ic) => {
-                    const selected = ic === t.icon;
-                    return (
-                      <TouchableOpacity
-                        key={ic}
-                        onPress={() => updateTag(idx, { icon: ic })}
-                        activeOpacity={0.85}
-                        style={{
-                          borderWidth: 1,
-                          borderColor: selected ? "rgba(212,175,55,.55)" : UI.BORDER,
-                          borderRadius: 10,
-                          padding: 8,
-                          backgroundColor: selected ? "rgba(212,175,55,.12)" : "transparent",
-                        }}
-                      >
-                        <Ionicons name={ic as any} size={18} color={selected ? UI.PRIMARY : UI.TEXT} />
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
-                  <TouchableOpacity
-                    onPress={() => removeAt(idx)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Ionicons name="trash-outline" size={18} color={UI.DANGER} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-
-          <View style={{ flexDirection: "row-reverse", gap: 8 }}>
-            <TouchableOpacity
-              onPress={persist}
-              activeOpacity={0.85}
-              style={[styles.btn, styles.btnPrimary, { flex: 1 }]}
-            >
-              <Text style={styles.btnPrimaryText}>ذخیره</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={addEmpty}
-              activeOpacity={0.85}
-              style={[styles.btn, styles.btnOutline, { flex: 1 }]}
-            >
-              <Text style={styles.btnOutlineText}>تگ جدید</Text>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity
-            onPress={onClose}
-            activeOpacity={0.85}
-            style={[styles.btn, styles.btnOutline, { marginTop: 6 }]}
-          >
-            <Text style={styles.btnOutlineText}>بستن</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 /* ---------- TodayBlock ---------- */
 function TodayBlock({
   rtl,
@@ -485,13 +280,6 @@ function TodayBlock({
   onAdd,
   editingId,
   onEditItem,
-  todaySelectedTags,
-  onAddTagToToday,
-  onRemoveTagFromToday,
-  tagInput,
-  setTagInput,
-  allTags,
-  tagIcons,
 }: {
   rtl: boolean;
   items: TodayItem[];
@@ -503,96 +291,60 @@ function TodayBlock({
   onAdd: () => void;
   editingId: string | null;
   onEditItem: (it: TodayItem) => void;
-  todaySelectedTags: string[];
-  onAddTagToToday: (t: string) => void;
-  onRemoveTagFromToday: (t: string) => void;
-  tagInput: string;
-  setTagInput: (s: string) => void;
-  allTags: string[];
-  tagIcons: Record<string, string>;
 }) {
   const toggle = (id: string) =>
     setItems((list) =>
       sortToday(list.map((it) => (it.id === id ? { ...it, done: !it.done } : it)))
     );
-  const remove = (id: string) => setItems((list) => list.filter((it) => it.id !== id));
+
+  const remove = (id: string) =>
+    setItems((list) => list.filter((it) => it.id !== id));
 
   return (
     <View style={styles.card}>
       <Text style={styles.helperText}>برنامه امروزت رو اینجا اضافه کن</Text>
 
-      <View style={{ flexDirection: "row-reverse", gap: 8 }}>
-        <TouchableOpacity onPress={onOpenTime} activeOpacity={0.85} style={styles.timeBtn}>
-          <Text style={{ color: UI.TEXT, fontWeight: "900" }}>
-            {time ? toFa(timeLabel(time)) : "انتخاب ساعت"}
-          </Text>
-        </TouchableOpacity>
-
-        <View style={[styles.inputBox, { flex: 1, height: 46 }]}>
+      <View style={{ gap: 8 }}>
+        <View style={[styles.inputBox, { height: 46 }]}>
           <TextInput
             value={title}
             onChangeText={setTitle}
             placeholder="عنوان کار"
             placeholderTextColor={UI.PLACEHOLDER}
-            style={{ color: UI.TEXT, textAlign: rtl ? "right" : "left", fontWeight: "800" }}
+            style={{
+              color: UI.TEXT,
+              textAlign: "right",
+              writingDirection: "rtl",
+              fontWeight: "800",
+            }}
             blurOnSubmit={false}
             returnKeyType="done"
           />
         </View>
 
-        <TouchableOpacity onPress={onAdd} activeOpacity={0.85} style={styles.addBtn}>
-          {editingId ? (
-            <Text style={{ color: "#111827", fontWeight: "900" }}>ذخیره</Text>
-          ) : (
-            <Ionicons name="add" size={22} color="#111827" />
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {/* TAGS: امروز */}
-      <View style={{ marginTop: 8 }}>
-        <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-          {todaySelectedTags.map((t) => (
-            <TagChip
-              key={t}
-              label={t}
-              iconName={tagIcons[t]}
-              selected
-              onRemove={() => onRemoveTagFromToday(t)}
-            />
-          ))}
-        </View>
-
-        <View style={{ flexDirection: "row-reverse", alignItems: "center", marginTop: 6 }}>
+        <View style={{ flexDirection: "row-reverse", gap: 8 }}>
           <TouchableOpacity
-            onPress={() => onAddTagToToday(tagInput.trim())}
-            style={{ marginStart: 8 }}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={onOpenTime}
+            activeOpacity={0.85}
+            style={[styles.timeBtn, { flex: 1 }]}
           >
-            <Ionicons name="pricetag-outline" size={22} color={UI.MUTED2} />
+            <Text style={{ color: UI.TEXT, fontWeight: "900" }}>
+              {time ? toFa(timeLabel(time)) : "انتخاب ساعت"}
+            </Text>
           </TouchableOpacity>
 
-          <View style={[styles.inputBox, { flex: 1, height: 44 }]}>
-            <TextInput
-              value={tagInput}
-              onChangeText={setTagInput}
-              placeholder="اضافه‌کردن برچسب"
-              placeholderTextColor={UI.PLACEHOLDER}
-              onSubmitEditing={() => onAddTagToToday(tagInput.trim())}
-              style={{ color: UI.TEXT, textAlign: "right", fontWeight: "800" }}
-            />
-          </View>
-        </View>
-
-        <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 6 }}>
-          {allTags.map((t) => (
-            <TagChip key={t} label={t} iconName={tagIcons[t]} onPress={() => onAddTagToToday(t)} />
-          ))}
+          <TouchableOpacity onPress={onAdd} activeOpacity={0.85} style={styles.addBtn}>
+            {editingId ? (
+              <Text style={{ color: "#111827", fontWeight: "900" }}>ذخیره</Text>
+            ) : (
+              <Ionicons name="add" size={22} color="#111827" />
+            )}
+          </TouchableOpacity>
         </View>
       </View>
 
       {items.length === 0 ? (
-        <Text style={styles.emptyText}>هنوز آیتمی در این برنامه ثبت نشده.</Text>
+        <Text style={styles.emptyText}>هنوز کاری در این برنامه ثبت.</Text>
       ) : (
         <View style={{ marginTop: 4 }}>
           {items.map((item) => (
@@ -614,28 +366,34 @@ function TodayBlock({
                     textDecorationLine: item.done ? "line-through" : "none",
                     opacity: item.done ? 0.6 : 1,
                   }}
-                  // ✅ بهبود UX: longPress بره روی edit، نه پاک کردن!
                   onLongPress={() => onEditItem(item)}
                 >
                   {item.title}
                 </Text>
-
-                <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 4 }}>
-                  {(item.tags ?? []).map((t) => (
-                    <TagChip key={t} label={t} iconName={tagIcons[t]} />
-                  ))}
-                </View>
               </View>
 
-              <Text style={{ color: UI.MUTED, width: 52, textAlign: "center", fontWeight: "900" }}>
+              <Text
+                style={{
+                  color: UI.MUTED,
+                  width: 52,
+                  textAlign: "center",
+                  fontWeight: "900",
+                }}
+              >
                 {toFa(item.time)}
               </Text>
 
-              <TouchableOpacity onPress={() => onEditItem(item)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <TouchableOpacity
+                onPress={() => onEditItem(item)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
                 <Ionicons name="create-outline" size={18} color={UI.TEXT} />
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={() => remove(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <TouchableOpacity
+                onPress={() => remove(item.id)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
                 <Ionicons name="trash-outline" size={18} color={UI.DANGER} />
               </TouchableOpacity>
             </View>
@@ -645,6 +403,7 @@ function TodayBlock({
     </View>
   );
 }
+
 
 /* ---------- ReminderBlock ---------- */
 function ReminderBlock({
@@ -665,13 +424,6 @@ function ReminderBlock({
   onAdd,
   editingId,
   onEditItem,
-  remSelectedTags,
-  onAddTagToRem,
-  onRemoveTagFromRem,
-  tagInput,
-  setTagInput,
-  allTags,
-  tagIcons,
   onToggleReminder,
   onRemoveReminder,
   onSnoozeReminder,
@@ -693,93 +445,71 @@ function ReminderBlock({
   onAdd: () => void;
   editingId: string | null;
   onEditItem: (it: ReminderItem) => void;
-  remSelectedTags: string[];
-  onAddTagToRem: (t: string) => void;
-  onRemoveTagFromRem: (t: string) => void;
-  tagInput: string;
-  setTagInput: (s: string) => void;
-  allTags: string[];
-  tagIcons: Record<string, string>;
   onToggleReminder: (id: string) => void;
   onRemoveReminder: (id: string) => void;
   onSnoozeReminder: (id: string) => void;
 }) {
   return (
     <View style={styles.card}>
-      <Text style={styles.helperText}>کارهای مهم خودت رو در روزهای آینده اینجا اضافه کن</Text>
+      <Text style={styles.helperText}>
+        کارهای مهم خودت رو در روزهای آینده اینجا اضافه کن
+      </Text>
 
-      <View style={{ flexDirection: "row-reverse", gap: 8, flexWrap: "wrap" }}>
-        <TouchableOpacity onPress={onOpenDate} activeOpacity={0.85} style={styles.timeBtn}>
-          <Text style={{ color: UI.TEXT, fontWeight: "900" }}>
-            {toFa(jy)}/{toFa(pad(jm))}/{toFa(pad(jd))}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={onOpenTime} activeOpacity={0.85} style={styles.timeBtn}>
-          <Text style={{ color: UI.TEXT, fontWeight: "900" }}>
-            {remTime ? toFa(timeLabel(remTime)) : "انتخاب ساعت"}
-          </Text>
-        </TouchableOpacity>
-
-        <View style={[styles.inputBox, { flex: 1, height: 46 }]}>
+      <View style={{ gap: 8 }}>
+        <View style={[styles.inputBox, { height: 46 }]}>
           <TextInput
             value={remTitle}
             onChangeText={setRemTitle}
             placeholder="عنوان"
             placeholderTextColor={UI.PLACEHOLDER}
-            style={{ color: UI.TEXT, textAlign: rtl ? "right" : "left", fontWeight: "800" }}
+            style={{
+              color: UI.TEXT,
+              textAlign: "right",
+              writingDirection: "rtl",
+              fontWeight: "800",
+            }}
             blurOnSubmit={false}
             returnKeyType="done"
           />
         </View>
 
-        <TouchableOpacity onPress={onAdd} activeOpacity={0.85} style={styles.addBtn}>
-          {editingId ? (
-            <Text style={{ color: "#111827", fontWeight: "900" }}>ذخیره</Text>
-          ) : (
-            <Ionicons name="add" size={22} color="#111827" />
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {/* TAGS: یادآور */}
-      <View style={{ marginTop: 8 }}>
-        <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-          {remSelectedTags.map((t) => (
-            <TagChip key={t} label={t} iconName={tagIcons[t]} selected onRemove={() => onRemoveTagFromRem(t)} />
-          ))}
-        </View>
-
-        <View style={{ flexDirection: "row-reverse", alignItems: "center", marginTop: 6 }}>
+        <View style={{ flexDirection: "row-reverse", gap: 8, flexWrap: "wrap" }}>
           <TouchableOpacity
-            onPress={() => onAddTagToRem(tagInput.trim())}
-            style={{ marginStart: 8 }}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={onOpenDate}
+            activeOpacity={0.85}
+            style={styles.timeBtn}
           >
-            <Ionicons name="pricetag-outline" size={22} color={UI.MUTED2} />
+            <Text style={{ color: UI.TEXT, fontWeight: "900" }}>
+              {toFa(jy)}/{toFa(pad(jm))}/{toFa(pad(jd))}
+            </Text>
           </TouchableOpacity>
 
-          <View style={[styles.inputBox, { flex: 1, height: 44 }]}>
-            <TextInput
-              value={tagInput}
-              onChangeText={setTagInput}
-              placeholder="اضافه‌کردن برچسب"
-              placeholderTextColor={UI.PLACEHOLDER}
-              onSubmitEditing={() => onAddTagToRem(tagInput.trim())}
-              style={{ color: UI.TEXT, textAlign: "right", fontWeight: "800" }}
-            />
-          </View>
-        </View>
+          <TouchableOpacity
+            onPress={onOpenTime}
+            activeOpacity={0.85}
+            style={[styles.timeBtn, { flex: 1 }]}
+          >
+            <Text style={{ color: UI.TEXT, fontWeight: "900" }}>
+              {remTime ? toFa(timeLabel(remTime)) : "انتخاب ساعت"}
+            </Text>
+          </TouchableOpacity>
 
-        <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 6 }}>
-          {allTags.map((t) => (
-            <TagChip key={t} label={t} iconName={tagIcons[t]} onPress={() => onAddTagToRem(t)} />
-          ))}
+          <TouchableOpacity
+            onPress={onAdd}
+            activeOpacity={0.85}
+            style={styles.addBtn}
+          >
+            {editingId ? (
+              <Text style={{ color: "#111827", fontWeight: "900" }}>ذخیره</Text>
+            ) : (
+              <Ionicons name="add" size={22} color="#111827" />
+            )}
+          </TouchableOpacity>
         </View>
       </View>
 
       {items.length === 0 ? (
-        <Text style={styles.emptyText}>هنوز یادآوری ثبت نشده است.</Text>
+        <Text style={styles.emptyText}>هنوز یادآوری ثبت نشده.</Text>
       ) : (
         <View style={{ marginTop: 4 }}>
           {items.map((item) => {
@@ -793,7 +523,9 @@ function ReminderBlock({
                   activeOpacity={0.85}
                   style={[styles.checkBox, done ? styles.checkBoxDone : null]}
                 >
-                  {done && <Ionicons name="checkmark" size={14} color="#111827" />}
+                  {done && (
+                    <Ionicons name="checkmark" size={14} color="#111827" />
+                  )}
                 </TouchableOpacity>
 
                 <View style={{ flex: 1 }}>
@@ -805,6 +537,7 @@ function ReminderBlock({
                       textDecorationLine: done ? "line-through" : "none",
                       opacity: done ? 0.6 : 1,
                     }}
+                    onLongPress={() => onEditItem(item)}
                   >
                     {item.title}
                   </Text>
@@ -821,27 +554,45 @@ function ReminderBlock({
                     {jalaliLabel(d)} • {toFa(timeLabel(d))}
                   </Text>
 
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 6 }}>
-                    {(item.tags ?? []).map((t) => (
-                      <TagChip key={t} label={t} iconName={tagIcons[t]} />
-                    ))}
-                  </View>
-
                   {!done && (
-                    <View style={{ flexDirection: "row-reverse", justifyContent: "flex-start", marginTop: 8 }}>
-                      <TouchableOpacity onPress={() => onSnoozeReminder(item.id)} activeOpacity={0.85} style={styles.snoozeBtn}>
+                    <View
+                      style={{
+                        flexDirection: "row-reverse",
+                        justifyContent: "flex-start",
+                        marginTop: 8,
+                      }}
+                    >
+                      <TouchableOpacity
+                        onPress={() => onSnoozeReminder(item.id)}
+                        activeOpacity={0.85}
+                        style={styles.snoozeBtn}
+                      >
                         <Ionicons name="time-outline" size={16} color={UI.TEXT} />
-                        <Text style={{ color: UI.TEXT, fontSize: 12, fontWeight: "900" }}>+۱۰ دقیقه</Text>
+                        <Text
+                          style={{
+                            color: UI.TEXT,
+                            fontSize: 12,
+                            fontWeight: "900",
+                          }}
+                        >
+                          +۱۰ دقیقه
+                        </Text>
                       </TouchableOpacity>
                     </View>
                   )}
                 </View>
 
-                <TouchableOpacity onPress={() => onEditItem(item)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <TouchableOpacity
+                  onPress={() => onEditItem(item)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
                   <Ionicons name="create-outline" size={18} color={UI.TEXT} />
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={() => onRemoveReminder(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <TouchableOpacity
+                  onPress={() => onRemoveReminder(item.id)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
                   <Ionicons name="trash-outline" size={18} color={UI.DANGER} />
                 </TouchableOpacity>
               </View>
@@ -852,6 +603,8 @@ function ReminderBlock({
     </View>
   );
 }
+
+
 
 /* ---------- DateModal ---------- */
 function DateModal({
@@ -1011,20 +764,6 @@ export default function Rooznegar() {
   const [showRemTime, setShowRemTime] = useState(false);
   const [remEditingId, setRemEditingId] = useState<string | null>(null);
 
-  /* TAGS */
-  const [allTags, setAllTags] = useState<string[]>([]);
-  // ✅ فیلتر: "__all__"=همه ، "__untagged__"=بدون برچسب ، بقیه=نام تگ
-  const [activeTag, setActiveTag] = useState<string | null>("__all__");
-  const [todayTags, setTodayTags] = useState<string[]>([]);
-  const [remTags, setRemTags] = useState<string[]>([]);
-
-  // ✅ بهبود سریع: ورودی تگ جدا
-  const [todayTagInput, setTodayTagInput] = useState("");
-  const [remTagInput, setRemTagInput] = useState("");
-
-  const [tagIcons, setTagIcons] = useState<Record<string, string>>({});
-  const [showTagManager, setShowTagManager] = useState(false);
-
   const loadedRef = useRef(false);
 
   /* NOTIFS */
@@ -1144,28 +883,20 @@ export default function Rooznegar() {
     setDayProgress(todayProgress);
   }, [todayProgress, setDayProgress]);
 
-  useEffect(() => {
+    useEffect(() => {
     (async () => {
       try {
-        const [tList, rList, tags, iconMapStr] = await Promise.all([
+        const [tList, rList] = await Promise.all([
           loadToday(),
           loadReminders(),
-          loadTags(),
-          AsyncStorage.getItem(K_TAG_ICONS),
         ]);
 
-        if (Array.isArray(tList))
+        if (Array.isArray(tList)) {
           setTodayItems((prev) => (prev.length ? prev : sortToday(tList)));
-        if (Array.isArray(rList))
-          setRemItems((prev) => (prev.length ? prev : sortReminders(rList)));
-        if (Array.isArray(tags)) setAllTags(tags);
+        }
 
-        if (iconMapStr) {
-          try {
-            setTagIcons(JSON.parse(iconMapStr) || {});
-          } catch {
-            setTagIcons({});
-          }
+        if (Array.isArray(rList)) {
+          setRemItems((prev) => (prev.length ? prev : sortReminders(rList)));
         }
       } finally {
         loadedRef.current = true;
@@ -1183,21 +914,10 @@ export default function Rooznegar() {
     saveReminders(remItems).catch(() => {});
   }, [remItems]);
 
-  useEffect(() => {
-    if (!loadedRef.current) return;
-    saveTags(allTags).catch(() => {});
-  }, [allTags]);
-
-  useEffect(() => {
-    if (!loadedRef.current) return;
-    AsyncStorage.setItem(K_TAG_ICONS, JSON.stringify(tagIcons)).catch(() => {});
-  }, [tagIcons]);
-
   const addTodayItem = () => {
     const t = todayTitle.trim();
     if (!t) return;
     if (!todayTime) {
-      // ✅ تم‌دار
       showTAlert("انتخاب ساعت", "برای ثبت کارِ امروز، حتماً ساعت انجامش رو انتخاب کن.");
       return;
     }
@@ -1207,7 +927,7 @@ export default function Rooznegar() {
         sortToday(
           list.map((it) =>
             it.id === todayEditingId
-              ? { ...it, title: t, time: timeLabel(todayTime), tags: todayTags }
+              ? { ...it, title: t, time: timeLabel(todayTime) }
               : it
           )
         )
@@ -1220,15 +940,12 @@ export default function Rooznegar() {
         time: timeLabel(todayTime),
         done: false,
         createdAt: Date.now(),
-        tags: todayTags,
       };
       setTodayItems((list) => sortToday([...list, item]));
     }
 
     setTodayTitle("");
     setTodayTime(null);
-    setTodayTags([]);
-    setTodayTagInput("");
     Keyboard.dismiss();
   };
 
@@ -1236,10 +953,10 @@ export default function Rooznegar() {
     const t = remTitle.trim();
     if (!t) return;
     if (!remTime) {
-      // ✅ تم‌دار
       showTAlert("انتخاب ساعت", "برای ثبت یادآور، حتماً ساعت انجامش رو انتخاب کن.");
       return;
     }
+
     const g = toGregorian(jy, jm, jd);
     const when = new Date(
       g.gy,
@@ -1263,7 +980,6 @@ export default function Rooznegar() {
               ...it,
               title: t,
               when: when.getTime(),
-              tags: remTags,
               notificationId: undefined,
             };
           }
@@ -1278,7 +994,6 @@ export default function Rooznegar() {
         when: when.getTime(),
         createdAt: Date.now(),
         done: false,
-        tags: remTags,
       });
 
       setRemItems((list) =>
@@ -1288,6 +1003,7 @@ export default function Rooznegar() {
             : it
         )
       );
+
       setRemEditingId(null);
     } else {
       const base: ReminderItem = {
@@ -1296,8 +1012,8 @@ export default function Rooznegar() {
         when: when.getTime(),
         createdAt: Date.now(),
         done: false,
-        tags: remTags,
       };
+
       const notificationId = await scheduleForReminder(base);
       const item: ReminderItem = { ...base, notificationId };
       setRemItems((list) => sortReminders([...list, item]));
@@ -1305,33 +1021,8 @@ export default function Rooznegar() {
 
     setRemTitle("");
     setRemTime(null);
-    setRemTags([]);
-    setRemTagInput("");
     Keyboard.dismiss();
   };
-
-  // ✅ فیلتر با حالت‌های جدید
-  const isAll = activeTag === "__all__";
-  const isUntagged = activeTag === "__untagged__";
-
-  const filteredToday = useMemo(() => {
-    if (isAll) return todayItems;
-    if (isUntagged) return todayItems.filter((i) => (i.tags ?? []).length === 0);
-    return todayItems.filter((i) => (i.tags ?? []).includes(activeTag as string));
-  }, [todayItems, activeTag, isAll, isUntagged]);
-
-  const filteredRem = useMemo(() => {
-    if (isAll) return remItems;
-    if (isUntagged) return remItems.filter((i) => (i.tags ?? []).length === 0);
-    return remItems.filter((i) => (i.tags ?? []).includes(activeTag as string));
-  }, [remItems, activeTag, isAll, isUntagged]);
-
-  const tagDefs: TagDef[] = useMemo(() => {
-    return (allTags || []).map((name) => ({
-      name,
-      icon: tagIcons[name] || "pricetag-outline",
-    }));
-  }, [allTags, tagIcons]);
 
   const handleRemoveReminder = async (id: string) => {
     const target = remItems.find((r) => r.id === id);
@@ -1444,81 +1135,44 @@ export default function Rooznegar() {
             <RoozHeader />
             <ProgressCard value={todayProgress} />
             <Segmented tab={tab} setTab={setTab} />
-
-            {/* TAGS: فیلتر */}
-            <View style={{ marginTop: 2, flexDirection: "row-reverse", flexWrap: "wrap", alignItems: "center" }}>
-              <TagChip label="همه" selected={activeTag === "__all__"} onPress={() => setActiveTag("__all__")} />
-              <TagChip label="بدون برچسب" selected={activeTag === "__untagged__"} onPress={() => setActiveTag("__untagged__")} />
-              {allTags.map((t) => (
-                <TagChip
-                  key={t}
-                  label={t}
-                  iconName={tagIcons[t]}
-                  selected={activeTag === t}
-                  onPress={() => setActiveTag(t)}
-                />
-              ))}
-              <TouchableOpacity onPress={() => setShowTagManager(true)} style={{ marginStart: 6 }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="settings-outline" size={20} color={UI.TEXT} style={{ opacity: 0.9 }} />
-              </TouchableOpacity>
-            </View>
           </View>
 
           <View style={{ paddingHorizontal: 16 }}>
             {tab === "today" ? (
-              <TodayBlock
-  rtl={false}
-  items={filteredToday}
-  setItems={setTodayItems}
-  title={todayTitle}
-  setTitle={setTodayTitle}
-  time={todayTime}
-  onOpenTime={() => setShowTodayTime(true)}
-  onAdd={addTodayItem}
-  editingId={todayEditingId}
-  onEditItem={(it) => {
-    setTodayEditingId(it.id);
-    setTodayTitle(it.title);
-    const [hh, mm] = it.time.split(":").map((x) => parseInt(x, 10));
-    const d = new Date();
-    d.setHours(hh || 0, mm || 0, 0, 0);
-    setTodayTime(d);
-    setTodayTags(it.tags ?? []);
-  }}
-                todaySelectedTags={todayTags}
-                onAddTagToToday={(t: string) => {
-                  const v = t.trim();
-                  if (!v) return;
-
-                  if (!allTags.includes(v)) {
-                    setAllTags((prev) => [...prev, v]);
-                    setTagIcons((prev) => ({ ...prev, [v]: "pricetag-outline" }));
-                  }
-
-                  setTodayTags((prev) => (prev.includes(v) ? prev : [...prev, v]));
-                  setTodayTagInput("");
+                            <TodayBlock
+                rtl={false}
+                items={todayItems}
+                setItems={setTodayItems}
+                title={todayTitle}
+                setTitle={setTodayTitle}
+                time={todayTime}
+                onOpenTime={() => setShowTodayTime(true)}
+                onAdd={addTodayItem}
+                editingId={todayEditingId}
+                onEditItem={(it) => {
+                  setTodayEditingId(it.id);
+                  setTodayTitle(it.title);
+                  const [hh, mm] = it.time.split(":").map((x) => parseInt(x, 10));
+                  const d = new Date();
+                  d.setHours(hh || 0, mm || 0, 0, 0);
+                  setTodayTime(d);
                 }}
-                onRemoveTagFromToday={(t) => setTodayTags((prev) => prev.filter((x) => x !== t))}
-                tagInput={todayTagInput}
-                setTagInput={setTodayTagInput}
-                allTags={allTags}
-                tagIcons={tagIcons}
               />
             ) : (
-              <ReminderBlock
-  rtl={false}
-  jy={jy}
-  jm={jm}
-  jd={jd}
-  setJy={setJy}
-  setJm={setJm}
-  setJd={setJd}
-  remTitle={remTitle}
-  setRemTitle={setRemTitle}
-  remTime={remTime}
+                            <ReminderBlock
+                rtl={false}
+                jy={jy}
+                jm={jm}
+                jd={jd}
+                setJy={setJy}
+                setJm={setJm}
+                setJd={setJd}
+                remTitle={remTitle}
+                setRemTitle={setRemTitle}
+                remTime={remTime}
                 onOpenDate={() => setShowDateModal(true)}
                 onOpenTime={() => setShowRemTime(true)}
-                items={filteredRem}
+                items={remItems}
                 setItems={setRemItems}
                 onAdd={addReminder}
                 editingId={remEditingId}
@@ -1533,30 +1187,12 @@ export default function Rooznegar() {
                   const tmp = new Date();
                   tmp.setHours(d.getHours(), d.getMinutes(), 0, 0);
                   setRemTime(tmp);
-                  setRemTags(it.tags ?? []);
                 }}
-                remSelectedTags={remTags}
-                onAddTagToRem={(t: string) => {
-                  const v = t.trim();
-                  if (!v) return;
-
-                  if (!allTags.includes(v)) {
-                    setAllTags((prev) => [...prev, v]);
-                    setTagIcons((prev) => ({ ...prev, [v]: "pricetag-outline" }));
-                  }
-
-                  setRemTags((prev) => (prev.includes(v) ? prev : [...prev, v]));
-                  setRemTagInput("");
-                }}
-                onRemoveTagFromRem={(t) => setRemTags((prev) => prev.filter((x) => x !== t))}
-                tagInput={remTagInput}
-                setTagInput={setRemTagInput}
-                allTags={allTags}
-                tagIcons={tagIcons}
                 onToggleReminder={handleToggleReminder}
                 onRemoveReminder={handleRemoveReminder}
                 onSnoozeReminder={handleSnoozeReminder}
               />
+
             )}
           </View>
         </ScrollView>
@@ -1592,20 +1228,6 @@ export default function Rooznegar() {
         setJy={setJy}
         setJm={setJm}
         setJd={setJd}
-      />
-
-      <TagManagerModal
-        visible={showTagManager}
-        onClose={() => setShowTagManager(false)}
-        tags={tagDefs}
-        onChange={(next) => {
-          setAllTags(next.map((x) => x.name));
-          const map: Record<string, string> = {};
-          next.forEach((x) => {
-            map[x.name] = x.icon || "pricetag-outline";
-          });
-          setTagIcons(map);
-        }}
       />
 
       {/* ✅ THEMED ALERT RENDER */}
