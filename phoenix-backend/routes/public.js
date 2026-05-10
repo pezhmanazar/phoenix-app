@@ -163,12 +163,6 @@ router.get("/tickets/open", async (req, res) => {
  */
 router.get("/tickets/open-batch", async (req, res) => {
   try {
-    console.log("[public/open-batch] hit", {
-      openedById: req.query?.openedById,
-      contact: req.query?.contact,
-      at: new Date().toISOString(),
-    });
-
     const { openedById, contact } = req.query || {};
 
     const or = [];
