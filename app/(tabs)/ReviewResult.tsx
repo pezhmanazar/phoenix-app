@@ -171,7 +171,7 @@ function InlineAudioPlayer({
   const opLockRef = useRef(false); // ✅ جلوگیری از دابل‌تپ/ریس‌کاندیشن
   const mountedRef = useRef(true);
 
-  const [ready, setReady] = useState(false);
+  const [, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [loadingAudio, setLoadingAudio] = useState(false); // ✅ NEW
   const [posMs, setPosMs] = useState(0);
@@ -315,8 +315,6 @@ function InlineAudioPlayer({
     };
   }, [unload]);
 
-  const showSpinnerOnButton = loadingAudio && !playing;
-
   return (
   <View style={[styles.audioRow, { borderColor: palette.border2, backgroundColor: palette.glass2 }]}>
     {/* Row: [Play] [Bar] [Time] */}
@@ -445,7 +443,7 @@ export default function ReviewResult() {
 
   // ✅ review result from /pelekan/review/result
   const [result, setResult] = useState<any | null>(null);
-  const [reviewStatus, setReviewStatus] = useState<"in_progress" | "completed_locked" | "unlocked" | null>(null);
+  const [, setReviewStatus] = useState<"in_progress" | "completed_locked" | "unlocked" | null>(null);
 
   const palette = useMemo(
     () => ({

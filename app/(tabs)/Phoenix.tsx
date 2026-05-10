@@ -1,6 +1,6 @@
 // app/(tabs)/Phoenix.tsx
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useTheme } from "@react-navigation/native";
+import { useFocusEffect } from "@react-navigation/native";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -180,7 +180,6 @@ function HalfStatCard({
 
 /* ================== Phoenix Screen ================== */
 export default function Phoenix() {
-  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { me, refresh } = useUser() as any;

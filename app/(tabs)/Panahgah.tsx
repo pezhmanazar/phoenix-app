@@ -291,7 +291,7 @@ export default function Panahgah() {
 
   const [q, setQ] = useState("");
   const [planView, setPlanView] = useState<PlanView>("free");
-  const [expiringDaysLeft, setExpiringDaysLeft] = useState<number | null>(null);
+  const [, setExpiringDaysLeft] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   // ✅ Guide modal
