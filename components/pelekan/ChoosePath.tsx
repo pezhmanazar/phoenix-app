@@ -89,20 +89,6 @@ export default function ChoosePath({ me, state, onRefresh }: Props) {
   // ✅ مسیر درست: review/choose
   const CHOOSE_URL = `${BACKEND_URL}/api/pelekan/review/choose`;
 
-  // ✅ NEW: start treatment (will be added in backend next step)
-  const START_TREATMENT_URL = `${BACKEND_URL}/api/pelekan/treatment/start`;
-
-  const startTreatment = useCallback(async () => {
-    if (!phone) return { ok: false as const, error: "NO_PHONE" };
-    const { res, json, text } = await postJsonSafe(START_TREATMENT_URL, { phone });
-    if (!res.ok || !json?.ok) {
-      const msg =
-        json?.error || json?.message || (text ? `HTTP ${res.status}` : "REQUEST_FAILED");
-      return { ok: false as const, error: String(msg) };
-    }
-    return { ok: true as const };
-  }, [phone, postJsonSafe, START_TREATMENT_URL]);
-
   const choose = useCallback(
     async (choice: "skip_review" | "review") => {
       if (!phone) {
