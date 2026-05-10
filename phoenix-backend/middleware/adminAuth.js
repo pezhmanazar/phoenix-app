@@ -15,7 +15,7 @@ export default async function adminAuth(req, res, next) {
     req.admin = { id: admin.id, email: admin.email, name: admin.name };
     next();
   } catch (e) {
-    console.error("adminAuth error:", e);
+    console.error("adminAuth error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 }

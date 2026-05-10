@@ -56,7 +56,7 @@ export async function requireActivePlan(req, res, next) {
     // اوکیه، اجازه ادامه بده
     return next();
   } catch (e) {
-    console.error("[requireActivePlan] error:", e);
+    console.error("[requireActivePlan] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "PLAN_CHECK_FAILED" });
   }
 }
