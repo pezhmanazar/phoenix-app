@@ -71,16 +71,6 @@ type ReviewStateResponse = {
   };
 };
 
-type ResultResponse = {
-  ok: boolean;
-  error?: string;
-  data?: {
-    status: SessStatus;
-    canEnterPelekan?: boolean;
-    result: any | null;
-  };
-};
-
 const API_BASE = "https://qoqnoos.app/api/pelekan/review";
 
 // ✅ NEW: timing helper (برای لاگ‌های پرفورمنس)

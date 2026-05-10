@@ -4,17 +4,17 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    InteractionManager,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  InteractionManager,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -413,8 +413,6 @@ export default function TD5HomeObjectScreen() {
   }, [agreeEssentialsNotForced, agreeNoEmotionalContact]);
 
   const canGo2 = acceptedWhy;
-  const canGo3 = acceptedWhy && statusOk && status === "has";
-  const canGo4 = acceptedWhy && statusOk && (status !== "has" ? true : planOk);
   const canGo5 = acceptedWhy && statusOk && (status !== "has" ? true : planOk) && commitOk;
   const canFinalize = canGo5;
 

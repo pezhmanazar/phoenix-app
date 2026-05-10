@@ -12,15 +12,13 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Modal,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
   Platform,
   ScrollView,
   Share,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import "react-native-get-random-values";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -370,15 +368,6 @@ export default function AIChatSupport() {
         }
       }, speed);
     });
-
-  /* scroll helpers */
-    const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-    const paddingToBottom = 24;
-    const atBottom = contentOffset.y + layoutMeasurement.height + paddingToBottom >= contentSize.height;
-    atBottomRef.current = atBottom;
-    setShowJump(!atBottom);
-  };
 
   const jumpToBottom = () => {
     scrollRef.current?.scrollToEnd({ animated: true });
