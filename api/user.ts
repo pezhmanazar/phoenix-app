@@ -51,10 +51,8 @@ async function doJson<T>(
   init?: RequestInit
 ): Promise<ApiResp<T>> {
   try {
-    // 1) هدرهای قبلی را جمع می‌کنیم
     const baseHeaders: Record<string, string> = {};
     if (init?.headers) {
-      // اگر قبلاً هدر داشتیم (مثلاً Content-Type) حفظشان می‌کنیم
       if (init.headers instanceof Headers) {
         init.headers.forEach((v, k) => {
           baseHeaders[k] = v;
@@ -72,15 +70,12 @@ async function doJson<T>(
     baseHeaders["Pragma"] = "no-cache";
     baseHeaders["x-cache-bust"] = String(Date.now());
 
-    // 2) توکن سشن را از AsyncStorage می‌خوانیم
     const sessionToken = await AsyncStorage.getItem("session_v1");
     if (sessionToken) {
-      // هر دو نوع هدر را می‌فرستیم تا با هر میدل‌وری‌ای سازگار باشد
       baseHeaders["Authorization"] = `Bearer ${sessionToken}`;
       baseHeaders["x-session-token"] = sessionToken;
     }
 
-    // 3) درخواست را با هدرهای نهایی می‌فرستیم
     const res = await fetch(input, {
       ...init,
       headers: baseHeaders,
@@ -90,13 +85,7 @@ async function doJson<T>(
     let json: any = {};
     try {
       json = text ? JSON.parse(text) : {};
-    } catch (e: any) {
-      console.log(
-        "[user.doJson] parse error, status =",
-        res.status,
-        "body[0..120] =",
-        text.slice(0, 120)
-      );
+    } catch {
       return { ok: false, error: `PARSE_ERROR_${res.status}` };
     }
 
@@ -145,10 +134,8 @@ export async function getMeByPhone(
 ): Promise<ApiResp<UserRecord | null>> {
   const p = normalizeIranPhone(phone);
   const cacheBuster = `cb=${Date.now()}`;
-  // 🔥 بسیار مهم: فقط یک ? باید وجود داشته باشد
   const url =
     userUrl(`/api/users/me`) + `?phone=${encodeURIComponent(p)}&${cacheBuster}`;
-  console.log("[user.getMeByPhone] FINAL URL =", url);
 
   return doJson<UserRecord | null>(url, {
     method: "GET",
@@ -165,10 +152,6 @@ export async function upsertUserByPhone(
 ): Promise<ApiResp<UserRecord>> {
   const p = normalizeIranPhone(phone);
   const url = userUrl(`/api/users/upsert`);
-  console.log("[user.upsertUserByPhone] url =", url, "payload =", {
-    ...payload,
-    phone: p,
-  });
 
   return doJson<UserRecord>(url, {
     method: "POST",
@@ -215,22 +198,16 @@ export async function fetchMe(): Promise<Me | null> {
   try {
     const storedPhone = await AsyncStorage.getItem("otp_phone_v1");
     if (!storedPhone) {
-      console.log("[user.fetchMe] no stored phone");
       return null;
     }
-
-    console.log("[user.fetchMe] loading me for phone =", storedPhone);
 
     const resp = await getMeByPhone(storedPhone);
     if (!resp.ok) {
-      console.log("[user.fetchMe] error =", resp.error);
       return null;
     }
 
-    console.log("[user.fetchMe] loaded me =", resp.data);
     return resp.data;
-  } catch (e: any) {
-    console.log("[user.fetchMe] exception", e?.message || e);
+  } catch {
     return null;
   }
 }
