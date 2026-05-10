@@ -52,12 +52,6 @@ function faOnlyTitle(raw?: string) {
 }
 
 /* ----------------------------- Types ----------------------------- */
-type ShareItemDraft = {
-  id: string;
-  label: string;
-  intent: string;
-  result: string;
-};
 
 type ShareItemFinal = {
   id: string;

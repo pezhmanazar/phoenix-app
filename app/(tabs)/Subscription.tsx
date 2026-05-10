@@ -1,6 +1,6 @@
 // app/(tabs)/Subscription.tsx
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useTheme } from "@react-navigation/native";
+import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -76,7 +76,6 @@ function formatJalaliDate(iso?: string | null): string | null {
 }
 
 export default function SubscriptionScreen() {
-  const { colors } = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams();
   const { phone, isAuthenticated } = useAuth();
@@ -389,7 +388,6 @@ export default function SubscriptionScreen() {
   }
 
   const headerBg = "#0b0f14";
-  const cardBg = "rgba(255,255,255,.04)";
   const border = "rgba(255,255,255,.10)";
 
   // رنگ و متن بج وضعیت بالا (دست نخورده)

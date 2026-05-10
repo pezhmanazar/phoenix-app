@@ -60,7 +60,7 @@ function BigAudioPlayer({ url }: { url: string }) {
   const opLockRef = useRef(false);
 
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [, setIsLoaded] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
   const [posMs, setPosMs] = useState(0);
   const [durMs, setDurMs] = useState(1);
@@ -616,7 +616,6 @@ export default function Runner() {
                 
 // ✅ NEW: متن‌های نوشته‌شده هم به خلاصه و تاریخچه اضافه میشن
 type FormFieldEntry = { key: string; label: string; value: string };
-type FormEntry = { stepIndex: number; title: string; fields: FormFieldEntry[] };
 
 // ✅ NEW: متن‌های نوشته‌شده هم به خلاصه و تاریخچه اضافه میشن
 const formEntries: {

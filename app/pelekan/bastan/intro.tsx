@@ -44,7 +44,7 @@ export default function BastanIntroScreen() {
   const [err, setErr] = useState<string | null>(null);
 
   const [introDone, setIntroDone] = useState(false);
-  const [paywallAfterIntro, setPaywallAfterIntro] = useState(false);
+  const [, setPaywallAfterIntro] = useState(false);
 
   // ✅ NEW (حداقلی و لازم): وضعیت پلن برای تصمیم‌گیری paywall در همان کلیک اول
   const [planStatus, setPlanStatus] = useState<"free" | "pro" | "expiring" | "expired">("free");
@@ -52,7 +52,7 @@ export default function BastanIntroScreen() {
 
   // Player state
   const soundRef = useRef<Audio.Sound | null>(null);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [, setIsLoaded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
 
   const [posMs, setPosMs] = useState(0);

@@ -1,7 +1,6 @@
 // app/(tabs)/_layout.tsx
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useTheme } from "@react-navigation/native";
 import { Tabs } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -161,7 +160,6 @@ function TabBarGlassBackground() {
 
 /* ===== خود layout تب‌ها ===== */
 export default function TabsLayout() {
-  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { me } = useUser();
 
@@ -220,7 +218,6 @@ if (appState.current === "active") {
 }
 
 const sub = AppState.addEventListener("change", (nextState) => {
-  const prevState = appState.current;
   appState.current = nextState;
 
   if (nextState === "active") {

@@ -1,10 +1,10 @@
 // app/pay/result.tsx
-import { useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, Pressable, ActivityIndicator } from "react-native";
-import { useLocalSearchParams, router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { useUser } from "@/hooks/useUser";
 import { toApi } from "@/constants/env";
+import { useUser } from "@/hooks/useUser";
+import { Ionicons } from "@expo/vector-icons";
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 
 type PayStatusResp =
   | { ok: false; error: string }
@@ -121,7 +121,6 @@ export default function PayResultScreen() {
     // Brand palette
     const GOLD = "#D4AF37";
     const ORANGE = "#E98A15";
-    const GREEN = "#22C55E";
     const RED = "#F87171";
 
     // defaults

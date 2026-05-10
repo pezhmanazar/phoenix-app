@@ -1241,14 +1241,6 @@ export default function Rooznegar() {
   );
 }
 
-/* ---------------- tiny util ---------------- */
-function toDateFromTime(hhmm: string) {
-  const [h, m] = hhmm.split(":").map((x) => parseInt(x, 10));
-  const d = new Date();
-  d.setHours(h || 0, m || 0, 0, 0);
-  return d;
-}
-
 function sortToday(arr: TodayItem[]) {
   return [...arr].sort((a, b) => {
     if (a.done !== b.done) return a.done ? 1 : -1;
