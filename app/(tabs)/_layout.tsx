@@ -187,7 +187,7 @@ export default function TabsLayout() {
     };
 
     run();
-    intervalId = setInterval(run, 5000);
+    intervalId = setInterval(run, 20000);
 
     const sub = AppState.addEventListener("change", (nextState) => {
       const prevState = appState.current;
