@@ -179,27 +179,27 @@ export default function SubscriptionScreen() {
 
   // هر بار ورود به تب → فقط از سرور می‌خوانیم
   useFocusEffect(
-    useCallback(() => {
-      // 👈 اگر از پرداخت برگشتیم (فورس رفرش واقعی)
-      if (params?._forceReloadUser && !handledFromPayRef.current) {
-        handledFromPayRef.current = true;
-        setWaitingForPayRefresh(true);
+  useCallback(() => {
+    // 👈 اگر از پرداخت برگشتیم (فورس رفرش واقعی)
+    if (params?._forceReloadUser && !handledFromPayRef.current) {
+      handledFromPayRef.current = true;
+      setWaitingForPayRefresh(true);
 
-        refresh({ force: true })
-          .catch(() => {})
-          .finally(() => {
-            setWaitingForPayRefresh(false);
-            // 2️⃣ بعدش خود تب رو بدون پارامتر replace کن = جلوگیری از حلقه
-            router.replace("/(tabs)/Subscription");
-          });
+      refresh({ force: true })
+        .catch(() => {})
+        .finally(() => {
+          setWaitingForPayRefresh(false);
+          // 2️⃣ بعدش خود تب رو بدون پارامتر replace کن = جلوگیری از حلقه
+          router.replace("/(tabs)/Subscription");
+        });
 
-        return;
-      }
+      return;
+    }
 
-      // ورود عادی به تب
-      refresh().catch(() => {});
-    }, [refresh, params?._forceReloadUser])
-  );
+    // ورود عادی به تب
+    refresh().catch(() => {});
+  }, [refresh, params?._forceReloadUser, router])
+);
 
   // 🔍 منبع واحد وضعیت پلن: فقط دیتابیس (getPlanStatus)
   const status = getPlanStatus(me);

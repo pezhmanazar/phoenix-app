@@ -668,7 +668,6 @@ export default function ML3ValuesNextTimeScreen() {
     apiBase,
     phone,
     token,
-    values.length,
     values,
     hasCustomValue,
     customValueTitle,
