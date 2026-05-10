@@ -123,9 +123,7 @@ export default function BastanActionScreen() {
   // ✅ قفل کلیک روی یک کارت ریزاقدام تا وقتی وارد صفحه شود
   const [openingKey, setOpeningKey] = useState<string | null>(null);
 
-  const log = useCallback((msg: string, extra?: any) => {
-    console.log(`🟩 [BastanAction] ${msg}`, extra ?? {});
-  }, []);
+  const log = useCallback((_: string, __?: any) => {}, []);
 
   const applyIfLatest = useCallback((seq: number, fn: () => void) => {
     if (seq !== fetchSeqRef.current) return;

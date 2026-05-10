@@ -337,8 +337,7 @@ export default function Panahgah() {
 
       setPlanView(view);
       setExpiringDaysLeft(expDays);
-    } catch (e) {
-      console.log("PANAHGAH PLAN ERR", e);
+       } catch {
       setPlanView("free");
       setExpiringDaysLeft(null);
     }

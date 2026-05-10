@@ -120,14 +120,13 @@ export default function RootLayout() {
 }, []);
 
 
-  useEffect(() => {
+    useEffect(() => {
     SplashScreen.preventAutoHideAsync().catch(() => {});
-    console.log("🟢 SPLASH PREVENT (SAFE)");
   }, []);
+
   useEffect(() => {
     (async () => {
-      const p = await getPaymentProvider();
-      console.log("💳 Active provider:", p.id);
+      await getPaymentProvider();
     })();
   }, []);
   useEffect(() => {

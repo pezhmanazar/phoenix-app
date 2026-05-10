@@ -111,15 +111,6 @@ export default function BastanIntroScreen() {
 
       setIntroDone(!!completedAt);
       setPaywallAfterIntro(!!paywall);
-
-      console.log(
-        "[bastan-intro] planStatus=",
-        json.data.user?.planStatus,
-        "completedAt=",
-        completedAt,
-        "paywallAfterIntro=",
-        !!paywall
-      );
     } catch (e: any) {
       setErr(String(e?.message || e));
     } finally {
@@ -134,10 +125,8 @@ export default function BastanIntroScreen() {
 
     completingRef.current = true;
 
-    try {
+        try {
       const url = `${apiBase}/api/pelekan/bastan/intro/complete`;
-      console.log("[bastan-intro] POST complete ->", url);
-
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
