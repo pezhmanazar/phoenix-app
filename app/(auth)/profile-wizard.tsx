@@ -217,18 +217,18 @@ export default function ProfileWizard() {
           return;
         }
         const as = await AsyncStorage.getItem(SECURE_KEYS.OTP_PHONE);
-        if (alive) setResolvedPhone(as || null);
-        if (__DEV__)
-          console.log("[profile-wizard] resolvePhone", {
-            ctx: phone ?? null,
-            ss: ss ?? null,
-            as: as ?? null,
-            key: SECURE_KEYS.OTP_PHONE,
-          });
-      } catch (e) {
-        if (__DEV__) console.log("[profile-wizard] resolvePhone error:", e);
-        if (alive) setResolvedPhone(null);
-      }
+if (alive) setResolvedPhone(as || null);
+if (__DEV__)
+  console.log("[profile-wizard] resolvePhone", {
+    ctx: phone ?? null,
+    ss: ss ?? null,
+    as: as ?? null,
+    key: SECURE_KEYS.OTP_PHONE,
+  });
+} catch (e) {
+  if (__DEV__) console.log("[profile-wizard] resolvePhone error:", e);
+  if (alive) setResolvedPhone(null);
+}
     })();
     return () => {
       alive = false;
@@ -350,27 +350,33 @@ export default function ProfileWizard() {
         selectionLimit: 1,
       });
       if (!res.canceled) {
-        const uri = (res as any).assets?.[0]?.uri;
-        if (uri) setAvatarUrlState(uri);
-      }
-    } catch (e) {
-      showBanner("error", "خطا", "در باز کردن گالری مشکلی پیش آمد.", 4500);
-    }
+  const uri = (res as any).assets?.[0]?.uri;
+  if (uri) setAvatarUrlState(uri);
+}
+} catch {
+  showBanner("error", "خطا", "در باز کردن گالری مشکلی پیش آمد.", 4500);
+}
   };
 
-  const pickFromCamera = async () => {
-    try {
-      const ok = await ensureCameraPermission();
-      if (!ok) return;
-      const res = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.85 });
-      if (!res.canceled) {
-        const uri = (res as any).assets?.[0]?.uri;
-        if (uri) setAvatarUrlState(uri);
-      }
-    } catch (e) {
-      showBanner("error", "خطا", "در باز کردن دوربین مشکلی پیش آمد.", 4500);
+const pickFromCamera = async () => {
+  try {
+    const ok = await ensureCameraPermission();
+    if (!ok) return;
+
+    const res = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.85,
+    });
+
+    if (!res.canceled) {
+      const uri = (res as any).assets?.[0]?.uri;
+      if (uri) setAvatarUrlState(uri);
     }
-  };
+  } catch {
+    showBanner("error", "خطا", "در باز کردن دوربین مشکلی پیش آمد.", 4500);
+  }
+};
 
   /* ---------------- Avatar (نمایش) ---------------- */
   const Avatar = () => {

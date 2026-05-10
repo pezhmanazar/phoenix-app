@@ -34,27 +34,29 @@ export default function TicketList() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/tickets`);
-      const json = await res.json();
-      if (json?.ok) {
-        const sorted: Ticket[] = (json.tickets || [])
-          .slice()
-          .sort(
-            (a: Ticket, b: Ticket) =>
-              new Date(b.createdAt).getTime() -
-              new Date(a.createdAt).getTime()
-          );
-        setData(sorted);
-      }
-    } catch (e) {
-      // silent
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+ const fetchData = useCallback(async () => {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/tickets`);
+    const json = await res.json();
+
+    if (json?.ok) {
+      const sorted: Ticket[] = (json.tickets || [])
+        .slice()
+        .sort(
+          (a: Ticket, b: Ticket) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+
+      setData(sorted);
     }
-  }, []);
+  } catch {
+    // silent
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+}, []);
+
 
   useFocusEffect(
     useCallback(() => {
