@@ -17,7 +17,6 @@ type VerifyResp = {
 // ----------------- ارسال کد -----------------
 export async function sendCode(phone: string): Promise<SendResp> {
   const url = toAppApi("/api/auth/send-otp");
-  if (__DEV__) console.log("[otp.sendCode] →", url, { phone });
 
   const res = await fetch(url, {
     method: "POST",
@@ -28,8 +27,6 @@ export async function sendCode(phone: string): Promise<SendResp> {
   const json = (await res.json().catch(() => ({}))) as any;
 
   if (!res.ok || !json?.ok) {
-    if (__DEV__)
-      console.log("[otp.sendCode][ERR]", res.status, json);
     throw new Error(json?.error || `SEND_FAILED_${res.status}`);
   }
 
@@ -42,7 +39,6 @@ export async function sendCode(phone: string): Promise<SendResp> {
     token: data.token ?? null, // الان فعلاً استفاده نمی‌کنیم
   };
 
-  if (__DEV__) console.log("[otp.sendCode][OK]", out);
   return out;
 }
 
@@ -50,10 +46,9 @@ export async function sendCode(phone: string): Promise<SendResp> {
 export async function verifyCode(
   phone: string,
   code: string,
-  _otpToken: string | null // عملاً فعلاً نادیده می‌گیریمش
+  _otpToken: string | null
 ): Promise<VerifyResp> {
   const url = toAppApi("/api/auth/verify-otp");
-  if (__DEV__) console.log("[otp.verifyCode] →", url, { phone, code });
 
   const res = await fetch(url, {
     method: "POST",
@@ -64,8 +59,6 @@ export async function verifyCode(
   const json = (await res.json().catch(() => ({}))) as any;
 
   if (!res.ok || !json?.ok) {
-    if (__DEV__)
-      console.log("[otp.verifyCode][ERR]", res.status, json);
     throw new Error(json?.error || `VERIFY_FAILED_${res.status}`);
   }
 
@@ -82,6 +75,5 @@ export async function verifyCode(
     sessionExpiresInSec: data.sessionExpiresInSec ?? 24 * 3600,
   };
 
-  if (__DEV__) console.log("[otp.verifyCode][OK]", out);
   return out;
 }
