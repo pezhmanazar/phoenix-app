@@ -1,12 +1,12 @@
 // routes/admin.js
-import prisma from "../utils/prisma.js";
-import { Router } from "express";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
+import { Router } from "express";
+import prisma from "../utils/prisma.js";
 
 // ⬇️ افزوده‌های مرحله ویس/فایل
-import multer from "multer";
 import fs from "fs";
+import multer from "multer";
 import path from "path";
 
 const router = Router();
@@ -82,7 +82,7 @@ router.post("/login", async (req, res) => {
       redirect: true,
     });
   } catch (e) {
-    console.error("admin/login error:", e);
+    console.error("admin/login error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -109,7 +109,7 @@ router.get("/verify", async (req, res) => {
       admin: { id: admin.id, email: admin.email, name: admin.name, role: admin.role },
     });
   } catch (e) {
-    console.error("admin/verify error:", e);
+    console.error("admin/verify error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -131,7 +131,7 @@ router.post("/logout", async (req, res) => {
       .catch(() => {});
     return res.json({ ok: true });
   } catch (e) {
-    console.error("admin/logout error:", e);
+    console.error("admin/logout error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -167,7 +167,7 @@ async function sessionAuth(req, res, next) {
     req.adminToken = token;
     next();
   } catch (e) {
-    console.error("sessionAuth error:", e);
+    console.error("sessionAuth error:", e?.message || "unknown_error");
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 }
@@ -268,7 +268,7 @@ router.get("/users", allow("agent", "manager", "owner"), async (req, res) => {
 
     return res.json({ ok: true, page, limit, total, users });
   } catch (e) {
-    console.error("admin/users GET error:", e);
+    console.error("admin/users GET error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -317,7 +317,7 @@ if (plan === "pro") {
 
     return res.json({ ok: true, user });
   } catch (e) {
-    console.error("admin/set-plan error:", e);
+    console.error("admin/set-plan error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -339,7 +339,7 @@ router.post("/users/:id/cancel-plan", allow("manager", "owner"), async (req, res
 
     return res.json({ ok: true, user });
   } catch (e) {
-    console.error("admin/cancel-plan error:", e);
+    console.error("admin/cancel-plan error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -364,7 +364,7 @@ router.post("/users/:id/pro", allow("manager", "owner"), async (req, res) => {
     return res.json({ ok: true, data: updated });
   } catch (e) {
     if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/users pro error:", e);
+    console.error("admin/users pro error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -402,7 +402,7 @@ router.post("/users/:id/extend", allow("manager", "owner"), async (req, res) => 
 
     return res.json({ ok: true, data: updated });
   } catch (e) {
-    console.error("admin/users extend error:", e);
+    console.error("admin/users extend error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -424,7 +424,7 @@ router.post("/users/:id/cancel", allow("manager", "owner"), async (req, res) => 
     return res.json({ ok: true, data: updated });
   } catch (e) {
     if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/users cancel error:", e);
+    console.error("admin/users cancel error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -476,7 +476,7 @@ router.patch("/users/:id/plan", allow("manager", "owner"), async (req, res) => {
     return res.json({ ok: true, data: updated });
   } catch (e) {
     if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/users plan PATCH error:", e);
+    console.error("admin/users plan PATCH error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -496,7 +496,7 @@ router.delete("/users/:id", allow("owner"), async (req, res) => {
     return res.json({ ok: true });
   } catch (e) {
     if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/users DELETE error:", e);
+    console.error("admin/users DELETE error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -539,7 +539,7 @@ router.get("/stats", allow("manager", "owner"), async (_req, res) => {
       },
     });
   } catch (e) {
-    console.error("admin/stats error:", e);
+    console.error("admin/stats error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -652,7 +652,7 @@ router.get("/announcements", allow("agent", "manager", "owner"), async (req, res
       },
     });
   } catch (e) {
-    console.error("admin/announcements GET error:", e);
+    console.error("admin/announcements GET error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -757,7 +757,7 @@ router.post("/announcements", allow("manager", "owner"), async (req, res) => {
     return res.json({ ok: true, item: created });
   } catch (e) {
     if (e?.code === "P2002") return res.status(409).json({ ok: false, error: "unique_violation" });
-    console.error("admin/announcements POST error:", e);
+    console.error("admin/announcements POST error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -909,7 +909,7 @@ router.patch("/announcements/:id", allow("manager", "owner"), async (req, res) =
     return res.json({ ok: true, item: updated });
   } catch (e) {
     if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/announcements PATCH error:", e);
+    console.error("admin/announcements PATCH error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -924,7 +924,7 @@ router.post("/announcements/:id/delete", allow("manager", "owner"), async (req, 
     return res.json({ ok: true });
   } catch (e) {
     if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/announcements delete error:", e);
+    console.error("admin/announcements delete error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -956,7 +956,7 @@ router.patch("/profile", async (req, res) => {
 
     res.json({ ok: true, admin: updated });
   } catch (e) {
-    console.error("admin/profile PATCH error:", e);
+    console.error("admin/profile PATCH error:", e?.message || "unknown_error");
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -1008,7 +1008,7 @@ router.get("/tickets", async (req, res) => {
 
     res.json({ ok: true, tickets: mapped });
   } catch (e) {
-    console.error("admin/tickets error:", e);
+    console.error("admin/tickets error:", e?.message || "unknown_error");
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -1086,7 +1086,7 @@ if (!user) {
 
     return res.json({ ok: true, ticket: withDisplay });
   } catch (e) {
-    console.error("admin/tickets/:id error:", e);
+    console.error("admin/tickets/:id error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -1102,7 +1102,7 @@ router.post("/tickets/:id/mark-read", allow("agent", "manager", "owner"), async 
     return res.json({ ok: true, ticket: t });
   } catch (e) {
     if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/tickets mark-read error:", e);
+    console.error("admin/tickets mark-read error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -1118,7 +1118,7 @@ router.post("/tickets/:id/mark-unread", allow("agent", "manager", "owner"), asyn
     return res.json({ ok: true, ticket: t });
   } catch (e) {
     if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/tickets mark-unread error:", e);
+    console.error("admin/tickets mark-unread error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -1156,7 +1156,7 @@ router.patch("/tickets/:id", allow("manager", "owner"), async (req, res) => {
     res.json({ ok: true, ticket });
   } catch (e) {
     if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/tickets PATCH error:", e);
+    console.error("admin/tickets PATCH error:", e?.message || "unknown_error");
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -1186,7 +1186,7 @@ router.post("/tickets/:id/reply", allow("agent", "manager", "owner"), async (req
 
     return res.json({ ok: true, ticket });
   } catch (e) {
-    console.error("admin/tickets reply error:", e);
+    console.error("admin/tickets reply error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -1201,7 +1201,7 @@ router.post("/tickets/:id/delete", allow("manager", "owner"), async (req, res) =
     if (!deleted) return res.status(404).json({ ok: false, error: "not_found" });
     return res.json({ ok: true });
   } catch (e) {
-    console.error("admin tickets/:id/delete error:", e);
+    console.error("admin tickets/:id/delete error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "server_error" });
   }
 });
@@ -1287,7 +1287,7 @@ router.post(
 
       return res.json({ ok: true, ticket, message: created });
     } catch (e) {
-      console.error("admin/reply-upload error:", e);
+      console.error("admin/reply-upload error:", e?.message || "unknown_error");
       if (e && e.code === "LIMIT_FILE_SIZE") {
         return res.status(413).json({ ok: false, error: "file_too_large" });
       }
@@ -1335,7 +1335,7 @@ router.post("/admins", allow("owner"), async (req, res) => {
       if (target.includes("apiKey")) return res.status(409).json({ ok: false, error: "api_key_taken" });
       return res.status(409).json({ ok: false, error: "unique_violation" });
     }
-    console.error("admin/create-admin error:", e);
+    console.error("admin/create-admin error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -1355,7 +1355,7 @@ router.get("/admins", allow("owner"), async (_req, res) => {
     });
     res.json({ ok: true, admins });
   } catch (e) {
-    console.error("admin/admins GET error:", e);
+    console.error("admin/admins GET error:", e?.message || "unknown_error");
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -1388,7 +1388,7 @@ router.patch("/admins/:id", allow("owner"), async (req, res) => {
     res.json({ ok: true, admin: updated });
   } catch (e) {
     if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/admins PATCH error:", e);
+    console.error("admin/admins PATCH error:", e?.message || "unknown_error");
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -1412,7 +1412,7 @@ router.delete("/admins/:id", allow("owner"), async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/admins DELETE error:", e);
+    console.error("admin/admins DELETE error:", e?.message || "unknown_error");
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -1438,7 +1438,7 @@ router.post("/admins/:id/reset-password", allow("owner"), async (req, res) => {
 
     return res.json({ ok: true });
   } catch (e) {
-    console.error("admin/admins reset-password error:", e);
+    console.error("admin/admins reset-password error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
