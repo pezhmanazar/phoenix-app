@@ -386,7 +386,7 @@ export default function Runner() {
     return () => {
       alive = false;
     };
-  }, [scenario?.id]);
+  }, [scenario]);
 
   useEffect(() => {
     if (booting) return;
@@ -780,15 +780,15 @@ if (steps?.length) {
 }
 
 function VoiceStep({ step }: { step: Extract<Step, { type: "voice" }> }) {
-  const url = useMemo(
-    () => resolveVoiceUrl((step as any).uri),
-    [(step as any).uri]
-  );
+  const stepAny = step as any;
+  const uri = stepAny?.uri;
+
+  const url = useMemo(() => resolveVoiceUrl(uri), [uri]);
 
   return (
     <>
       <View style={styles.sectionCard}>
-        <Text style={styles.h1}>{(step as any).title}</Text>
+        <Text style={styles.h1}>{stepAny?.title}</Text>
       </View>
 
       {url ? (
@@ -826,20 +826,25 @@ function FormStep({
 
   const isTable =
     String(stepAny?.variant || "") === "table" && !!stepAny?.table;
+    
 
-  const fields: any[] = Array.isArray(stepAny?.fields) ? stepAny.fields : [];
+  const fields: any[] = useMemo(() => {
+  return Array.isArray(stepAny?.fields) ? stepAny.fields : [];
+}, [stepAny?.fields]);
 
- const table = stepAny?.table as
+const table = stepAny?.table as
   | {
       columns: { key: string; label: string }[];
       rows?: { id: string }[];
     }
   | undefined;
 
-  // ✅ required هم برای table و هم برای فرم معمولی
-  const required: string[] = Array.isArray(stepAny?.required)
+// ✅ required هم برای table و هم برای فرم معمولی
+const required: string[] = useMemo(() => {
+  return Array.isArray(stepAny?.required)
     ? stepAny.required.map((x: any) => String(x))
     : [];
+}, [stepAny?.required]);
 
   /* ---------------------------------------------
    * ✅ Auto-calc for Risk Score form (rs_*)
