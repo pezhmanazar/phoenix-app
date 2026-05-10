@@ -68,9 +68,6 @@ export default function BastanSubtaskRouter() {
   const params = useLocalSearchParams();
   const subtaskKey = String((params as any)?.key || "").trim();
 
- console.log("CR3AfterFeelingScreen typeof =", typeof CR3AfterFeelingScreen);
- console.log("CR3AfterFeelingScreen value =", CR3AfterFeelingScreen);
-
   // ✅ dispatch
 if (subtaskKey === "RC_1_red_flags") return <RC1RedFlagsScreen />;
 if (subtaskKey === "RC_2_costs") return <RC2CostsScreen />;

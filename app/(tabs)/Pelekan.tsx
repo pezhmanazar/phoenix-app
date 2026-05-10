@@ -110,7 +110,6 @@ export default function PelekanTab() {
   const [forceView, setForceView] = useState<null | "review">(null);
   const [forceTab, setForceTab] = useState<null | TabState>(null);
 
-  const mountedRef = useRef(false);
   const lastFocusRef = useRef<string>("__init__");
 
   // ✅ مهم: جلوگیری از چند fetch همزمان (ریشه‌ی گیر کردن روی لودینگ)
@@ -161,38 +160,19 @@ export default function PelekanTab() {
   const fetchState = useCallback(
     async (opts?: { initial?: boolean; reason?: string }) => {
       const isInitial = !!opts?.initial;
-      const reason = opts?.reason || (isInitial ? "initial" : "refresh");
       const phone = me?.phone;
 
       // ✅ اگر یک fetch در جریان است، یکی دیگه راه ننداز
       if (inFlightRef.current) {
-        console.log("⏭️ [PelekanTab] fetch skipped (inFlight)", {
-          reason,
-          isInitial,
-        });
         return;
       }
       inFlightRef.current = true;
-
-      console.log("🧭 [PelekanTab] fetchState:start", {
-        reason,
-        isInitial,
-        phone: phone || null,
-        focus,
-        autoStart,
-        enterTreatment,
-        forceView,
-        forceTab,
-        startGateReady,
-        gateBoot,
-      });
 
       try {
         if (isInitial) setInitialLoading(true);
         else setRefreshing(true);
 
         if (!phone) {
-          console.log("⚠️ [PelekanTab] no phone -> initialState");
           setState(initialState);
           return;
         }
@@ -201,16 +181,8 @@ export default function PelekanTab() {
         if (enterTreatment) qs.set("enterTreatment", enterTreatment);
 
         const url = `https://api.qoqnoos.app/api/pelekan/state?${qs.toString()}`;
-        console.log("🌐 [PelekanTab] GET", { url });
-
         const res = await fetch(url, {
           headers: { "Cache-Control": "no-store" },
-        });
-
-        console.log("🧾 [PelekanTab] res", {
-        status: res.status,
-        ok: res.ok,
-        contentType: String(res.headers.get("content-type") || ""),
         });
 
         let json: any = null;
@@ -220,20 +192,7 @@ export default function PelekanTab() {
           json = null;
         }
 
-        console.log("🧾 [PelekanTab] json summary", {
-        ok: json?.ok ?? null,
-        tabState: json?.data?.tabState ?? null,
-        activeStage: json?.data?.treatment?.activeStage ?? null,
-        activeDay: json?.data?.treatment?.activeDay ?? null,
-        progressActiveDayId: json?.data?.progress?.activeDayId ?? null,
-      });
-
         if (!res.ok || !json?.ok) {
-          console.log("❌ [PelekanTab] state not ok", {
-            http: res.status,
-            ok: json?.ok,
-            error: json?.error,
-          });
           setState(initialState);
           return;
         }
@@ -305,16 +264,12 @@ export default function PelekanTab() {
         };
 
         setState(merged);
-      } catch (e: any) {
-        const msg = String(e?.message || e);
-        console.log("💥 [PelekanTab] fetchState:error", { msg });
-        setState(initialState);
+      } catch {
       } finally {
         // ✅ مهم: لودینگ باید همیشه جمع شود
         inFlightRef.current = false;
         if (isInitial) setInitialLoading(false);
         else setRefreshing(false);
-        console.log("🧭 [PelekanTab] fetchState:end", { reason, isInitial });
       }
     },
     [
@@ -330,17 +285,12 @@ export default function PelekanTab() {
   );
 
   useEffect(() => {
-    if (!mountedRef.current) {
-      mountedRef.current = true;
-      console.log("🔁 [PelekanTab] mount");
-    }
-    fetchState({ initial: true, reason: "mount_or_phone_change" });
-  }, [me?.phone, fetchState]);
+  fetchState({ initial: true, reason: "mount_or_phone_change" });
+}, [me?.phone, fetchState]);
 
   useFocusEffect(
     useCallback(() => {
       if (initialLoading) {
-        console.log("⏭️ [PelekanTab] focus refresh skipped (initialLoading)");
         return;
       }
       fetchState({ initial: false, reason: "focus" });
