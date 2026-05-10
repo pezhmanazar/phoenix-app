@@ -805,7 +805,7 @@ export default function TD6DetoxConfirmScreen() {
                       size={18}
                       color={agreeNoCheck7Days ? palette.green : "rgba(231,238,247,.55)"}
                     />
-                    <Text style={styles.choiceText}>تعهد می‌دم ۷ روز «چک نمی‌کنم» حتی اگه مغزم گفت "فقط یک بار"</Text>
+                    <Text style={styles.choiceText}>تعهد می‌دم ۷ روز «چک نمی‌کنم» حتی اگه مغزم گفت: فقط یک بار</Text>
                   </View>
                 </Pressable>
 
