@@ -47,14 +47,15 @@ function loadSystemPrompt() {
     "ایموجی در صورت نیاز، حداکثر یکی از مجموعهٔ مجاز {🌿, ❤️‍🩹, 🙂, ✨, 💬}. با ایموجی شروع نکن و از 🤗 استفاده نکن.",
   ].join("\n");
 
-  try {
+    try {
     if (fs.existsSync(PROMPT_PATH)) {
       const txt = fs.readFileSync(PROMPT_PATH, "utf8").trim();
       if (txt.length > 0) return txt;
     }
-    } catch (e) {
+  } catch (e) {
     console.warn("SYSTEM_PROMPT load warning:", e?.message || "unknown");
   }
+
   return FALLBACK;
 }
 
@@ -147,16 +148,16 @@ router.post("/chat", async (req, res) => {
       }),
     });
 
-    const data = await r.json().catch(() => ({}));
+        const data = await r.json().catch(() => ({}));
 
-        if (!r.ok) {
+    if (!r.ok) {
       console.error("[AI_CHAT][OPENAI_ERR]", {
         requestId,
         status: r.status,
         ms: Date.now() - t0,
       });
 
-            return res.status(502).json({
+      return res.status(502).json({
         ok: false,
         error: "llm_upstream_error",
         requestId,
@@ -170,7 +171,7 @@ router.post("/chat", async (req, res) => {
     const reply = postProcessFa(raw);
 
     return res.json({ ok: true, reply, requestId });
-    } catch (e) {
+  } catch (e) {
     console.error("[AI_CHAT][CRASH]", {
       requestId,
       ms: Date.now() - t0,
@@ -180,5 +181,6 @@ router.post("/chat", async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error", requestId });
   }
 });
+
 
 export default router;
