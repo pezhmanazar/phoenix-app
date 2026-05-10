@@ -8,7 +8,6 @@ import {
   InteractionManager,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -214,24 +213,14 @@ export default function TreatmentPelekan({ me, state }: Props) {
 
     const task = InteractionManager.runAfterInteractions(() => {
       requestAnimationFrame(() => {
-        console.log("🎯 [TreatmentPelekan] scrollToActive", {
-          activeDayId,
-          activeIndex,
-          total: days.length,
-          inverted: true,
-          activeStageCode: activeStageCode || null,
-        });
-
-        try {
-          listRef.current?.scrollToIndex({
-            index: activeIndex,
-            animated: false,
-            viewPosition: 0.35,
-          });
-        } catch (e: any) {
-          console.log("🧯 [TreatmentPelekan] scrollToIndex threw", String(e?.message || e));
-        }
-      });
+  try {
+    listRef.current?.scrollToIndex({
+      index: activeIndex,
+      animated: false,
+      viewPosition: 0.35,
+    });
+  } catch {}
+});
     });
 
     return () => task.cancel?.();
@@ -300,49 +289,27 @@ export default function TreatmentPelekan({ me, state }: Props) {
         </Svg>
 
         <NodeWrapper {...(isActive ? {} : null)}>
-          <TouchableOpacity
-            activeOpacity={0.85}
-            style={[
-              styles.node,
-              {
-                left: nodeX - NODE_R,
-                top: CELL_H / 2 - NODE_R,
-                borderColor: isActive
-                  ? "rgba(212,175,55,.70)"
-                  : isPastStage
-                  ? "rgba(255,255,255,.28)"
-                  : "rgba(255,255,255,.20)",
-                opacity: isActive ? 1 : isPastStage ? 0.95 : 0.85,
-              },
-            ]}
-            onPress={() => {
-              // فعلاً:
-              // - active => بعداً navigate به صفحه اصلی درمان (بستن/گسستن...)
-              // - past => preview (بعداً)
-              // - locked => هیچ
-              if (isActive) {
-                console.log("🟡 [TreatmentPelekan] click active day", {
-                  stage: item.stageCode,
-                  day: day.dayNumberInStage,
-                  dayId: day.id,
-                });
-                return;
-              }
-              if (isPastStage) {
-                console.log("🟦 [TreatmentPelekan] preview past day", {
-                  stage: item.stageCode,
-                  day: day.dayNumberInStage,
-                  dayId: day.id,
-                });
-                return;
-              }
-            }}
-          >
-            <Ionicons name={iconName} size={22} color={iconColor} />
-            <Text style={styles.nodeText}>
-              {isActiveStage ? "روز " : ""} {day.dayNumberInStage}
-            </Text>
-          </TouchableOpacity>
+          <View
+  style={[
+    styles.node,
+    {
+      left: nodeX - NODE_R,
+      top: CELL_H / 2 - NODE_R,
+      borderColor: isActive
+        ? "rgba(212,175,55,.70)"
+        : isPastStage
+        ? "rgba(255,255,255,.28)"
+        : "rgba(255,255,255,.20)",
+      opacity: isActive ? 1 : isPastStage ? 0.95 : 0.85,
+    },
+  ]}
+>
+  <Ionicons name={iconName} size={22} color={iconColor} />
+  <Text style={styles.nodeText}>
+    {isActiveStage ? "روز " : ""} {day.dayNumberInStage}
+  </Text>
+</View>
+
         </NodeWrapper>
       </View>
     );
@@ -366,26 +333,22 @@ export default function TreatmentPelekan({ me, state }: Props) {
         contentContainerStyle={{ paddingBottom: 24, paddingTop: 16 }}
         showsVerticalScrollIndicator={false}
         onScrollToIndexFailed={(info) => {
-          console.log("🧯 [TreatmentPelekan] onScrollToIndexFailed", {
-            index: info.index,
-            highestMeasuredFrameIndex: info.highestMeasuredFrameIndex,
-            averageItemLength: info.averageItemLength,
-          });
+  requestAnimationFrame(() => {
+    try {
+      listRef.current?.scrollToOffset({
+        offset: Math.max(0, info.averageItemLength * info.index),
+        animated: false,
+      });
 
-          requestAnimationFrame(() => {
-            try {
-              listRef.current?.scrollToOffset({
-                offset: Math.max(0, info.averageItemLength * info.index),
-                animated: false,
-              });
-              listRef.current?.scrollToIndex({
-                index: info.index,
-                animated: false,
-                viewPosition: 0.35,
-              });
-            } catch {}
-          });
-        }}
+      listRef.current?.scrollToIndex({
+        index: info.index,
+        animated: false,
+        viewPosition: 0.35,
+      });
+    } catch {}
+  });
+}}
+
       />
     </SafeAreaView>
   );
