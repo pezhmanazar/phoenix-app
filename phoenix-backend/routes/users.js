@@ -36,7 +36,7 @@ function authUser(req, res, next) {
   const phone = fromQuery || fromBody;
 
     if (!phone) {
-    console.warn("[users.authUser] missing or invalid phone in query/body");
+    console.warn("[users.authUser] invalid auth input");
     return res.status(401).json({ ok: false, error: "PHONE_REQUIRED" });
   }
 

@@ -1104,7 +1104,7 @@ router.get("/state", authUser, async (req, res) => {
       },
     });
   } catch (e) {
-    console.error("[pelekan.state] error:", e);
+    console.error("[pelekan.state] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -1180,7 +1180,7 @@ if (choice === "skip_review") {
 
     return res.json({ ok: true, data: { session } });
   } catch (e) {
-    console.error("[pelekan.review.choose] error:", e);
+    console.error("[pelekan.review.choose] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -1456,7 +1456,7 @@ if (canUnlock && gosastanUnlockedAtFinal) {
       },
     });
   } catch (e) {
-    console.error("[pelekan.bastan.state] error:", e);
+    console.error("[pelekan.bastan.state] error:", e?.message || "unknown_error");
     return wcdnOkError(res, "SERVER_ERROR");
   }
 });
@@ -1466,11 +1466,6 @@ if (canUnlock && gosastanUnlockedAtFinal) {
 router.post("/bastan/subtask/complete", authUser, async (req, res) => {
   try {
     noStore(res);
-
-    console.log("[CC3 DEBUG] userPhone=", req.userPhone);
-    console.log("[CC3 DEBUG] content-type=", req.headers["content-type"]);
-    console.log("[CC3 DEBUG] body=", req.body);
-
     const phone = req.userPhone;
     const { subtaskKey, payload } = req.body || {};
 
@@ -1731,7 +1726,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
 
       await syncBastanActionsToDays(prisma, user.id, stages, nowSync);
     } catch (e) {
-      console.warn("[pelekan.bastan.subtask.complete] syncBastanActionsToDays failed:", e);
+       console.warn("[pelekan.bastan.subtask.complete] sync failed:", e?.message || "unknown_error");
       // sync failure must NOT break completing the subtask
     }
 
@@ -1755,7 +1750,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       },
     });
   } catch (e) {
-    console.error("[pelekan.bastan.subtask.complete] error:", e);
+    console.error("[pelekan.bastan.subtask.complete] error:", e?.message || "unknown_error");
     return wcdnOkError(res, "SERVER_ERROR");
   }
 });
@@ -1803,7 +1798,7 @@ router.post("/bastan/intro/complete", authUser, async (req, res) => {
 
     return res.json({ ok: true, data: { completedAt: st.introAudioCompletedAt } });
   } catch (e) {
-    console.error("[pelekan.bastan.intro.complete] error:", e);
+    console.error("[pelekan.bastan.intro.complete] error:", e?.message || "unknown_error");
     return wcdnOkError(res, "SERVER_ERROR");
   }
 });
@@ -1861,7 +1856,7 @@ router.post("/baseline/start", authUser, async (req, res) => {
       },
     });
   } catch (e) {
-    console.error("[pelekan.baseline.start] error:", e);
+    console.error("[pelekan.baseline.start] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -1934,7 +1929,7 @@ router.post("/baseline/answer", authUser, async (req, res) => {
 
     return res.json({ ok: true, data: updated });
   } catch (e) {
-    console.error("[pelekan.baseline.answer] error:", e);
+    console.error("[pelekan.baseline.answer] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -2022,7 +2017,7 @@ router.post("/baseline/submit", authUser, async (req, res) => {
       },
     });
   } catch (e) {
-    console.error("[pelekan.baseline.submit] error:", e);
+    console.error("[pelekan.baseline.submit] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -2166,7 +2161,7 @@ router.get("/baseline/state", authUser, async (req, res) => {
       },
     });
   } catch (e) {
-    console.error("[pelekan.baseline.state] error:", e);
+    console.error("[pelekan.baseline.state] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -2203,7 +2198,7 @@ router.post("/baseline/reset", authUser, async (req, res) => {
 
     return res.json({ ok: true, data: { reset: true, forced: force } });
   } catch (e) {
-    console.error("[pelekan.baseline.reset] error:", e);
+    console.error("[pelekan.baseline.reset] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -2235,7 +2230,7 @@ router.post("/baseline/seen", authUser, async (req, res) => {
 
     return res.json({ ok: true, data: { seenAt: nextScales.baselineResultSeenAt } });
   } catch (e) {
-    console.error("[pelekan.baseline.seen] error:", e);
+    console.error("[pelekan.baseline.seen] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -2308,7 +2303,7 @@ router.post("/_debug/force-active-day", async (req, res) => {
 
     return res.json({ ok: true, data: { forced: true, stageCode, dayNumber } });
   } catch (e) {
-    console.error("[pelekan._debug.force-active-day] error:", e);
+    console.error("[pelekan._debug.force-active-day] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
