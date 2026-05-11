@@ -22,7 +22,9 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SECURE_KEYS } from "@/constants/storage";
+import { getFriendlyErrorMessage } from "@/lib/errors/getFriendlyErrorMessage";
 import type { UserRecord } from "../../api/user";
+
 import { getMeByPhone, upsertUserByPhone } from "../../api/user";
 import JalaliSelect from "../../components/JalaliSelect";
 import { usePhoenix } from "../../hooks/PhoenixContext";
@@ -254,7 +256,7 @@ export default function ProfileWizard() {
             return;
           }
           setBootError(r.error || "NETWORK_ERROR");
-          showBanner("error", "خطا در ارتباط با سرور", r.error || "NETWORK_ERROR", 4500);
+          showBanner("error", "خطا در ارتباط با سرور", getFriendlyErrorMessage(r.error || "NETWORK_ERROR"), 4500);
           return;
         }
 
@@ -301,7 +303,7 @@ export default function ProfileWizard() {
         );
       } catch (e: any) {
         setBootError(e?.message || "NETWORK_ERROR");
-        showBanner("error", "مشکل شبکه", e?.message || "NETWORK_ERROR", 4500);
+        showBanner("error", "مشکل شبکه", getFriendlyErrorMessage(e?.message || "NETWORK_ERROR"), 4500);
       } finally {
         setBootChecking(false);
       }
@@ -499,7 +501,7 @@ const pickFromCamera = async () => {
       setSaving(true);
       const r = await upsertUserByPhone(resolvedPhone, body);
       if (!r.ok) {
-        showBanner("error", "ذخیره ناموفق بود", r.error || "HTTP_400", 4500);
+        showBanner("error", "ذخیره ناموفق بود", getFriendlyErrorMessage(r.error || "HTTP_400"), 4500);
         return;
       }
 
@@ -536,7 +538,7 @@ const pickFromCamera = async () => {
         router.replace("/(tabs)");
       }
     } catch (e: any) {
-      showBanner("error", "مشکل شبکه", e?.message || "NETWORK_ERROR", 4500);
+      showBanner("error", "مشکل شبکه", getFriendlyErrorMessage(e?.message || "NETWORK_ERROR"), 4500);
     } finally {
       if (mounted.current) setSaving(false);
       submittingRef.current = false;
@@ -671,8 +673,10 @@ const pickFromCamera = async () => {
                       <Text style={{ color: P.muted2, fontSize: 11 }}>در حال بررسی وضعیت پروفایل از سرور…</Text>
                     </View>
                   ) : bootError ? (
-                    <Text style={{ color: P.danger, fontSize: 11 }}>خطا در ارتباط با سرور: {bootError}</Text>
-                  ) : null}
+  <Text style={{ color: P.danger, fontSize: 11 }}>
+    خطا در ارتباط با سرور: {getFriendlyErrorMessage(bootError)}
+  </Text>
+) : null}
                 </View>
               </View>
 

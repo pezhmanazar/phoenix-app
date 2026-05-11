@@ -1,3 +1,4 @@
+import { getFriendlyErrorMessage } from "@/lib/errors/getFriendlyErrorMessage";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -9,6 +10,7 @@ import {
 } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import AppBannerModal from "../ui/AppBannerModal";
+
 
 type Props = {
   me: any;
@@ -455,10 +457,11 @@ return;
                 خطا در دریافت سنجش.
               </Text>
               {!!errorMsg && (
-                <Text style={[styles.centerText, { color: palette.sub2, marginTop: 8, fontSize: 12 }]}>
-                  {errorMsg}
-                </Text>
-              )}
+  <Text style={[styles.centerText, { color: palette.sub2, marginTop: 8, fontSize: 12 }]}>
+    {getFriendlyErrorMessage(errorMsg)}
+  </Text>
+)}
+
               <View style={{ height: 14 }} />
               <Pressable
                 disabled={busy}
@@ -620,10 +623,10 @@ return;
                 سنجش در حال همگام‌سازی است…
               </Text>
               {!!errorMsg && (
-                <Text style={[styles.centerText, { color: palette.sub2, marginTop: 8, fontSize: 12 }]}>
-                  {errorMsg}
-                </Text>
-              )}
+  <Text style={[styles.centerText, { color: palette.sub2, marginTop: 8, fontSize: 12 }]}>
+    {getFriendlyErrorMessage(errorMsg)}
+  </Text>
+)}
               <View style={{ height: 14 }} />
               <Pressable
                 disabled={busy}

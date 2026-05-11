@@ -1,4 +1,5 @@
 // phoenix-app/app/(tabs)/ReviewResult.tsx
+import { getFriendlyErrorMessage } from "@/lib/errors/getFriendlyErrorMessage";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { Audio } from "expo-av";
@@ -906,7 +907,7 @@ export default function ReviewResult() {
             </View>
           )}
 
-          {!!err && !loading && <Text style={[styles.rtl, { color: palette.red }]}>{err}</Text>}
+         {!!err && !loading && <Text style={[styles.rtl, { color: palette.red }]}>{getFriendlyErrorMessage(err)}</Text>}
 
           {!loading && !err && (
             <>
