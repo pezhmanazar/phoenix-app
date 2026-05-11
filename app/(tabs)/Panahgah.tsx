@@ -7,7 +7,6 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -19,6 +18,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import AppBannerModal from "../../components/ui/AppBannerModal";
 
 import { allScenarios } from "@/lib/panahgah/registry";
 import PlanStatusBadge from "../../components/PlanStatusBadge";
@@ -297,6 +297,31 @@ export default function Panahgah() {
   // ✅ Guide modal
   const [guideOpen, setGuideOpen] = useState(false);
 
+  const [appModal, setAppModal] = useState<{
+    visible: boolean;
+    kind: "error" | "warning" | "success" | "info";
+    title: string;
+    message: string;
+  }>({
+    visible: false,
+    kind: "info",
+    title: "",
+    message: "",
+  });
+
+  const showAppModal = (
+    kind: "error" | "warning" | "success" | "info",
+    title: string,
+    message: string
+  ) => {
+    setAppModal({
+      visible: true,
+      kind,
+      title,
+      message,
+    });
+  };
+
   const isProPlan = planView === "pro" || planView === "expiring";
 
   const AUDIO_URL = useMemo(() => mediaUrl(AUDIO_KEYS.panahgahIntro), []);
@@ -368,8 +393,9 @@ export default function Panahgah() {
 
   /** هنگام تپ روی سناریو */
   const onTapScenario = (id: string) => {
-    if (planView === "expired") {
-      Alert.alert(
+        if (planView === "expired") {
+      showAppModal(
+        "warning",
         "اشتراک منقضی شده",
         "اشتراکت منقضی شده و پناهگاه فعلاً برات قفله.\n\n" +
           "پناهگاه جاییه برای وقتی که یهو حالت بد میشه یا وسوسه‌ می‌شی پیام بدی، یا احساساتت بهت هجوم میارن.\n\n" +
@@ -377,8 +403,12 @@ export default function Panahgah() {
       );
       return;
     }
-    if (!isProPlan) {
-      Alert.alert("نسخه رایگان", "برای باز شدن کامل پناهگاه و استفاده از سناریوهای اورژانسی باید پلن PRO رو فعال کنی.");
+        if (!isProPlan) {
+      showAppModal(
+        "info",
+        "نسخه رایگان",
+        "برای باز شدن کامل پناهگاه و استفاده از سناریوهای اورژانسی باید پلن PRO رو فعال کنی."
+      );
       return;
     }
     router.push(`/panahgah/${id}`);
@@ -409,14 +439,29 @@ export default function Panahgah() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.root, { backgroundColor: palette.bg }]} edges={["top"]}>
-        <View pointerEvents="none" style={styles.bgGlowTop} />
-        <View pointerEvents="none" style={styles.bgGlowBottom} />
-        <View style={[styles.center, { paddingBottom: insets.bottom }]}>
-          <ActivityIndicator color={palette.gold} />
-          <Text style={{ color: "#E5E7EB", marginTop: 8, fontSize: 12 }}>در حال آماده‌سازی پناهگاه…</Text>
-        </View>
-      </SafeAreaView>
+      <>
+        <SafeAreaView style={[styles.root, { backgroundColor: palette.bg }]} edges={["top"]}>
+          <View pointerEvents="none" style={styles.bgGlowTop} />
+          <View pointerEvents="none" style={styles.bgGlowBottom} />
+          <View style={[styles.center, { paddingBottom: insets.bottom }]}>
+            <ActivityIndicator color={palette.gold} />
+            <Text style={{ color: "#E5E7EB", marginTop: 8, fontSize: 12 }}>در حال آماده‌سازی پناهگاه…</Text>
+          </View>
+        </SafeAreaView>
+
+        <AppBannerModal
+          visible={appModal.visible}
+          kind={appModal.kind}
+          title={appModal.title}
+          message={appModal.message}
+          onClose={() =>
+            setAppModal((prev) => ({
+              ...prev,
+              visible: false,
+            }))
+          }
+        />
+      </>
     );
   }
 
@@ -614,6 +659,19 @@ export default function Panahgah() {
           />
         </>
       )}
+
+      <AppBannerModal
+        visible={appModal.visible}
+        kind={appModal.kind}
+        title={appModal.title}
+        message={appModal.message}
+        onClose={() =>
+          setAppModal((prev) => ({
+            ...prev,
+            visible: false,
+          }))
+        }
+      />
     </SafeAreaView>
   );
 }
