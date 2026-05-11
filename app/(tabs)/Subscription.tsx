@@ -15,6 +15,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import AppBannerModal from "../../components/ui/AppBannerModal";
 import { useAuth } from "../../hooks/useAuth";
 import { useUser } from "../../hooks/useUser";
+import { getFriendlyErrorMessage } from "../../lib/errors/getFriendlyErrorMessage";
 
 import * as WebBrowser from "expo-web-browser";
 import { toJalaali } from "jalaali-js";
@@ -310,11 +311,9 @@ export default function SubscriptionScreen() {
           }
 
           openPayModal({
-            kind: "failed",
-            message:
-              msg ||
-              "در خرید از بازار مشکلی پیش اومد. اگه مبلغ از حسابت کم شده، چند دقیقه بعد دوباره وضعیت اشتراک رو چک کن.",
-          });
+  kind: "failed",
+  message: getFriendlyErrorMessage(msg),
+});
           return;
         }
       }
@@ -337,12 +336,12 @@ export default function SubscriptionScreen() {
       });
 
       if (!start.ok) {
-        openPayModal({
-          kind: "failed",
-          message: start.error || "در اتصال به سرور مشکلی پیش آمد.",
-        });
-        return;
-      }
+  openPayModal({
+    kind: "failed",
+    message: getFriendlyErrorMessage(start.error || ""),
+  });
+  return;
+}
 
       if (!start.data) {
         openPayModal({
@@ -377,11 +376,9 @@ export default function SubscriptionScreen() {
       return;
     } catch (e: any) {
       openPayModal({
-        kind: "failed",
-        message:
-          e?.message ||
-          "در اتصال به درگاه مشکلی پیش اومد. اگه مبلغ از حسابت کم شده، وضعیت اشتراک رو بعد از چند دقیقه دوباره چک کن.",
-      });
+  kind: "failed",
+  message: getFriendlyErrorMessage(String(e?.message || "")),
+});
     } finally {
       payingRef.current = false;
       setPayingKey(null);
