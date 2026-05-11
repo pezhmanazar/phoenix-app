@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import Svg, { Circle } from "react-native-svg";
+import AppBannerModal from "../ui/AppBannerModal";
 
 type Props = {
   me: any;
@@ -121,10 +122,36 @@ export default function Baseline({ me, state, onRefresh }: Props) {
 
   const [localSelected, setLocalSelected] = useState<number | null>(null);
 
+  const [appModal, setAppModal] = useState<{
+  visible: boolean;
+  kind: "success" | "error" | "warning" | "info";
+  title: string;
+  message?: string;
+}>({
+  visible: false,
+  kind: "info",
+  title: "",
+  message: "",
+});
+
+
   const consentCount: number = useMemo(() => {
     const arr = state?.baseline?.content?.consentSteps;
     return Array.isArray(arr) ? arr.length : 0;
   }, [state?.baseline?.content?.consentSteps]);
+
+  const showAppModal = (
+  kind: "success" | "error" | "warning" | "info",
+  title: string,
+  message?: string
+) => {
+  setAppModal({
+    visible: true,
+    kind,
+    title,
+    message,
+  });
+};
 
   const clamp = (n: number, min: number, max: number) =>
     Math.max(min, Math.min(max, n));
@@ -230,14 +257,22 @@ export default function Baseline({ me, state, onRefresh }: Props) {
         );
 
         if (!json?.ok) {
-          Alert.alert("خطا", String(json?.error || "ثبت پاسخ ناموفق بود."));
-          return false;
-        }
+  showAppModal(
+    "error",
+    "ثبت پاسخ انجام نشد",
+    "ثبت پاسخ با مشکل مواجه شد. لطفاً چند لحظه بعد دوباره تلاش کن."
+  );
+  return false;
+}
         return true;
       } catch {
-        Alert.alert("خطا", "ارتباط با سرور برقرار نشد.");
-        return false;
-      } finally {
+  showAppModal(
+    "error",
+    "ارتباط برقرار نشد",
+    "اتصال به سرور برقرار نشد. لطفاً اینترنتت را بررسی کن و دوباره تلاش کن."
+  );
+  return false;
+} finally {
         setBusy(false);
       }
     },
@@ -256,15 +291,24 @@ export default function Baseline({ me, state, onRefresh }: Props) {
       );
 
       if (!json?.ok) {
-        Alert.alert("خطا", String(json?.error || "ثبت نهایی سنجش ناموفق بود."));
-        return;
-      }
+  showAppModal(
+    "error",
+    "ثبت نهایی انجام نشد",
+    "ثبت نهایی سنجش با مشکل مواجه شد. لطفاً چند لحظه بعد دوباره تلاش کن."
+  );
+  return;
+}
 
       await onRefresh?.();
       await fetchBaselineState();
     } catch {
-      Alert.alert("خطا", "ارتباط با سرور برقرار نشد.");
-    } finally {
+  showAppModal(
+    "error",
+    "ارتباط برقرار نشد",
+    "اتصال به سرور برقرار نشد. لطفاً اینترنتت را بررسی کن و دوباره تلاش کن."
+  );
+  return;
+} finally {
       setBusy(false);
     }
   }, [phone, onRefresh, fetchBaselineState]);
@@ -586,10 +630,18 @@ export default function Baseline({ me, state, onRefresh }: Props) {
             </>
           )}
         </View>
-      </ScrollView>
+            </ScrollView>
+      <AppBannerModal
+        visible={appModal.visible}
+        kind={appModal.kind}
+        title={appModal.title}
+        message={appModal.message}
+        onClose={() => setAppModal((prev) => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   rtlText: { writingDirection: "rtl" as any },

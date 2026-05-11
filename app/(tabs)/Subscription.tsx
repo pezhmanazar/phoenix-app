@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import AppBannerModal from "../../components/ui/AppBannerModal";
 import { useAuth } from "../../hooks/useAuth";
 import { useUser } from "../../hooks/useUser";
 
@@ -415,27 +416,6 @@ export default function SubscriptionScreen() {
       : planView === "pro" || planView === "expiring"
       ? "PRO"
       : "FREE";
-
-  const modalTitle =
-    payResult.kind === "success"
-      ? "پرداخت موفق"
-      : payResult.kind === "cancelled"
-      ? "پرداخت لغو شد"
-      : "پرداخت ناموفق";
-
-  const modalIcon =
-    payResult.kind === "success"
-      ? "checkmark-circle"
-      : payResult.kind === "cancelled"
-      ? "remove-circle"
-      : "close-circle";
-
-  const modalIconColor =
-    payResult.kind === "success"
-      ? "#22C55E"
-      : payResult.kind === "cancelled"
-      ? "#FBBF24"
-      : "#F97373";
 
   return (
     <SafeAreaView
@@ -884,89 +864,27 @@ export default function SubscriptionScreen() {
         </ScrollView>
 
         {/* بنر نتیجه پرداخت (برای بازار و خطاهای شبکه) */}
-        {payResult.visible && (
-          <View
-            style={{
-              position: "absolute",
-              top: 0,
-              bottom: 0,
-              left: 0,
-              right: 0,
-              backgroundColor: "rgba(0,0,0,0.6)",
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <View
-              style={{
-                width: "80%",
-                borderRadius: 18,
-                backgroundColor: "#111827",
-                paddingVertical: 18,
-                paddingHorizontal: 16,
-              }}
-            >
-              <View style={{ flexDirection: "row-reverse", alignItems: "center", marginBottom: 8 }}>
-                <Ionicons
-                  name={modalIcon as any}
-                  size={28}
-                  color={modalIconColor}
-                  style={{ marginLeft: 8 }}
-                />
-                <Text
-                  style={{
-                    color: "#F9FAFB",
-                    fontSize: 18,
-                    fontWeight: "900",
-                    textAlign: "right",
-                    flex: 1,
-                  }}
-                >
-                  {modalTitle}
-                </Text>
-              </View>
+                <AppBannerModal
+          visible={payResult.visible}
+          kind={
+            payResult.kind === "success"
+              ? "success"
+              : payResult.kind === "cancelled"
+              ? "warning"
+              : "error"
+          }
+          title={
+            payResult.kind === "success"
+              ? "پرداخت موفق"
+              : payResult.kind === "cancelled"
+              ? "پرداخت لغو شد"
+              : "پرداخت ناموفق"
+          }
+          message={payResult.message}
+          refId={payResult.refId}
+          onClose={() => setPayResult((prev) => ({ ...prev, visible: false }))}
+        />
 
-              {payResult.refId && (
-                <View style={{ marginTop: 4 }}>
-                  <Text style={{ color: "#9CA3AF", fontSize: 12, textAlign: "right" }}>
-                    کد رهگیری:
-                  </Text>
-                  <Text
-                    style={{
-                      color: "#E5E7EB",
-                      fontSize: 14,
-                      fontWeight: "800",
-                      marginTop: 2,
-                      textAlign: "left",
-                    }}
-                  >
-                    {payResult.refId}
-                  </Text>
-                </View>
-              )}
-
-              {payResult.message && (
-                <Text style={{ color: "#D1D5DB", fontSize: 12, textAlign: "right", marginTop: 8 }}>
-                  {payResult.message}
-                </Text>
-              )}
-
-              <TouchableOpacity
-                onPress={() => setPayResult((prev) => ({ ...prev, visible: false }))}
-                style={{
-                  alignSelf: "flex-start",
-                  marginTop: 14,
-                  paddingHorizontal: 14,
-                  paddingVertical: 6,
-                  borderRadius: 999,
-                  backgroundColor: "#4B5563",
-                }}
-              >
-                <Text style={{ color: "#E5E7EB", fontSize: 13, fontWeight: "800" }}>بستن</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
       </View>
     </SafeAreaView>
   );
