@@ -1,5 +1,6 @@
 // routes/pelekan.js
 import express from "express";
+import authUser from "../middleware/authUser.js";
 import engineModule from "../services/pelekan/engine.cjs";
 import prisma from "../utils/prisma.js";
 
@@ -7,28 +8,6 @@ const pelekanEngine = engineModule.default ?? engineModule;
 
 const router = express.Router();
 router.use(express.json());
-
-/* ---------- helpers (copy from users.js for consistency) ---------- */
-function normalizePhone(input) {
-  const digits = String(input || "").replace(/\D/g, "");
-  if (digits.startsWith("989") && digits.length === 12) return "0" + digits.slice(2);
-  if (digits.startsWith("09") && digits.length === 11) return digits;
-  if (digits.startsWith("9") && digits.length === 10) return "0" + digits;
-  return null;
-}
-
-function authUser(req, res, next) {
-  const fromQuery = normalizePhone(req.query?.phone);
-  const fromBody = normalizePhone(req.body?.phone);
-  const phone = fromQuery || fromBody;
-
-  // NOTE: for baseline endpoints behind WCDN, 4xx becomes HTML.
-  // But authUser is shared across routes; keep 401 here.
-  if (!phone) return res.status(401).json({ ok: false, error: "PHONE_REQUIRED" });
-
-  req.userPhone = phone;
-  return next();
-}
 
 function noStore(res) {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0");
@@ -701,7 +680,10 @@ async function syncBastanActionsToDays(prisma, userId, stages, now = new Date())
 router.get("/state", authUser, async (req, res) => {
   try {
     noStore(res);
-    const phone = req.userPhone;
+    const phone = req.user?.phone;
+if (!phone) {
+  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+}
 
     // ✅ NEW: explicit treatment entry from UI (e.g. ReviewResult "Go to Pelekan")
     const enterTreatment = String(req.query?.enterTreatment || "") === "1";
@@ -986,6 +968,8 @@ router.get("/state", authUser, async (req, res) => {
     const hasAnyProgress = Array.isArray(dayProgress) && dayProgress.length > 0;
     const hasAnyProgressFinal = applyDebugProgress(req, hasAnyProgress);
 
+
+//----------------------------------------------------------------------------------
     // ✅ ورود به treating فقط اگر:
     // - کاربر skip_review کرده باشد
     // - یا واقعاً progress درمانی دارد
@@ -1115,7 +1099,10 @@ router.post("/review/choose", authUser, async (req, res) => {
   try {
     noStore(res);
 
-    const phone = req.userPhone;
+    const phone = req.user?.phone;
+if (!phone) {
+  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+}
     const choice = String(req.body?.choice || "").trim();
 
     if (choice !== "skip_review" && choice !== "review") {
@@ -1189,7 +1176,10 @@ if (choice === "skip_review") {
 router.get("/bastan/state", authUser, async (req, res) => {
   try {
     noStore(res);
-    const phone = req.userPhone;
+    const phone = req.user?.phone;
+if (!phone) {
+  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+}
 
     const user = await prisma.user.findUnique({
       where: { phone },
@@ -1466,7 +1456,10 @@ if (canUnlock && gosastanUnlockedAtFinal) {
 router.post("/bastan/subtask/complete", authUser, async (req, res) => {
   try {
     noStore(res);
-    const phone = req.userPhone;
+    const phone = req.user?.phone;
+if (!phone) {
+  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+}
     const { subtaskKey, payload } = req.body || {};
 
     if (!subtaskKey || typeof subtaskKey !== "string") {
@@ -1760,7 +1753,10 @@ router.post("/bastan/intro/complete", authUser, async (req, res) => {
   try {
     noStore(res);
 
-    const phone = req.userPhone;
+    const phone = req.user?.phone;
+if (!phone) {
+  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+}
 
     const user = await prisma.user.findUnique({
       where: { phone },
@@ -1808,7 +1804,10 @@ router.post("/bastan/intro/complete", authUser, async (req, res) => {
 // POST /api/pelekan/baseline/start
 router.post("/baseline/start", authUser, async (req, res) => {
   try {
-    const phone = req.userPhone;
+    const phone = req.user?.phone;
+if (!phone) {
+  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+}
     const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
     if (!user) return baselineError(res, "USER_NOT_FOUND");
 
@@ -1864,7 +1863,10 @@ router.post("/baseline/start", authUser, async (req, res) => {
 // POST /api/pelekan/baseline/answer
 router.post("/baseline/answer", authUser, async (req, res) => {
   try {
-    const phone = req.userPhone;
+    const phone = req.user?.phone;
+if (!phone) {
+  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+}
     const { stepType, stepId, optionIndex, acknowledged } = req.body || {};
 
     const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
@@ -1937,7 +1939,10 @@ router.post("/baseline/answer", authUser, async (req, res) => {
 // POST /api/pelekan/baseline/submit
 router.post("/baseline/submit", authUser, async (req, res) => {
   try {
-    const phone = req.userPhone;
+    const phone = req.user?.phone;
+if (!phone) {
+  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+}
     const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
     if (!user) return baselineError(res, "USER_NOT_FOUND");
 
@@ -2027,7 +2032,10 @@ router.get("/baseline/state", authUser, async (req, res) => {
   try {
     noStore(res);
 
-    const phone = req.userPhone;
+    const phone = req.user?.phone;
+if (!phone) {
+  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+}
     const user = await prisma.user.findUnique({
       where: { phone },
       select: { id: true },
@@ -2169,7 +2177,10 @@ router.get("/baseline/state", authUser, async (req, res) => {
 // POST /api/pelekan/baseline/reset
 router.post("/baseline/reset", authUser, async (req, res) => {
   try {
-    const phone = req.userPhone;
+    const phone = req.user?.phone;
+if (!phone) {
+  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+}
     const force = req.body?.force === true;
 
     const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
@@ -2208,7 +2219,10 @@ router.post("/baseline/seen", authUser, async (req, res) => {
   try {
     noStore(res);
 
-    const phone = req.userPhone;
+    const phone = req.user?.phone;
+if (!phone) {
+  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+}
     const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
     if (!user) return baselineError(res, "USER_NOT_FOUND");
 
