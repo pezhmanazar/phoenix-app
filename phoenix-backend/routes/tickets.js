@@ -100,7 +100,7 @@ router.post("/", async (req, res) => {
     const withDisplay = { ...t, displayTitle: t.openedByName || t.title };
     res.json({ ok: true, ticket: withDisplay });
   } catch (e) {
-    console.error(e);
+    console.error("[tickets.open] error:", e?.message || "unknown_error");
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -135,8 +135,8 @@ router.get("/", async (req, res) => {
       displayTitle: t.openedByName || t.title,
     }));
     res.json({ ok: true, tickets: mapped });
-  } catch (e) {
-    console.error(e);
+    } catch (e) {
+    console.error("[tickets.list] error:", e?.message || "unknown_error");
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -156,8 +156,8 @@ router.get("/:id", async (req, res) => {
     if (!t) return res.status(404).json({ ok: false, error: "not_found" });
     const withDisplay = { ...t, displayTitle: t.openedByName || t.title };
     res.json({ ok: true, ticket: withDisplay });
-  } catch (e) {
-    console.error(e);
+   } catch (e) {
+    console.error("[tickets.detail] error:", e?.message || "unknown_error");
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -190,8 +190,8 @@ router.post("/:id/reply", async (req, res) => {
       ? { ...ticket, displayTitle: ticket.openedByName || ticket.title }
       : ticket;
     res.json({ ok: true, ticket: withDisplay, message });
-  } catch (e) {
-    console.error(e);
+    } catch (e) {
+    console.error("[tickets.reply] error:", e?.message || "unknown_error");
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -215,11 +215,11 @@ router.patch("/:id/status", async (req, res) => {
     });
     const withDisplay = { ...t, displayTitle: t.openedByName || t.title };
     res.json({ ok: true, ticket: withDisplay });
-  } catch (e) {
+    } catch (e) {
     if (e?.code === "P2025") {
       return res.status(404).json({ ok: false, error: "not_found" });
     }
-    console.error(e);
+    console.error("[tickets.status] error:", e?.message || "unknown_error");
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });

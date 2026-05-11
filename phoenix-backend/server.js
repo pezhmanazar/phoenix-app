@@ -150,35 +150,7 @@ const markParsed = (req, _res, next) => {
   next();
 };
 
-const logUploadDebug = (req, _res, next) => {
-  try {
-    console.log("⬇️ UPLOAD DEBUG", req.method, req.originalUrl);
-    console.log("  content-type:", req.headers["content-type"]);
-    console.log("  body:", req.body);
-
-    if (Array.isArray(req.files) && req.files.length) {
-      console.log(
-        "  files:",
-        req.files.map((f) => ({
-          field: f.fieldname,
-          name: f.originalname,
-          mimetype: f.mimetype,
-          size: f.size,
-          path: f.path,
-        }))
-      );
-    }
-
-    if (req.file) {
-      console.log("  file(single):", {
-        field: req.file.fieldname,
-        name: req.file.originalname,
-        mimetype: req.file.mimetype,
-        size: req.file.size,
-        path: req.file.path,
-      });
-    }
-  } catch {}
+const logUploadDebug = (_req, _res, next) => {
   next();
 };
 

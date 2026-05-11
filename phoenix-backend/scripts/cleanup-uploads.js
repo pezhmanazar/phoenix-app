@@ -35,7 +35,7 @@ function resolveUploadDir() {
 async function main() {
   const uploadDir = resolveUploadDir();
 
-  console.log('[cleanup] UPLOAD_DIR:', uploadDir);
+  console.log("[cleanup] starting uploads cleanup");
 
   if (!fs.existsSync(uploadDir)) {
     console.log('[cleanup] uploads folder not found:', uploadDir);

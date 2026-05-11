@@ -238,7 +238,7 @@ router.get("/tickets/:id", async (req, res) => {
     if (!t) return res.status(404).json({ ok: false, error: "not_found" });
     return res.json({ ok: true, ticket: t, displayTitle: t.openedByName || t.title });
   } catch (e) {
-    console.error(e);
+    console.error("[public.tickets.detail] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -260,7 +260,7 @@ router.get("/tickets", async (req, res) => {
     });
     return res.json({ ok: true, tickets: list });
   } catch (e) {
-    console.error(e);
+    console.error("[public.tickets.list] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -394,7 +394,7 @@ router.post("/tickets/:id/reply", async (req, res) => {
 
     return res.json({ ok: true, ticket: updated });
   } catch (e) {
-    console.error(e);
+    console.error("[public.tickets.reply] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
