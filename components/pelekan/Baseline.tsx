@@ -346,8 +346,12 @@ export default function Baseline({ me, state, onRefresh }: Props) {
 
     if (step.type === "question") {
       if (typeof localSelected !== "number") {
-        Alert.alert("یک گزینه رو انتخاب کن", "برای ادامه باید یکی از گزینه‌ها رو انتخاب کنی.");
-        return;
+showAppModal(
+  "warning",
+  "یک گزینه را انتخاب کن",
+  "برای ادامه، لازمه یکی از گزینه‌ها رو انتخاب کنی."
+);
+return;
       }
 
       const ok = await postAnswer({
