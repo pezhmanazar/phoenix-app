@@ -216,7 +216,7 @@ export default function BastanActionScreen() {
         });
       } catch (e: any) {
         applyIfLatest(seq, () => {
-          setErr(String(e?.message || e));
+          setErr("بارگذاری این اقدام با مشکل مواجه شد، لطفاً دوباره تلاش کن");
           setAction(null);
         });
       } finally {

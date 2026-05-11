@@ -119,7 +119,7 @@ export default function GosastanStageIntroScreen() {
       else await s.playAsync();
     } catch (e: any) {
       setIsBuffering(false);
-      setErr(String(e?.message || e));
+      setErr("پخش مقدمه مرحله گسستن با مشکل مواجه شد، لطفاً دوباره تلاش کن");
     }
   }, [loadIfNeeded, isBuffering]);
 
@@ -138,7 +138,7 @@ export default function GosastanStageIntroScreen() {
         await s.setPositionAsync(clamped);
         if (clamped > maxPosRef.current) maxPosRef.current = clamped;
       } catch (e: any) {
-        setErr(String(e?.message || e));
+        setErr("پخش مقدمه مرحله گسستن با مشکل مواجه شد، لطفاً دوباره تلاش کن");
       }
     },
     [durMs, loadIfNeeded]
@@ -167,7 +167,7 @@ export default function GosastanStageIntroScreen() {
         await loadIfNeeded();
       } catch (e: any) {
         if (!alive) return;
-        setErr(String(e?.message || e));
+        setErr("پخش مقدمه مرحله گسستن با مشکل مواجه شد، لطفاً دوباره تلاش کن");
       } finally {
         if (!alive) return;
         setLoading(false);

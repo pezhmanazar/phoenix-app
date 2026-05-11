@@ -112,7 +112,7 @@ export default function BastanIntroScreen() {
       setIntroDone(!!completedAt);
       setPaywallAfterIntro(!!paywall);
     } catch (e: any) {
-      setErr(String(e?.message || e));
+      setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
     } finally {
       setLoading(false);
     }
@@ -227,7 +227,7 @@ export default function BastanIntroScreen() {
           try {
             await markIntroComplete();
           } catch (e: any) {
-            setErr(String(e?.message || e));
+           setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
           }
         }
 
@@ -286,7 +286,7 @@ export default function BastanIntroScreen() {
       }
     } catch (e: any) {
       setIsBuffering(false);
-      setErr(String(e?.message || e));
+      setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
     }
   }, [loadIfNeeded, isBuffering]);
 
@@ -308,11 +308,11 @@ export default function BastanIntroScreen() {
           try {
             await markIntroComplete();
           } catch (e: any) {
-            setErr(String(e?.message || e));
+            setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
           }
         }
       } catch (e: any) {
-        setErr(String(e?.message || e));
+        setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
       }
     },
     [durMs, loadIfNeeded, introDone, markIntroComplete]
@@ -406,7 +406,7 @@ export default function BastanIntroScreen() {
                 await markIntroComplete();
               }
             } catch (e: any) {
-              setErr(String(e?.message || e));
+              setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
               return;
             }
 
