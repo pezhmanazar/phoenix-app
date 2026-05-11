@@ -1,3 +1,4 @@
+//phoenix-app\phoenix-backend\routes\_ticketAccess.js
 export async function getPublicOwnedTicketOrThrow(prisma, ticketId, openedById) {
   const ticket = await prisma.ticket.findUnique({
     where: { id: String(ticketId) },

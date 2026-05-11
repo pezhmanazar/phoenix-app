@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { Router } from "express";
 import path from "path";
 import { isUserPro } from "../services/planStatus.js";
+import { requireTicketIdentity } from "./_ticketIdentity.js";
 
 const prisma = new PrismaClient();
 
@@ -290,6 +291,8 @@ publicTicketsRouter.get("/open", async (req, res) => {
  */
 publicTicketsRouter.get("/:id", async (req, res) => {
   try {
+    const identity = requireTicketIdentity(req);
+
     const id = String(req.params.id);
     const t = await prisma.ticket.findUnique({
       where: { id },
@@ -299,10 +302,11 @@ publicTicketsRouter.get("/:id", async (req, res) => {
     const withDisplay = { ...t, displayTitle: t.openedByName || t.title };
     res.json({ ok: true, ticket: withDisplay });
   } catch (e) {
-    console.error("[tickets.public.detail] error:", e?.message || "unknown_error");
-    res.status(500).json({ ok: false, error: "internal_error" });
-  }
+  console.error("[tickets.public.detail] error:", e?.message || "unknown_error");
+  res.status(e?.statusCode || 500).json({ ok: false, error: e?.message || "internal_error" });
+}
 });
+
 
 /**
  * POST /api/public/tickets/send
