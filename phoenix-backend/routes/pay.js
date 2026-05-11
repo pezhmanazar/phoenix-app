@@ -236,9 +236,9 @@ router.post("/start", async (req, res) => {
       gatewayUrl,
       description,
     });
-  } catch (e) {
-    console.error("PAY_START_ERR", e);
-    return res.status(500).json({ ok: false, error: e?.message || "SERVER_ERROR" });
+    } catch (e) {
+    console.error("PAY_START_ERR", e?.message || "unknown_error");
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
 
@@ -286,12 +286,12 @@ router.get("/verify", async (req, res) => {
       return res.redirect(302, buildResultUrl({ ok: false, authority }));
     }
 
-    if (sub.status !== "pending") {
-      console.error("[pay/verify] INVALID_SUBSCRIPTION_STATE", {
-        authority,
-        subId: sub.id,
-        status: sub.status,
-      });
+        if (sub.status !== "pending") {
+      console.error(
+        "[pay/verify] INVALID_SUBSCRIPTION_STATE",
+        `subId=${sub.id || "unknown"}`,
+        `status=${sub.status || "unknown"}`
+      );
       return res.redirect(302, buildResultUrl({ ok: false, authority }));
     }
 
@@ -300,11 +300,11 @@ router.get("/verify", async (req, res) => {
     const months = sub.months || 1;
     const phone = normalizeIranPhone(sub.phone || sub.user?.phone || "");
 
-    if (!phone) {
-      console.error("[pay/verify] PHONE_MISSING_FOR_SUBSCRIPTION", {
-        authority,
-        subId: sub.id,
-      });
+        if (!phone) {
+      console.error(
+        "[pay/verify] PHONE_MISSING_FOR_SUBSCRIPTION",
+        `subId=${sub.id || "unknown"}`
+      );
       return res.redirect(302, buildResultUrl({ ok: false, authority }));
     }
 
@@ -365,13 +365,12 @@ router.get("/verify", async (req, res) => {
 
     const json = await zpRes.json().catch(() => null);
 
-    if (!zpRes.ok || !json) {
-      console.error("[pay/verify] ZARINPAL_VERIFY_FAILED", {
-        status: zpRes.status,
-        verifyUrl,
-        payload,
-        response: json,
-      });
+        if (!zpRes.ok || !json) {
+      console.error(
+        "[pay/verify] ZARINPAL_VERIFY_FAILED",
+        `status=${zpRes.status}`,
+        `hasBody=${json ? "yes" : "no"}`
+      );
 
       await prisma.subscription.updateMany({
         where: {
@@ -389,9 +388,13 @@ router.get("/verify", async (req, res) => {
 
     const { data, errors } = json;
 
-    if (!data || (data.code !== 100 && data.code !== 101)) {
+        if (!data || (data.code !== 100 && data.code !== 101)) {
       const code = data?.code ?? errors?.code ?? "UNKNOWN";
-      console.error("[pay/verify] ZARINPAL_VERIFY_ERROR", { code, json });
+      console.error(
+        "[pay/verify] ZARINPAL_VERIFY_ERROR",
+        `code=${code}`,
+        `hasBody=${json ? "yes" : "no"}`
+      );
 
       await prisma.subscription.updateMany({
         where: {
@@ -431,9 +434,9 @@ router.get("/verify", async (req, res) => {
     });
 
     return res.redirect(302, buildResultUrl({ ok: true, authority }));
-  } catch (e) {
-    console.error("VERIFY_ERR", e);
-    return res.status(500).json({ ok: false, error: e?.message || "SERVER_ERROR" });
+    } catch (e) {
+    console.error("VERIFY_ERR", e?.message || "unknown_error");
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
 
@@ -626,9 +629,9 @@ router.get("/status", async (req, res) => {
         ? new Date(sub.user.planExpiresAt).toISOString()
         : null,
     });
-  } catch (e) {
-    console.error("PAY_STATUS_ERR", e);
-    return res.status(500).json({ ok: false, error: e?.message || "SERVER_ERROR" });
+    } catch (e) {
+    console.error("PAY_STATUS_ERR", e?.message || "unknown_error");
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
 

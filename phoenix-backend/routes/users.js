@@ -35,11 +35,8 @@ function authUser(req, res, next) {
   const fromBody = normalizePhone(req.body?.phone);
   const phone = fromQuery || fromBody;
 
-  if (!phone) {
-    console.warn("[users.authUser] missing or invalid phone in query/body", {
-      queryPhone: req.query?.phone,
-      bodyPhone: req.body?.phone,
-    });
+    if (!phone) {
+    console.warn("[users.authUser] missing or invalid phone in query/body");
     return res.status(401).json({ ok: false, error: "PHONE_REQUIRED" });
   }
 
@@ -75,8 +72,8 @@ router.get("/me", authUser, async (req, res) => {
     }
 
     return res.json({ ok: true, data: user });
-  } catch (e) {
-    console.error("[users.me] error:", e);
+    } catch (e) {
+    console.error("[users.me] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -100,8 +97,8 @@ router.post("/me/delete", authUser, async (req, res) => {
     await prisma.user.delete({ where: { phone } });
 
     return res.json({ ok: true, data: { deleted: true } });
-  } catch (e) {
-    console.error("[users.me.delete] error:", e);
+    } catch (e) {
+    console.error("[users.me.delete] error:", e?.message || "unknown_error");
     const code = e?.code ? String(e.code) : "";
     const errorLabel = code && code.startsWith("P") ? `PRISMA_${code}` : "SERVER_ERROR";
     return res.status(500).json({ ok: false, error: errorLabel });
@@ -197,7 +194,7 @@ router.post("/upsert", authUser, async (req, res) => {
       lastLoginAt,    // در Prisma نداریم، نادیده می‌گیریم
     } = req.body || {};
 
-    console.log("[users.upsert] HIT phone =", phone, "body =", req.body);
+    console.log("[users.upsert] HIT");
 
     const birthDateValue = parseDateOrNull(birthDate);
     const planExpiresValue = parseDateOrNull(planExpiresAt);
@@ -230,9 +227,9 @@ router.post("/upsert", authUser, async (req, res) => {
     }
 
     // اگر هیچ آپدیتی نیست، فقط همان رکورد فعلی را برگردان
-    if (Object.keys(updateData).length === 0) {
+        if (Object.keys(updateData).length === 0) {
       const existing = await prisma.user.findUnique({ where: { phone } });
-      console.log("[users.upsert] NO_UPDATE phone =", phone, "existing =", existing);
+      console.log("[users.upsert] NO_UPDATE");
       return res.json({ ok: true, data: existing });
     }
 
@@ -253,11 +250,11 @@ router.post("/upsert", authUser, async (req, res) => {
       update: updateData,
     });
 
-    console.log("[users.upsert] UPSERT_RESULT user =", user);
+    console.log("[users.upsert] UPSERT_RESULT success");
 
     return res.json({ ok: true, data: user });
-  } catch (e) {
-    console.error("[users.upsert] error:", e);
+    } catch (e) {
+    console.error("[users.upsert] error:", e?.message || "unknown_error");
     const code = e?.code ? String(e.code) : "";
     const errorLabel =
       code && code.startsWith("P")
@@ -291,7 +288,7 @@ router.post("/", async (req, res) => {
       lastLoginAt,    // نادیده گرفته می‌شود
     } = req.body || {};
 
-    console.log("[users.root-post] HIT phone =", phone, "body =", req.body);
+        console.log("[users.root-post] HIT");
 
     const birthDateValue = parseDateOrNull(birthDate);
     const planExpiresValue = parseDateOrNull(planExpiresAt);
@@ -317,7 +314,7 @@ router.post("/", async (req, res) => {
       updateData.planExpiresAt = planExpiresValue;
     }
 
-    console.log("[users.root-post] updateData =", updateData);
+        console.log("[users.root-post] updateData prepared");
 
     const user = await prisma.user.upsert({
       where: { phone },
@@ -336,11 +333,11 @@ router.post("/", async (req, res) => {
       update: updateData,
     });
 
-    console.log("[users.root-post] UPSERT_RESULT user =", user);
+    console.log("[users.root-post] UPSERT_RESULT success");
 
     return res.json({ ok: true, data: user });
-  } catch (e) {
-    console.error("[users.root-post] error:", e);
+    } catch (e) {
+    console.error("[users.root-post] error:", e?.message || "unknown_error");
     const code = e?.code ? String(e.code) : "";
     const errorLabel =
       code && code.startsWith("P")
