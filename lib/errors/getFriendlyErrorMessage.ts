@@ -25,6 +25,12 @@ export function getFriendlyErrorMessage(input?: unknown): string {
     case "BASELINE_STATE_FAILED":
       return "دریافت اطلاعات این بخش با مشکل مواجه شد.";
 
+    case "TICKET_NOT_FOUND":
+      return "این گفتگو پیدا نشد.";
+
+    case "TICKET_FORBIDDEN":
+      return "اجازه دسترسی به این گفتگو را نداری.";
+
     case "FAILED":
     case "UNKNOWN_ERROR":
     case "SERVER_ERROR":
