@@ -167,7 +167,7 @@ router.post("/seen", async (req, res) => {
 
     return res.json({ ok: true });
   } catch (e) {
-    console.error("announcements/seen error:", e);
+    console.error("[announcements.seen] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });

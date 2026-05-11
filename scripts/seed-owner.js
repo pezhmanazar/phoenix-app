@@ -33,7 +33,7 @@ async function main() {
     select: { id: true, email: true, name: true, role: true }
   });
 
-  console.log("✅ Owner created:", admin);
+  console.log("✅ Owner created:", admin.id);
 }
 
 main().finally(() => prisma.$disconnect());
