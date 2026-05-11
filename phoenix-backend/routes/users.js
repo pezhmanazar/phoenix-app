@@ -1,6 +1,8 @@
 // routes/users.js
 import express from "express";
+import authUser from "../middleware/authUser.js";
 import prisma from "../utils/prisma.js";
+
 
 const router = express.Router();
 
@@ -23,27 +25,6 @@ function parseDateOrNull(value) {
   return d;
 }
 
-/* ---------- auth با شماره موبایل (بدون JWT) ---------- */
-/**
- * منطق:
- *   - شماره را از query.phone یا body.phone می‌خوانیم
- *   - اگر قابل نرمال‌سازی بود → req.userPhone
- *   - اگر نبود → 401 با PHONE_REQUIRED
- */
-function authUser(req, res, next) {
-  const fromQuery = normalizePhone(req.query?.phone);
-  const fromBody = normalizePhone(req.body?.phone);
-  const phone = fromQuery || fromBody;
-
-    if (!phone) {
-    console.warn("[users.authUser] invalid auth input");
-    return res.status(401).json({ ok: false, error: "PHONE_REQUIRED" });
-  }
-
-  req.userPhone = phone;
-  return next();
-}
-
 function noStore(res) {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0");
   res.setHeader("Pragma", "no-cache");
@@ -63,7 +44,10 @@ router.get("/me", authUser, async (req, res) => {
   try {
     noStore(res);
 
-    const phone = req.userPhone;
+    const phone = normalizePhone(req.user?.phone);
+if (!phone) {
+  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+}
     const user = await prisma.user.findUnique({ where: { phone } });
 
     if (!user) {
@@ -86,7 +70,10 @@ router.get("/me", authUser, async (req, res) => {
 router.post("/me/delete", authUser, async (req, res) => {
   try {
     noStore(res);
-    const phone = req.userPhone;
+    const phone = normalizePhone(req.user?.phone);
+if (!phone) {
+  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+}
 
     // اگر کاربر وجود نداشت، ok=true برگردون که اپ گیر نکنه
     const existing = await prisma.user.findUnique({ where: { phone } });
@@ -113,7 +100,10 @@ router.post("/me/delete", authUser, async (req, res) => {
 router.post("/me/reset", authUser, async (req, res) => {
   try {
     noStore(res);
-    const phone = req.userPhone;
+    const phone = normalizePhone(req.user?.phone);
+if (!phone) {
+  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+}
 
     const user = await prisma.user.findUnique({
       where: { phone },
@@ -181,7 +171,10 @@ router.post("/me/reset", authUser, async (req, res) => {
 ------------------------------------------------ */
 router.post("/upsert", authUser, async (req, res) => {
   try {
-    const phone = req.userPhone;
+    const phone = normalizePhone(req.user?.phone);
+if (!phone) {
+  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+}
 
     const {
       fullName,
