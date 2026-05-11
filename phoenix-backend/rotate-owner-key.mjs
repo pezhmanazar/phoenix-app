@@ -1,5 +1,5 @@
-import 'dotenv/config';
 import crypto from 'crypto';
+import 'dotenv/config';
 import prisma from './utils/prisma.js';
 
 const email = 'dr.pezhman.azar@gmail.com';
@@ -10,5 +10,5 @@ const admin = await prisma.admin.update({
   data: { apiKey: newKey },
 });
 
-console.log('NEW API KEY:', newKey);
+console.log("NEW API KEY generated and saved.");
 await prisma.$disconnect();

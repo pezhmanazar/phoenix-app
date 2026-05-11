@@ -46,7 +46,11 @@ router.get("/stream", async (req, res) => {
     // stream body
     out.Body.pipe(res);
   } catch (e) {
-    console.error("[media.stream] error:", e?.name, e?.message || e);
+    console.error(
+  "[media.stream] error:",
+  e?.name || "Error",
+  e?.message || "unknown_error"
+);
     return res.status(500).json({ ok: false, error: "STREAM_FAILED" });
   }
 });

@@ -119,8 +119,7 @@ router.post("/send-otp", async (req, res) => {
           data = { raw: text };
         }
 
-        console.log("[auth.send-otp] sms.ir status =", resp.status);
-        console.log("[auth.send-otp] sms.ir body   =", data);
+      console.log("[auth.send-otp] sms.ir status =", resp.status);
 
         // طبق داکیومنت sms.ir معمولاً status === 1 یعنی موفق
         if (resp.ok && data && data.status === 1) {
@@ -129,7 +128,7 @@ router.post("/send-otp", async (req, res) => {
           smsError = data?.message || `SMS_SEND_FAILED_STATUS_${resp.status}`;
         }
       } catch (e) {
-        console.error("[auth.send-otp] SMS fatal error:", e?.message || e);
+        console.error("[auth.send-otp] SMS fatal error:", e?.message || "unknown_error");
         smsError = e?.message || "SMS_SEND_EXCEPTION";
       }
     } else {
@@ -138,17 +137,6 @@ router.post("/send-otp", async (req, res) => {
         console.warn("[auth.send-otp] SMSIR env not set; skipping SMS send");
       }
     }
-
-    console.log(
-      "[auth.send-otp] phone =",
-      normalized,
-      "code =",
-      code,
-      "smsSent =",
-      smsSent,
-      "IS_DEV =",
-      IS_DEV
-    );
 
     return res.json({
       ok: true,
@@ -161,7 +149,7 @@ router.post("/send-otp", async (req, res) => {
       },
     });
   } catch (e) {
-    console.error("[auth.send-otp] error", e);
+    console.error("[auth.send-otp] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -212,7 +200,7 @@ router.post("/verify-otp", async (req, res) => {
 
     // موفق: OTP مصرف شود
 otpStore.delete(normalized);
-console.log("[auth.verify-otp] SUCCESS for phone =", normalized);
+console.log("[auth.verify-otp] SUCCESS");
 
 // 🔑 ساختن JWT سشن اپ
 const appSecret =
@@ -242,7 +230,7 @@ return res.json({
   },
 });
   } catch (e) {
-    console.error("[auth.verify-otp] error", e);
+    console.error("[auth.verify-otp] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });

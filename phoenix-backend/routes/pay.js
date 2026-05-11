@@ -190,12 +190,10 @@ router.post("/start", async (req, res) => {
     const json = await zpRes.json().catch(() => null);
 
     if (!zpRes.ok || !json) {
-      console.error("[pay/start] ZARINPAL_REQUEST_FAILED", {
-        status: zpRes.status,
-        requestUrl,
-        payload,
-        response: json,
-      });
+      console.error(
+  "[pay/start] ZARINPAL_REQUEST_FAILED:",
+  `status=${zpRes.status}`
+);
       return res.status(502).json({ ok: false, error: "ZARINPAL_REQUEST_FAILED" });
     }
 
@@ -203,7 +201,10 @@ router.post("/start", async (req, res) => {
 
     if (!data || data.code !== 100) {
       const code = data?.code ?? errors?.code ?? "UNKNOWN";
-      console.error("[pay/start] ZARINPAL_ERROR", { code, json });
+      console.error(
+  "[pay/start] ZARINPAL_ERROR:",
+  `code=${code}`
+);
       return res.status(502).json({ ok: false, error: `ZP_ERROR_${code}` });
     }
 

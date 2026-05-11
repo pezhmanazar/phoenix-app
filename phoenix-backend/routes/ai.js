@@ -151,11 +151,12 @@ router.post("/chat", async (req, res) => {
         const data = await r.json().catch(() => ({}));
 
     if (!r.ok) {
-      console.error("[AI_CHAT][OPENAI_ERR]", {
-        requestId,
-        status: r.status,
-        ms: Date.now() - t0,
-      });
+      console.error(
+  "[AI_CHAT][OPENAI_ERR]",
+  `requestId=${requestId}`,
+  `status=${r.status}`,
+  `ms=${Date.now() - t0}`
+);
 
       return res.status(502).json({
         ok: false,
@@ -172,11 +173,12 @@ router.post("/chat", async (req, res) => {
 
     return res.json({ ok: true, reply, requestId });
   } catch (e) {
-    console.error("[AI_CHAT][CRASH]", {
-      requestId,
-      ms: Date.now() - t0,
-      msg: e?.message || "unknown_error",
-    });
+    console.error(
+  "[AI_CHAT][CRASH]",
+  `requestId=${requestId}`,
+  `ms=${Date.now() - t0}`,
+  `msg=${e?.message || "unknown_error"}`
+);
 
     return res.status(500).json({ ok: false, error: "internal_error", requestId });
   }

@@ -136,7 +136,7 @@ const filtered = active.filter((a) => {
 
     return res.json({ ok: true, data: filtered });
   } catch (e) {
-    console.error("announcements/active error:", e);
+    console.error("announcements/active error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
