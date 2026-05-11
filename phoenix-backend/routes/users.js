@@ -167,7 +167,7 @@ router.post("/me/reset", authUser, async (req, res) => {
       },
     });
   } catch (e) {
-    console.error("[users.me.reset] error:", e);
+    console.error("[users.me.reset] error:", e?.message || "unknown_error");
     const code = e?.code ? String(e.code) : "";
     const errorLabel = code && code.startsWith("P") ? `PRISMA_${code}` : "SERVER_ERROR";
     return res.status(500).json({ ok: false, error: errorLabel });
