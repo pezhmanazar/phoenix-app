@@ -2,7 +2,6 @@
 import { PrismaClient } from "@prisma/client";
 import { Router } from "express";
 import path from "path";
-import auth from "../middleware/auth.js";
 import { isUserPro } from "../services/planStatus.js";
 import { getPublicOwnedTicketOrThrow } from "./_ticketAccess.js";
 
