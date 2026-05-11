@@ -1,9 +1,9 @@
 // scripts/cleanup-uploads.js
+import { PrismaClient } from '@prisma/client';
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -95,7 +95,7 @@ async function main() {
       try {
         fs.unlinkSync(full);
       } catch (e) {
-        console.warn('   failed to delete:', e?.message || e);
+        console.warn("[cleanup] failed to delete:", e?.message || "unknown_error");
       }
     }
   }
@@ -105,7 +105,7 @@ async function main() {
 
 main()
   .catch(err => {
-    console.error('[cleanup] error:', err);
+    console.error("[cleanup] error:", err?.message || "unknown_error");
   })
   .finally(async () => {
     try { await prisma.$disconnect(); } catch {}

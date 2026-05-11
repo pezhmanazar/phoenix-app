@@ -675,7 +675,7 @@ router.get("/question-set", async (req, res) => {
 
     return res.json(payload);
   } catch (e) {
-    console.log("[pelekanReview/question-set] error", e);
+    console.error("[pelekanReview.questionSet] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -722,7 +722,7 @@ router.get("/state", async (req, res) => {
       },
     });
   } catch (e) {
-    console.log("[pelekanReview/state] error", e);
+    console.error("[pelekanReview.state] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -800,7 +800,7 @@ router.post("/choose", async (req, res) => {
 
     return res.json({ ok: true, data: { sessionId: session.id, chosenPath: session.chosenPath } });
   } catch (e) {
-    console.log("[pelekanReview/choose] error", e);
+    console.error("[pelekanReview.choose] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -860,7 +860,7 @@ router.post("/start", async (req, res) => {
       },
     });
   } catch (e) {
-    console.log("[pelekanReview/start] error", e);
+    console.error("[pelekanReview.start] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -916,7 +916,7 @@ router.post("/skip-test2", async (req, res) => {
       },
     });
   } catch (e) {
-    console.log("[pelekanReview/skip-test2] error", e);
+    console.error("[pelekanReview.skipTest2] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -1005,7 +1005,7 @@ router.post("/answer", async (req, res) => {
       },
     });
   } catch (e) {
-    console.log("[pelekanReview/answer] error", e);
+    console.error("[pelekanReview.answer] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -1079,7 +1079,7 @@ router.post("/complete-test", async (req, res) => {
       },
     });
   } catch (e) {
-    console.log("[pelekanReview/complete-test] error", e);
+    console.error("[pelekanReview.completeTest] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -1130,7 +1130,7 @@ router.post("/finish", async (req, res) => {
       },
     });
   } catch (e) {
-    console.log("[pelekanReview/finish] error", e);
+    console.error("[pelekanReview.finish] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -1138,8 +1138,6 @@ router.post("/finish", async (req, res) => {
 // GET result (✅ PAYWALL REMOVED: always return full result)
 router.get("/result", async (req, res) => {
   try {
-    console.log("[pelekanReview/result] BUILD = 2026-02-10-REL-FIRST");
-
     const phone = String(req.query.phone || "").trim();
     const user = await getUserByPhone(phone);
     if (!user) return res.json({ ok: false, error: "USER_NOT_FOUND" });
@@ -1181,7 +1179,7 @@ router.get("/result", async (req, res) => {
       },
     });
   } catch (e) {
-    console.log("[pelekanReview/result] error", e);
+    console.error("[pelekanReview.result] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });

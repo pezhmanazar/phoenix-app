@@ -148,7 +148,7 @@ router.get("/tickets/open", async (req, res) => {
 
     return res.json({ ok: true, ticket: withDisplay });
   } catch (e) {
-    console.error("public tickets/open error:", e);
+    console.error("[public.tickets.open] error:", e?.message || "unknown_error");
     return res
       .status(500)
       .json({ ok: false, error: "internal_error" });
@@ -221,7 +221,7 @@ router.get("/tickets/open-batch", async (req, res) => {
       },
     });
   } catch (e) {
-    console.error("public /tickets/open-batch error:", e);
+    console.error("[public.tickets.openBatch] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -349,7 +349,7 @@ router.post("/tickets/send", async (req, res) => {
 
     return res.json({ ok: true, ticket: fresh, displayTitle: fresh?.openedByName || fresh?.title });
   } catch (e) {
-    console.error("public /tickets/send error:", e);
+    console.error("[public.tickets.send] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -471,7 +471,7 @@ router.post("/tickets/:id/reply-upload", async (req, res) => {
 
     return res.json({ ok: true, ticket: updated });
   } catch (e) {
-    console.error("public /reply-upload error:", e);
+    console.error("[public.replyUpload] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -531,7 +531,7 @@ router.post("/ai/chat", async (req, res) => {
 
     return res.json({ ok: true, reply });
   } catch (e) {
-    console.error("public /ai/chat error:", e);
+    console.error("[public.ai.chat] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -549,7 +549,7 @@ router.post("/ai/clear-memory", async (req, res) => {
     await prisma.aiMemory.delete({ where: { userId: key } }).catch(() => {});
     return res.json({ ok: true });
   } catch (e) {
-    console.error("clear-memory error:", e);
+    console.error("[public.clearMemory] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });

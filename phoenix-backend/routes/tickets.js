@@ -49,7 +49,7 @@ async function checkTherapyAccessOrReject({ res, type, openedById, contact }) {
 
     return false;
   } catch (err) {
-    console.error("[tickets] therapy access check failed:", err);
+    console.error("[tickets.therapyAccess] error:", err?.message || "unknown_error");
     res.status(500).json({ ok: false, error: "therapy_check_failed" });
     return true;
   }
@@ -278,7 +278,7 @@ publicTicketsRouter.get("/open", async (req, res) => {
 
     return res.json({ ok: true, ticket: withDisplay });
   } catch (e) {
-    console.error("public tickets/open error:", e);
+    console.error("[tickets.public.open] error:", e?.message || "unknown_error");
     return res
       .status(500)
       .json({ ok: false, error: "internal_error" });
@@ -299,7 +299,7 @@ publicTicketsRouter.get("/:id", async (req, res) => {
     const withDisplay = { ...t, displayTitle: t.openedByName || t.title };
     res.json({ ok: true, ticket: withDisplay });
   } catch (e) {
-    console.error("public tickets/:id error:", e);
+    console.error("[tickets.public.detail] error:", e?.message || "unknown_error");
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -387,7 +387,7 @@ publicTicketsRouter.post("/send", async (req, res) => {
       : fresh;
     return res.json({ ok: true, ticket: withDisplay });
   } catch (e) {
-    console.error("public tickets/send error:", e);
+    console.error("[tickets.public.send] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -477,7 +477,7 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
 
     return res.json({ ok: true, ticket: withDisplay });
   } catch (e) {
-    console.error("public tickets/:id/reply error:", e);
+    console.error("[tickets.public.reply] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -601,7 +601,7 @@ publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
       : ticket;
     res.json({ ok: true, ticket: withDisplay });
   } catch (e) {
-    console.error("public tickets/:id/reply-upload error:", e);
+    console.error("[tickets.public.replyUpload] error:", e?.message || "unknown_error");
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });

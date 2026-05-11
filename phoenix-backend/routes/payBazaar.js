@@ -102,7 +102,7 @@ router.get("/status", async (req, res) => {
       },
     });
   } catch (e) {
-    console.error("PAY_BAZAAR_STATUS_ERR", e);
+    console.error("[payBazaar.status] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: e?.message || "SERVER_ERROR" });
   }
 });
@@ -203,7 +203,7 @@ router.post("/verify", async (req, res) => {
       },
     });
   } catch (e) {
-    console.error("[pay-bazaar/verify] err", e);
+    console.error("[payBazaar.verify] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: e?.message || "SERVER_ERROR" });
   }
 });

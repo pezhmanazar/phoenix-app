@@ -366,12 +366,11 @@ app.use((req, res) =>
 
 // ---------- Error handler ----------
 app.use((err, _req, res, _next) => {
-  console.error("Unhandled error:", err);
+  console.error("[server.unhandled] error:", err?.message || "unknown_error");
   res.status(500).json({ ok: false, error: "internal_error" });
 });
 
 // ---------- Start ----------
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Phoenix backend running on http://0.0.0.0:${PORT}`);
-  console.log(`📦 Uploads: ${ROOT_UPLOAD_DIR}`);
 });
