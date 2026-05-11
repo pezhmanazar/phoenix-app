@@ -207,19 +207,19 @@ const appSecret =
   process.env.APP_JWT_SECRET || process.env.JWT_SECRET || "";
 const sessionExpiresInSec = 30 * 24 * 60 * 60; // ۳۰ روز
 
-let sessionToken = "FAKE_TOKEN_FOR_NOW";
-
-if (appSecret) {
-  sessionToken = jwt.sign(
-    { phone: normalized },         // می‌تونی بعداً userId هم اضافه کنی
-    appSecret,
-    { expiresIn: sessionExpiresInSec }
-  );
-} else {
-  console.warn(
-    "[auth.verify-otp] APP_JWT_SECRET missing, using fallback token"
-  );
+if (!appSecret) {
+  console.error("[auth.verify-otp] APP_JWT_SECRET missing");
+  return res.status(500).json({
+    ok: false,
+    error: "AUTH_CONFIG_ERROR",
+  });
 }
+
+const sessionToken = jwt.sign(
+  { phone: normalized },
+  appSecret,
+  { expiresIn: sessionExpiresInSec }
+);
 
 return res.json({
   ok: true,
@@ -229,6 +229,7 @@ return res.json({
     sessionExpiresInSec,
   },
 });
+
   } catch (e) {
     console.error("[auth.verify-otp] error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
