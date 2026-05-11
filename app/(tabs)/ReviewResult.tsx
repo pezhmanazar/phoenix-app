@@ -522,8 +522,6 @@ export default function ReviewResult() {
 
       // 2) review/result only if done
       const rStatus = String(r?.status || "");
-      const chosen = String(r?.chosenPath || "");
-
       const shouldFetchReviewResult = rStatus === "completed_locked" || rStatus === "unlocked";
 
       if (!shouldFetchReviewResult) {

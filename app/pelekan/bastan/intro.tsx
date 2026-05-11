@@ -111,7 +111,7 @@ export default function BastanIntroScreen() {
 
       setIntroDone(!!completedAt);
       setPaywallAfterIntro(!!paywall);
-    } catch (e: any) {
+        } catch {
       setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
     } finally {
       setLoading(false);
@@ -226,8 +226,8 @@ export default function BastanIntroScreen() {
           setIsPlaying(false);
           try {
             await markIntroComplete();
-          } catch (e: any) {
-           setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
+          } catch {
+            setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
           }
         }
 
@@ -284,7 +284,7 @@ export default function BastanIntroScreen() {
       } else {
         await s.playAsync();
       }
-    } catch (e: any) {
+    } catch {
       setIsBuffering(false);
       setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
     }
@@ -307,11 +307,11 @@ export default function BastanIntroScreen() {
         if (!introDone && d > 0 && d - clamped <= 800) {
           try {
             await markIntroComplete();
-          } catch (e: any) {
+          } catch {
             setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
           }
         }
-      } catch (e: any) {
+            } catch {
         setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
       }
     },
@@ -405,11 +405,10 @@ export default function BastanIntroScreen() {
               if (!introDone) {
                 await markIntroComplete();
               }
-            } catch (e: any) {
+            } catch {
               setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
               return;
             }
-
             // ✅ شرط ساده و دقیق: اگر پرو نیست → paywall ؛ اگر پرو هست → ادامه پلکان
             if (!isPro) {
               router.push("/(tabs)/Subscription" as any);

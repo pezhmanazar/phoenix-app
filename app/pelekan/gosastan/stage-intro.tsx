@@ -117,7 +117,7 @@ export default function GosastanStageIntroScreen() {
 
       if (st.isPlaying) await s.pauseAsync();
       else await s.playAsync();
-    } catch (e: any) {
+    } catch {
       setIsBuffering(false);
       setErr("پخش مقدمه مرحله گسستن با مشکل مواجه شد، لطفاً دوباره تلاش کن");
     }
@@ -137,7 +137,7 @@ export default function GosastanStageIntroScreen() {
         const clamped = Math.max(0, Math.min(ms, Math.max(1, d)));
         await s.setPositionAsync(clamped);
         if (clamped > maxPosRef.current) maxPosRef.current = clamped;
-      } catch (e: any) {
+      } catch {
         setErr("پخش مقدمه مرحله گسستن با مشکل مواجه شد، لطفاً دوباره تلاش کن");
       }
     },
@@ -165,7 +165,7 @@ export default function GosastanStageIntroScreen() {
         // ✅ فقط تست دسترسی فایل (تا 404 را سریع بفهمیم)
         // اگر خواستی حذفش می‌کنیم، ولی برای لانچ بهتره همین باشه.
         await loadIfNeeded();
-      } catch (e: any) {
+      } catch {
         if (!alive) return;
         setErr("پخش مقدمه مرحله گسستن با مشکل مواجه شد، لطفاً دوباره تلاش کن");
       } finally {

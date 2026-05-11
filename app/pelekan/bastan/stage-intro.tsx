@@ -74,11 +74,10 @@ export default function BastanStageIntroScreen() {
       } catch {
         restorePosRef.current = null;
       }
-    } catch (e: any) {
+    } catch {
       setErr("پخش مقدمه با مشکل مواجه شد، لطفاً دوباره تلاش کن");
-
     } finally {
-      setLoading(false);
+            setLoading(false);
     }
   }, [phone, STORAGE_POS_KEY]);
 
@@ -166,10 +165,9 @@ export default function BastanStageIntroScreen() {
 
       if (st.isPlaying) await s.pauseAsync();
       else await s.playAsync();
-    } catch (e: any) {
+    } catch {
       setIsBuffering(false);
       setErr("پخش مقدمه با مشکل مواجه شد، لطفاً دوباره تلاش کن");
-
     }
   }, [loadIfNeeded, isBuffering]);
 
@@ -187,7 +185,7 @@ export default function BastanStageIntroScreen() {
         const d = Number(st.durationMillis ?? durMs);
         const clamped = Math.max(0, Math.min(ms, Math.max(1, d)));
         await s.setPositionAsync(clamped);
-      } catch (e: any) {
+      } catch {
         setErr("پخش مقدمه با مشکل مواجه شد، لطفاً دوباره تلاش کن");
       }
     },

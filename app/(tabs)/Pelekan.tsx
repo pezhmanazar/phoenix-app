@@ -272,16 +272,7 @@ export default function PelekanTab() {
         else setRefreshing(false);
       }
     },
-    [
-      me?.phone,
-      focus,
-      autoStart,
-      enterTreatment,
-      forceView,
-      forceTab,
-      startGateReady,
-      gateBoot,
-    ]
+    [me?.phone, enterTreatment]
   );
 
   useEffect(() => {

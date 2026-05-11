@@ -214,7 +214,7 @@ export default function BastanActionScreen() {
           foundTitle: found.titleFa,
           subtasksLen: found.subtasks?.length ?? 0,
         });
-      } catch (e: any) {
+      } catch {
         applyIfLatest(seq, () => {
           setErr("بارگذاری این اقدام با مشکل مواجه شد، لطفاً دوباره تلاش کن");
           setAction(null);
