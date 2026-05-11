@@ -2,6 +2,7 @@
 import { PrismaClient } from "@prisma/client";
 import { Router } from "express";
 import path from "path";
+import authUser from "../middleware/authUser.js";
 import { isUserPro } from "../services/planStatus.js";
 import {
   requireTicketIdentity,
@@ -63,6 +64,14 @@ async function checkTherapyAccessOrReject({ res, type, openedById, contact }) {
 }
 
 function sendPublicRouteError(res, e, extra = {}) {
+  if (e?.publicCode === "UNAUTHORIZED") {
+    return res.status(401).json({
+      ok: false,
+      error: "UNAUTHORIZED",
+      ...extra,
+    });
+  }
+
   if (e?.publicCode === "TICKET_MISSING_IDENTITY") {
     return res.status(400).json({
       ok: false,
@@ -276,6 +285,7 @@ router.patch("/:id/status", async (req, res) => {
 /* ====================== روتر عمومی کاربر ====================== */
 
 export const publicTicketsRouter = Router();
+publicTicketsRouter.use(authUser);
 
 /**
  * GET /api/public/tickets

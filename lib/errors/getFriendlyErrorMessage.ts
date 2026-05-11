@@ -36,6 +36,12 @@ export function getFriendlyErrorMessage(input?: unknown): string {
     case "SERVER_ERROR":
       return "مشکلی پیش آمد. لطفاً دوباره تلاش کن.";
 
+    case "UNAUTHORIZED":
+    case "AUTH_REQUIRED":
+    case "INVALID_TOKEN":
+    return "برای دسترسی به این بخش باید وارد حساب کاربریت بشی.";
+
+
     default:
       if (/^HTTP_\d{3}$/.test(code)) {
         return "در ارتباط با سرور مشکلی پیش آمد. لطفاً دوباره تلاش کن.";
