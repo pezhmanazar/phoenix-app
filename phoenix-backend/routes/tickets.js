@@ -16,12 +16,12 @@ const UPLOAD_ROOT =
 /* ================= helper پلن برای چت درمانگر ================= */
 /**
  * اگر type = "therapy" باشد، چک می‌کند کاربر واقعا PRO/VIP هست یا نه.
- * - اگر اجازه نداشته باشد → خودش 403 می‌دهد و true برمی‌گرداند (یعنی روت باید return کند).
+ * - اگر اجازه نداشته باشد → خودش 403 می‌دهد و true برمی‌گرداند.
  * - اگر اجازه داشته باشد یا تیکت فنی باشد → false برمی‌گرداند.
  */
 async function checkTherapyAccessOrReject({ res, type, openedById, contact }) {
   const t = (type || "").toString().toLowerCase();
-  if (t !== "therapy") return false; // تیکت فنی؛ نیازی به چک پلن نیست
+  if (t !== "therapy") return false;
 
   const userKey =
     (openedById && String(openedById)) ||
@@ -53,10 +53,44 @@ async function checkTherapyAccessOrReject({ res, type, openedById, contact }) {
 
     return false;
   } catch (err) {
-    console.error("[tickets.therapyAccess] error:", err?.message || "unknown_error");
+    console.error(
+      "[tickets.therapyAccess] error:",
+      err?.message || "unknown_error"
+    );
     res.status(500).json({ ok: false, error: "therapy_check_failed" });
     return true;
   }
+}
+
+function sendPublicRouteError(res, e, extra = {}) {
+  if (e?.publicCode === "TICKET_MISSING_IDENTITY") {
+    return res.status(400).json({
+      ok: false,
+      error: "TICKET_MISSING_IDENTITY",
+      ...extra,
+    });
+  }
+
+  return res.status(e?.statusCode || 500).json({
+    ok: false,
+    error: e?.publicCode || "SERVER_ERROR",
+    ...extra,
+  });
+}
+
+function withDisplayTitle(ticket) {
+  if (!ticket) return ticket;
+  return {
+    ...ticket,
+    displayTitle: ticket.openedByName || ticket.title,
+  };
+}
+
+function buildIdentityOrWhere(identity) {
+  return [
+    identity?.openedById ? { openedById: identity.openedById } : null,
+    identity?.contact ? { contact: identity.contact } : null,
+  ].filter(Boolean);
 }
 
 /* ====================== روتر پنل/ادمین (قدیمی) ====================== */
@@ -101,11 +135,11 @@ router.post("/", async (req, res) => {
       },
     });
 
-    const withDisplay = { ...t, displayTitle: t.openedByName || t.title };
-    res.json({ ok: true, ticket: withDisplay });
+    const withDisplay = withDisplayTitle(t);
+    return res.json({ ok: true, ticket: withDisplay });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ ok: false, error: "internal_error" });
+    console.error("[tickets.admin.create] error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 
@@ -117,7 +151,9 @@ router.get("/", async (req, res) => {
   try {
     const { contact, type } = req.query;
     const where = {};
+
     if (contact) where.contact = String(contact);
+
     if (type) {
       const t = String(type).toLowerCase();
       if (t !== "tech" && t !== "therapy") {
@@ -134,14 +170,11 @@ router.get("/", async (req, res) => {
       },
     });
 
-    const mapped = list.map((t) => ({
-      ...t,
-      displayTitle: t.openedByName || t.title,
-    }));
-    res.json({ ok: true, tickets: mapped });
+    const mapped = list.map(withDisplayTitle);
+    return res.json({ ok: true, tickets: mapped });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ ok: false, error: "internal_error" });
+    console.error("[tickets.admin.list] error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 
@@ -151,18 +184,22 @@ router.get("/", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const id = String(req.params.id);
+
     const t = await prisma.ticket.findUnique({
       where: { id },
       include: {
         messages: { orderBy: { createdAt: "asc" } },
       },
     });
-    if (!t) return res.status(404).json({ ok: false, error: "not_found" });
-    const withDisplay = { ...t, displayTitle: t.openedByName || t.title };
-    res.json({ ok: true, ticket: withDisplay });
+
+    if (!t) {
+      return res.status(404).json({ ok: false, error: "not_found" });
+    }
+
+    return res.json({ ok: true, ticket: withDisplayTitle(t) });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ ok: false, error: "internal_error" });
+    console.error("[tickets.admin.detail] error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 
@@ -174,13 +211,17 @@ router.get("/:id", async (req, res) => {
 router.post("/:id/reply", async (req, res) => {
   try {
     const id = String(req.params.id);
-    const { text } = req.body || {};
-    if (!text)
+    const rawText = typeof req.body?.text === "string" ? req.body.text : "";
+    const text = rawText.trim();
+
+    if (!text) {
       return res.status(400).json({ ok: false, error: "text required" });
+    }
 
     const exists = await prisma.ticket.findUnique({ where: { id } });
-    if (!exists)
+    if (!exists) {
       return res.status(404).json({ ok: false, error: "not_found" });
+    }
 
     const message = await prisma.message.create({
       data: { ticketId: id, sender: "admin", text },
@@ -190,13 +231,15 @@ router.post("/:id/reply", async (req, res) => {
       where: { id },
       include: { messages: { orderBy: { createdAt: "asc" } } },
     });
-    const withDisplay = ticket
-      ? { ...ticket, displayTitle: ticket.openedByName || ticket.title }
-      : ticket;
-    res.json({ ok: true, ticket: withDisplay, message });
+
+    return res.json({
+      ok: true,
+      ticket: withDisplayTitle(ticket),
+      message,
+    });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ ok: false, error: "internal_error" });
+    console.error("[tickets.admin.reply] error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 
@@ -208,6 +251,7 @@ router.patch("/:id/status", async (req, res) => {
   try {
     const id = String(req.params.id);
     const { status } = req.body || {};
+
     if (!["open", "pending", "closed"].includes(status)) {
       return res.status(400).json({ ok: false, error: "invalid_status" });
     }
@@ -217,14 +261,15 @@ router.patch("/:id/status", async (req, res) => {
       data: { status },
       include: { messages: { orderBy: { createdAt: "asc" } } },
     });
-    const withDisplay = { ...t, displayTitle: t.openedByName || t.title };
-    res.json({ ok: true, ticket: withDisplay });
+
+    return res.json({ ok: true, ticket: withDisplayTitle(t) });
   } catch (e) {
     if (e?.code === "P2025") {
       return res.status(404).json({ ok: false, error: "not_found" });
     }
-    console.error(e);
-    res.status(500).json({ ok: false, error: "internal_error" });
+
+    console.error("[tickets.admin.status] error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 
@@ -233,37 +278,74 @@ router.patch("/:id/status", async (req, res) => {
 export const publicTicketsRouter = Router();
 
 /**
+ * GET /api/public/tickets
+ * optional query: ?type=tech|therapy
+ * identity required
+ */
+publicTicketsRouter.get("/", async (req, res) => {
+  try {
+    const identity = requireTicketIdentity(req);
+    const { type } = req.query || {};
+
+    const orWhere = buildIdentityOrWhere(identity);
+
+    const where = {
+      OR: orWhere,
+    };
+
+    if (type) {
+      const t = String(type).toLowerCase();
+      if (t !== "tech" && t !== "therapy") {
+        return res.status(400).json({
+          ok: false,
+          error: "TICKET_INVALID_TYPE",
+        });
+      }
+      where.type = t;
+    }
+
+    const list = await prisma.ticket.findMany({
+      where,
+      orderBy: { updatedAt: "desc" },
+      include: {
+        messages: { orderBy: { createdAt: "asc" } },
+      },
+    });
+
+    return res.json({
+      ok: true,
+      tickets: list.map(withDisplayTitle),
+    });
+  } catch (e) {
+    console.error("[tickets.public.list] error:", e?.message || "unknown_error");
+    return sendPublicRouteError(res, e);
+  }
+});
+
+/**
  * GET /api/public/tickets/open
- * query: ?type=tech|therapy & openedById=... &/or contact=...
- *
- * اگر تیکتی پیدا نشود → ۲۰۰ با { ok:false, error:"not_found", ticket:null }
+ * query: ?type=tech|therapy
  */
 publicTicketsRouter.get("/open", async (req, res) => {
   try {
-    const { type, openedById, contact } = req.query;
+    const identity = requireTicketIdentity(req);
+    const { type } = req.query || {};
 
     const tType = String(type || "tech").toLowerCase();
     if (tType !== "tech" && tType !== "therapy") {
-      return res.status(400).json({ ok: false, error: "invalid_type" });
+      return res.status(400).json({
+        ok: false,
+        error: "TICKET_INVALID_TYPE",
+      });
     }
 
-    const or = [];
-    if (openedById) or.push({ openedById: String(openedById) });
-    if (contact) or.push({ contact: String(contact) });
-
-    if (or.length === 0) {
-      return res.json({
-  ok: false,
-  error: "TICKET_MISSING_IDENTITY",
-  ticket: null,
-});
-    }
+    const orWhere = buildIdentityOrWhere(identity);
 
     const t = await prisma.ticket.findFirst({
       where: {
         type: tType,
         status: { in: ["open", "pending"] },
-        OR: or,
+        OR: orWhere,
       },
       orderBy: { createdAt: "desc" },
       include: {
@@ -272,20 +354,72 @@ publicTicketsRouter.get("/open", async (req, res) => {
     });
 
     if (!t) {
-      return res.json({ ok: false, error: "TICKET_NOT_FOUND", ticket: null });
+      return res.json({
+        ok: false,
+        error: "TICKET_NOT_FOUND",
+        ticket: null,
+      });
     }
 
-    const withDisplay = {
-      ...t,
-      displayTitle: t.openedByName || t.title,
-    };
-
-    return res.json({ ok: true, ticket: withDisplay });
+    return res.json({
+      ok: true,
+      ticket: withDisplayTitle(t),
+    });
   } catch (e) {
     console.error("[tickets.public.open] error:", e?.message || "unknown_error");
-    return res
-      .status(500)
-.json({ ok: false, error: "SERVER_ERROR" });
+    return sendPublicRouteError(res, e, { ticket: null });
+  }
+});
+
+/**
+ * GET /api/public/tickets/open-batch
+ * هر دو تیکت باز tech و therapy را یکجا برمی‌گرداند
+ */
+publicTicketsRouter.get("/open-batch", async (req, res) => {
+  try {
+    const identity = requireTicketIdentity(req);
+    const orWhere = buildIdentityOrWhere(identity);
+
+    const [tech, therapy] = await Promise.all([
+      prisma.ticket.findFirst({
+        where: {
+          type: "tech",
+          status: { in: ["open", "pending"] },
+          OR: orWhere,
+        },
+        orderBy: { createdAt: "desc" },
+        include: {
+          messages: { orderBy: { createdAt: "asc" } },
+        },
+      }),
+      prisma.ticket.findFirst({
+        where: {
+          type: "therapy",
+          status: { in: ["open", "pending"] },
+          OR: orWhere,
+        },
+        orderBy: { createdAt: "desc" },
+        include: {
+          messages: { orderBy: { createdAt: "asc" } },
+        },
+      }),
+    ]);
+
+    return res.json({
+      ok: true,
+      tickets: {
+        tech: withDisplayTitle(tech),
+        therapy: withDisplayTitle(therapy),
+      },
+    });
+  } catch (e) {
+    console.error(
+      "[tickets.public.openBatch] error:",
+      e?.message || "unknown_error"
+    );
+    return sendPublicRouteError(res, e, {
+      tickets: { tech: null, therapy: null },
+    });
   }
 });
 
@@ -295,7 +429,6 @@ publicTicketsRouter.get("/open", async (req, res) => {
 publicTicketsRouter.get("/:id", async (req, res) => {
   try {
     const identity = requireTicketIdentity(req);
-
     const id = String(req.params.id);
 
     const t = await prisma.ticket.findUnique({
@@ -319,32 +452,13 @@ publicTicketsRouter.get("/:id", async (req, res) => {
       });
     }
 
-    const withDisplay = {
-      ...t,
-      displayTitle: t.openedByName || t.title,
-    };
-
     return res.json({
       ok: true,
-      ticket: withDisplay,
+      ticket: withDisplayTitle(t),
     });
   } catch (e) {
-    console.error(
-      "[tickets.public.detail] error:",
-      e?.message || "unknown_error"
-    );
-
-    if (e?.publicCode === "TICKET_MISSING_IDENTITY") {
-      return res.status(400).json({
-        ok: false,
-        error: "TICKET_MISSING_IDENTITY",
-      });
-    }
-
-    return res.status(e?.statusCode || 500).json({
-      ok: false,
-      error: e?.publicCode || "SERVER_ERROR",
-    });
+    console.error("[tickets.public.detail] error:", e?.message || "unknown_error");
+    return sendPublicRouteError(res, e);
   }
 });
 
@@ -354,37 +468,46 @@ publicTicketsRouter.get("/:id", async (req, res) => {
  */
 publicTicketsRouter.post("/send", async (req, res) => {
   try {
-    const { type, text, openedById, openedByName, contact } = req.body || {};
-    const msgText = (text || "").trim();
-    if (!msgText)
-      return res.status(400).json({ ok: false, error: "text_required" });
+    const identity = requireTicketIdentity(req);
+    const { type, text, openedByName } = req.body || {};
+
+    const msgText = typeof text === "string" ? text.trim() : "";
+    if (!msgText) {
+      return res.status(400).json({
+        ok: false,
+        error: "TEXT_REQUIRED",
+      });
+    }
 
     const tType = String(type || "tech").toLowerCase();
     if (tType !== "tech" && tType !== "therapy") {
-      return res.status(400).json({ ok: false, error: "invalid_type" });
+      return res.status(400).json({
+        ok: false,
+        error: "TICKET_INVALID_TYPE",
+      });
     }
 
-    // 🔒 گارد پلن برای چت درمانگر
     const blocked = await checkTherapyAccessOrReject({
       res,
       type: tType,
-      openedById,
-      contact,
+      openedById: identity.openedById,
+      contact: identity.contact,
     });
     if (blocked) return;
 
-    const latestName = (openedByName || "کاربر").toString().trim();
+    const latestName = (openedByName || "کاربر").toString().trim() || "کاربر";
 
     let ticket = await prisma.ticket.findFirst({
       where: {
         type: tType,
         status: { in: ["open", "pending"] },
-        OR: [
-          openedById ? { openedById: String(openedById) } : null,
-          contact ? { contact: String(contact) } : null,
-        ].filter(Boolean),
+        OR: buildIdentityOrWhere(identity),
       },
-      select: { id: true, openedByName: true, title: true },
+      select: {
+        id: true,
+        openedByName: true,
+        title: true,
+      },
     });
 
     if (!ticket) {
@@ -394,12 +517,18 @@ publicTicketsRouter.post("/send", async (req, res) => {
           status: "open",
           title: latestName,
           description: msgText.slice(0, 500),
-          contact: contact ?? null,
-          ...(openedById ? { openedById: String(openedById) } : {}),
+          contact: identity.contact ?? null,
+          ...(identity.openedById
+            ? { openedById: String(identity.openedById) }
+            : {}),
           openedByName: latestName,
           unread: true,
         },
-        select: { id: true, openedByName: true, title: true },
+        select: {
+          id: true,
+          openedByName: true,
+          title: true,
+        },
       });
     } else if (ticket.openedByName !== latestName) {
       await prisma.ticket.update({
@@ -426,32 +555,33 @@ publicTicketsRouter.post("/send", async (req, res) => {
       where: { id: ticket.id },
       include: { messages: { orderBy: { createdAt: "asc" } } },
     });
-    const withDisplay = fresh
-      ? { ...fresh, displayTitle: fresh.openedByName || fresh.title }
-      : fresh;
-    return res.json({ ok: true, ticket: withDisplay });
+
+    return res.json({
+      ok: true,
+      ticket: withDisplayTitle(fresh),
+    });
   } catch (e) {
     console.error("[tickets.public.send] error:", e?.message || "unknown_error");
-    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+    return sendPublicRouteError(res, e);
   }
 });
 
 /**
  * POST /api/public/tickets/:id/reply
- * body: { text, openedById?, openedByName? }
- *
- * این روت قبلا اشتباهی دوباره /open بود؛ همین باعث می‌شد پیام جدید ذخیره نشود.
+ * body: { text, openedByName? }
  */
 publicTicketsRouter.post("/:id/reply", async (req, res) => {
   try {
     const identity = requireTicketIdentity(req);
-
     const id = String(req.params.id);
     const { text, openedByName } = req.body || {};
 
-    const msgText = (text || "").trim();
+    const msgText = typeof text === "string" ? text.trim() : "";
     if (!msgText) {
-      return res.status(400).json({ ok: false, error: "TEXT_REQUIRED" });
+      return res.status(400).json({
+        ok: false,
+        error: "TEXT_REQUIRED",
+      });
     }
 
     const exists = await prisma.ticket.findUnique({
@@ -466,7 +596,10 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
     });
 
     if (!exists) {
-      return res.status(404).json({ ok: false, error: "TICKET_NOT_FOUND" });
+      return res.status(404).json({
+        ok: false,
+        error: "TICKET_NOT_FOUND",
+      });
     }
 
     if (!ticketMatchesIdentity(exists, identity)) {
@@ -488,16 +621,13 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
       .toString()
       .trim();
 
-    const updateData = {};
     if (latestName && latestName !== exists.openedByName) {
-      updateData.openedByName = latestName;
-      updateData.title = latestName;
-    }
-
-    if (Object.keys(updateData).length > 0) {
       await prisma.ticket.update({
         where: { id },
-        data: updateData,
+        data: {
+          openedByName: latestName,
+          title: latestName,
+        },
       });
     }
 
@@ -520,37 +650,23 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
       include: { messages: { orderBy: { createdAt: "asc" } } },
     });
 
-    const withDisplay = ticket
-      ? { ...ticket, displayTitle: ticket.openedByName || ticket.title }
-      : ticket;
-
-    return res.json({ ok: true, ticket: withDisplay });
+    return res.json({
+      ok: true,
+      ticket: withDisplayTitle(ticket),
+    });
   } catch (e) {
     console.error("[tickets.public.reply] error:", e?.message || "unknown_error");
-
-    if (e?.publicCode === "TICKET_MISSING_IDENTITY") {
-      return res.status(400).json({
-        ok: false,
-        error: "TICKET_MISSING_IDENTITY",
-      });
-    }
-
-    return res.status(e?.statusCode || 500).json({
-      ok: false,
-      error: e?.publicCode || "SERVER_ERROR",
-    });
+    return sendPublicRouteError(res, e);
   }
 });
 
-
 /**
  * POST /api/public/tickets/:id/reply-upload
- * form-data: file? , text? , durationSec?
+ * form-data: file? , text? , durationSec? , openedByName?
  */
 publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
   try {
     const identity = requireTicketIdentity(req);
-
     const id = String(req.params.id);
 
     const exists = await prisma.ticket.findUnique({
@@ -582,38 +698,26 @@ publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
       typeof req.body?.text === "string" ? req.body.text.trim() : "";
     const hasText = rawText.length > 0;
 
-    const openedByIdBody =
-      req.body?.openedById !== undefined && req.body.openedById !== null
-        ? String(req.body.openedById)
-        : undefined;
-
     const openedByNameBody =
       req.body?.openedByName !== undefined && req.body.openedByName !== null
-        ? String(req.body.openedByName)
-        : undefined;
+        ? String(req.body.openedByName).trim()
+        : "";
 
     const blocked = await checkTherapyAccessOrReject({
       res,
       type: exists.type,
-      openedById: openedByIdBody || exists.openedById,
+      openedById: exists.openedById,
       contact: exists.contact,
     });
     if (blocked) return;
 
-    const dataUpdate = {};
-    if (
-      openedByNameBody &&
-      openedByNameBody.trim() &&
-      openedByNameBody.trim() !== exists.openedByName
-    ) {
-      dataUpdate.openedByName = openedByNameBody.trim();
-      dataUpdate.title = openedByNameBody.trim();
-    }
-
-    if (Object.keys(dataUpdate).length > 0) {
+    if (openedByNameBody && openedByNameBody !== exists.openedByName) {
       await prisma.ticket.update({
         where: { id },
-        data: dataUpdate,
+        data: {
+          openedByName: openedByNameBody,
+          title: openedByNameBody,
+        },
       });
     }
 
@@ -628,7 +732,9 @@ publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
       mime = f.mimetype || null;
       size = typeof f.size === "number" ? f.size : null;
 
-      const relPath = path.relative(UPLOAD_ROOT, f.path || "").replace(/\\/g, "/");
+      const relPath = path
+        .relative(UPLOAD_ROOT, f.path || "")
+        .replace(/\\/g, "/");
       fileUrl = relPath ? `/uploads/${relPath}` : null;
 
       const mt = (mime || "").toLowerCase();
@@ -643,7 +749,10 @@ publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
     }
 
     if (!f && !hasText) {
-      return res.status(400).json({ ok: false, error: "no_content" });
+      return res.status(400).json({
+        ok: false,
+        error: "NO_CONTENT",
+      });
     }
 
     await prisma.message.create({
@@ -669,28 +778,16 @@ publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
       include: { messages: { orderBy: { createdAt: "asc" } } },
     });
 
-    const withDisplay = ticket
-      ? { ...ticket, displayTitle: ticket.openedByName || ticket.title }
-      : ticket;
-
-    return res.json({ ok: true, ticket: withDisplay });
+    return res.json({
+      ok: true,
+      ticket: withDisplayTitle(ticket),
+    });
   } catch (e) {
     console.error(
       "[tickets.public.replyUpload] error:",
       e?.message || "unknown_error"
     );
-
-    if (e?.publicCode === "TICKET_MISSING_IDENTITY") {
-      return res.status(400).json({
-        ok: false,
-        error: "TICKET_MISSING_IDENTITY",
-      });
-    }
-
-    return res.status(e?.statusCode || 500).json({
-      ok: false,
-      error: e?.publicCode || "SERVER_ERROR",
-    });
+    return sendPublicRouteError(res, e);
   }
 });
 
