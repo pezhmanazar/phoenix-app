@@ -114,7 +114,6 @@ type ReminderItem = {
   notificationId?: string;
 };
 
-/* ===================== THEMED ALERT (replace raw Alert.alert) ===================== */
 function ThemedAlert({
   visible,
   title,
@@ -735,7 +734,7 @@ export default function Rooznegar() {
 
   const [tab, setTab] = useState<"today" | "rem">("today");
 
-  // ✅ Themed alert state + helper (replaces Alert.alert)
+
   const [tAlertOpen, setTAlertOpen] = useState(false);
   const [tAlertTitle, setTAlertTitle] = useState("");
   const [tAlertMsg, setTAlertMsg] = useState("");
