@@ -15,10 +15,11 @@ async function main() {
   const after = await prisma.bastanActionDefinition.findUnique({ where: { code } });
 
   console.log("✅ patched minRequiredSubtasks");
-  console.log({
-    before: { code: before.code, minRequiredSubtasks: before.minRequiredSubtasks },
-    after: { code: after.code, minRequiredSubtasks: after.minRequiredSubtasks },
-  });
+  console.log(
+    `Patch summary: ${code} minRequiredSubtasks ${before.minRequiredSubtasks} -> ${
+      after?.minRequiredSubtasks ?? "unknown"
+    }`
+  );
 }
 
 main()

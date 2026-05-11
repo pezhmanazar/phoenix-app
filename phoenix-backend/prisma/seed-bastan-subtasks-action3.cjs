@@ -83,7 +83,7 @@ async function main() {
 
 main()
   .catch((e) => {
-    cconsole.error("seed-bastan-actions3 error:", e?.message || "unknown_error");
+    console.error("seed-bastan-actions3 error:", e?.message || "unknown_error");
     process.exit(1);
   })
   .finally(async () => {
