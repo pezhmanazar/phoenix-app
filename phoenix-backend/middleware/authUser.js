@@ -60,26 +60,6 @@ export default function authUser(req, res, next) {
         return unauthorized(res, "UNAUTHORIZED", 401);
       }
     }
-
-    // 2) حالت استاندارد اگر upstream قبلاً ست کرده
-    if (req.user && (cleanString(req.user.id) || cleanString(req.user.phone))) {
-      req.user = {
-        id: cleanString(req.user.id),
-        phone: cleanString(req.user.phone),
-      };
-      return next();
-    }
-
-    // 3) fallback موقت
-    const trustedPhone = cleanString(req.userPhone);
-    if (trustedPhone) {
-      req.user = {
-        id: null,
-        phone: trustedPhone,
-      };
-      return next();
-    }
-
     return unauthorized(res, "UNAUTHORIZED", 401);
   } catch (err) {
     return unauthorized(res, "UNAUTHORIZED", 401);
