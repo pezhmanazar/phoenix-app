@@ -10,14 +10,12 @@ function normalizePhone(input) {
   return null;
 }
 
-/**
- * این میدل‌ور از req.userPhone (ست شده توسط authUser)
- * یا phone داخل body/query استفاده می‌کنه و مطمئن می‌شه
- * که پلن کاربر فعال و غیررایگانه.
- */
 export async function requireActivePlan(req, res, next) {
   try {
-    let phone = req.userPhone;
+    const phone = req.user?.phone;
+if (!phone) {
+  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+}
     if (!phone) {
       const raw = req.body?.phone || req.query?.phone;
       phone = normalizePhone(raw);
