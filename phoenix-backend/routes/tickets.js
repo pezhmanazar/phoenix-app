@@ -309,7 +309,7 @@ publicTicketsRouter.get("/open", async (req, res) => {
 /**
  * GET /api/public/tickets/:id
  */
-publicTicketsRouter.get("/:id", auth, async (req, res) => {
+publicTicketsRouter.get("/:id", async (req, res) => {
   try {
     const openedById = req.user?.id;
 
