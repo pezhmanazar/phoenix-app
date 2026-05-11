@@ -35,12 +35,11 @@ async function main() {
   });
 
   console.log("✅ patched sortOrder (+1) for limited_contact");
-  console.table(after);
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error("patch-limited-contact-sortorder error:", e?.message || "unknown_error");
     process.exit(1);
   })
   .finally(async () => prisma.$disconnect());

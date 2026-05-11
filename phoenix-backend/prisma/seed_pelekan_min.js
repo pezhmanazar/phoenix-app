@@ -52,13 +52,13 @@ async function main() {
     },
   });
 
-  console.log("seed ok:", { stageId: stage.id, dayId: day.id, taskId: TASK_ID });
+   console.log("seed ok");
 }
 
 main()
   .then(async () => prisma.$disconnect())
   .catch(async (e) => {
-    console.error("seed error:", e);
+    console.error("seed error:", e?.message || "unknown_error");
     await prisma.$disconnect();
     process.exit(1);
   });

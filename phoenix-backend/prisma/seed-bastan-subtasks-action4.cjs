@@ -94,7 +94,7 @@ async function main() {
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error("seed-bastan-actions4 error:", e?.message || "unknown_error");
     process.exit(1);
   })
   .finally(async () => {
