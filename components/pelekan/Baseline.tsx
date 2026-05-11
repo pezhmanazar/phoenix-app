@@ -1,12 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  View,
+  View
 } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import AppBannerModal from "../ui/AppBannerModal";
@@ -371,7 +370,12 @@ return;
     }
 
     if (step.type === "review_missing") {
-      Alert.alert("نیاز به ریست", step.message || "چند پاسخ ثبت نشده. لطفاً سنجش رو ریست کن.");
+   showAppModal(
+   "warning",
+  "از اول باید شروع کنی",
+  step.message ||
+    "چند پاسخ ثبت نشده. برای شروع دوباره، به تب پروفایل برو، وارد ویرایش پروفایل شو و گزینه «شروع از صفر» رو انتخاب کن."
+);
     }
   }, [step, localSelected, postAnswer, fetchBaselineState, isLastQuestion, submit]);
 
