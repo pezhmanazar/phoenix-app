@@ -2,6 +2,7 @@
 import { PrismaClient } from "@prisma/client";
 import { Router } from "express";
 import path from "path";
+import { allowAdmin, authAdmin } from "../middleware/authAdmin.js";
 import authUser from "../middleware/authUser.js";
 import { isUserPro } from "../services/planStatus.js";
 import {
@@ -105,13 +106,14 @@ function buildIdentityOrWhere(identity) {
 /* ====================== روتر پنل/ادمین (قدیمی) ====================== */
 
 const router = Router();
+router.use(authAdmin);
 
 /**
  * POST /api/tickets
  * body: { title, description, contact?, type?, openedById?, openedByName? }
  *        type: "tech" | "therapy"
  */
-router.post("/", async (req, res) => {
+router.post("/", allowAdmin("agent", "manager", "owner"), async (req, res) => {
   try {
     const { title, description, contact, type, openedById, openedByName } =
       req.body || {};
@@ -156,7 +158,7 @@ router.post("/", async (req, res) => {
  * GET /api/tickets
  * optional query: ?contact=... & ?type=tech|therapy
  */
-router.get("/", async (req, res) => {
+router.get("/", allowAdmin("agent", "manager", "owner"), async (req, res) => {
   try {
     const { contact, type } = req.query;
     const where = {};
@@ -190,7 +192,7 @@ router.get("/", async (req, res) => {
 /**
  * GET /api/tickets/:id
  */
-router.get("/:id", async (req, res) => {
+router.get("/:id", allowAdmin("agent", "manager", "owner"), async (req, res) => {
   try {
     const id = String(req.params.id);
 
@@ -217,7 +219,7 @@ router.get("/:id", async (req, res) => {
  * body: { text }
  * sender = "admin"
  */
-router.post("/:id/reply", async (req, res) => {
+router.post("/:id/reply", allowAdmin("agent", "manager", "owner"), async (req, res) => {
   try {
     const id = String(req.params.id);
     const rawText = typeof req.body?.text === "string" ? req.body.text : "";
@@ -256,8 +258,8 @@ router.post("/:id/reply", async (req, res) => {
  * PATCH /api/tickets/:id/status
  * body: { status }  -> open | pending | closed
  */
-router.patch("/:id/status", async (req, res) => {
-  try {
+router.patch("/:id/status", allowAdmin("manager", "owner"), async (req, res) => {
+    try {
     const id = String(req.params.id);
     const { status } = req.body || {};
 
