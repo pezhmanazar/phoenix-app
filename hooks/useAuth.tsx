@@ -370,16 +370,18 @@ setState((s) => ({
       throw new Error("NO_SESSION_FROM_BACKEND");
     }
 
-    await setPhone(String(phone));
-    await setToken(String(session));
-    
-    try {
-      await AsyncStorage.setItem(SECURE_KEYS.OTP_PHONE, String(phone));
-    } catch {
-      throw new Error("PHONE_STORAGE_SYNC_FAILED");
-    }
+await setPhone(String(phone));
+await setToken(String(session));
+await refreshFromStore();
 
-    return { ok: true };
+try {
+  await AsyncStorage.setItem(SECURE_KEYS.OTP_PHONE, String(phone));
+} catch {
+  throw new Error("PHONE_STORAGE_SYNC_FAILED");
+}
+
+return { ok: true };
+
   } catch (e: any) {
     console.log("VERIFY_OTP_ERROR_RAW:", e);
     console.log("VERIFY_OTP_ERROR_MESSAGE:", e?.message);
