@@ -476,8 +476,10 @@ publicTicketsRouter.get("/:id", async (req, res) => {
 
 /**
  * POST /api/public/tickets/send
- * body: { type, text, openedById, openedByName, contact }
+ * body: { type?, text, openedByName? }
+ * identity is derived only from req.user
  */
+
 publicTicketsRouter.post("/send", async (req, res) => {
   try {
     const identity = requireTicketIdentity(req);
