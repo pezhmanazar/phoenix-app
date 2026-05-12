@@ -1,5 +1,6 @@
 // phoenix-backend/routes/pelekanReview.js
 import express from "express";
+import authUser from "../middleware/authUser.js";
 import prisma from "../utils/prisma.js";
 
 const router = express.Router();
@@ -16,11 +17,23 @@ function isUserPro(user) {
   return new Date(user.planExpiresAt).getTime() > Date.now();
 }
 
-async function getUserByPhone(phone) {
-  const p = String(phone || "").trim();
-  if (!p) return null;
-  return prisma.user.findUnique({ where: { phone: p } });
+async function getAuthUser(req) {
+  const id = String(req.user?.id || "").trim();
+  const phone = String(req.user?.phone || "").trim();
+
+  if (id) {
+    const userById = await prisma.user.findUnique({ where: { id } });
+    if (userById) return userById;
+  }
+
+  if (phone) {
+    const userByPhone = await prisma.user.findUnique({ where: { phone } });
+    if (userByPhone) return userByPhone;
+  }
+
+  return null;
 }
+
 
 function safeJson(obj) {
   try {
@@ -587,36 +600,37 @@ function isQsCacheValid() {
 }
 
 /**
- * GET /question-set?phone=...  (اختیاری phone فقط برای ست کردن questionSetId روی session در صورت وجود)
+ * GET /question-set
  * خروجی: سوالات + گزینه‌ها
+ * کاربر از طریق Authorization Bearer token شناسایی می‌شود.
  */
-router.get("/question-set", async (req, res) => {
+router.get("/question-set", authUser, async (req, res) => {
   try {
-    const phone = String(req.query.phone || "").trim();
+    const user = await getAuthUser(req);
+if (!user) return res.json({ ok: false, error: "USER_NOT_FOUND" });
 
-    // ✅ cache headers (این endpoint عملاً ثابت است)
-    res.setHeader("Cache-Control", "public, max-age=600");
+// ✅ چون endpoint حالا authed است، public cache نذار
+res.setHeader("Cache-Control", "private, max-age=600");
 
-    // ✅ fast path: cached payload
-    if (isQsCacheValid()) {
-      return res.json(QS_CACHE.payload);
-    }
+const activeSet = await ensureQuestionSetSeeded();
 
-    const activeSet = await ensureQuestionSetSeeded();
+// اگر session موجود بود و questionSetId نداشت، همینجا ست می‌کنیم
+const session = await prisma.pelekanReviewSession.findUnique({
+  where: { userId: user.id },
+});
 
-    // اگر session موجود بود و questionSetId نداشت، همینجا ست می‌کنیم (اختیاری)
-    if (phone) {
-      const user = await getUserByPhone(phone);
-      if (user) {
-        const session = await prisma.pelekanReviewSession.findUnique({ where: { userId: user.id } });
-        if (session && !session.questionSetId) {
-          await prisma.pelekanReviewSession.update({
-            where: { userId: user.id },
-            data: { questionSetId: activeSet.id, updatedAt: now() },
-          });
-        }
-      }
-    }
+if (session && !session.questionSetId) {
+  await prisma.pelekanReviewSession.update({
+    where: { userId: user.id },
+    data: { questionSetId: activeSet.id, updatedAt: now() },
+  });
+}
+
+// ✅ fast path: cached payload
+// بعد از sync کردن session اجازه داریم از cache جواب بدیم
+if (isQsCacheValid()) {
+  return res.json(QS_CACHE.payload);
+}
 
     const full = await loadQuestionsForSet(activeSet.id);
     if (!full) return res.status(500).json({ ok: false, error: "QUESTION_SET_NOT_FOUND" });
@@ -681,10 +695,9 @@ router.get("/question-set", async (req, res) => {
 });
 
 // GET state (برای اپ)
-router.get("/state", async (req, res) => {
+router.get("/state", authUser, async (req, res) => {
   try {
-    const phone = String(req.query.phone || "").trim();
-    const user = await getUserByPhone(phone);
+    const user = await getAuthUser(req);
     if (!user) return res.json({ ok: false, error: "USER_NOT_FOUND" });
 
     const session = await prisma.pelekanReviewSession.findUnique({
@@ -728,10 +741,11 @@ router.get("/state", async (req, res) => {
 });
 
 // POST choose path (دو گزینه‌ای که گفتی)
-router.post("/choose", async (req, res) => {
+router.post("/choose", authUser, async (req, res) => {
   try {
-    const { phone, choice } = req.body || {};
-    const user = await getUserByPhone(phone);
+    const { choice } = req.body || {};
+    const user = await getAuthUser(req);
+
     if (!user) return res.json({ ok: false, error: "USER_NOT_FOUND" });
 
     const normalized = String(choice || "").trim();
@@ -806,10 +820,10 @@ router.post("/choose", async (req, res) => {
 });
 
 // POST start review (شروع آزمون 1)
-router.post("/start", async (req, res) => {
+router.post("/start", authUser, async (req, res) => {
   try {
-    const { phone, force } = req.body || {};
-    const user = await getUserByPhone(phone);
+    const { force } = req.body || {};
+    const user = await getAuthUser(req);
     if (!user) return res.json({ ok: false, error: "USER_NOT_FOUND" });
 
     const activeSet = await ensureQuestionSetSeeded();
@@ -871,10 +885,9 @@ router.post("/start", async (req, res) => {
  * - test2SkippedAt ست می‌شود
  * - سپس finish انجام می‌شود (نتیجه آماده می‌شود)
  */
-router.post("/skip-test2", async (req, res) => {
+router.post("/skip-test2", authUser, async (req, res) => {
   try {
-    const { phone } = req.body || {};
-    const user = await getUserByPhone(phone);
+    const user = await getAuthUser(req);
     if (!user) return res.json({ ok: false, error: "USER_NOT_FOUND" });
 
     const session = await prisma.pelekanReviewSession.findUnique({ where: { userId: user.id } });
@@ -922,10 +935,10 @@ router.post("/skip-test2", async (req, res) => {
 });
 
 // POST answer (برای هر سوال)
-router.post("/answer", async (req, res) => {
+router.post("/answer", authUser, async (req, res) => {
   try {
-    const { phone, testNo, index, value } = req.body || {};
-    const user = await getUserByPhone(phone);
+    const { testNo, index, value } = req.body || {};
+    const user = await getAuthUser(req);
     if (!user) return res.json({ ok: false, error: "USER_NOT_FOUND" });
 
     const t = Number(testNo);
@@ -1011,10 +1024,10 @@ router.post("/answer", async (req, res) => {
 });
 
 // POST mark test completed (وقتی آزمون 1 یا 2 تمام شد)
-router.post("/complete-test", async (req, res) => {
+router.post("/complete-test", authUser, async (req, res) => {
   try {
-    const { phone, testNo } = req.body || {};
-    const user = await getUserByPhone(phone);
+    const { testNo } = req.body || {};
+    const user = await getAuthUser(req);
     if (!user) return res.json({ ok: false, error: "USER_NOT_FOUND" });
 
     const t = Number(testNo);
@@ -1090,10 +1103,9 @@ router.post("/complete-test", async (req, res) => {
  * - test2 یا completed باشد یا skipped باشد
  * - خروجی: locked / canEnterPelekan
  */
-router.post("/finish", async (req, res) => {
+router.post("/finish", authUser, async (req, res) => {
   try {
-    const { phone } = req.body || {};
-    const user = await getUserByPhone(phone);
+    const user = await getAuthUser(req);
     if (!user) return res.json({ ok: false, error: "USER_NOT_FOUND" });
 
     const session = await prisma.pelekanReviewSession.findUnique({ where: { userId: user.id } });
@@ -1136,10 +1148,9 @@ router.post("/finish", async (req, res) => {
 });
 
 // GET result (✅ PAYWALL REMOVED: always return full result)
-router.get("/result", async (req, res) => {
+router.get("/result", authUser, async (req, res) => {
   try {
-    const phone = String(req.query.phone || "").trim();
-    const user = await getUserByPhone(phone);
+    const user = await getAuthUser(req);
     if (!user) return res.json({ ok: false, error: "USER_NOT_FOUND" });
 
     const session = await prisma.pelekanReviewSession.findUnique({ where: { userId: user.id } });
