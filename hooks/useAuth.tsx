@@ -130,9 +130,8 @@ function parseJwtPayload(t?: string | null): any | null {
   }
 }
 
-function looksLikeOtpToken(t?: string | null) {
-  const payload = parseJwtPayload(t);
-  return payload && typeof payload.code !== "undefined";
+function looksLikeOtpToken(_t?: string | null) {
+  return false;
 }
 
 function withTimeout<T>(p: Promise<T>, ms = 15000) {
@@ -261,11 +260,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!mountedRef.current) return;
 
-    setState((s) => ({
-      ...s,
-      token: t,
-      isAuthenticated: !!t,
-    }));
+    console.log("AUTH_SET_TOKEN", t);
+
+setState((s) => ({
+  ...s,
+  token: t,
+  isAuthenticated: !!t,
+}));
   };
 
   const setPhone = async (p: string | null) => {
@@ -347,30 +348,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       🔹 OTP ACTIONS
    ============================== */
 
-  const requestCode: AuthContextValue["requestCode"] = async (phone) => {
-    if (!/^09\d{9}$/.test(phone)) {
-      throw new Error("INVALID_PHONE");
-    }
+ const requestCode: AuthContextValue["requestCode"] = async (phone) => {
+  if (!/^09\d{9}$/.test(phone)) {
+    throw new Error("INVALID_PHONE");
+  }
 
-    const resp = await withTimeout(apiSendCode(phone), 15000);
+  const resp = await withTimeout(apiSendCode(phone), 15000);
 
-    if (!resp?.ok) {
-      throw new Error("SEND_CODE_FAILED");
-    }
+  if (!resp?.ok) {
+    throw new Error("SEND_CODE_FAILED");
+  }
 
-    await setPhone(phone);
+  await setOtpToken(null);
+  await setPhone(phone);
 
-    const maybeToken = (resp as any).token ?? null;
-    await setOtpToken(maybeToken);
-
-    return { ok: true };
-  };
+  return { ok: true };
+};
 
   const verifyOtp: AuthContextValue["verifyOtp"] = async (code) => {
     const phone = state.phone || (await safeGet(SECURE_KEYS.OTP_PHONE));
-    const otpToken =
-      state.otpToken ||
-      (SECURE_KEYS.OTP_TOKEN ? await safeGet(SECURE_KEYS.OTP_TOKEN) : null);
 
     if (!phone) {
       throw new Error("OTP_FLOW_NOT_STARTED");
@@ -381,9 +377,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const v = await withTimeout(
-      apiVerifyCode(String(phone), String(code), String(otpToken ?? "")),
-      15000
-    );
+  apiVerifyCode(String(phone), String(code)),
+  15000
+);
 
     if (!v?.ok) {
       throw new Error((v as any)?.error || "VERIFY_FAILED");
@@ -397,7 +393,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     await setPhone(String(phone));
     await setToken(session);
+    console.log("AUTH_VERIFY_SESSION", session);
     await setOtpToken(null);
+
 
     try {
       await AsyncStorage.setItem(SECURE_KEYS.OTP_PHONE, String(phone));

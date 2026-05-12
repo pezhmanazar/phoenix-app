@@ -245,13 +245,13 @@ export default function LoginScreen() {
       };
 
       router.push({
-        pathname: "/(auth)/verify",
-        params: {
-          phone,
-          token: res.token,
-          exp: String(res.expiresInSec ?? 120),
-        },
-      });
+  pathname: "/(auth)/verify",
+  params: {
+    phone,
+    exp: String((res as any)?.data?.expiresInSec ?? 180),
+  },
+});
+
     } catch (e: any) {
       const msg = String(e?.message || "");
       if (msg.includes("429") || msg === "TOO_MANY_REQUESTS") {

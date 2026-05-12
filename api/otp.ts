@@ -3,13 +3,16 @@ import { toAppApi } from "@/constants/env";
 
 type SendResp = {
   ok: true;
+  phone?: string;
   expiresInSec?: number;
   devHint?: string;
-  token?: string | null;
+  smsSent?: boolean;
+  smsError?: string | null;
 };
 
 type VerifyResp = {
   ok: true;
+  phone?: string;
   sessionToken: string;
   sessionExpiresInSec?: number;
 };
@@ -32,21 +35,21 @@ export async function sendCode(phone: string): Promise<SendResp> {
 
   const data = json.data ?? json;
 
-  const out: SendResp = {
+  return {
     ok: true,
+    phone: data.phone,
     expiresInSec: data.expiresInSec,
     devHint: data.devHint,
-    token: data.token ?? null, // الان فعلاً استفاده نمی‌کنیم
+    smsSent: data.smsSent,
+    smsError: data.smsError ?? null,
   };
-
-  return out;
 }
 
 // ----------------- وریفای کد -----------------
 export async function verifyCode(
   phone: string,
   code: string,
-  _otpToken: string | null
+  _otpToken?: string | null
 ): Promise<VerifyResp> {
   const url = toAppApi("/api/auth/verify-otp");
 
@@ -63,17 +66,18 @@ export async function verifyCode(
   }
 
   const data = json.data ?? json;
-  const sessionToken: string | undefined = data.token ?? data.sessionToken;
+
+  const sessionToken: string | undefined =
+    data.token ?? data.sessionToken;
 
   if (!sessionToken) {
     throw new Error("NO_SESSION_FROM_BACKEND");
   }
 
-  const out: VerifyResp = {
+  return {
     ok: true,
+    phone: data.phone,
     sessionToken,
-    sessionExpiresInSec: data.sessionExpiresInSec ?? 24 * 3600,
+    sessionExpiresInSec: data.sessionExpiresInSec,
   };
-
-  return out;
 }

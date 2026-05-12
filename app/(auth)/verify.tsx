@@ -1,21 +1,21 @@
 // app/(auth)/verify.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  View,
-  Text,
-  Pressable,
-  ActivityIndicator,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { Ionicons } from "@expo/vector-icons";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { sendCode as apiSendCode, verifyCode as apiVerifyCode } from "../../api/otp";
 import { useAuth } from "../../hooks/useAuth";
 import { useUser } from "../../hooks/useUser";
-import { sendCode as apiSendCode, verifyCode as apiVerifyCode } from "../../api/otp";
 
 // تبدیل اعداد فارسی/عربی به انگلیسی
 function toEnDigits(input: string) {
@@ -170,8 +170,7 @@ export default function VerifyScreen() {
         return;
       }
 
-      const sessionToken: string | undefined =
-        (resp as any).sessionToken || (resp as any).data?.sessionToken;
+      const sessionToken: string | undefined = (resp as any)?.data?.token;
 
       if (!sessionToken) {
         setNotice({
