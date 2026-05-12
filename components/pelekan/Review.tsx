@@ -1,4 +1,5 @@
 // phoenix-app/components/pelekan/Review.tsx
+import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -20,7 +21,6 @@ type Props = {
 
 type ReviewOption = { value: number; labelFa: string };
 
-// ✅ NEW: UI hint coming from backend
 type ReviewQuestionUI = {
   layout?: "row2" | "grid2x2" | "grid3x2_last2" | "grid3x2" | "stack" | string;
   columns?: number;
@@ -33,7 +33,7 @@ type ReviewQuestion = {
   textFa: string;
   helpFa?: string | null;
   options: ReviewOption[];
-  ui?: ReviewQuestionUI; // ✅ NEW
+  ui?: ReviewQuestionUI;
 };
 
 type QuestionSetResponse = {
@@ -45,7 +45,7 @@ type QuestionSetResponse = {
   };
 };
 
-type SessStatus = "in_progress" | "completed_locked" | "unlocked"; // completed_locked فقط برای backward-compat
+type SessStatus = "in_progress" | "completed_locked" | "unlocked";
 
 type ReviewStateResponse = {
   ok: boolean;
@@ -71,11 +71,11 @@ type ReviewStateResponse = {
   };
 };
 
-const API_BASE = "https://qoqnoos.app/api/pelekan/review";
+const API_BASE = "https://api.qoqnoos.app/api/pelekan/review";
 
 export default function Review({ me, state, onRefresh }: Props) {
-  const router = useRouter();
-  const phone = String(me?.phone || "").trim();
+const router = useRouter();
+const { token, loading: authLoading } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [qsLoading, setQsLoading] = useState(true);
@@ -86,14 +86,15 @@ export default function Review({ me, state, onRefresh }: Props) {
   const [test1, setTest1] = useState<ReviewQuestion[]>([]);
   const [test2, setTest2] = useState<ReviewQuestion[]>([]);
 
-  const bootRef = useRef<{ phone: string | null; done: boolean }>({ phone: null, done: false });
+  const bootRef = useRef<{ token: string | null; done: boolean }>({
+  token: null,
+  done: false,
+});
   const startLockRef = useRef(false);
   const mountedRef = useRef(true);
   const submitLockRef = useRef(false);
   const bootingRef = useRef(false);
   const bootSeqRef = useRef(0);
-
-  // ✅ NEW: ضد-ریدایرکت چندباره (برای جلوگیری از باگ‌های "برگشت به شروع")
   const redirectedRef = useRef(false);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -146,52 +147,97 @@ export default function Review({ me, state, onRefresh }: Props) {
     };
   }, []);
 
+  const fetchJsonAuthed = useCallback(
+    async <T,>(url: string): Promise<T> => {
+      if (!token) throw new Error("NO_TOKEN");
+
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Cache-Control": "no-store",
+        },
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(json?.error || `HTTP_${res.status}`);
+      }
+
+      return json as T;
+    },
+    [token]
+  );
+
+  const postJsonAuthed = useCallback(
+    async <T,>(url: string, body?: Record<string, any>): Promise<T> => {
+      if (!token) throw new Error("NO_TOKEN");
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+        },
+        body: JSON.stringify(body || {}),
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(json?.error || `HTTP_${res.status}`);
+      }
+
+      return json as T;
+    },
+    [token]
+  );
+
   const fetchReviewState = useCallback(async () => {
-  if (!phone) return null;
+  if (authLoading) return null;
+  if (!token) return null;
 
-  const res = await fetch(`${API_BASE}/state?phone=${encodeURIComponent(phone)}`, {
-    headers: { "Cache-Control": "no-store" },
-  });
-
-  const json: ReviewStateResponse = await res.json().catch(() => ({ ok: false } as any));
+  const json = await fetchJsonAuthed<ReviewStateResponse>(
+    `${API_BASE}/state`
+  );
 
   if (!json?.ok) throw new Error(json?.error || "STATE_FAILED");
 
   if (mountedRef.current) setReviewState(json.data || null);
   return json.data || null;
-}, [phone]);
+}, [authLoading, token, fetchJsonAuthed]);
+
+
 
   const fetchQuestionSet = useCallback(async () => {
-    const res = await fetch(`${API_BASE}/question-set`, {
-      headers: { "Cache-Control": "no-store" },
-    });
+  if (authLoading) return null;
+  if (!token) return null;
 
-    const json: QuestionSetResponse = await res.json().catch(() => ({ ok: false } as any));
+  const json = await fetchJsonAuthed<QuestionSetResponse>(
+    `${API_BASE}/question-set`
+  );
 
-    if (!json?.ok || !json?.data?.tests || !json?.data?.questionSet?.id) {
-      throw new Error(json?.error || "QS_FAILED");
-    }
+  if (!json?.ok || !json?.data?.tests || !json?.data?.questionSet?.id) {
+    throw new Error(json?.error || "QS_FAILED");
+  }
 
-    if (!mountedRef.current) return null;
+  if (!mountedRef.current) return null;
 
-    setQuestionSetId(json.data.questionSet.id);
-    setTest1(Array.isArray(json.data.tests.test1) ? json.data.tests.test1 : []);
-    setTest2(Array.isArray(json.data.tests.test2) ? json.data.tests.test2 : []);
+  setQuestionSetId(json.data.questionSet.id);
+  setTest1(Array.isArray(json.data.tests.test1) ? json.data.tests.test1 : []);
+  setTest2(Array.isArray(json.data.tests.test2) ? json.data.tests.test2 : []);
 
-    return json.data.questionSet.id;
-  }, []);
+  return json.data.questionSet.id;
+}, [authLoading, token, fetchJsonAuthed]);
 
-  // ✅ FIX (1): ناوبری نتیجه بدون query-string (رفع TS2872 و گیرهای محیطی)
+
   const goToResultPage = useCallback(() => {
-    if (!phone) return;
-
     router.push({
       pathname: "/(tabs)/ReviewResult",
-      params: { phone },
     } as any);
-  }, [router, phone]);
+  }, [router]);
 
-  // ✅ NEW LOGIC: هر وقت از in_progress خارج شد، برو نتیجه (دیگه paywall نداریم)
   const openResultScreen = useCallback(async () => {
     const st = await fetchReviewState();
     onRefresh?.();
@@ -202,10 +248,7 @@ export default function Review({ me, state, onRefresh }: Props) {
     }
   }, [fetchReviewState, onRefresh, goToResultPage]);
 
-  // ✅ NEW LOGIC: اگر از in_progress خارج شد، مستقیم ریدایرکت کن
-  // 🔧 PERF FIX: onRefresh رو از اینجا حذف کردیم تا بعد هر سوال PelekanTab بی‌خودی fetch نکند
-  const syncAndMaybeGoResult = useCallback(
-  async () => {
+  const syncAndMaybeGoResult = useCallback(async () => {
     const st = await fetchReviewState();
 
     const sessStatus = String(st?.session?.status || "");
@@ -214,61 +257,53 @@ export default function Review({ me, state, onRefresh }: Props) {
       return true;
     }
     return false;
-  },
-  [fetchReviewState, goToResultPage]
-);
+  }, [fetchReviewState, goToResultPage]);
 
- const ensureStarted = useCallback(
+  const ensureStarted = useCallback(
   async (stData: ReviewStateResponse["data"] | null) => {
-    if (!phone) return;
+    if (authLoading) return;
+    if (!token) return;
 
     const st = stData?.session;
-    if (st?.questionSetId) return;
+    if (st?.id && st?.questionSetId) return;
 
     if (startLockRef.current) return;
     startLockRef.current = true;
 
     try {
-      await fetch(`${API_BASE}/start`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
-      });
-
+      await postJsonAuthed(`${API_BASE}/start`, {});
       await fetchReviewState();
       onRefresh?.();
     } finally {
       startLockRef.current = false;
     }
   },
-  [phone, fetchReviewState, onRefresh]
+  [authLoading, token, postJsonAuthed, fetchReviewState, onRefresh]
 );
 
-const bootstrap = useCallback(async () => {
-  if (!phone) return;
 
-  // ✅ single-flight: دوبار همزمان اجرا نشه
+
+  const bootstrap = useCallback(async () => {
+  if (authLoading) return;
+  if (!token) return;
   if (bootingRef.current) return;
   bootingRef.current = true;
 
-  // ✅ seq: اگر بوت جدید شروع شد، نتایج بوت قبلی اعمال نشه
   const seq = ++bootSeqRef.current;
 
   setError(null);
   setQsLoading(true);
 
   try {
-    // ✅ اول سوال‌ها (تا از qsLoading سریع خارج بشیم)
-    await fetchQuestionSet();
+    let st = await fetchReviewState();
+if (!st) throw new Error("STATE_EMPTY");
 
-    // ✅ بعد state
-    const st = await fetchReviewState();
+await ensureStarted(st);
 
-    // ✅ اگر session questionSetId ندارد، start کن
-    await ensureStarted(st);
+st = await fetchReviewState();
+if (!st) throw new Error("STATE_EMPTY_AFTER_START");
 
-    // ✅ بعد از start یکبار دوباره state بگیر تا questionSetId قطعاً sync شود
-    await fetchReviewState();
+await fetchQuestionSet();
   } catch (e: any) {
     if (mountedRef.current && bootSeqRef.current === seq) {
       setError(String(e?.message || "UNKNOWN_ERROR"));
@@ -279,36 +314,33 @@ const bootstrap = useCallback(async () => {
     }
     bootingRef.current = false;
   }
-}, [phone, fetchQuestionSet, fetchReviewState, ensureStarted]);
-
+}, [authLoading, token, fetchReviewState, ensureStarted, fetchQuestionSet]);
 
   useEffect(() => {
-    if (bootRef.current.phone !== phone) {
-      bootRef.current.phone = phone;
-      bootRef.current.done = false;
-      startLockRef.current = false;
-      submitLockRef.current = false;
+    if (bootRef.current.token !== (token || null)) {
+  bootRef.current.token = token || null;
+  bootRef.current.done = false;
+  startLockRef.current = false;
+  submitLockRef.current = false;
+  redirectedRef.current = false;
 
-      // ✅ ریست ضد-ریدایرکت
-      redirectedRef.current = false;
+  setResultOpen(false);
+  setResultData(null);
+  setResultError(null);
+  setResultLoading(false);
+  setSelectedValue(null);
+}
 
-      setResultOpen(false);
-      setResultData(null);
-      setResultError(null);
-      setResultLoading(false);
+if (authLoading) return;
+if (!token) return;
+if (bootRef.current.done) return;
 
-      setSelectedValue(null);
-    }
-
-    if (!phone) return;
-    if (bootRef.current.done) return;
-
-    (async () => {
-      await bootstrap();
-      if (!mountedRef.current) return;
-      bootRef.current.done = true;
-    })();
-  }, [phone, bootstrap]);
+(async () => {
+  await bootstrap();
+  if (!mountedRef.current) return;
+  bootRef.current.done = true;
+})();
+}, [token, authLoading, bootstrap]);
 
   const session = reviewState?.session || null;
   const currentTest = session?.currentTest ?? 1;
@@ -318,9 +350,8 @@ const bootstrap = useCallback(async () => {
   const currentQuestion = questions[currentIndex] || null;
 
   const sessStatus = String(session?.status || "");
-  const showUnlocked = sessStatus === "unlocked" || sessStatus === "completed_locked"; // completed_locked => treat as unlocked (compat)
+  const showUnlocked = sessStatus === "unlocked" || sessStatus === "completed_locked";
 
-  // ✅ وقتی از in_progress خارج شد، سوال نده و برو نتیجه (فقط یک‌بار)
   useEffect(() => {
     if (!session) return;
     if (redirectedRef.current) return;
@@ -350,8 +381,7 @@ const bootstrap = useCallback(async () => {
         useNativeDriver: true,
       }),
     ]).start();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTest, currentIndex]);
+  }, [currentTest, currentIndex, fade, slideY]);
 
   const title = useMemo(() => {
     if (currentTest === 1) return "آزمون بازسنجی";
@@ -373,7 +403,6 @@ const bootstrap = useCallback(async () => {
     return (session.currentIndex ?? 0) >= questions.length;
   }, [session, questions]);
 
-  // ✅ PERF FIX: UI رو بعد از جواب، لوکال جلو می‌بریم تا برای سوال بعد منتظر GET /state نمانیم
   const optimisticAdvance = useCallback((idx: number) => {
     setReviewState((prev) => {
       if (!prev?.session) return prev;
@@ -398,71 +427,66 @@ const bootstrap = useCallback(async () => {
   );
 
   const submitAnswer = useCallback(
-  async (value: number) => {
-    if (!phone || !session) return;
-
-    // ✅ اگر از in_progress خارج شده، اجازه نده
-    if (session?.status !== "in_progress") {
-      await openResultScreen();
-      return;
-    }
-
-    if (submitLockRef.current) return;
-    submitLockRef.current = true;
-
-    const idx = session.currentIndex ?? 0;
-
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/answer`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, testNo: currentTest, index: idx, value }),
-      });
-
-      const json = await res.json().catch(() => null);
-
-      if (!json?.ok) {
-        setError(json?.error || "SERVER_ERROR");
+    async (value: number) => {
+      if (authLoading) return;
+if (!token || !session) return;
+      if (session?.status !== "in_progress") {
+        await openResultScreen();
         return;
       }
 
-      // ✅ فوراً برو سوال بعدی (بدون sync شبکه)
-      optimisticAdvance(idx);
+      if (submitLockRef.current) return;
+      submitLockRef.current = true;
 
-      // ✅ SAFETY: هر ۵ سوال یک بار sync کن + آخر تست حتماً sync
-      const nextIdx = idx + 1;
-      const len = questions?.length || 0;
-      const isLast = nextIdx >= len;
-      const shouldPeriodicSync = nextIdx % 5 === 0;
+      const idx = session.currentIndex ?? 0;
 
-      if (isLast || shouldPeriodicSync) {
-        const finished = await syncAndMaybeGoResult();
+      setLoading(true);
+      try {
+const json = await postJsonAuthed<any>(`${API_BASE}/answer`, {
+  testNo: currentTest,
+  index: idx,
+  value,
+});
 
-        if (finished) return;
+        if (!json?.ok) {
+          setError(json?.error || "SERVER_ERROR");
+          return;
+        }
+
+        optimisticAdvance(idx);
+
+        const nextIdx = idx + 1;
+        const len = questions?.length || 0;
+        const isLast = nextIdx >= len;
+        const shouldPeriodicSync = nextIdx % 5 === 0;
+
+        if (isLast || shouldPeriodicSync) {
+          const finished = await syncAndMaybeGoResult();
+          if (finished) return;
+        }
+      } catch (e: any) {
+        setError(e?.message || "SERVER_ERROR");
+      } finally {
+        setLoading(false);
+        submitLockRef.current = false;
       }
-    } catch (e: any) {
-      setError(e?.message || "SERVER_ERROR");
-    } finally {
-      setLoading(false);
-      submitLockRef.current = false;
-    }
-  },
-  [
-    phone,
-    session,
-    currentTest,
-    openResultScreen,
-    syncAndMaybeGoResult,
-    optimisticAdvance,
-    questions?.length,
-  ]
-);
-
+    },
+    [
+  authLoading,
+  token,
+  session,
+  currentTest,
+  openResultScreen,
+  postJsonAuthed,
+  optimisticAdvance,
+  questions?.length,
+  syncAndMaybeGoResult,
+]
+  );
 
   const goToTest2 = useCallback(async () => {
-    if (!phone) return;
-
+  if (authLoading) return;
+  if (!token) return;
     if (session?.status !== "in_progress") {
       await openResultScreen();
       return;
@@ -473,13 +497,10 @@ const bootstrap = useCallback(async () => {
 
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/complete-test`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, testNo: 1 }),
-      });
+    const json = await postJsonAuthed<any>(`${API_BASE}/complete-test`, {
+  testNo: 1,
+});
 
-      const json = await res.json().catch(() => null);
       if (!json?.ok) {
         setError(json?.error || "SERVER_ERROR");
         return;
@@ -491,12 +512,13 @@ const bootstrap = useCallback(async () => {
       setLoading(false);
       submitLockRef.current = false;
     }
-  }, [phone, session?.status, fetchReviewState, onRefresh, openResultScreen]);
+ }, [authLoading, token, session?.status, openResultScreen, postJsonAuthed, fetchReviewState, onRefresh]
+);
 
-  // ✅ FIX: حذف finish اضافه (skip-test2 خودش نتیجه را می‌سازد/وضعیت را تغییر می‌دهد)
+
   const passTest2FromEndOfTest1 = useCallback(async () => {
-    if (!phone) return;
-
+    if (authLoading) return;
+if (!token) return;
     if (session?.status !== "in_progress") {
       await openResultScreen();
       return;
@@ -507,39 +529,32 @@ const bootstrap = useCallback(async () => {
 
     setLoading(true);
     try {
-      const c1 = await fetch(`${API_BASE}/complete-test`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, testNo: 1 }),
-      }).then((r) => r.json());
+    const c1 = await postJsonAuthed<any>(`${API_BASE}/complete-test`, {
+  testNo: 1,
+});
 
       if (!c1?.ok) {
         setError(c1?.error || "SERVER_ERROR");
         return;
       }
 
-      const s2 = await fetch(`${API_BASE}/skip-test2`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
-      }).then((r) => r.json());
+      const s2 = await postJsonAuthed<any>(`${API_BASE}/skip-test2`, {});
 
       if (!s2?.ok) {
         setError(s2?.error || "SERVER_ERROR");
         return;
       }
 
-      // ✅ فقط sync
       await syncAndMaybeGoResult();
     } finally {
       setLoading(false);
       submitLockRef.current = false;
     }
-  }, [phone, session?.status, syncAndMaybeGoResult, openResultScreen]);
+  }, [authLoading, token, session?.status, openResultScreen, postJsonAuthed, syncAndMaybeGoResult]);
 
   const finishAfterTest2 = useCallback(async () => {
-    if (!phone) return;
-
+    if (authLoading) return;
+if (!token) return;
     if (session?.status !== "in_progress") {
       await openResultScreen();
       return;
@@ -550,46 +565,37 @@ const bootstrap = useCallback(async () => {
 
     setLoading(true);
     try {
-      const c = await fetch(`${API_BASE}/complete-test`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, testNo: 2 }),
-      }).then((r) => r.json());
+     const c = await postJsonAuthed<any>(`${API_BASE}/complete-test`, {
+  testNo: 2,
+});
+
 
       if (!c?.ok) {
         setError(c?.error || "SERVER_ERROR");
         return;
       }
 
-      const f = await fetch(`${API_BASE}/finish`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
-      }).then((r) => r.json());
-
+      const f = await postJsonAuthed<any>(`${API_BASE}/finish`, {});
       if (!f?.ok) {
         setError(f?.error || "SERVER_ERROR");
         return;
       }
 
-      // ✅ فقط sync
       await syncAndMaybeGoResult();
     } finally {
       setLoading(false);
       submitLockRef.current = false;
     }
-  }, [phone, session?.status, syncAndMaybeGoResult, openResultScreen]);  
+  }, [authLoading, token, session?.status, openResultScreen, postJsonAuthed, syncAndMaybeGoResult]);
 
   const manualReload = useCallback(() => {
-    bootRef.current.done = false;
-    startLockRef.current = false;
-    submitLockRef.current = false;
-
-    // ✅ ریست ضد-ریدایرکت
-    redirectedRef.current = false;
-
-    bootstrap();
-  }, [bootstrap]);
+  bootRef.current.done = false;
+  startLockRef.current = false;
+  submitLockRef.current = false;
+  redirectedRef.current = false;
+  setError(null);
+  bootstrap();
+}, [bootstrap]);
 
   const ConfirmGlass = useMemo(() => {
     if (!confirmOpen) return null;
@@ -597,10 +603,20 @@ const bootstrap = useCallback(async () => {
     return (
       <View style={styles.confirmOverlay}>
         <View style={[styles.confirmCard, { backgroundColor: palette.glass, borderColor: palette.border }]}>
-          <Text style={[styles.rtlText, { color: palette.text, fontWeight: "900", fontSize: 16, textAlign: "center" }]}>
+          <Text
+            style={[
+              styles.rtlText,
+              { color: palette.text, fontWeight: "900", fontSize: 16, textAlign: "center" },
+            ]}
+          >
             {confirmTitle}
           </Text>
-          <Text style={[styles.rtlText, { color: palette.sub, marginTop: 10, lineHeight: 22, fontSize: 12, textAlign: "right" }]}>
+          <Text
+            style={[
+              styles.rtlText,
+              { color: palette.sub, marginTop: 10, lineHeight: 22, fontSize: 12, textAlign: "right" },
+            ]}
+          >
             {confirmMsg}
           </Text>
 
@@ -649,10 +665,8 @@ const bootstrap = useCallback(async () => {
   const ResultScreen = useMemo(() => {
     if (!resultOpen) return null;
 
-    // ✅ paywall removed: locked is always false (even if old backend returns it, we ignore in UI)
     const locked = false;
     const didSkipTest2 = !!resultData?.meta?.didSkipTest2;
-
     const resultTitle = didSkipTest2 ? "نتیجه آزمون بازسنجی" : "نتیجه دو آزمون";
     const msg = String(resultData?.message || "نتیجه آماده است.");
 
@@ -670,7 +684,12 @@ const bootstrap = useCallback(async () => {
           </Text>
 
           {!!resultError && (
-            <Text style={[styles.rtlText, { color: palette.red, marginTop: 10, fontSize: 12, textAlign: "right" }]}>
+            <Text
+              style={[
+                styles.rtlText,
+                { color: palette.red, marginTop: 10, fontSize: 12, textAlign: "right" },
+              ]}
+            >
               {resultError}
             </Text>
           )}
@@ -688,15 +707,12 @@ const bootstrap = useCallback(async () => {
                 style={[styles.btn, { borderColor: palette.border }]}
                 onPress={async () => {
                   setResultOpen(false);
-
-                  // ✅ FIX (2): رفتن به پلکان زیگزاگ (دایره‌ها) => focus را صراحتاً خالی کن
                   router.replace(
                     {
                       pathname: "/(tabs)/Pelekan",
-                      params: { phone, focus: "" },
+                      params: { focus: "" },
                     } as any
                   );
-
                   setTimeout(() => onRefresh?.(), 50);
                 }}
               >
@@ -716,17 +732,15 @@ const bootstrap = useCallback(async () => {
         </View>
       </View>
     );
-  }, [resultOpen, resultData, resultLoading, resultError, palette, router, onRefresh, phone]);
+  }, [resultOpen, resultData, resultLoading, resultError, palette, router, onRefresh]);
 
-  // ✅ NEW: option renderer with layouts
   const OptionsBlock = useMemo(() => {
     if (!currentQuestion) return null;
 
     const opts = currentQuestion.options || [];
     const rawLayout = String(currentQuestion.ui?.layout || "").trim();
     const layout =
-      rawLayout ||
-      (opts.length === 4 ? "grid2x2" : opts.length === 5 ? "grid3x2_last2" : "stack");
+      rawLayout || (opts.length === 4 ? "grid2x2" : opts.length === 5 ? "grid3x2_last2" : "stack");
 
     const renderBtn = (op: ReviewOption) => {
       const isSelected = selectedValue === op.value;
@@ -745,12 +759,13 @@ const bootstrap = useCallback(async () => {
             },
           ]}
         >
-          <Text style={[styles.centerText, styles.rtlText, { color: palette.text, fontSize: 14 }]}>{op.labelFa}</Text>
+          <Text style={[styles.centerText, styles.rtlText, { color: palette.text, fontSize: 14 }]}>
+            {op.labelFa}
+          </Text>
         </Pressable>
       );
     };
 
-    // ✅ 2 گزینه کنار هم
     if (layout === "row2" && opts.length === 2) {
       return (
         <View style={styles.row2}>
@@ -760,7 +775,6 @@ const bootstrap = useCallback(async () => {
       );
     }
 
-    // ✅ 4 گزینه: 2 بالا + 2 پایین
     if (layout === "grid2x2" && opts.length === 4) {
       return (
         <View>
@@ -776,7 +790,6 @@ const bootstrap = useCallback(async () => {
       );
     }
 
-    // ✅ 5 گزینه: 3 بالا + 2 پایین
     if (layout === "grid3x2_last2" && opts.length === 5) {
       return (
         <View>
@@ -785,8 +798,6 @@ const bootstrap = useCallback(async () => {
             <View style={styles.gridCol}>{renderBtn(opts[1])}</View>
             <View style={styles.gridCol}>{renderBtn(opts[2])}</View>
           </View>
-
-          {/* ✅ ردیف دوم: دو آیتم وسط‌چین با عرض 1.5 ستون */}
           <View style={[styles.gridRow, styles.centerRow]}>
             <View style={styles.gridColWide}>{renderBtn(opts[3])}</View>
             <View style={styles.gridColWide}>{renderBtn(opts[4])}</View>
@@ -795,7 +806,6 @@ const bootstrap = useCallback(async () => {
       );
     }
 
-    // ✅ 6 گزینه: 3 بالا + 3 پایین
     if (layout === "grid3x2" && opts.length === 6) {
       return (
         <View>
@@ -813,14 +823,22 @@ const bootstrap = useCallback(async () => {
       );
     }
 
-    // ✅ fallback: همان عمودی قبلی
     return <View>{opts.map(renderBtn)}</View>;
   }, [currentQuestion, selectedValue, loading, accentColor, palette.border, palette.text]);
 
-  if (!phone) {
+  if (authLoading) {
     return (
       <View style={[styles.root, { backgroundColor: palette.bg }]}>
-        <Text style={{ color: palette.sub }}>شماره کاربر پیدا نشد.</Text>
+        <ActivityIndicator color={palette.gold} />
+        <Text style={{ color: palette.sub, marginTop: 10, fontSize: 12 }}>در حال بررسی ورود…</Text>
+      </View>
+    );
+  }
+
+  if (!token) {
+    return (
+      <View style={[styles.root, { backgroundColor: palette.bg }]}>
+        <Text style={{ color: palette.sub }}>نشست کاربر پیدا نشد.</Text>
       </View>
     );
   }
@@ -837,7 +855,9 @@ const bootstrap = useCallback(async () => {
   if (error) {
     return (
       <View style={[styles.root, { backgroundColor: palette.bg, paddingHorizontal: 18 }]}>
-        <Text style={{ color: palette.red, fontWeight: "900", marginBottom: 8, textAlign: "center" }}>خطا</Text>
+        <Text style={{ color: palette.red, fontWeight: "900", marginBottom: 8, textAlign: "center" }}>
+          خطا
+        </Text>
         <Text style={[styles.rtlText, { color: palette.sub, fontSize: 12, lineHeight: 18, textAlign: "right" }]}>
           {error}
         </Text>
@@ -851,12 +871,10 @@ const bootstrap = useCallback(async () => {
     );
   }
 
-  // ✅ اگر نتیجه باز است
   if (resultOpen) {
     return <View style={{ flex: 1, backgroundColor: palette.bg }}>{ResultScreen}</View>;
   }
 
-  // ✅ اگر unlocked است (یا حالت قدیمی completed_locked)، نتیجه را نشان بده
   if (session && showUnlocked) {
     return (
       <View style={[styles.container, { backgroundColor: palette.bg, justifyContent: "center" }]}>
@@ -879,7 +897,6 @@ const bootstrap = useCallback(async () => {
     );
   }
 
-  // پایان آزمون 1
   if (session && currentTest === 1 && isEndOfTest) {
     return (
       <View style={[styles.container, { backgroundColor: palette.bg, justifyContent: "center" }]}>
@@ -891,7 +908,7 @@ const bootstrap = useCallback(async () => {
           <Text style={[styles.rtlText, { color: palette.sub, marginTop: 10, lineHeight: 22, textAlign: "right" }]}>
             آزمون بازسنجی به پایان رسید و پاسخ‌های تو ثبت شد.
             {"\n"}
-            اگر «ادامه» رو بزنی، وارد آزمون دوم یعنی آزمون («آیا برمی‌گرده؟») میشی و در پایان، نتیجه‌ی کامل هر دو نمایش داده میشه.
+            اگر «ادامه» رو بزنی، وارد آزمون دوم یعنی آزمون «آیا برمی‌گرده؟» میشی و در پایان، نتیجه‌ی کامل هر دو نمایش داده میشه.
           </Text>
 
           <View style={{ height: 14 }} />
@@ -930,7 +947,6 @@ const bootstrap = useCallback(async () => {
     );
   }
 
-  // پایان آزمون 2
   if (session && currentTest === 2 && isEndOfTest) {
     return (
       <View style={[styles.container, { backgroundColor: palette.bg, justifyContent: "center" }]}>
@@ -1020,14 +1036,18 @@ const bootstrap = useCallback(async () => {
           <Text style={[styles.qText, styles.rtlText, { color: palette.text }]}>{currentQuestion.textFa}</Text>
 
           {!!currentQuestion.helpFa && (
-            <Text style={[styles.rtlText, { color: palette.sub2, marginTop: 10, lineHeight: 20, textAlign: "right" }]}>
+            <Text
+              style={[
+                styles.rtlText,
+                { color: palette.sub2, marginTop: 10, lineHeight: 20, textAlign: "right" },
+              ]}
+            >
               {currentQuestion.helpFa}
             </Text>
           )}
 
           <View style={{ height: 16 }} />
 
-          {/* ✅ UPDATED: options rendering based on ui.layout */}
           {OptionsBlock}
 
           <View style={{ height: 6 }} />
@@ -1042,7 +1062,8 @@ const bootstrap = useCallback(async () => {
               styles.btnPrimary,
               {
                 borderColor: selectedValue === null ? palette.border : "rgba(212,175,55,.35)",
-                backgroundColor: selectedValue === null ? "rgba(255,255,255,.04)" : "rgba(212,175,55,.10)",
+                backgroundColor:
+                  selectedValue === null ? "rgba(255,255,255,.04)" : "rgba(212,175,55,.10)",
                 opacity: loading ? 0.85 : 1,
               },
             ]}
@@ -1102,7 +1123,10 @@ const styles = StyleSheet.create({
     opacity: 0.95,
   },
 
-  title: { fontSize: 18, fontWeight: "900" },
+  title: {
+    fontSize: 18,
+    fontWeight: "900",
+  },
 
   hr: {
     height: 1,
@@ -1110,7 +1134,12 @@ const styles = StyleSheet.create({
     marginVertical: 14,
   },
 
-  qText: { fontSize: 16, fontWeight: "800", lineHeight: 26, textAlign: "right" as any },
+  qText: {
+    fontSize: 16,
+    fontWeight: "800",
+    lineHeight: 26,
+    textAlign: "right" as any,
+  },
 
   option: {
     borderWidth: 1,
@@ -1120,12 +1149,12 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
-  // ✅ NEW layouts
   row2: {
     flexDirection: "row-reverse",
     gap: 10 as any,
     marginBottom: 10,
   },
+
   rowItem: {
     flex: 1,
   },
@@ -1135,15 +1164,9 @@ const styles = StyleSheet.create({
     gap: 10 as any,
     marginBottom: 10,
   },
+
   gridCol: {
     flex: 1,
-  },
-
-  btn: {
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingVertical: 12,
-    alignItems: "center",
   },
 
   centerRow: {
@@ -1152,7 +1175,14 @@ const styles = StyleSheet.create({
 
   gridColWide: {
     flexGrow: 0,
-    flexBasis: "47%", // دو تا کنار هم، وسط‌چین (با gap)
+    flexBasis: "47%",
+  },
+
+  btn: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: "center",
   },
 
   btnPrimary: {
@@ -1169,7 +1199,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  btnText: { fontSize: 14, fontWeight: "900" },
+  btnText: {
+    fontSize: 14,
+    fontWeight: "900",
+  },
 
   confirmOverlay: {
     position: "absolute",
@@ -1182,6 +1215,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 18,
   },
+
   confirmCard: {
     width: "100%",
     borderWidth: 1,
@@ -1195,6 +1229,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8 as any,
   },
+
   inlineLoadingText: {
     fontSize: 12,
     fontWeight: "900",

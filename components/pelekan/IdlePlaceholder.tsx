@@ -1,5 +1,6 @@
 // components/pelekan/IdlePlaceholder.tsx
 
+import { useAuth } from "@/hooks/useAuth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -19,13 +20,15 @@ type Props = {
   onRefresh?: () => Promise<void> | void;
 };
 
-// ✅ کلید گیت: تا وقتی کاربر دایره "شروع" رو نزده، وارد معرفی/آزمون نشیم
 const KEY_START_GATE = "pelekan:idle:start_gate:v1";
+const API_BASE = "https://api.qoqnoos.app";
 
 export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
+  const { token, loading: authLoading } = useAuth();
+
   const [busy, setBusy] = useState(false);
 
-    const [appModal, setAppModal] = useState<{
+  const [appModal, setAppModal] = useState<{
     visible: boolean;
     kind: "error" | "warning" | "success" | "info";
     title: string;
@@ -50,18 +53,11 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
     });
   };
 
-  // ✅ مرحله‌ی اول: فقط دکمه "شروع"
-  // ✅ مرحله‌ی دوم: توضیحات + دکمه "شروع آزمون"
   const [mode, setMode] = useState<"start" | "intro">("start");
-
-  // ✅ گیت
   const [gateBoot, setGateBoot] = useState(true);
   const [gateReady, setGateReady] = useState(false);
 
-  // ✅ انیمیشن انتقال
-  const anim = useRef(new Animated.Value(0)).current; // 0 => start, 1 => intro
-
-  const phone = me?.phone as string | undefined;
+  const anim = useRef(new Animated.Value(0)).current;
 
   const palette = useMemo(
     () => ({
@@ -107,7 +103,6 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
     }).start(() => done?.());
   };
 
-  // ✅ گیت را از AsyncStorage بخوان
   useEffect(() => {
     let alive = true;
 
@@ -115,10 +110,10 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
       try {
         const v = await AsyncStorage.getItem(KEY_START_GATE);
         if (!alive) return;
+
         const ok = v === "1";
         setGateReady(ok);
 
-        // اگر قبلاً گیت زده شده، مستقیم برو intro
         if (ok) {
           setMode("intro");
           anim.setValue(1);
@@ -126,7 +121,9 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
           setMode("start");
           anim.setValue(0);
         }
-      } catch {
+      } catch (e) {
+        console.log("[IdlePlaceholder] gate read error:", e);
+
         if (!alive) return;
         setGateReady(false);
         setMode("start");
@@ -140,181 +137,232 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [anim]);
 
   const goIntro = async () => {
-    // ✅ اینجا گیت را ست می‌کنیم تا از این به بعد مستقیم intro بیاد
     try {
       await AsyncStorage.setItem(KEY_START_GATE, "1");
       setGateReady(true);
-    } catch {}
+    } catch (e) {
+      console.log("[IdlePlaceholder] gate write error:", e);
+    }
 
     setMode("intro");
     requestAnimationFrame(() => animateTo(1));
   };
 
   const goStart = async () => {
-    // ⚠️ این دکمه «بازگشت» فقط به حالت start برمی‌گرده
-    // گیت رو ریست نمی‌کنیم (چون تجربه‌ت می‌گه نباید هر بار برگرده)
     animateTo(0, () => setMode("start"));
   };
 
-  // ✅ اگر می‌خوای بازگشت، گیت رو هم ریست کنه (فعلاً خاموش)
-  // const goStartAndResetGate = async () => {
-  //   try {
-  //     await AsyncStorage.removeItem(KEY_START_GATE);
-  //   } catch {}
-  //   setGateReady(false);
-  //   animateTo(0, () => setMode("start"));
-  // };
-
   const startBaseline = async () => {
-    if (!phone) {
-  showAppModal("error", "خطا", "شماره کاربر پیدا نشد.");
-  return;
-}
+    if (busy) return;
+
+    if (authLoading) {
+      showAppModal("info", "کمی صبر کن", "در حال آماده‌سازی اطلاعات ورود هستیم.");
+      return;
+    }
+
+    if (!token) {
+      showAppModal("error", "نیاز به ورود", "نشست کاربری شما پیدا نشد. لطفاً دوباره وارد شوید.");
+      return;
+    }
+
+    if (!gateReady) {
+      showAppModal("warning", "توجه", "اول روی دکمه «شروع» بزن.");
+      return;
+    }
 
     try {
       setBusy(true);
 
-      // ✅ ضدگلوله: تا وقتی کاربر «شروع» نزده، حق نداره startBaseline بزنه
-      if (!gateReady) {
-  showAppModal("warning", "توجه", "اول روی دکمه «شروع» بزن.");
-  return;
-}
-
-      const res = await fetch(`https://qoqnoos.app/api/pelekan/baseline/start`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
+      console.log("[IdlePlaceholder] startBaseline -> request", {
+        endpoint: `${API_BASE}/api/pelekan/baseline/start`,
+        hasToken: !!token,
+        mePhone: me?.phone,
       });
 
-      const json = await res.json();
-      if (!json?.ok) {
-  showAppModal("error", "شروع آزمون انجام نشد", "شروع آزمون ناموفق بود.");
-  return;
-}
+      const res = await fetch(`${API_BASE}/api/pelekan/baseline/start`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-      await onRefresh?.(); // tabState -> baseline_assessment (یا هرچی سرور می‌گه)
-    } catch {
-  showAppModal("error", "ارتباط برقرار نشد", "ارتباط با سرور برقرار نشد.");
-} finally {
+      const rawText = await res.text();
+      let json: any = null;
+
+      try {
+        json = rawText ? JSON.parse(rawText) : null;
+      } catch {
+        json = null;
+      }
+
+      console.log("[IdlePlaceholder] startBaseline <- response", {
+        status: res.status,
+        ok: res.ok,
+        body: json ?? rawText,
+      });
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          showAppModal(
+            "error",
+            "نشست نامعتبر است",
+            "نشست کاربری شما منقضی شده یا معتبر نیست. لطفاً دوباره وارد شوید."
+          );
+          return;
+        }
+
+        if (res.status === 403) {
+          showAppModal(
+            "error",
+            "دسترسی مجاز نیست",
+            "اجازه شروع این بخش برای این کاربر صادر نشده است."
+          );
+          return;
+        }
+
+        showAppModal(
+          "error",
+          "شروع آزمون انجام نشد",
+          json?.message || json?.error || "سرور درخواست شروع آزمون را نپذیرفت."
+        );
+        return;
+      }
+
+      if (!json?.ok) {
+        showAppModal(
+          "error",
+          "شروع آزمون انجام نشد",
+          json?.message || json?.error || "شروع آزمون ناموفق بود."
+        );
+        return;
+      }
+
+      await onRefresh?.();
+    } catch (e: any) {
+      console.log("[IdlePlaceholder] startBaseline error:", e);
+
+      showAppModal(
+        "error",
+        "ارتباط برقرار نشد",
+        e?.message || "ارتباط با سرور برقرار نشد."
+      );
+    } finally {
       setBusy(false);
     }
   };
 
-  // ✅ Loader هنگام خواندن گیت
-  if (gateBoot) {
-  return (
-    <>
-      <View style={[styles.full, { backgroundColor: palette.bg }]}>
-        <View style={[styles.centerWrap, { paddingHorizontal: 18 }]}>
-          <ActivityIndicator color={palette.gold} />
-          <Text style={{ color: palette.faint, marginTop: 10, fontSize: 12 }}>
-            در حال آماده‌سازی…
-          </Text>
+  if (gateBoot || authLoading) {
+    return (
+      <>
+        <View style={[styles.full, { backgroundColor: palette.bg }]}>
+          <View style={[styles.centerWrap, { paddingHorizontal: 18 }]}>
+            <ActivityIndicator color={palette.gold} />
+            <Text style={{ color: palette.faint, marginTop: 10, fontSize: 12 }}>
+              در حال آماده‌سازی…
+            </Text>
+          </View>
         </View>
-      </View>
 
-      <AppBannerModal
-        visible={appModal.visible}
-        kind={appModal.kind}
-        title={appModal.title}
-        message={appModal.message}
-        onClose={() =>
-          setAppModal((prev) => ({
-            ...prev,
-            visible: false,
-          }))
-        }
-      />
-    </>
-  );
-}
+        <AppBannerModal
+          visible={appModal.visible}
+          kind={appModal.kind}
+          title={appModal.title}
+          message={appModal.message}
+          onClose={() =>
+            setAppModal((prev) => ({
+              ...prev,
+              visible: false,
+            }))
+          }
+        />
+      </>
+    );
+  }
 
-  // ------------------------- UI -------------------------
-  // ✅ حالت ۱: دکمه دایره بزرگ سبز وسط صفحه
   if (mode === "start") {
-  const startOpacity = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 0],
-  });
-  const startTranslate = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -12],
-  });
+    const startOpacity = anim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [1, 0],
+    });
 
-  return (
-    <>
-      <View style={[styles.full, { backgroundColor: palette.bg }]}>
-        <Animated.View
-          style={[
-            styles.centerWrap,
-            {
-              opacity: startOpacity,
-              transform: [{ translateY: startTranslate }],
-            },
-          ]}
-        >
-          <TouchableOpacity
-            activeOpacity={0.92}
-            onPress={goIntro}
+    const startTranslate = anim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, -12],
+    });
+
+    return (
+      <>
+        <View style={[styles.full, { backgroundColor: palette.bg }]}>
+          <Animated.View
             style={[
-              styles.startCircle,
+              styles.centerWrap,
               {
-                backgroundColor: palette.startGreenBg,
-                borderColor: palette.startGreenBorder,
+                opacity: startOpacity,
+                transform: [{ translateY: startTranslate }],
               },
             ]}
           >
-            <View
+            <TouchableOpacity
+              activeOpacity={0.92}
+              onPress={goIntro}
               style={[
-                styles.startCircleInner,
+                styles.startCircle,
                 {
-                  backgroundColor: "rgba(3,7,18,.60)",
-                  borderColor: "rgba(134,239,172,.25)",
+                  backgroundColor: palette.startGreenBg,
+                  borderColor: palette.startGreenBorder,
                 },
               ]}
             >
-              <Text
-                style={[styles.startCircleText, { color: palette.startGreen }]}
+              <View
+                style={[
+                  styles.startCircleInner,
+                  {
+                    backgroundColor: "rgba(3,7,18,.60)",
+                    borderColor: "rgba(134,239,172,.25)",
+                  },
+                ]}
               >
-                شروع
-              </Text>
-            </View>
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
+                <Text
+                  style={[styles.startCircleText, { color: palette.startGreen }]}
+                >
+                  شروع
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
 
-      <AppBannerModal
-        visible={appModal.visible}
-        kind={appModal.kind}
-        title={appModal.title}
-        message={appModal.message}
-        onClose={() =>
-          setAppModal((prev) => ({
-            ...prev,
-            visible: false,
-          }))
-        }
-      />
-    </>
-  );
-}
+        <AppBannerModal
+          visible={appModal.visible}
+          kind={appModal.kind}
+          title={appModal.title}
+          message={appModal.message}
+          onClose={() =>
+            setAppModal((prev) => ({
+              ...prev,
+              visible: false,
+            }))
+          }
+        />
+      </>
+    );
+  }
 
-
-  // ✅ حالت ۲: کارت وسط صفحه + توضیحات + دکمه شروع آزمون
   const introOpacity = anim.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 1],
   });
+
   const introTranslate = anim.interpolate({
     inputRange: [0, 1],
     outputRange: [14, 0],
   });
 
-   return (
+  return (
     <>
       <View style={[styles.full, { backgroundColor: palette.bg }]}>
         <Animated.View
@@ -381,13 +429,13 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
             <TouchableOpacity
               activeOpacity={0.9}
               onPress={startBaseline}
-              disabled={busy}
+              disabled={busy || authLoading}
               style={[
                 styles.primaryBtnGlass,
                 {
                   backgroundColor: "rgba(212,175,55,.10)",
                   borderColor: "rgba(212,175,55,.35)",
-                  opacity: busy ? 0.6 : 1,
+                  opacity: busy || authLoading ? 0.6 : 1,
                 },
               ]}
             >

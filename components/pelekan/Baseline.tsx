@@ -1,16 +1,9 @@
+import { useAuth } from "@/hooks/useAuth";
 import { getFriendlyErrorMessage } from "@/lib/errors/getFriendlyErrorMessage";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View
-} from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import AppBannerModal from "../ui/AppBannerModal";
-
 
 type Props = {
   me: any;
@@ -38,43 +31,37 @@ type Nav = {
   canSubmit?: boolean;
 };
 
-const API_PRIMARY = "https://api.qoqnoos.app/api/pelekan/baseline";
-const API_FALLBACK = "https://qoqnoos.app/api/pelekan/baseline";
+const API_BASE = "https://api.qoqnoos.app/api/pelekan/baseline";
 
-async function fetchJsonWithFallback(urlPrimary: string, urlFallback: string) {
-  try {
-    const r1 = await fetch(urlPrimary, { headers: { "Cache-Control": "no-store" } });
-    const j1 = await r1.json().catch(() => null);
-    if (j1 && j1.ok) return j1;
-    // اگر ok نبود هم برگردون تا error reason معلوم بشه
-    if (j1) return j1;
-  } catch {}
-  const r2 = await fetch(urlFallback, { headers: { "Cache-Control": "no-store" } });
-  const j2 = await r2.json().catch(() => null);
-  return j2;
+async function fetchJson(url: string, token: string) {
+  const res = await fetch(url, {
+    headers: {
+      "Cache-Control": "no-store",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const json = await res.json().catch(() => null);
+  return { res, json };
 }
 
-async function postJsonWithFallback(urlPrimary: string, urlFallback: string, body: any) {
-  try {
-    const r1 = await fetch(urlPrimary, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-      body: JSON.stringify(body),
-    });
-    const j1 = await r1.json().catch(() => null);
-    if (j1 && j1.ok) return j1;
-    if (j1) return j1;
-  } catch {}
-  const r2 = await fetch(urlFallback, {
+async function postJson(url: string, token: string, body: any) {
+  const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify(body),
   });
-  const j2 = await r2.json().catch(() => null);
-  return j2;
+
+  const json = await res.json().catch(() => null);
+  return { res, json };
 }
 
 export default function Baseline({ me, state, onRefresh }: Props) {
+  const { token, loading: authLoading } = useAuth();
   const phone = me?.phone as string | undefined;
 
   const palette = useMemo(
@@ -124,17 +111,16 @@ export default function Baseline({ me, state, onRefresh }: Props) {
   const [localSelected, setLocalSelected] = useState<number | null>(null);
 
   const [appModal, setAppModal] = useState<{
-  visible: boolean;
-  kind: "success" | "error" | "warning" | "info";
-  title: string;
-  message?: string;
-}>({
-  visible: false,
-  kind: "info",
-  title: "",
-  message: "",
-});
-
+    visible: boolean;
+    kind: "success" | "error" | "warning" | "info";
+    title: string;
+    message?: string;
+  }>({
+    visible: false,
+    kind: "info",
+    title: "",
+    message: "",
+  });
 
   const consentCount: number = useMemo(() => {
     const arr = state?.baseline?.content?.consentSteps;
@@ -142,17 +128,17 @@ export default function Baseline({ me, state, onRefresh }: Props) {
   }, [state?.baseline?.content?.consentSteps]);
 
   const showAppModal = (
-  kind: "success" | "error" | "warning" | "info",
-  title: string,
-  message?: string
-) => {
-  setAppModal({
-    visible: true,
-    kind,
-    title,
-    message,
-  });
-};
+    kind: "success" | "error" | "warning" | "info",
+    title: string,
+    message?: string
+  ) => {
+    setAppModal({
+      visible: true,
+      kind,
+      title,
+      message,
+    });
+  };
 
   const clamp = (n: number, min: number, max: number) =>
     Math.max(min, Math.min(max, n));
@@ -180,21 +166,54 @@ export default function Baseline({ me, state, onRefresh }: Props) {
       return;
     }
 
+    if (authLoading) {
+      console.log("[Baseline/fetchState] skipped: authLoading");
+      return;
+    }
+
+    if (!token) {
+      console.log("[Baseline/fetchState] no token");
+      setLoading(false);
+      setStep(null);
+      setCompletedResult(null);
+      setStatus("error");
+      setErrorMsg("TOKEN_MISSING");
+      return;
+    }
+
     try {
       setLoading(true);
       setErrorMsg(null);
 
-      const json = await fetchJsonWithFallback(
-        `${API_PRIMARY}/state?phone=${encodeURIComponent(phone)}`,
-        `${API_FALLBACK}/state?phone=${encodeURIComponent(phone)}`
-      );
+      const url = `${API_BASE}/state?phone=${encodeURIComponent(phone)}`;
 
-      if (!json?.ok) {
+      console.log("[Baseline/fetchState] request", {
+        phone,
+        hasToken: !!token,
+        tokenPreview: `${token.slice(0, 12)}...`,
+        url,
+      });
+
+      const { res, json } = await fetchJson(url, token);
+
+      console.log("[Baseline/fetchState] response", {
+        status: res.status,
+        ok: res.ok,
+      });
+
+      console.log("[Baseline/fetchState] json", {
+        ok: json?.ok,
+        error: json?.error || null,
+        message: json?.message || null,
+        hasData: !!json?.data,
+      });
+
+      if (!res.ok || !json?.ok) {
         setStep(null);
         setCompletedResult(null);
         setNav({ index: 0, total: 0, canNext: false, canSubmit: false });
         setStatus("error");
-        setErrorMsg(String(json?.error || "BASELINE_STATE_FAILED"));
+        setErrorMsg(String(json?.error || json?.message || `HTTP_${res.status}`));
         return;
       }
 
@@ -228,11 +247,14 @@ export default function Baseline({ me, state, onRefresh }: Props) {
         setLocalSelected(null);
       }
 
-      // ✅ اگر in_progress هست ولی step نیومده، این دیگه "نامشخص" نیست => sync issue
       if (st !== "completed" && !s) {
         setErrorMsg("STEP_MISSING");
       }
     } catch (e: any) {
+      console.log("[Baseline/fetchState] catch", {
+        message: e?.message || null,
+      });
+
       setStatus("error");
       setStep(null);
       setCompletedResult(null);
@@ -240,79 +262,147 @@ export default function Baseline({ me, state, onRefresh }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [phone]);
+  }, [phone, token, authLoading]);
 
   useEffect(() => {
+    console.log("[Baseline/useEffect]", {
+      authLoading,
+      hasToken: !!token,
+      tokenPreview: token ? `${token.slice(0, 12)}...` : null,
+      phone: phone || null,
+    });
+
+    if (authLoading) return;
     fetchBaselineState();
-  }, [fetchBaselineState]);
+  }, [authLoading, token, phone, fetchBaselineState]);
 
   const postAnswer = useCallback(
     async (payload: any) => {
       if (!phone) return false;
+
+      if (authLoading) {
+        showAppModal("warning", "کمی صبر کن", "احراز هویت هنوز کامل نشده.");
+        return false;
+      }
+
+      if (!token) {
+        showAppModal("error", "نیاز به ورود", "توکن احراز هویت پیدا نشد.");
+        return false;
+      }
+
       try {
         setBusy(true);
-        const json = await postJsonWithFallback(
-          `${API_PRIMARY}/answer`,
-          `${API_FALLBACK}/answer`,
-          { phone, ...payload }
-        );
 
-        if (!json?.ok) {
-  showAppModal(
-    "error",
-    "ثبت پاسخ انجام نشد",
-    "ثبت پاسخ با مشکل مواجه شد. لطفاً چند لحظه بعد دوباره تلاش کن."
-  );
-  return false;
-}
+        console.log("[Baseline/postAnswer] request", {
+          hasToken: !!token,
+          tokenPreview: `${token.slice(0, 12)}...`,
+          payload,
+        });
+
+        const { res, json } = await postJson(`${API_BASE}/answer`, token, {
+          phone,
+          ...payload,
+        });
+
+        console.log("[Baseline/postAnswer] response", {
+          status: res.status,
+          ok: res.ok,
+        });
+
+        console.log("[Baseline/postAnswer] json", {
+          ok: json?.ok,
+          error: json?.error || null,
+          message: json?.message || null,
+        });
+
+        if (!res.ok || !json?.ok) {
+          showAppModal(
+            "error",
+            "ثبت پاسخ انجام نشد",
+            json?.message || json?.error || `status=${res.status}`
+          );
+          return false;
+        }
+
         return true;
-      } catch {
-  showAppModal(
-    "error",
-    "ارتباط برقرار نشد",
-    "اتصال به سرور برقرار نشد. لطفاً اینترنتت را بررسی کن و دوباره تلاش کن."
-  );
-  return false;
-} finally {
+      } catch (e: any) {
+        console.log("[Baseline/postAnswer] catch", {
+          message: e?.message || null,
+        });
+
+        showAppModal(
+          "error",
+          "ارتباط برقرار نشد",
+          e?.message || "اتصال به سرور برقرار نشد. لطفاً دوباره تلاش کن."
+        );
+        return false;
+      } finally {
         setBusy(false);
       }
     },
-    [phone]
+    [phone, token, authLoading]
   );
 
   const submit = useCallback(async () => {
     if (!phone) return;
+
+    if (authLoading) {
+      showAppModal("warning", "کمی صبر کن", "احراز هویت هنوز کامل نشده.");
+      return;
+    }
+
+    if (!token) {
+      showAppModal("error", "نیاز به ورود", "توکن احراز هویت پیدا نشد.");
+      return;
+    }
+
     try {
       setBusy(true);
 
-      const json = await postJsonWithFallback(
-        `${API_PRIMARY}/submit`,
-        `${API_FALLBACK}/submit`,
-        { phone }
-      );
+      console.log("[Baseline/submit] request", {
+        hasToken: !!token,
+        tokenPreview: `${token.slice(0, 12)}...`,
+        phone,
+      });
 
-      if (!json?.ok) {
-  showAppModal(
-    "error",
-    "ثبت نهایی انجام نشد",
-    "ثبت نهایی سنجش با مشکل مواجه شد. لطفاً چند لحظه بعد دوباره تلاش کن."
-  );
-  return;
-}
+      const { res, json } = await postJson(`${API_BASE}/submit`, token, { phone });
+
+      console.log("[Baseline/submit] response", {
+        status: res.status,
+        ok: res.ok,
+      });
+
+      console.log("[Baseline/submit] json", {
+        ok: json?.ok,
+        error: json?.error || null,
+        message: json?.message || null,
+      });
+
+      if (!res.ok || !json?.ok) {
+        showAppModal(
+          "error",
+          "ثبت نهایی انجام نشد",
+          json?.message || json?.error || `status=${res.status}`
+        );
+        return;
+      }
 
       await onRefresh?.();
       await fetchBaselineState();
-    } catch {
-  showAppModal(
-    "error",
-    "ارتباط برقرار نشد",
-    "اتصال به سرور برقرار نشد. لطفاً اینترنتت را بررسی کن و دوباره تلاش کن."
-  );
-  return;
-} finally {
+    } catch (e: any) {
+      console.log("[Baseline/submit] catch", {
+        message: e?.message || null,
+      });
+
+      showAppModal(
+        "error",
+        "ارتباط برقرار نشد",
+        e?.message || "اتصال به سرور برقرار نشد. لطفاً دوباره تلاش کن."
+      );
+    } finally {
       setBusy(false);
     }
-  }, [phone, onRefresh, fetchBaselineState]);
+  }, [phone, token, authLoading, onRefresh, fetchBaselineState]);
 
   const questionIndex = useMemo(() => {
     if (step?.type !== "question") return null;
@@ -347,12 +437,12 @@ export default function Baseline({ me, state, onRefresh }: Props) {
 
     if (step.type === "question") {
       if (typeof localSelected !== "number") {
-showAppModal(
-  "warning",
-  "یک گزینه را انتخاب کن",
-  "برای ادامه، لازمه یکی از گزینه‌ها رو انتخاب کنی."
-);
-return;
+        showAppModal(
+          "warning",
+          "یک گزینه را انتخاب کن",
+          "برای ادامه، لازمه یکی از گزینه‌ها رو انتخاب کنی."
+        );
+        return;
       }
 
       const ok = await postAnswer({
@@ -372,12 +462,12 @@ return;
     }
 
     if (step.type === "review_missing") {
-   showAppModal(
-   "warning",
-  "از اول باید شروع کنی",
-  step.message ||
-    "چند پاسخ ثبت نشده. برای شروع دوباره، به تب پروفایل برو، وارد ویرایش پروفایل شو و گزینه «شروع از صفر» رو انتخاب کن."
-);
+      showAppModal(
+        "warning",
+        "از اول باید شروع کنی",
+        step.message ||
+          "چند پاسخ ثبت نشده. برای شروع دوباره، به تب پروفایل برو، وارد ویرایش پروفایل شو و گزینه «شروع از صفر» رو انتخاب کن."
+      );
     }
   }, [step, localSelected, postAnswer, fetchBaselineState, isLastQuestion, submit]);
 
@@ -450,17 +540,17 @@ return;
 
           <Text style={[styles.title, { color: accent, textAlign: "center" }]}>{header}</Text>
 
-          {/* ✅ error state */}
           {status === "error" ? (
             <>
               <Text style={[styles.centerText, { color: palette.red, marginTop: 12, lineHeight: 20 }]}>
                 خطا در دریافت سنجش.
               </Text>
+
               {!!errorMsg && (
-  <Text style={[styles.centerText, { color: palette.sub2, marginTop: 8, fontSize: 12 }]}>
-    {getFriendlyErrorMessage(errorMsg)}
-  </Text>
-)}
+                <Text style={[styles.centerText, { color: palette.sub2, marginTop: 8, fontSize: 12 }]}>
+                  {getFriendlyErrorMessage(errorMsg)}
+                </Text>
+              )}
 
               <View style={{ height: 14 }} />
               <Pressable
@@ -468,7 +558,11 @@ return;
                 onPress={fetchBaselineState}
                 style={[
                   styles.btnPrimary,
-                  { borderColor: palette.border, backgroundColor: "rgba(255,255,255,.04)", opacity: busy ? 0.7 : 1 },
+                  {
+                    borderColor: palette.border,
+                    backgroundColor: "rgba(255,255,255,.04)",
+                    opacity: busy ? 0.7 : 1,
+                  },
                 ]}
               >
                 <Text style={[styles.btnText, { color: palette.text }]}>تلاش دوباره</Text>
@@ -498,12 +592,46 @@ return;
                 disabled={busy}
                 onPress={async () => {
                   if (!phone) return;
+
+                  if (authLoading) {
+                    showAppModal("warning", "کمی صبر کن", "احراز هویت هنوز کامل نشده.");
+                    return;
+                  }
+
+                  if (!token) {
+                    showAppModal("error", "نیاز به ورود", "توکن احراز هویت پیدا نشد.");
+                    return;
+                  }
+
                   try {
                     setBusy(true);
-                    await postJsonWithFallback(`${API_PRIMARY}/seen`, `${API_FALLBACK}/seen`, { phone }).catch(() => null);
+
+                    console.log("[Baseline/seen] request", {
+                      hasToken: !!token,
+                      tokenPreview: `${token.slice(0, 12)}...`,
+                      phone,
+                    });
+
+                    const { res, json } = await postJson(`${API_BASE}/seen`, token, { phone });
+
+                    console.log("[Baseline/seen] response", {
+                      status: res.status,
+                      ok: res.ok,
+                    });
+
+                    console.log("[Baseline/seen] json", {
+                      ok: json?.ok,
+                      error: json?.error || null,
+                      message: json?.message || null,
+                    });
+                  } catch (e: any) {
+                    console.log("[Baseline/seen] catch", {
+                      message: e?.message || null,
+                    });
                   } finally {
                     setBusy(false);
                   }
+
                   await onRefresh?.();
                 }}
                 style={[
@@ -531,7 +659,11 @@ return;
                 onPress={goNext}
                 style={[
                   styles.btnPrimary,
-                  { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)", opacity: busy ? 0.7 : 1 },
+                  {
+                    borderColor: "rgba(212,175,55,.35)",
+                    backgroundColor: "rgba(212,175,55,.10)",
+                    opacity: busy ? 0.7 : 1,
+                  },
                 ]}
               >
                 {busy ? (
@@ -540,7 +672,9 @@ return;
                     <Text style={[styles.btnText, { color: palette.text }]}>در حال ثبت…</Text>
                   </View>
                 ) : (
-                  <Text style={[styles.btnText, { color: palette.text }]}>{step.optionText || "متوجه شدم"}</Text>
+                  <Text style={[styles.btnText, { color: palette.text }]}>
+                    {step.optionText || "متوجه شدم"}
+                  </Text>
                 )}
               </Pressable>
             </>
@@ -594,8 +728,14 @@ return;
                 style={[
                   styles.btnPrimary,
                   {
-                    borderColor: typeof localSelected !== "number" ? palette.border : "rgba(212,175,55,.35)",
-                    backgroundColor: typeof localSelected !== "number" ? "rgba(255,255,255,.04)" : "rgba(212,175,55,.10)",
+                    borderColor:
+                      typeof localSelected !== "number"
+                        ? palette.border
+                        : "rgba(212,175,55,.35)",
+                    backgroundColor:
+                      typeof localSelected !== "number"
+                        ? "rgba(255,255,255,.04)"
+                        : "rgba(212,175,55,.10)",
                     opacity: busy ? 0.85 : 1,
                   },
                 ]}
@@ -606,7 +746,17 @@ return;
                     <Text style={[styles.btnText, { color: palette.text }]}>در حال ثبت…</Text>
                   </View>
                 ) : (
-                  <Text style={[styles.btnText, { color: typeof localSelected !== "number" ? palette.sub : palette.text }]}>
+                  <Text
+                    style={[
+                      styles.btnText,
+                      {
+                        color:
+                          typeof localSelected !== "number"
+                            ? palette.sub
+                            : palette.text,
+                      },
+                    ]}
+                  >
                     {isLastQuestion ? "ثبت نهایی" : "ادامه"}
                   </Text>
                 )}
@@ -617,23 +767,28 @@ return;
               {step.message || "چند پاسخ ثبت نشده. لطفاً سنجش رو ریست کن."}
             </Text>
           ) : (
-            // ✅ به‌جای «نامشخص»، یک پیام دقیق‌تر + دکمه sync
             <>
               <Text style={[styles.centerText, { color: palette.sub2, marginTop: 12, lineHeight: 20 }]}>
                 سنجش در حال همگام‌سازی است…
               </Text>
+
               {!!errorMsg && (
-  <Text style={[styles.centerText, { color: palette.sub2, marginTop: 8, fontSize: 12 }]}>
-    {getFriendlyErrorMessage(errorMsg)}
-  </Text>
-)}
+                <Text style={[styles.centerText, { color: palette.sub2, marginTop: 8, fontSize: 12 }]}>
+                  {getFriendlyErrorMessage(errorMsg)}
+                </Text>
+              )}
+
               <View style={{ height: 14 }} />
               <Pressable
                 disabled={busy}
                 onPress={fetchBaselineState}
                 style={[
                   styles.btnPrimary,
-                  { borderColor: palette.border, backgroundColor: "rgba(255,255,255,.04)", opacity: busy ? 0.7 : 1 },
+                  {
+                    borderColor: palette.border,
+                    backgroundColor: "rgba(255,255,255,.04)",
+                    opacity: busy ? 0.7 : 1,
+                  },
                 ]}
               >
                 <Text style={[styles.btnText, { color: palette.text }]}>تازه‌سازی</Text>
@@ -641,7 +796,8 @@ return;
             </>
           )}
         </View>
-            </ScrollView>
+      </ScrollView>
+
       <AppBannerModal
         visible={appModal.visible}
         kind={appModal.kind}
@@ -652,7 +808,6 @@ return;
     </View>
   );
 }
-
 
 const styles = StyleSheet.create({
   rtlText: { writingDirection: "rtl" as any },
@@ -700,7 +855,12 @@ const styles = StyleSheet.create({
     marginVertical: 14,
   },
 
-  qText: { fontSize: 16, fontWeight: "800", lineHeight: 26, textAlign: "right" as any },
+  qText: {
+    fontSize: 16,
+    fontWeight: "800",
+    lineHeight: 26,
+    textAlign: "right" as any,
+  },
 
   option: {
     borderWidth: 1,

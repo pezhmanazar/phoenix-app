@@ -160,48 +160,76 @@ export default function PelekanTab() {
 
   /* ----------------------------- Fetch State ----------------------------- */
   const fetchState = useCallback(
-    async (opts?: { initial?: boolean; reason?: string }) => {
-      const isInitial = !!opts?.initial;
-      const sessionToken = token;
+  async (opts?: { initial?: boolean; reason?: string }) => {
+    const isInitial = !!opts?.initial;
+    const sessionToken = token;
 
-      // ✅ اگر یک fetch در جریان است، یکی دیگه راه ننداز
-      if (inFlightRef.current) {
-        return;
-      }
-      inFlightRef.current = true;
+    console.log("[Pelekan/fetchState] start", {
+      isInitial,
+      reason: opts?.reason || null,
+      hasToken: !!sessionToken,
+      tokenPreview: sessionToken ? `${sessionToken.slice(0, 12)}...` : null,
+      authLoading,
+    });
 
-      try {
-        if (isInitial) setInitialLoading(true);
-        else setRefreshing(true);
+    // ✅ اگر یک fetch در جریان است، یکی دیگه راه ننداز
+    if (inFlightRef.current) {
+      console.log("[Pelekan/fetchState] skipped: in flight");
+      return;
+    }
+    inFlightRef.current = true;
 
-        if (!sessionToken) {
+    try {
+      if (isInitial) setInitialLoading(true);
+      else setRefreshing(true);
+
+      if (!sessionToken) {
+        console.log("[Pelekan/fetchState] no token -> initialState");
         setState(initialState);
         return;
-        }
+      }
 
-        const qs = new URLSearchParams();
-        if (enterTreatment) qs.set("enterTreatment", enterTreatment);
+      const qs = new URLSearchParams();
+      if (enterTreatment) qs.set("enterTreatment", enterTreatment);
 
-        const url = `https://api.qoqnoos.app/api/pelekan/state${qs.toString() ? `?${qs.toString()}` : ""}`;
+      const url = `https://api.qoqnoos.app/api/pelekan/state${qs.toString() ? `?${qs.toString()}` : ""}`;
 
-        const res = await fetch(url, {
-  headers: {
-    "Cache-Control": "no-store",
-    Authorization: `Bearer ${sessionToken}`,
-  },
-});
+      console.log("[Pelekan/fetchState] request", {
+        url,
+        authHeaderPreview: `Bearer ${sessionToken.slice(0, 12)}...`,
+      });
 
-        let json: any = null;
-        try {
-          json = await res.json();
-        } catch {
-          json = null;
-        }
+      const res = await fetch(url, {
+        headers: {
+          "Cache-Control": "no-store",
+          Authorization: `Bearer ${sessionToken}`,
+        },
+      });
 
-        if (!res.ok || !json?.ok) {
-          setState(initialState);
-          return;
-        }
+      console.log("[Pelekan/fetchState] response", {
+        status: res.status,
+        ok: res.ok,
+      });
+
+      let json: any = null;
+      try {
+        json = await res.json();
+      } catch {
+        json = null;
+      }
+
+      console.log("[Pelekan/fetchState] json", {
+        ok: json?.ok,
+        hasData: !!json?.data,
+        message: json?.message || null,
+      });
+
+      if (!res.ok || !json?.ok) {
+        console.log("[Pelekan/fetchState] failed -> initialState");
+        setState(initialState);
+        return;
+      }
+
 
         const data = json.data || {};
 
@@ -281,7 +309,13 @@ export default function PelekanTab() {
     [token, enterTreatment]
   );
 
-  useEffect(() => {
+ useEffect(() => {
+  console.log("[Pelekan/useEffect]", {
+    authLoading,
+    hasToken: !!token,
+    tokenPreview: token ? `${token.slice(0, 12)}...` : null,
+  });
+
   if (authLoading) return;
   fetchState({ initial: true, reason: "mount_or_token_change" });
 }, [authLoading, token, fetchState]);
@@ -605,6 +639,7 @@ export default function PelekanTab() {
   const onTapResults = useCallback(() => {
   router.push("/(tabs)/ReviewResult" as any);
 }, [router]);
+
 
   /* ----------------------------- Layout ----------------------------- */
   const bottomSafe = insets.bottom + tabBarH;

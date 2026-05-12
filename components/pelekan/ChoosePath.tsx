@@ -1,4 +1,5 @@
 // components/pelekan/ChoosePath.tsx
+import { useAuth } from "@/hooks/useAuth";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -21,7 +22,7 @@ type Props = {
 type BusyKind = null | "skip_review" | "review";
 
 export default function ChoosePath({ me, state, onRefresh }: Props) {
-  const phone = me?.phone as string | undefined;
+  const { token, loading: authLoading } = useAuth();
 
   const palette = useMemo(
     () => ({
@@ -47,7 +48,6 @@ export default function ChoosePath({ me, state, onRefresh }: Props) {
   const [busy, setBusy] = useState<BusyKind>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  // Entrance animation like other cards
   const fade = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(10)).current;
 
@@ -70,29 +70,60 @@ export default function ChoosePath({ me, state, onRefresh }: Props) {
     ]).start();
   }, [fade, slide]);
 
-  const postJsonSafe = useCallback(async (url: string, body: any) => {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const text = await res.text();
-  let json: any = null;
-  try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    json = null;
-  }
-  return { res, json, text };
-}, []);
+  const postJsonSafe = useCallback(
+    async (url: string, body: any) => {
+      if (authLoading) {
+        throw new Error("AUTH_NOT_READY");
+      }
 
-  // ✅ مسیر درست: review/choose
+      if (!token) {
+        throw new Error("NO_AUTH_TOKEN");
+      }
+
+      console.log("CHOOSE_PATH_POST:", {
+        url,
+        body,
+        hasToken: !!token,
+      });
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      const text = await res.text();
+
+      let json: any = null;
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        json = null;
+      }
+
+      console.log("CHOOSE_PATH_RESPONSE_STATUS:", res.status);
+      console.log("CHOOSE_PATH_RESPONSE_JSON:", json);
+      console.log("CHOOSE_PATH_RESPONSE_TEXT:", text);
+
+      return { res, json, text };
+    },
+    [token, authLoading]
+  );
+
   const CHOOSE_URL = `${BACKEND_URL}/api/pelekan/review/choose`;
 
   const choose = useCallback(
     async (choice: "skip_review" | "review") => {
-      if (!phone) {
-        setErr("شماره کاربر پیدا نشد.");
+      if (authLoading) {
+        setErr("لطفاً کمی صبر کنید...");
+        return;
+      }
+
+      if (!token) {
+        setErr("نشست کاربر معتبر نیست. لطفاً دوباره وارد شوید.");
         return;
       }
 
@@ -100,29 +131,59 @@ export default function ChoosePath({ me, state, onRefresh }: Props) {
       setBusy(choice);
 
       try {
-        // 1) store choice
-        const { res, json, text } = await postJsonSafe(CHOOSE_URL, { phone, choice });
+        // backend باید کاربر را از روی token بشناسد
+        const { res, json, text } = await postJsonSafe(CHOOSE_URL, { choice });
+
         if (!res.ok || !json?.ok) {
           const msg =
-            json?.error || json?.message || (text ? `HTTP ${res.status}` : "REQUEST_FAILED");
+            json?.error ||
+            json?.message ||
+            json?.detail ||
+            json?.data?.error ||
+            json?.data?.message ||
+            (res.status === 401
+              ? "UNAUTHORIZED"
+              : text
+              ? `HTTP ${res.status}`
+              : "REQUEST_FAILED");
+
+          if (res.status === 401) {
+            setErr("دسترسی نامعتبر است. لطفاً یک‌بار از حساب خارج و دوباره وارد شوید.");
+            return;
+          }
+
+          if (res.status === 403) {
+            setErr("شما مجاز به انجام این عملیات نیستید.");
+            return;
+          }
+
           setErr(`ثبت مسیر ناموفق بود: ${String(msg)}`);
           return;
         }
 
-        
-
-        // 3) refresh parent (should move tabState to treating or review)
         await onRefresh?.();
-    } catch {
-      setErr("ارتباط با سرور برقرار نشد.");
-    } finally {
-      setBusy(null);
-    }
-  },
-  [phone, postJsonSafe, CHOOSE_URL, onRefresh]
-);
+      } catch (e: any) {
+        console.log("CHOOSE_PATH_ERROR:", e);
 
+        const raw = String(e?.message || "");
 
+        if (raw === "AUTH_NOT_READY") {
+          setErr("احراز هویت هنوز آماده نیست. چند لحظه دیگر دوباره تلاش کنید.");
+          return;
+        }
+
+        if (raw === "NO_AUTH_TOKEN") {
+          setErr("توکن احراز هویت یافت نشد. لطفاً دوباره وارد شوید.");
+          return;
+        }
+
+        setErr("ارتباط با سرور برقرار نشد.");
+      } finally {
+        setBusy(null);
+      }
+    },
+    [authLoading, token, postJsonSafe, CHOOSE_URL, onRefresh]
+  );
 
   const header = "انتخاب مسیر";
 
@@ -148,29 +209,28 @@ export default function ChoosePath({ me, state, onRefresh }: Props) {
             </Text>
 
             <Text style={[styles.centerText, { color: palette.sub, marginTop: 10, lineHeight: 20 }]}>
-  یک مسیر برای «رها کردن و جلو رفتن»
-</Text>
+              یک مسیر برای «رها کردن و جلو رفتن»
+            </Text>
 
-<Text
-  style={[
-    styles.centerText,
-    {
-      color: palette.sub,
-      marginTop: 4,
-      lineHeight: 20,
-      fontSize: 12,
-      opacity: 0.9,
-    },
-  ]}
->
-  یک مسیر برای «بررسی واقع‌بینانه احتمال ترمیم رابطه»
-</Text>
+            <Text
+              style={[
+                styles.centerText,
+                {
+                  color: palette.sub,
+                  marginTop: 4,
+                  lineHeight: 20,
+                  fontSize: 12,
+                  opacity: 0.9,
+                },
+              ]}
+            >
+              یک مسیر برای «بررسی واقع‌بینانه احتمال ترمیم رابطه»
+            </Text>
 
             <View style={{ height: 14 }} />
 
-            {/* Option 1 */}
             <Pressable
-              disabled={!!busy}
+              disabled={!!busy || authLoading}
               onPress={() => choose("skip_review")}
               style={({ pressed }) => [
                 styles.choiceCard,
@@ -211,9 +271,8 @@ export default function ChoosePath({ me, state, onRefresh }: Props) {
               </View>
             </Pressable>
 
-            {/* Option 2 */}
             <Pressable
-              disabled={!!busy}
+              disabled={!!busy || authLoading}
               onPress={() => choose("review")}
               style={({ pressed }) => [
                 styles.choiceCard,
@@ -230,8 +289,8 @@ export default function ChoosePath({ me, state, onRefresh }: Props) {
                 می‌خوام احتمال درست شدن رابطه رو بررسی کنم
               </Text>
               <Text style={[styles.choiceDesc, { color: palette.sub2, textAlign: "center" }]}>
-  بازسنجی رابطه با دو آزمون علمی
-</Text>
+                بازسنجی رابطه با دو آزمون علمی
+              </Text>
 
               <View style={{ height: 12 }} />
 

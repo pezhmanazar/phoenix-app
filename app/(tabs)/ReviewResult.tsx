@@ -1,9 +1,10 @@
 // phoenix-app/app/(tabs)/ReviewResult.tsx
+import { useAuth } from "@/hooks/useAuth";
 import { getFriendlyErrorMessage } from "@/lib/errors/getFriendlyErrorMessage";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { Audio } from "expo-av";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -11,13 +12,10 @@ import Svg, { Circle } from "react-native-svg";
 import { AUDIO_KEYS, mediaUrl } from "../../constants/media";
 
 /**
- * ✅ دو دامنه برای جلوگیری از گیرهای محیطی/کش
+ * ✅ فقط API اصلی
  */
-const API_REVIEW_PRIMARY = "https://api.qoqnoos.app/api/pelekan/review";
-const API_REVIEW_FALLBACK = "https://qoqnoos.app/api/pelekan/review";
-
-const API_STATE_PRIMARY = "https://api.qoqnoos.app/api/pelekan/state";
-const API_STATE_FALLBACK = "https://qoqnoos.app/api/pelekan/state";
+const API_REVIEW = "https://api.qoqnoos.app/api/pelekan/review";
+const API_STATE = "https://api.qoqnoos.app/api/pelekan/state";
 
 // ✅ Baseline max score
 const BASELINE_MAX_SCORE = 31;
@@ -49,35 +47,75 @@ type DiagramItem = {
   label?: string;
 };
 
-async function fetchJsonWithFallback(urlPrimary: string, urlFallback: string) {
+async function fetchJsonAuthed(url: string, token: string) {
+  const res = await fetch(url, {
+    headers: {
+      "Cache-Control": "no-store",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const text = await res.text();
+  let json: any = null;
+
   try {
-    const res1 = await fetch(urlPrimary, { headers: { "Cache-Control": "no-store" } });
-    const j1 = await res1.json().catch(() => null);
-    if (j1 && j1.ok) return j1;
-  } catch {}
-  const res2 = await fetch(urlFallback, { headers: { "Cache-Control": "no-store" } });
-  const j2 = await res2.json().catch(() => null);
-  return j2;
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = null;
+  }
+
+  console.log("REVIEW_RESULT_FETCH_STATUS:", res.status, url);
+  console.log("REVIEW_RESULT_FETCH_JSON:", json);
+
+  if (!res.ok || !json?.ok) {
+    const msg =
+      json?.error ||
+      json?.message ||
+      json?.detail ||
+      json?.data?.error ||
+      json?.data?.message ||
+      (res.status === 401 ? "UNAUTHORIZED" : `HTTP_${res.status}`);
+    throw new Error(msg);
+  }
+
+  return json;
 }
 
-// ✅ NEW: POST with primary/fallback
-async function postJsonWithFallback(urlPrimary: string, urlFallback: string, body: any) {
-  try {
-    const res1 = await fetch(urlPrimary, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-      body: JSON.stringify(body),
-    });
-    const j1 = await res1.json().catch(() => null);
-    if (j1 && j1.ok) return j1;
-  } catch {}
-  const res2 = await fetch(urlFallback, {
+async function postJsonAuthed(url: string, body: any, token: string) {
+  const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify(body),
   });
-  const j2 = await res2.json().catch(() => null);
-  return j2;
+
+  const text = await res.text();
+  let json: any = null;
+
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = null;
+  }
+
+  console.log("REVIEW_RESULT_POST_STATUS:", res.status, url);
+  console.log("REVIEW_RESULT_POST_JSON:", json);
+
+  if (!res.ok || !json?.ok) {
+    const msg =
+      json?.error ||
+      json?.message ||
+      json?.detail ||
+      json?.data?.error ||
+      json?.data?.message ||
+      (res.status === 401 ? "UNAUTHORIZED" : `HTTP_${res.status}`);
+    throw new Error(msg);
+  }
+
+  return json;
 }
 
 /** ✅ Ring (بدون کتابخانه اضافی) */
@@ -169,12 +207,12 @@ function InlineAudioPlayer({
 }) {
   const soundRef = useRef<Audio.Sound | null>(null);
 
-  const opLockRef = useRef(false); // ✅ جلوگیری از دابل‌تپ/ریس‌کاندیشن
+  const opLockRef = useRef(false);
   const mountedRef = useRef(true);
 
   const [, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
-  const [loadingAudio, setLoadingAudio] = useState(false); // ✅ NEW
+  const [loadingAudio, setLoadingAudio] = useState(false);
   const [posMs, setPosMs] = useState(0);
   const [durMs, setDurMs] = useState(0);
 
@@ -237,7 +275,6 @@ function InlineAudioPlayer({
         setPosMs(Number(st.positionMillis || 0));
         setDurMs(Number(st.durationMillis || 0));
 
-        // وقتی به انتها رسید، play رو خاموش کن
         if (st.didJustFinish) {
           setPlaying(false);
         }
@@ -253,7 +290,6 @@ function InlineAudioPlayer({
 
   const togglePlayPause = useCallback(() => {
     return lock(async () => {
-      // ✅ اگر هنوز لود نشده، همینجا لود کن و دکمه رو لودینگ کن
       if (!soundRef.current) {
         await ensureLoaded();
       }
@@ -277,7 +313,6 @@ function InlineAudioPlayer({
         return;
       }
 
-      // اگر به آخر رسیده بود، از اول
       if (Number(st.positionMillis || 0) >= Number(st.durationMillis || 0) - 250) {
         await s.setPositionAsync(0).catch(() => {});
       }
@@ -317,43 +352,36 @@ function InlineAudioPlayer({
   }, [unload]);
 
   return (
-  <View style={[styles.audioRow, { borderColor: palette.border2, backgroundColor: palette.glass2 }]}>
-    {/* Row: [Play] [Bar] [Time] */}
-    <View style={styles.audioInnerRow}>
-      <Pressable
-        style={({ pressed }) => [
-          styles.audioPlayBtn,
-          { opacity: pressed ? 0.85 : 1, borderColor: "rgba(255,255,255,.10)" },
-        ]}
-        onPress={togglePlayPause}
-        hitSlop={10}
-        disabled={loadingAudio && !playing}
-      >
-        {loadingAudio && !playing ? (
-          <ActivityIndicator size="small" color={palette.text} />
-        ) : (
-          <Ionicons name={playing ? "pause" : "play"} size={18} color={palette.text} />
-        )}
-      </Pressable>
+    <View style={[styles.audioRow, { borderColor: palette.border2, backgroundColor: palette.glass2 }]}>
+      <View style={styles.audioInnerRow}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.audioPlayBtn,
+            { opacity: pressed ? 0.85 : 1, borderColor: "rgba(255,255,255,.10)" },
+          ]}
+          onPress={togglePlayPause}
+          hitSlop={10}
+          disabled={loadingAudio && !playing}
+        >
+          {loadingAudio && !playing ? (
+            <ActivityIndicator size="small" color={palette.text} />
+          ) : (
+            <Ionicons name={playing ? "pause" : "play"} size={18} color={palette.text} />
+          )}
+        </Pressable>
 
-      {/* ✅ Bar: flex می‌گیرد، دیگر وارد دکمه نمی‌شود */}
-      <View style={styles.audioBarCol}>
-        <SeekBar progress={progress} palette={palette} onSeek={seekTo} />
+        <View style={styles.audioBarCol}>
+          <SeekBar progress={progress} palette={palette} onSeek={seekTo} />
+        </View>
+
+        <Text style={[styles.audioTimeInline, { color: palette.sub2 }]}>
+          {formatMs(posMs)} / {formatMs(durMs)}
+        </Text>
       </View>
-
-      {/* ✅ Time: داخل کادر و با عرض ثابت */}
-      <Text style={[styles.audioTimeInline, { color: palette.sub2 }]}>
-        {formatMs(posMs)} / {formatMs(durMs)}
-      </Text>
     </View>
-  </View>
-);
-
+  );
 }
 
-/**
- * ✅ SeekBar دقیق با onLayout (برای tap-to-seek درست)
- */
 function SeekBar({
   progress,
   palette,
@@ -417,9 +445,12 @@ function computeReviewAudioKeyFromMeta(metaTest1: any): ReviewAudioKey {
     (attachPercent != null && attachPercent >= 65);
 
   const relationshipGood =
-    (satisfPercent != null && satisfPercent >= 65) &&
-    (conflictPercent != null && conflictPercent <= 45) &&
-    (attachPercent != null && attachPercent <= 55);
+    satisfPercent != null &&
+    satisfPercent >= 65 &&
+    conflictPercent != null &&
+    conflictPercent <= 45 &&
+    attachPercent != null &&
+    attachPercent <= 55;
 
   if (relationshipDanger) return "danger";
   if (personalDanger) return "draining";
@@ -429,22 +460,22 @@ function computeReviewAudioKeyFromMeta(metaTest1: any): ReviewAudioKey {
 }
 
 export default function ReviewResult() {
-  const router = useRouter();
-  const params = useLocalSearchParams();
-  const phone = String((params as any)?.phone || "").trim();
+const router = useRouter();
+const { token, loading: authLoading } = useAuth() as any;
+
 
   const mountedRef = useRef(true);
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  // ✅ state from /pelekan/state
   const [baselineSession, setBaselineSession] = useState<any | null>(null);
   const [reviewSession, setReviewSession] = useState<any | null>(null);
 
-  // ✅ review result from /pelekan/review/result
   const [result, setResult] = useState<any | null>(null);
-  const [, setReviewStatus] = useState<"in_progress" | "completed_locked" | "unlocked" | null>(null);
+  const [reviewResultStatus, setReviewResultStatus] = useState<
+  "in_progress" | "completed_locked" | "unlocked" | null
+>(null);
 
   const palette = useMemo(
     () => ({
@@ -472,31 +503,44 @@ export default function ReviewResult() {
     };
   }, []);
 
-  // ✅ FIX: always pass phone to Pelekan so it doesn't reset state
   const goPelekan = useCallback(() => {
-    if (!phone) return;
-    router.replace({
-      pathname: "/(tabs)/Pelekan",
-      params: { phone, enterTreatment: "1" },
-    } as any);
-  }, [router, phone]);
+  router.replace({
+    pathname: "/(tabs)/Pelekan",
+    params: { enterTreatment: "1" },
+  } as any);
+}, [router]);
+
 
   const goPelekanReviewTests = useCallback(() => {
-    if (!phone) return;
-    router.replace(`/(tabs)/Pelekan?phone=${encodeURIComponent(phone)}&focus=review_tests`);
-  }, [router, phone]);
+  router.replace(`/(tabs)/Pelekan?focus=review_tests`);
+}, [router]);
 
   const goPelekanBaselineTests = useCallback(() => {
-    if (!phone) return;
-    router.replace(`/(tabs)/Pelekan?phone=${encodeURIComponent(phone)}&focus=baseline_tests`);
-  }, [router, phone]);
+  router.replace(`/(tabs)/Pelekan?focus=baseline_tests`);
+}, [router]);
 
   const fetchAll = useCallback(async () => {
-    if (!phone) {
-      setErr("PHONE_MISSING");
-      setLoading(false);
-      return;
-    }
+  console.log("REVIEW_RESULT_FETCHALL_START", {
+  authLoading,
+  hasToken: !!token,
+});
+
+if (authLoading) {
+  console.log("REVIEW_RESULT_FETCHALL_SKIP_AUTH_LOADING");
+  return;
+}
+
+if (!token) {
+  console.log("REVIEW_RESULT_FETCHALL_NO_TOKEN");
+  setBaselineSession(null);
+  setReviewSession(null);
+  setResult(null);
+  setReviewResultStatus(null);
+  setErr("TOKEN_MISSING");
+  setLoading(false);
+  return;
+}
+
 
     if (mountedRef.current) {
       setLoading(true);
@@ -504,104 +548,158 @@ export default function ReviewResult() {
     }
 
     try {
-      // 1) pelekan/state -> baseline + review session
-      const stJson: StateResponse = await fetchJsonWithFallback(
-        `${API_STATE_PRIMARY}?phone=${encodeURIComponent(phone)}`,
-        `${API_STATE_FALLBACK}?phone=${encodeURIComponent(phone)}`
-      );
-
-      if (!stJson?.ok) throw new Error(stJson?.error || "STATE_FAILED");
-
+      const stJson: StateResponse = await fetchJsonAuthed(API_STATE, token);
       const b = stJson?.data?.baseline?.session ?? null;
       const r = stJson?.data?.review?.session ?? null;
+
+console.log("STATE_BASELINE_SESSION:", b);
+console.log("STATE_REVIEW_SESSION:", r);
+console.log("STATE_REVIEW_STATUS:", r?.status);
+console.log("STATE_REVIEW_CHOSEN_PATH:", r?.chosenPath);
+
 
       if (mountedRef.current) {
         setBaselineSession(b);
         setReviewSession(r);
       }
 
-      // 2) review/result only if done
       const rStatus = String(r?.status || "");
       const shouldFetchReviewResult = rStatus === "completed_locked" || rStatus === "unlocked";
 
-      if (!shouldFetchReviewResult) {
-        if (mountedRef.current) {
-          setReviewStatus((rStatus as any) || null);
-          setResult(null);
-        }
-        return;
-      }
+  if (!shouldFetchReviewResult) {
+  if (mountedRef.current) {
+    setReviewResultStatus((rStatus as any) || null);
+    setResult(null);
+    setErr(null);
+  }
+  return;
+}
 
-      const rrJson: ResultResponse = await fetchJsonWithFallback(
-        `${API_REVIEW_PRIMARY}/result?phone=${encodeURIComponent(phone)}`,
-        `${API_REVIEW_FALLBACK}/result?phone=${encodeURIComponent(phone)}`
-      );
+try {
+  const rrJson: ResultResponse = await fetchJsonAuthed(`${API_REVIEW}/result`, token);
+  console.log("REVIEW_RESULT_DATA_STATUS:", rrJson?.data?.status);
+  console.log("REVIEW_RESULT_DATA_RESULT:", rrJson?.data?.result);
 
-      if (!rrJson?.ok) throw new Error(rrJson?.error || "RESULT_FAILED");
+  if (mountedRef.current) {
+    setReviewResultStatus(rrJson?.data?.status ?? null);
+    setResult(rrJson?.data?.result ?? null);
+    setErr(null);
+  }
+} catch (e: any) {
+  console.log("REVIEW_RESULT_RESULT_FETCH_ERROR:", e?.message || e);
 
-      if (mountedRef.current) {
-        setReviewStatus(rrJson?.data?.status ?? null);
-        setResult(rrJson?.data?.result ?? null);
-      }
+  if (mountedRef.current) {
+    setReviewResultStatus((rStatus as any) || null);
+    setResult(null);
+    setErr(String(e?.message || "FAILED"));
+  }
+}
+
     } catch (e: any) {
-      if (mountedRef.current) setErr(String(e?.message || "FAILED"));
+      if (mountedRef.current) setErr(String(e?.message || "NETWORK_ERROR"));
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [phone]);
+  }, [token, authLoading]);
 
   useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
+  console.log("[ReviewResult/useEffect]", {
+    authLoading,
+    hasToken: !!token,
+    tokenPreview: token ? `${token.slice(0, 12)}...` : null,
+  });
+
+  if (authLoading) return;
+  fetchAll();
+}, [authLoading, token, fetchAll]);
+
 
   useFocusEffect(
-    useCallback(() => {
-      fetchAll();
-    }, [fetchAll])
-  );
+  useCallback(() => {
+    if (authLoading) return;
+    if (!token) return;
 
-  // ✅ NEW: retry چندباره برای همگام‌سازی status
+    fetchAll();
+  }, [fetchAll, authLoading, token])
+);
+
+
   const retryRef = useRef(0);
   const retryTimerRef = useRef<any>(null);
 
+  const hasUsableResultForRetry = useMemo(() => {
+  const diagramsObjForRetry = result?.diagrams || null;
+  const test1ForRetry = Array.isArray(diagramsObjForRetry?.test1)
+    ? diagramsObjForRetry.test1
+    : [];
+  const test2ForRetry = Array.isArray(diagramsObjForRetry?.test2)
+    ? diagramsObjForRetry.test2
+    : [];
+  const summaryForRetry = result?.summary || null;
+
+  return (
+    !!result &&
+    (
+      !!summaryForRetry ||
+      !!result?.message ||
+      test1ForRetry.length > 0 ||
+      test2ForRetry.length > 0
+    )
+  );
+}, [result]);
+
+
   useEffect(() => {
-  if (retryTimerRef.current) {
-    clearTimeout(retryTimerRef.current);
-    retryTimerRef.current = null;
-  }
-
-  if (loading || err) return;
-  if (!phone) return;
-
-  const rStatus = String(reviewSession?.status || "");
-  const chosen = String(reviewSession?.chosenPath || "");
-
-  const isDone = rStatus === "completed_locked" || rStatus === "unlocked";
-  if (isDone) {
-    retryRef.current = 0;
-    return;
-  }
-
-  if (chosen !== "review") return;
-  if (retryRef.current >= 6) return;
-
-  retryTimerRef.current = setTimeout(() => {
-    retryRef.current += 1;
-    fetchAll();
-  }, 700);
-
-  return () => {
     if (retryTimerRef.current) {
       clearTimeout(retryTimerRef.current);
       retryTimerRef.current = null;
     }
-  };
-}, [loading, err, phone, reviewSession?.status, reviewSession?.chosenPath, fetchAll]);
 
+    if (loading || err) return;
+    if (authLoading || !token) return;
 
-  // ✅ NEW: اگر مسیر skip_review بود، قبل رفتن به تست‌ها مسیر را review کن
+    const rStatus = String(reviewSession?.status || "");
+    const chosen = String(reviewSession?.chosenPath || "");
+
+    const isDone = rStatus === "completed_locked" || rStatus === "unlocked";
+    if (isDone && hasUsableResultForRetry) {
+  retryRef.current = 0;
+  return;
+}
+
+    if (chosen !== "review") return;
+    if (retryRef.current >= 6) return;
+
+    retryTimerRef.current = setTimeout(() => {
+      retryRef.current += 1;
+      fetchAll();
+    }, 700);
+
+    return () => {
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    };
+  }, [
+  loading,
+  err,
+  authLoading,
+  token,
+  reviewSession?.status,
+  reviewSession?.chosenPath,
+  hasUsableResultForRetry,
+  fetchAll,
+]
+);
+
   const goReviewTestsForceReviewPath = useCallback(async () => {
-    if (!phone) return;
+if (authLoading) return;
+
+if (!token) {
+  setErr("TOKEN_MISSING");
+  return;
+}
 
     if (mountedRef.current) {
       setLoading(true);
@@ -609,32 +707,25 @@ export default function ReviewResult() {
     }
 
     try {
-            const chosen = String(reviewSession?.chosenPath || "");
+      const chosen = String(reviewSession?.chosenPath || "");
       if (chosen === "skip_review") {
-        const cj = await postJsonWithFallback(`${API_REVIEW_PRIMARY}/choose`, `${API_REVIEW_FALLBACK}/choose`, {
-          phone,
-          choice: "review",
-        });
-
-        if (!cj?.ok) throw new Error(cj?.error || "CHOOSE_FAILED");
-
+        await postJsonAuthed(`${API_REVIEW}/choose`, { choice: "review" }, token);
         try {
           await fetchAll();
         } catch {}
       }
 
-      router.push({
-        pathname: "/(tabs)/Pelekan",
-        params: { phone, focus: "review_tests" },
-      } as any);
+      router.replace({
+  pathname: "/(tabs)/Pelekan",
+  params: { focus: "review_tests" },
+} as any);
     } catch (e: any) {
-      if (mountedRef.current) setErr(String(e?.message || "FAILED"));
+      if (mountedRef.current) setErr(String(e?.message || "NETWORK_ERROR"));
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [phone, reviewSession?.chosenPath, router, fetchAll]);
+  }, [authLoading, token, reviewSession?.chosenPath, router, fetchAll]);
 
-  // ---------------- baseline status ----------------
   const baselineStatus = String(baselineSession?.status || "");
   const baselineDone = baselineStatus === "completed";
   const baselineInProgress = !!baselineSession && !baselineDone;
@@ -673,17 +764,19 @@ export default function ReviewResult() {
     return "این نمره شدت «فشار و آسیب روانیِ ناشی از شکست عاطفی یا جدایی» را نشان می‌دهد. نمره بالاتر یعنی ذهن و بدن تو هنوز تحت فشار بیشتری هستند و بهتر است از یک مسیر حمایتی و درمانی ساختارمند استفاده کنی.";
   }, [baselineSession]);
 
-  // ---------------- review / tests ----------------
   const hasReviewSession = !!reviewSession?.id;
   const chosenPath = reviewSession?.chosenPath ?? null;
   const reviewSessStatus = String(reviewSession?.status || "");
-  const reviewInProgress = reviewSessStatus === "in_progress";
+  const effectiveReviewStatus = String(reviewResultStatus || reviewSessStatus || "");
+  const reviewInProgress = effectiveReviewStatus === "in_progress";
 
   const isSkipPath = chosenPath === "skip_review";
   const isReviewPath = chosenPath === "review";
-  const reviewDone = isReviewPath && (reviewSessStatus === "completed_locked" || reviewSessStatus === "unlocked");
-
-  const locked = false; // ✅ نتایج رایگان است
+  const reviewDone =
+  isReviewPath &&
+  (effectiveReviewStatus === "completed_locked" ||
+   effectiveReviewStatus === "unlocked");
+  const locked = effectiveReviewStatus === "completed_locked";
   const didSkipTest2 = !!result?.meta?.didSkipTest2;
 
   const diagramsObj = result?.diagrams || null;
@@ -691,7 +784,16 @@ export default function ReviewResult() {
   const test2Diagrams: DiagramItem[] = Array.isArray(diagramsObj?.test2) ? diagramsObj.test2 : [];
   const summary = result?.summary || null;
 
-  // ✅ NEW: بخش احتمال برگشت (اگر سرور جدا کرده باشد)
+  const hasUsableResult =
+  !!result &&
+  (
+    !!summary ||
+    !!result?.message ||
+    test1Diagrams.length > 0 ||
+    test2Diagrams.length > 0
+  );
+
+
   const returnOne =
     summary?.returnOne ??
     summary?.retOne ??
@@ -831,10 +933,11 @@ export default function ReviewResult() {
   const headerTitle = "سنجش وضعیت";
 
   const headerSub = useMemo(() => {
+    if (authLoading) return "در حال آماده‌سازی نشست…";
     if (loading) return "در حال دریافت نتیجه…";
     if (err) return "خطا در دریافت نتیجه";
     return null;
-  }, [loading, err]);
+  }, [authLoading, loading, err]);
 
   const DiagramCard = ({ item }: { item: DiagramItem }) => {
     const p = clamp(Number(item?.percent ?? 0), 0, 100);
@@ -867,7 +970,6 @@ export default function ReviewResult() {
     );
   };
 
-  // ✅ NEW: انتخاب ویس بر اساس داده‌های سرور
   const reviewAudio = useMemo(() => {
     const metaT1 = summary?.meta?.test1 ?? result?.summary?.meta?.test1 ?? null;
     const key = computeReviewAudioKeyFromMeta(metaT1);
@@ -898,18 +1000,34 @@ export default function ReviewResult() {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={[styles.card, { backgroundColor: palette.glass, borderColor: palette.border }]}>
-          {loading && (
+          {(loading || authLoading) && (
             <View style={{ paddingVertical: 18, alignItems: "center" }}>
               <ActivityIndicator color={palette.gold} />
-              <Text style={{ color: palette.sub2, marginTop: 10, fontSize: 12 }}>در حال دریافت…</Text>
+              <Text style={{ color: palette.sub2, marginTop: 10, fontSize: 12 }}>
+                {authLoading ? "در حال آماده‌سازی نشست…" : "در حال دریافت…"}
+              </Text>
             </View>
           )}
 
-         {!!err && !loading && <Text style={[styles.rtl, { color: palette.red }]}>{getFriendlyErrorMessage(err)}</Text>}
+{!!err && !loading && !authLoading && (
+  <View>
+    <Text style={[styles.rtl, { color: palette.red }]}>
+      {getFriendlyErrorMessage(err)}
+    </Text>
+    <Text style={[styles.rtl, { color: palette.sub2, marginTop: 6, fontSize: 12 }]}>
+      DEBUG: {String(err)}
+    </Text>
+    <Text style={[styles.rtl, { color: palette.sub2, marginTop: 4, fontSize: 12 }]}>
+      token={token ? "YES" : "NO"} | authLoading={String(authLoading)}
+    </Text>
+  </View>
+)}
+          {/* {!!err && !loading && !authLoading && (
+            <Text style={[styles.rtl, { color: palette.red }]}>{getFriendlyErrorMessage(err)}</Text>
+          )} */}
 
-          {!loading && !err && (
+          {!loading && !authLoading && !err && (
             <>
-              {/* ---------------- Baseline ---------------- */}
               <View style={[styles.block, { borderColor: palette.border }]}>
                 <Text style={[styles.h2, { color: palette.text }]}>سنجش آسیب شکست عاطفی یا جدایی</Text>
 
@@ -958,7 +1076,6 @@ export default function ReviewResult() {
 
               <View style={{ height: 12 }} />
 
-              {/* ---------------- Review / Tests ---------------- */}
               <View style={[styles.block, { borderColor: palette.border }]}>
                 <Text style={[styles.h2, { color: palette.text }]}>بازسنجی + «آیا برمی‌گرده؟»</Text>
 
@@ -1000,21 +1117,30 @@ export default function ReviewResult() {
                       <Text style={[styles.btnText, { color: palette.text }]}>ادامه آزمون‌ها</Text>
                     </Pressable>
                   </>
-                ) : reviewDone ? (
+                ) : reviewDone && !hasUsableResult ? (
+  <>
+    <Text style={[styles.rtl, { color: palette.sub2, marginTop: 8, lineHeight: 20 }]}>
+      نتیجه هنوز آماده نشده یا کامل دریافت نشده. یک‌بار تازه‌سازی را بزن.
+    </Text>
+
+    <View style={{ height: 12 }} />
+
+    <Pressable
+      style={[styles.btnPrimary, { borderColor: palette.border }]}
+      onPress={fetchAll}
+    >
+      <Text style={[styles.btnText, { color: palette.text }]}>تازه‌سازی نتیجه</Text>
+    </Pressable>
+  </>
+) : reviewDone ? (
                   <>
-                    {/* وضعیت کلی (در یک نگاه) */}
                     <View style={{ height: 10 }} />
                     <View style={[styles.oneLook, { borderColor: palette.border2 }]}>
                       <Text style={[styles.h2, { color: palette.text, textAlign: "center" as any }]}>وضعیت کلی تو (در یک نگاه)</Text>
 
-                      {/* ✅ NEW: ویس درست زیر تیتر */}
                       <View style={{ height: 10 }} />
-                      <InlineAudioPlayer
-                        url={reviewAudio.url}
-                        palette={palette}
-                      />
+                      <InlineAudioPlayer url={reviewAudio.url} palette={palette} />
 
-                      {/* متن‌های فعلی */}
                       <Text style={[styles.rtl, { color: palette.sub2, marginTop: 10, lineHeight: 20 }]}>
                         {summary?.oneLook || result?.message || "—"}
                       </Text>
@@ -1024,7 +1150,6 @@ export default function ReviewResult() {
                           <Text style={[styles.h3, { color: palette.gold }]}>گام پیشنهادی بعدی</Text>
                           <Text style={[styles.rtl, { color: palette.sub, marginTop: 6, lineHeight: 20 }]}>{summary.nextStep}</Text>
 
-                          {/* ✅ NEW: بخش احتمال برگشت، زیر گام پیشنهادی */}
                           {!!returnOne && (
                             <View style={[styles.returnBox, { borderColor: "rgba(233,138,21,.25)" }]}>
                               <Text style={[styles.h3, { color: palette.orange }]}>احتمال برگشت (جمع‌بندی)</Text>
@@ -1040,7 +1165,6 @@ export default function ReviewResult() {
                       )}
                     </View>
 
-                    {/* دکمه رفتن به پلکان قبل از جزئیات تحلیلی */}
                     <View style={{ height: 12 }} />
                     <Pressable style={[styles.btn, { borderColor: palette.border }]} onPress={reviewInProgress ? goPelekanReviewTests : goPelekan}>
                       <Text style={[styles.btnText, { color: palette.text }]}>رفتن به پلکان درمــــان</Text>
@@ -1108,13 +1232,14 @@ export default function ReviewResult() {
 
               <View style={{ height: 10 }} />
 
-              {/* ✅ دکمه: تازه‌سازی نتایج */}
               <Pressable
                 style={[styles.btnGhost, { borderColor: palette.border, backgroundColor: "rgba(255,255,255,.04)" }]}
                 onPress={fetchAll}
-                disabled={loading}
+                disabled={loading || authLoading}
               >
-                <Text style={[styles.btnText, { color: palette.sub }]}>{loading ? "..." : "تازه‌سازی نتایج"}</Text>
+                <Text style={[styles.btnText, { color: palette.sub }]}>
+                  {loading || authLoading ? "..." : "تازه‌سازی نتایج"}
+                </Text>
               </Pressable>
             </>
           )}
@@ -1232,56 +1357,54 @@ const styles = StyleSheet.create({
 
   btnText: { fontSize: 14, fontWeight: "900", writingDirection: "rtl" as any },
 
-  // audio
   audioRow: {
-  borderWidth: 1,
-  borderRadius: 14,
-  paddingVertical: 10,
-  paddingHorizontal: 12,
-  overflow: "hidden", // ✅ جلوگیری از بیرون‌زدن
-},
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    overflow: "hidden",
+  },
 
-audioInnerRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  width: "100%",
-},
+  audioInnerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+  },
 
-audioPlayBtn: {
-  width: 40,
-  height: 40,
-  borderRadius: 999,
-  borderWidth: 1,
-  alignItems: "center",
-  justifyContent: "center",
-  flexShrink: 0,
-},
+  audioPlayBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
 
-audioBarCol: {
-  flex: 1,              // ✅ کل فضای وسط را می‌گیرد
-  marginLeft: 12,       // فاصله از دکمه پلی
-  marginRight: 10,      // فاصله از تایمر
-  justifyContent: "center",
-},
+  audioBarCol: {
+    flex: 1,
+    marginLeft: 12,
+    marginRight: 10,
+    justifyContent: "center",
+  },
 
-audioBarWrap: {
-  height: 8,
-  borderWidth: 1,
-  borderRadius: 999,
-  overflow: "hidden",
-},
+  audioBarWrap: {
+    height: 8,
+    borderWidth: 1,
+    borderRadius: 999,
+    overflow: "hidden",
+  },
 
-audioBarFill: {
-  height: "100%",
-},
+  audioBarFill: {
+    height: "100%",
+  },
 
-audioTimeInline: {
-  width: 84,            // ✅ ثابت تا بار جابجا نشود و بیرون نزند
-  textAlign: "right",
-  fontSize: 12,
-  fontWeight: "900",
-  flexShrink: 0,
-  writingDirection: "ltr" as any,
-},
-  
+  audioTimeInline: {
+    width: 84,
+    textAlign: "right",
+    fontSize: 12,
+    fontWeight: "900",
+    flexShrink: 0,
+    writingDirection: "ltr" as any,
+  },
 });

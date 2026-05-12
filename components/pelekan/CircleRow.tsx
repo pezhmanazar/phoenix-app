@@ -4,21 +4,19 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import Circle1Modal from "./Circle1Modal";
 
 type Props = {
-  // از PelekanState فقط همینا کافی‌ست
-  tabState: string;
   baselineStatus?: string | null;
   reviewChosenPath?: string | null;
+  reviewStatus?: string | null;
 
-  // برای ناوبری/اکشن‌ها (فعلاً ساده)
   onGoResults: () => void;
   onGoBaseline: () => void;
   onGoReview: () => void;
 };
 
 export default function CircleRow({
-  tabState,
   baselineStatus,
   reviewChosenPath,
+  reviewStatus,
   onGoResults,
   onGoBaseline,
   onGoReview,
@@ -26,20 +24,23 @@ export default function CircleRow({
   const [open, setOpen] = useState(false);
 
   const circle1Done = useMemo(() => {
-    // فعلاً «تیک دایره اول» را حدسی نمی‌زنیم، فقط برای نمایش ساده:
-    // baseline completed => دایره ۱ حداقل آماده است.
-    // (بعداً از بک‌اند فیلد قطعی می‌گیریم)
     return baselineStatus === "completed";
   }, [baselineStatus]);
 
   const subtitle = useMemo(() => {
-    if (baselineStatus !== "completed") return "اول آزمون ۱";
+    if (!baselineStatus) return "اول آزمون ۱";
+    if (baselineStatus !== "completed") return "ادامه آزمون ۱";
+
+    if (reviewChosenPath === "review" && reviewStatus === "in_progress") {
+      return "نتایج + بازسنجی در حال انجام";
+    }
+
     if (reviewChosenPath === "review") return "نتایج + بازسنجی";
     if (reviewChosenPath === "skip_review") return "نتایج آماده";
-    return "نتیجه آزمون ۱";
-  }, [baselineStatus, reviewChosenPath]);
 
-  // کلیک دایره ۱: مودال هوشمند
+    return "نتیجه آزمون ۱";
+  }, [baselineStatus, reviewChosenPath, reviewStatus]);
+
   const onPressCircle1 = () => setOpen(true);
 
   return (
@@ -50,9 +51,6 @@ export default function CircleRow({
           <Text style={styles.circleSub}>{subtitle}</Text>
           <Text style={styles.circleTick}>{circle1Done ? "✓" : ""}</Text>
         </Pressable>
-
-        {/* فعلاً فقط یک دایره می‌گذاریم تا تست کنیم.
-            بعداً دایره‌های ۲..۷ رو اضافه می‌کنیم */}
       </View>
 
       <Circle1Modal
@@ -60,9 +58,14 @@ export default function CircleRow({
         onClose={() => setOpen(false)}
         baselineStatus={baselineStatus as any}
         reviewChosenPath={reviewChosenPath as any}
+        reviewStatus={reviewStatus as any}
         onViewTest1={() => {
           setOpen(false);
-          onGoResults();
+          if (baselineStatus === "completed") {
+            onGoResults();
+          } else {
+            onGoBaseline();
+          }
         }}
         onStartTest2={() => {
           setOpen(false);
@@ -99,6 +102,8 @@ const styles = StyleSheet.create({
     color: "rgba(231,238,247,.70)",
     fontSize: 12,
     marginTop: 4,
+    textAlign: "right",
+    writingDirection: "rtl",
   },
   circleTick: {
     position: "absolute",
