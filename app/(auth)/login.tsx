@@ -1,4 +1,5 @@
 // app/(auth)/login.tsx
+import { useAuth } from "@/hooks/useAuth";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@react-navigation/native";
 import { useRouter } from "expo-router";
@@ -17,7 +18,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { sendCode } from "../../api/otp";
 import { APP_API_URL } from "../../constants/env";
 
 /* تبدیل اعداد فارسی/عربی به انگلیسی */
@@ -197,7 +197,8 @@ export default function LoginScreen() {
       await withTimeout(fetch(url, { method: "GET" }), 3000).catch(() => {});
     } catch {}
   }
-
+  
+  const { requestCode } = useAuth();
   async function onSend() {
     if (loading || runningRef.current) return;
 
@@ -238,19 +239,16 @@ export default function LoginScreen() {
     try {
       await safePing();
 
-      const res = (await withTimeout(sendCode(phone), 15000)) as {
-        ok: true;
-        token: string;
-        expiresInSec: number;
-      };
+      await withTimeout(requestCode(phone), 15000);
 
-      router.push({
+router.push({
   pathname: "/(auth)/verify",
   params: {
     phone,
-    exp: String((res as any)?.data?.expiresInSec ?? 180),
+    exp: "180",
   },
 });
+
 
     } catch (e: any) {
       const msg = String(e?.message || "");

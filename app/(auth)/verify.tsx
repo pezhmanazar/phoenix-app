@@ -13,7 +13,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { sendCode as apiSendCode, verifyCode as apiVerifyCode } from "../../api/otp";
 import { useAuth } from "../../hooks/useAuth";
 import { useUser } from "../../hooks/useUser";
 
@@ -57,14 +56,13 @@ const RESEND_COOLDOWN_SEC = 30;
 
 export default function VerifyScreen() {
   const router = useRouter();
-  const { setToken, setPhone } = useAuth();
+  const { verifyOtp, requestCode } = useAuth();
   const { refresh } = useUser();
 
   // پارامترها از صفحهٔ لاگین
-  const params = useLocalSearchParams<{ phone?: string; token?: string; exp?: string }>();
+  const params = useLocalSearchParams<{ phone?: string; exp?: string }>();
 
   const phone = useMemo(() => String(params.phone || ""), [params.phone]);
-  const otpToken = useMemo(() => String(params.token || ""), [params.token]);
 
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -123,7 +121,7 @@ export default function VerifyScreen() {
   // ✅ هر بار که وارد صفحه می‌شیم، قفل resend از ۴۵ شروع بشه
   useEffect(() => {
     setSecondsLeft(RESEND_COOLDOWN_SEC);
-  }, [phone, otpToken]);
+  }, [phone]);
 
   // تایمر ثانیه‌ای
   useEffect(() => {
@@ -143,51 +141,43 @@ export default function VerifyScreen() {
     setLoading(true);
 
     try {
-      const resp = await withTimeout(apiVerifyCode(phone, enCode, otpToken), 15000);
+      await withTimeout(verifyOtp(enCode), 15000);
+      await refresh().catch(() => {});
+      await new Promise((r) => setTimeout(r, 150));
+      router.replace("/(auth)/profile-wizard");
 
-      if (!resp?.ok) {
-        const err = String((resp as any)?.error || "VERIFY_FAILED");
+    } catch (e: any) {
+      const msg = String(e?.message || "");
 
-        if (err === "TOKEN_INVALID_OR_EXPIRED") {
-          setNotice({
-            type: "warn",
-            title: "کد منقضی شد",
-            message: "ارسال مجدد کد رو بزن تا یک کد جدید بگیری.",
-          });
-        } else if (err === "MISMATCH" || err === "CODE_NOT_MATCH" || err === "INVALID_CODE") {
-          setNotice({
-            type: "error",
-            title: "کد نادرست است",
-            message: "کد تأیید اشتباهه. دوباره تلاش کن.",
-          });
-        } else {
-          setNotice({
-            type: "error",
-            title: "تأیید ناموفق بود",
-            message: "چند لحظه بعد دوباره امتحان کن.",
-          });
-        }
-        return;
-      }
-
-      const sessionToken: string | undefined = (resp as any)?.data?.token;
-
-      if (!sessionToken) {
+      if (msg === "TOKEN_INVALID_OR_EXPIRED") {
+        setNotice({
+          type: "warn",
+          title: "کد منقضی شد",
+          message: "ارسال مجدد کد رو بزن تا یک کد جدید بگیری.",
+        });
+      } else if (
+        msg === "MISMATCH" ||
+        msg === "CODE_NOT_MATCH" ||
+        msg === "INVALID_CODE"
+      ) {
+        setNotice({
+          type: "error",
+          title: "کد نادرست است",
+          message: "کد تأیید اشتباهه. دوباره تلاش کن.",
+        });
+      } else if (msg === "OTP_FLOW_NOT_STARTED") {
+        setNotice({
+          type: "error",
+          title: "فرآیند تأیید ناقص است",
+          message: "لطفاً دوباره شماره موبایل را وارد کن.",
+        });
+      } else if (msg === "NO_SESSION_FROM_BACKEND") {
         setNotice({
           type: "error",
           title: "خطای سرور",
           message: "توکن سشن از سرور دریافت نشد.",
         });
-        return;
-      }
-
-      await setToken(sessionToken);
-      await setPhone(phone);
-      await refresh().catch(() => {});
-      router.replace("/(auth)/profile-wizard");
-    } catch (e: any) {
-      const msg = String(e?.message || "");
-      if (msg === "REQUEST_TIMEOUT") {
+      } else if (msg === "REQUEST_TIMEOUT") {
         setNotice({
           type: "warn",
           title: "کندی شبکه",
@@ -207,74 +197,61 @@ export default function VerifyScreen() {
   }
 
   async function resend() {
-  if (resending || secondsLeft > 0) return;
+    if (resending || secondsLeft > 0) return;
 
-  setNotice(null);
-  setResending(true);
-  try {
-    const res = (await withTimeout(apiSendCode(phone), 15000)) as {
-      ok: boolean;
-      token?: string | null;
-      expiresInSec?: number;
-      error?: string;
-    };
+    setNotice(null);
+    setResending(true);
 
-    // ✅ معیار موفقیت فقط ok باشد
-    if (res?.ok) {
-      // اگر توکن داری، آپدیت کن؛ اگر نداری، مهم نیست چون verify فعلاً بهش نیاز نداره
-      if (res.token) {
+    try {
+      const res = await withTimeout(requestCode(phone), 15000);
+
+      if (res?.ok) {
         router.setParams({
           phone,
-          token: res.token,
           exp: String(res.expiresInSec ?? 45),
+        });
+
+        setSecondsLeft(res.expiresInSec ?? 45);
+        setCode("");
+
+        setNotice({
+          type: "success",
+          title: "کد ارسال شد",
+          message: "کد جدید ارسال شد. لطفاً کد ۶ رقمی را وارد کن.",
         });
       } else {
-        router.setParams({
-          phone,
-          exp: String(res.expiresInSec ?? 45),
+        setNotice({
+          type: "error",
+          title: "ارسال مجدد ناموفق بود",
+          message: "چند لحظه بعد دوباره تلاش کن.",
         });
       }
+    } catch (e: any) {
+      const msg = String(e?.message || "");
 
-      setSecondsLeft(res.expiresInSec ?? 45);
-      setCode("");
-
-      setNotice({
-        type: "success",
-        title: "کد ارسال شد",
-        message: "کد جدید ارسال شد. لطفاً کد ۶ رقمی را وارد کن.",
-      });
-    } else {
-      setNotice({
-        type: "error",
-        title: "ارسال مجدد ناموفق بود",
-        message: "چند لحظه بعد دوباره تلاش کن.",
-      });
+      if (msg.includes("429") || msg === "TOO_MANY_REQUESTS") {
+        setNotice({
+          type: "warn",
+          title: "محدودیت درخواست",
+          message: "درخواست‌ها زیاد بوده؛ کمی بعد دوباره تلاش کن.",
+        });
+      } else if (msg === "REQUEST_TIMEOUT") {
+        setNotice({
+          type: "warn",
+          title: "کندی شبکه",
+          message: "پاسخی دریافت نشد. دوباره تلاش کن.",
+        });
+      } else {
+        setNotice({
+          type: "error",
+          title: "ارسال مجدد ناموفق بود",
+          message: "دوباره تلاش کن.",
+        });
+      }
+    } finally {
+      setResending(false);
     }
-  } catch (e: any) {
-    const msg = String(e?.message || "");
-    if (msg.includes("429") || msg === "TOO_MANY_REQUESTS") {
-      setNotice({
-        type: "warn",
-        title: "محدودیت درخواست",
-        message: "درخواست‌ها زیاد بوده؛ کمی بعد دوباره تلاش کن.",
-      });
-    } else if (msg === "REQUEST_TIMEOUT") {
-      setNotice({
-        type: "warn",
-        title: "کندی شبکه",
-        message: "پاسخی دریافت نشد. دوباره تلاش کن.",
-      });
-    } else {
-      setNotice({
-        type: "error",
-        title: "ارسال مجدد ناموفق بود",
-        message: "دوباره تلاش کن.",
-      });
-    }
-  } finally {
-    setResending(false);
   }
-}
 
   function handleChangeCode(t: string) {
     const next = toEnDigits(t).replace(/\D/g, "").slice(0, 6);

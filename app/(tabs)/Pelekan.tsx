@@ -26,6 +26,7 @@ import TreatmentView, {
 } from "../../components/pelekan/TreatmentView";
 import PlanStatusBadge from "../../components/PlanStatusBadge";
 import TopBanner from "../../components/TopBanner";
+import { useAuth } from "../../hooks/useAuth";
 import { useUser } from "../../hooks/useUser";
 
 /* ----------------------------- Types ----------------------------- */
@@ -123,6 +124,7 @@ export default function PelekanTab() {
 
   const [gateBoot, setGateBoot] = useState(true);
   const [startGateReady, setStartGateReady] = useState(false);
+  const { token, loading: authLoading } = useAuth();
 
   const palette = useMemo(
     () => ({
@@ -160,7 +162,7 @@ export default function PelekanTab() {
   const fetchState = useCallback(
     async (opts?: { initial?: boolean; reason?: string }) => {
       const isInitial = !!opts?.initial;
-      const phone = me?.phone;
+      const sessionToken = token;
 
       // ✅ اگر یک fetch در جریان است، یکی دیگه راه ننداز
       if (inFlightRef.current) {
@@ -172,18 +174,22 @@ export default function PelekanTab() {
         if (isInitial) setInitialLoading(true);
         else setRefreshing(true);
 
-        if (!phone) {
-          setState(initialState);
-          return;
+        if (!sessionToken) {
+        setState(initialState);
+        return;
         }
 
-        const qs = new URLSearchParams({ phone: String(phone) });
+        const qs = new URLSearchParams();
         if (enterTreatment) qs.set("enterTreatment", enterTreatment);
 
-        const url = `https://api.qoqnoos.app/api/pelekan/state?${qs.toString()}`;
+        const url = `https://api.qoqnoos.app/api/pelekan/state${qs.toString() ? `?${qs.toString()}` : ""}`;
+
         const res = await fetch(url, {
-          headers: { "Cache-Control": "no-store" },
-        });
+  headers: {
+    "Cache-Control": "no-store",
+    Authorization: `Bearer ${sessionToken}`,
+  },
+});
 
         let json: any = null;
         try {
@@ -272,21 +278,22 @@ export default function PelekanTab() {
         else setRefreshing(false);
       }
     },
-    [me?.phone, enterTreatment]
+    [token, enterTreatment]
   );
 
   useEffect(() => {
-  fetchState({ initial: true, reason: "mount_or_phone_change" });
-}, [me?.phone, fetchState]);
+  if (authLoading) return;
+  fetchState({ initial: true, reason: "mount_or_token_change" });
+}, [authLoading, token, fetchState]);
 
   useFocusEffect(
-    useCallback(() => {
-      if (initialLoading) {
-        return;
-      }
-      fetchState({ initial: false, reason: "focus" });
-    }, [fetchState, initialLoading])
-  );
+  useCallback(() => {
+    if (initialLoading || authLoading || !token) {
+      return;
+    }
+    fetchState({ initial: false, reason: "focus" });
+  }, [fetchState, initialLoading, authLoading, token])
+);
 
   // ✅ one-shot param cleanup
   useEffect(() => {
@@ -596,12 +603,8 @@ export default function PelekanTab() {
   );
 
   const onTapResults = useCallback(() => {
-    const phone = String(me?.phone || "").trim();
-    if (!phone) return;
-    router.push(
-      `/(tabs)/ReviewResult?phone=${encodeURIComponent(phone)}` as any
-    );
-  }, [router, me?.phone]);
+  router.push("/(tabs)/ReviewResult" as any);
+}, [router]);
 
   /* ----------------------------- Layout ----------------------------- */
   const bottomSafe = insets.bottom + tabBarH;

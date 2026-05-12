@@ -24,15 +24,22 @@ type AuthState = {
   token: string | null;
   isAuthenticated: boolean;
   phone: string | null;
-  otpToken: string | null;
-};
+  };
 
 type AuthContextValue = AuthState & {
   setToken: (t: string | null) => Promise<void>;
   setPhone: (p: string | null) => Promise<void>;
   signOut: (opts?: { keepPhone?: boolean }) => Promise<void>;
   refreshFromStore: () => Promise<void>;
-  requestCode: (phone: string) => Promise<{ ok: true }>;
+  requestCode: (
+  phone: string
+) => Promise<{
+  ok: true;
+  expiresInSec?: number;
+  devHint?: string;
+  smsSent?: boolean;
+  smsError?: string | null;
+}>;
   verifyOtp: (code: string) => Promise<{ ok: true }>;
 };
 
@@ -130,10 +137,6 @@ function parseJwtPayload(t?: string | null): any | null {
   }
 }
 
-function looksLikeOtpToken(_t?: string | null) {
-  return false;
-}
-
 function withTimeout<T>(p: Promise<T>, ms = 15000) {
   return new Promise<T>((resolve, reject) => {
     const id = setTimeout(() => reject(new Error("REQUEST_TIMEOUT")), ms);
@@ -158,8 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     token: null,
     isAuthenticated: false,
     phone: null,
-    otpToken: null,
-  });
+    });
 
   const signingOutRef = useRef(false);
   const mountedRef = useRef(true);
@@ -170,18 +172,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       await migrateBadKeysOnce();
 
-      let [token, phone, otpToken] = await Promise.all([
-        safeGet(SECURE_KEYS.SESSION),
-        safeGet(SECURE_KEYS.OTP_PHONE),
-        SECURE_KEYS.OTP_TOKEN
-          ? safeGet(SECURE_KEYS.OTP_TOKEN)
-          : Promise.resolve(null),
-      ]);
-
-      if (looksLikeOtpToken(token)) {
-        await safeDel(SECURE_KEYS.SESSION);
-        token = null;
-      }
+      let [token, phone] = await Promise.all([
+  safeGet(SECURE_KEYS.SESSION),
+  safeGet(SECURE_KEYS.OTP_PHONE),
+]);
 
       try {
         if (token) {
@@ -200,8 +194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         token: token || null,
         isAuthenticated: !!token,
         phone: phone || null,
-        otpToken: otpToken || null,
-      });
+            });
     })();
 
     return () => {
@@ -210,13 +203,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshFromStore = async () => {
-    const [token, phone, otpToken] = await Promise.all([
-      safeGet(SECURE_KEYS.SESSION),
-      safeGet(SECURE_KEYS.OTP_PHONE),
-      SECURE_KEYS.OTP_TOKEN
-        ? safeGet(SECURE_KEYS.OTP_TOKEN)
-        : Promise.resolve(null),
-    ]);
+    const [token, phone] = await Promise.all([
+  safeGet(SECURE_KEYS.SESSION),
+  safeGet(SECURE_KEYS.OTP_PHONE),
+]);
 
     try {
       if (token) {
@@ -235,14 +225,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       token: token || null,
       isAuthenticated: !!token,
       phone: phone || null,
-      otpToken: otpToken || null,
     }));
   };
 
   const setToken = async (t: string | null) => {
-    if (looksLikeOtpToken(t)) {
-      return;
-    }
 
     if (state.token === t) return;
 
@@ -259,8 +245,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (!mountedRef.current) return;
-
-    console.log("AUTH_SET_TOKEN", t);
 
 setState((s) => ({
   ...s,
@@ -292,19 +276,6 @@ setState((s) => ({
     }));
   };
 
-  const setOtpToken = async (t: string | null) => {
-    if (!SECURE_KEYS.OTP_TOKEN) return;
-
-    await safeSet(SECURE_KEYS.OTP_TOKEN, t);
-
-    if (!mountedRef.current) return;
-
-    setState((s) => ({
-      ...s,
-      otpToken: t,
-    }));
-  };
-
   const signOut = async (opts?: { keepPhone?: boolean }) => {
     if (signingOutRef.current) return;
 
@@ -317,9 +288,6 @@ setState((s) => ({
         safeDel(SECURE_KEYS.SESSION),
         SECURE_KEYS.REFRESH_TOKEN
           ? safeDel(SECURE_KEYS.REFRESH_TOKEN)
-          : Promise.resolve(),
-        SECURE_KEYS.OTP_TOKEN
-          ? safeDel(SECURE_KEYS.OTP_TOKEN)
           : Promise.resolve(),
 
         AsyncStorage.removeItem("session_v1"),
@@ -337,8 +305,7 @@ setState((s) => ({
         token: null,
         isAuthenticated: false,
         phone: keepPhone ? s.phone : null,
-        otpToken: null,
-      }));
+        }));
     } finally {
       signingOutRef.current = false;
     }
@@ -359,44 +326,53 @@ setState((s) => ({
     throw new Error("SEND_CODE_FAILED");
   }
 
-  await setOtpToken(null);
-  await setPhone(phone);
+    await setPhone(phone);
 
-  return { ok: true };
+  return {
+    ok: true,
+    expiresInSec: resp.expiresInSec,
+    devHint: resp.devHint,
+    smsSent: resp.smsSent,
+    smsError: resp.smsError ?? null,
+  };
 };
 
-  const verifyOtp: AuthContextValue["verifyOtp"] = async (code) => {
-    const phone = state.phone || (await safeGet(SECURE_KEYS.OTP_PHONE));
+ const verifyOtp: AuthContextValue["verifyOtp"] = async (code) => {
+  const phone = state.phone || (await safeGet(SECURE_KEYS.OTP_PHONE));
 
-    if (!phone) {
-      throw new Error("OTP_FLOW_NOT_STARTED");
-    }
+  if (!phone) {
+    throw new Error("OTP_FLOW_NOT_STARTED");
+  }
 
-    if (!/^\d{5,6}$/.test(String(code))) {
-      throw new Error("INVALID_CODE");
-    }
+  if (!/^\d{5,6}$/.test(String(code))) {
+    throw new Error("INVALID_CODE");
+  }
 
+  try {
     const v = await withTimeout(
-  apiVerifyCode(String(phone), String(code)),
-  15000
-);
+      apiVerifyCode(String(phone), String(code)),
+      15000
+    );
+
+    console.log("VERIFY_OTP_RESPONSE:", v);
 
     if (!v?.ok) {
       throw new Error((v as any)?.error || "VERIFY_FAILED");
     }
 
-    const session = (v as any).sessionToken;
+    const session =
+      (v as any)?.sessionToken ||
+      (v as any)?.token ||
+      (v as any)?.data?.sessionToken ||
+      (v as any)?.data?.token;
 
     if (!session) {
       throw new Error("NO_SESSION_FROM_BACKEND");
     }
 
     await setPhone(String(phone));
-    await setToken(session);
-    console.log("AUTH_VERIFY_SESSION", session);
-    await setOtpToken(null);
-
-
+    await setToken(String(session));
+    
     try {
       await AsyncStorage.setItem(SECURE_KEYS.OTP_PHONE, String(phone));
     } catch {
@@ -404,7 +380,58 @@ setState((s) => ({
     }
 
     return { ok: true };
-  };
+  } catch (e: any) {
+    console.log("VERIFY_OTP_ERROR_RAW:", e);
+    console.log("VERIFY_OTP_ERROR_MESSAGE:", e?.message);
+
+    const raw = String(
+      e?.message ||
+        e?.error ||
+        "VERIFY_FAILED"
+    );
+
+    if (
+      raw === "INVALID_CODE" ||
+      /invalid code/i.test(raw) ||
+      /code.*invalid/i.test(raw) ||
+      /not match/i.test(raw) ||
+      /mismatch/i.test(raw)
+    ) {
+      throw new Error("INVALID_CODE");
+    }
+
+    if (
+      raw === "TOKEN_INVALID_OR_EXPIRED" ||
+      /expired/i.test(raw)
+    ) {
+      throw new Error("TOKEN_INVALID_OR_EXPIRED");
+    }
+
+    if (
+      raw === "NO_SESSION_FROM_BACKEND" ||
+      /session/i.test(raw) ||
+      /token/i.test(raw)
+    ) {
+      throw new Error("NO_SESSION_FROM_BACKEND");
+    }
+
+    if (
+      raw === "REQUEST_TIMEOUT" ||
+      /timeout/i.test(raw)
+    ) {
+      throw new Error("REQUEST_TIMEOUT");
+    }
+
+    if (
+      raw === "OTP_FLOW_NOT_STARTED"
+    ) {
+      throw new Error("OTP_FLOW_NOT_STARTED");
+    }
+
+    throw new Error(raw);
+  }
+};
+
 
   const value = useMemo<AuthContextValue>(
     () => ({
