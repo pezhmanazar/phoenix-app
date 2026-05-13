@@ -1123,33 +1123,14 @@ router.get("/tickets/:id", allow("agent", "manager", "owner"), async (req, res) 
 });
     if (!t) return res.status(404).json({ ok: false, error: "not_found" });
 
-    console.log("ticket detail hit:", {
-  ticketId: t.id,
-  beforeAssignedAdminId: t.assignedAdminId,
-  reqAdminId: req.admin?.id || null,
-});
-
-
     // اگر هنوز مسئول ندارد، ادمین فعلی مسئول شود
 if (!t.assignedAdminId && req.admin?.id) {
-  console.log("assigning admin to ticket...", {
-  ticketId: t.id,
-  adminId: req.admin.id,
-});
-
   await prisma.ticket.update({
     where: { id: t.id },
     data: {
       assignedAdminId: req.admin.id,
     },
   });
-  const checkAssigned = await prisma.ticket.findUnique({
-  where: { id: t.id },
-  select: { id: true, assignedAdminId: true },
-});
-
-console.log("after assign check:", checkAssigned);
-
 
   t = await prisma.ticket.findUnique({
     where: { id: t.id },
