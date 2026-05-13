@@ -210,8 +210,23 @@ router.get("/", allowAdmin("agent", "manager", "owner"), async (req, res) => {
       where,
       orderBy: { createdAt: "desc" },
       include: {
-        messages: { orderBy: { createdAt: "asc" } },
-      },
+  user: {
+    select: {
+      id: true,
+      fullName: true,
+      phone: true,
+    },
+  },
+  messages: { orderBy: { createdAt: "asc" } },
+  assignedAdmin: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+    },
+  },
+},
     });
 
     const mapped = list.map(withDisplayTitle);
@@ -232,8 +247,23 @@ router.get("/:id", allowAdmin("agent", "manager", "owner"), async (req, res) => 
     const t = await prisma.ticket.findUnique({
       where: { id },
       include: {
-        messages: { orderBy: { createdAt: "asc" } },
-      },
+  user: {
+    select: {
+      id: true,
+      fullName: true,
+      phone: true,
+    },
+  },
+  messages: { orderBy: { createdAt: "asc" } },
+  assignedAdmin: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+    },
+  },
+},
     });
 
     if (!t) {
