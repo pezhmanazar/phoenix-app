@@ -683,135 +683,125 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
  * POST /api/public/tickets/:id/reply-upload
  * form-data: file? , text? , durationSec? , openedByName?
  */
+const replyUploadMiddleware = upload.single("file");
+
 publicTicketsRouter.post(
   "/:id/reply-upload",
-  upload.single("file"),
+
+  (req, res, next) => {
+    replyUploadMiddleware(req, res, (err) => {
+      if (err) {
+        console.error("[reply-upload multer error]", {
+          name: err.name,
+          message: err.message,
+          code: err.code,
+          field: err.field,
+        });
+
+        return res.status(400).json({
+          ok: false,
+          error: "UPLOAD_ERROR",
+          multer: {
+            name: err.name,
+            message: err.message,
+            code: err.code,
+            field: err.field,
+          },
+        });
+      }
+
+      console.log("[reply-upload multer success]", {
+        body: req.body,
+        file: req.file
+          ? {
+              fieldname: req.file.fieldname,
+              originalname: req.file.originalname,
+              mimetype: req.file.mimetype,
+              size: req.file.size,
+              path: req.file.path,
+            }
+          : null,
+      });
+
+      next();
+    });
+  },
+
   async (req, res) => {
-  try {
-    const identity = requireTicketIdentity(req);
-    const id = String(req.params.id);
+    try {
+      const identity = requireTicketIdentity(req);
+      const id = String(req.params.id);
 
-    const exists = await prisma.ticket.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        type: true,
-        openedById: true,
-        openedByName: true,
-        contact: true,
-      },
-    });
-
-    if (!exists) {
-      return res.status(404).json({
-        ok: false,
-        error: "TICKET_NOT_FOUND",
-      });
-    }
-
-    if (!ticketMatchesIdentity(exists, identity)) {
-      return res.status(403).json({
-        ok: false,
-        error: "TICKET_FORBIDDEN",
-      });
-    }
-
-    const rawText =
-      typeof req.body?.text === "string" ? req.body.text.trim() : "";
-    const hasText = rawText.length > 0;
-
-    const openedByNameBody =
-      req.body?.openedByName !== undefined && req.body.openedByName !== null
-        ? String(req.body.openedByName).trim()
-        : "";
-
-    const blocked = await checkTherapyAccessOrReject({
-      res,
-      type: exists.type,
-      openedById: exists.openedById,
-      contact: exists.contact,
-    });
-    if (blocked) return;
-
-    if (openedByNameBody && openedByNameBody !== exists.openedByName) {
-      await prisma.ticket.update({
+      const exists = await prisma.ticket.findUnique({
         where: { id },
-        data: {
-          openedByName: openedByNameBody,
-          title: openedByNameBody,
+        select: {
+          id: true,
+          type: true,
+          openedById: true,
+          openedByName: true,
+          contact: true,
         },
       });
-    }
 
-    const f = req.file;
-    let messageType = "text";
-    let fileUrl = null;
-    let mime = null;
-    let size = null;
-    let durationSec = null;
+      if (!exists) {
+        return res.status(404).json({
+          ok: false,
+          error: "TICKET_NOT_FOUND",
+        });
+      }
 
-    if (f) {
-      mime = f.mimetype || null;
-      size = typeof f.size === "number" ? f.size : null;
+      if (!ticketMatchesIdentity(exists, identity)) {
+        return res.status(403).json({
+          ok: false,
+          error: "TICKET_FORBIDDEN",
+        });
+      }
 
-      const relPath = path
-        .relative(UPLOAD_ROOT, f.path || "")
-        .replace(/\\/g, "/");
-      fileUrl = relPath ? `/uploads/${relPath}` : null;
+      const rawText =
+        typeof req.body?.text === "string"
+          ? req.body.text.trim()
+          : "";
 
-      const mt = (mime || "").toLowerCase();
-      if (mt.startsWith("audio/")) messageType = "voice";
-      else if (mt.startsWith("image/")) messageType = "image";
-      else messageType = "file";
-    }
+      const hasText = rawText.length > 0;
 
-    if (req.body?.durationSec !== undefined) {
-      const d = Number(req.body.durationSec);
-      if (!Number.isNaN(d) && d >= 0) durationSec = Math.floor(d);
-    }
+      const f = req.file;
 
-    if (!f && !hasText) {
-      return res.status(400).json({
+      console.log("[reply-upload handler]", {
+        hasFile: !!f,
+        hasText,
+        body: req.body,
+      });
+
+      if (!f && !hasText) {
+        return res.status(400).json({
+          ok: false,
+          error: "NO_CONTENT",
+        });
+      }
+
+      return res.json({
+        ok: true,
+        debug: {
+          hasFile: !!f,
+          fieldname: f?.fieldname || null,
+          mimetype: f?.mimetype || null,
+          originalname: f?.originalname || null,
+          size: f?.size || null,
+          body: req.body,
+        },
+      });
+    } catch (e) {
+      console.error("[reply-upload route error]", e);
+
+      return res.status(500).json({
         ok: false,
-        error: "NO_CONTENT",
+        error: "internal_error",
+        message: e?.message || "unknown_error",
       });
     }
-
-    await prisma.message.create({
-      data: {
-        ticketId: id,
-        sender: "user",
-        type: f ? messageType : "text",
-        text: hasText ? rawText : null,
-        fileUrl,
-        mime,
-        size,
-        durationSec,
-      },
-    });
-
-    await prisma.ticket.update({
-      where: { id },
-      data: { unread: true, updatedAt: new Date() },
-    });
-
-    const ticket = await prisma.ticket.findUnique({
-      where: { id },
-      include: { messages: { orderBy: { createdAt: "asc" } } },
-    });
-
-    return res.json({
-      ok: true,
-      ticket: withDisplayTitle(ticket),
-    });
-  } catch (e) {
-    console.error(
-      "[tickets.public.replyUpload] error:",
-      e?.message || "unknown_error"
-    );
-    return sendPublicRouteError(res, e);
   }
-});
+);
+
 
 // ====================== اکسپورت‌ها ======================
 export default router;
