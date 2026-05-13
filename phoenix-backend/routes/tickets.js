@@ -685,7 +685,7 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
  */
 publicTicketsRouter.post(
   "/:id/reply-upload",
-  upload.single("file"),
+  upload.single("attachment"),
   async (req, res) => {
     try {
       const identity = requireTicketIdentity(req);
