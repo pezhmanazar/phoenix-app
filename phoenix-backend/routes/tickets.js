@@ -683,8 +683,7 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
  * POST /api/public/tickets/:id/reply-upload
  * form-data: file? , text? , durationSec? , openedByName?
  */
-const replyUploadMiddleware = upload.single("file");
-
+const replyUploadMiddleware = upload.single("attachment");
 publicTicketsRouter.post(
   "/:id/reply-upload",
 
