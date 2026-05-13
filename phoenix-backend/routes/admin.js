@@ -993,11 +993,19 @@ router.get("/tickets", async (req, res) => {
     };
     const whereFinal = { ...where, AND: [hasContentFilter] };
 
-    const tickets = await prisma.ticket.findMany({
+  const tickets = await prisma.ticket.findMany({
   where: whereFinal,
   orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
   include: {
     messages: { orderBy: { createdAt: "asc" } },
+    assignedAdmin: {
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+      },
+    },
   },
   take: 200,
 });
