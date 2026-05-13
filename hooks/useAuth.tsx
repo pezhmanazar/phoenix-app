@@ -6,6 +6,7 @@ import {
 import { SECURE_KEYS } from "@/constants/storage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
+import { jwtDecode } from "jwt-decode";
 import React, {
   createContext,
   useContext,
@@ -19,12 +20,28 @@ import React, {
    🔹 TYPES
 ============================== */
 
+type JwtPayload = {
+  id?: string | number;
+  userId?: string | number;
+  sub?: string | number;
+  phone?: string;
+  mobile?: string;
+  name?: string;
+  fullName?: string;
+  exp?: number;
+  [key: string]: any;
+};
+
 type AuthState = {
   loading: boolean;
   token: string | null;
   isAuthenticated: boolean;
   phone: string | null;
-  };
+
+  // برای استفاده‌های بعدی مثل تیکت، پروفایل و دیباگ
+  userId: string | null;
+  name: string | null;
+};
 
 type AuthContextValue = AuthState & {
   setToken: (t: string | null) => Promise<void>;
@@ -32,14 +49,14 @@ type AuthContextValue = AuthState & {
   signOut: (opts?: { keepPhone?: boolean }) => Promise<void>;
   refreshFromStore: () => Promise<void>;
   requestCode: (
-  phone: string
-) => Promise<{
-  ok: true;
-  expiresInSec?: number;
-  devHint?: string;
-  smsSent?: boolean;
-  smsError?: string | null;
-}>;
+    phone: string
+  ) => Promise<{
+    ok: true;
+    expiresInSec?: number;
+    devHint?: string;
+    smsSent?: boolean;
+    smsError?: string | null;
+  }>;
   verifyOtp: (code: string) => Promise<{ ok: true }>;
 };
 
@@ -110,31 +127,74 @@ async function migrateBadKeysOnce() {
 }
 
 /* ==============================
-   🔹 Helpers
+   🔹 HELPERS
 ============================== */
 
-function parseJwtPayload(t?: string | null): any | null {
+function cleanString(value: any): string | null {
+  if (value === undefined || value === null) return null;
+
+  const s = String(value).trim();
+  return s ? s : null;
+}
+
+function parseJwtPayload(t?: string | null): JwtPayload | null {
   try {
     if (!t) return null;
-
-    const parts = t.split(".");
-    if (parts.length < 2) return null;
-
-    const b64url = parts[1];
-    const b64 = b64url
-      .replace(/-/g, "+")
-      .replace(/_/g, "/")
-      .padEnd(Math.ceil(b64url.length / 4) * 4, "=");
-
-    // @ts-ignore
-    const atobFn = (globalThis as any).atob;
-    if (!atobFn) return null;
-
-    const json = atobFn(b64);
-    return JSON.parse(json);
+    return jwtDecode<JwtPayload>(t);
   } catch {
     return null;
   }
+}
+
+function isJwtExpired(payload: JwtPayload | null) {
+  if (!payload?.exp) return false;
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  return payload.exp <= nowSec;
+}
+
+function deriveAuthStateFromToken(
+  token: string | null,
+  storedPhone: string | null,
+  loading: boolean
+): AuthState {
+  const payload = parseJwtPayload(token);
+
+  const usableToken = !!token && !!payload && !isJwtExpired(payload);
+
+  if (!usableToken) {
+    return {
+      loading,
+      token: null,
+      isAuthenticated: false,
+      phone: storedPhone || null,
+      userId: null,
+      name: null,
+    };
+  }
+
+  const userId =
+    cleanString(payload?.id) ||
+    cleanString(payload?.userId) ||
+    cleanString(payload?.sub);
+
+  const phone =
+    cleanString(payload?.phone) ||
+    cleanString(payload?.mobile) ||
+    cleanString(storedPhone);
+
+  const name =
+    cleanString(payload?.name) ||
+    cleanString(payload?.fullName);
+
+  return {
+    loading,
+    token,
+    isAuthenticated: true,
+    phone,
+    userId,
+    name,
+  };
 }
 
 function withTimeout<T>(p: Promise<T>, ms = 15000) {
@@ -161,7 +221,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     token: null,
     isAuthenticated: false,
     phone: null,
-    });
+    userId: null,
+    name: null,
+  });
 
   const signingOutRef = useRef(false);
   const mountedRef = useRef(true);
@@ -173,9 +235,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await migrateBadKeysOnce();
 
       let [token, phone] = await Promise.all([
-  safeGet(SECURE_KEYS.SESSION),
-  safeGet(SECURE_KEYS.OTP_PHONE),
-]);
+        safeGet(SECURE_KEYS.SESSION),
+        safeGet(SECURE_KEYS.OTP_PHONE),
+      ]);
+
+      const payload = parseJwtPayload(token);
+
+      // اگر توکن خراب یا منقضی بود، نگهش ندار
+      if (token && (!payload || isJwtExpired(payload))) {
+        token = null;
+
+        try {
+          await safeDel(SECURE_KEYS.SESSION);
+          await AsyncStorage.removeItem("session_v1");
+        } catch {
+          // intentionally ignored
+        }
+      }
 
       try {
         if (token) {
@@ -189,12 +265,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (!mountedRef.current) return;
 
-      setState({
-        loading: false,
-        token: token || null,
-        isAuthenticated: !!token,
-        phone: phone || null,
-            });
+      setState(deriveAuthStateFromToken(token || null, phone || null, false));
     })();
 
     return () => {
@@ -203,10 +274,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshFromStore = async () => {
-    const [token, phone] = await Promise.all([
-  safeGet(SECURE_KEYS.SESSION),
-  safeGet(SECURE_KEYS.OTP_PHONE),
-]);
+    let [token, phone] = await Promise.all([
+      safeGet(SECURE_KEYS.SESSION),
+      safeGet(SECURE_KEYS.OTP_PHONE),
+    ]);
+
+    const payload = parseJwtPayload(token);
+
+    if (token && (!payload || isJwtExpired(payload))) {
+      token = null;
+
+      try {
+        await safeDel(SECURE_KEYS.SESSION);
+        await AsyncStorage.removeItem("session_v1");
+      } catch {
+        // intentionally ignored
+      }
+    }
 
     try {
       if (token) {
@@ -221,22 +305,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!mountedRef.current) return;
 
     setState((s) => ({
-      ...s,
-      token: token || null,
-      isAuthenticated: !!token,
-      phone: phone || null,
+      ...deriveAuthStateFromToken(token || null, phone || null, false),
+      loading: s.loading ? false : s.loading,
     }));
   };
 
   const setToken = async (t: string | null) => {
+    let nextToken = t ? String(t) : null;
 
-    if (state.token === t) return;
+    const payload = parseJwtPayload(nextToken);
 
-    await safeSet(SECURE_KEYS.SESSION, t);
+    if (nextToken && (!payload || isJwtExpired(payload))) {
+      nextToken = null;
+    }
+
+    await safeSet(SECURE_KEYS.SESSION, nextToken);
 
     try {
-      if (t) {
-        await AsyncStorage.setItem("session_v1", t);
+      if (nextToken) {
+        await AsyncStorage.setItem("session_v1", nextToken);
       } else {
         await AsyncStorage.removeItem("session_v1");
       }
@@ -246,21 +333,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!mountedRef.current) return;
 
-setState((s) => ({
-  ...s,
-  token: t,
-  isAuthenticated: !!t,
-}));
+    setState((s) => {
+      const derived = deriveAuthStateFromToken(
+        nextToken,
+        s.phone,
+        false
+      );
+
+      return {
+        ...s,
+        ...derived,
+      };
+    });
   };
 
   const setPhone = async (p: string | null) => {
-    if (state.phone === p) return;
+    const nextPhone = p ? String(p) : null;
 
-    await safeSet(SECURE_KEYS.OTP_PHONE, p);
+    await safeSet(SECURE_KEYS.OTP_PHONE, nextPhone);
 
     try {
-      if (p) {
-        await AsyncStorage.setItem(SECURE_KEYS.OTP_PHONE, p);
+      if (nextPhone) {
+        await AsyncStorage.setItem(SECURE_KEYS.OTP_PHONE, nextPhone);
       } else {
         await AsyncStorage.removeItem(SECURE_KEYS.OTP_PHONE);
       }
@@ -272,7 +366,7 @@ setState((s) => ({
 
     setState((s) => ({
       ...s,
-      phone: p,
+      phone: nextPhone,
     }));
   };
 
@@ -286,6 +380,7 @@ setState((s) => ({
     try {
       await Promise.all([
         safeDel(SECURE_KEYS.SESSION),
+
         SECURE_KEYS.REFRESH_TOKEN
           ? safeDel(SECURE_KEYS.REFRESH_TOKEN)
           : Promise.resolve(),
@@ -293,6 +388,7 @@ setState((s) => ({
         AsyncStorage.removeItem("session_v1"),
 
         keepPhone ? Promise.resolve() : safeDel(SECURE_KEYS.OTP_PHONE),
+
         keepPhone
           ? Promise.resolve()
           : AsyncStorage.removeItem(SECURE_KEYS.OTP_PHONE),
@@ -301,11 +397,13 @@ setState((s) => ({
       if (!mountedRef.current) return;
 
       setState((s) => ({
-        ...s,
+        loading: false,
         token: null,
         isAuthenticated: false,
         phone: keepPhone ? s.phone : null,
-        }));
+        userId: null,
+        name: null,
+      }));
     } finally {
       signingOutRef.current = false;
     }
@@ -315,125 +413,114 @@ setState((s) => ({
       🔹 OTP ACTIONS
    ============================== */
 
- const requestCode: AuthContextValue["requestCode"] = async (phone) => {
-  if (!/^09\d{9}$/.test(phone)) {
-    throw new Error("INVALID_PHONE");
-  }
+  const requestCode: AuthContextValue["requestCode"] = async (phone) => {
+    if (!/^09\d{9}$/.test(phone)) {
+      throw new Error("INVALID_PHONE");
+    }
 
-  const resp = await withTimeout(apiSendCode(phone), 15000);
+    const resp = await withTimeout(apiSendCode(phone), 15000);
 
-  if (!resp?.ok) {
-    throw new Error("SEND_CODE_FAILED");
-  }
+    if (!resp?.ok) {
+      throw new Error("SEND_CODE_FAILED");
+    }
 
     await setPhone(phone);
 
-  return {
-    ok: true,
-    expiresInSec: resp.expiresInSec,
-    devHint: resp.devHint,
-    smsSent: resp.smsSent,
-    smsError: resp.smsError ?? null,
+    return {
+      ok: true,
+      expiresInSec: resp.expiresInSec,
+      devHint: resp.devHint,
+      smsSent: resp.smsSent,
+      smsError: resp.smsError ?? null,
+    };
   };
-};
 
- const verifyOtp: AuthContextValue["verifyOtp"] = async (code) => {
-  const phone = state.phone || (await safeGet(SECURE_KEYS.OTP_PHONE));
+  const verifyOtp: AuthContextValue["verifyOtp"] = async (code) => {
+    const phone = state.phone || (await safeGet(SECURE_KEYS.OTP_PHONE));
 
-  if (!phone) {
-    throw new Error("OTP_FLOW_NOT_STARTED");
-  }
-
-  if (!/^\d{5,6}$/.test(String(code))) {
-    throw new Error("INVALID_CODE");
-  }
-
-  try {
-    const v = await withTimeout(
-      apiVerifyCode(String(phone), String(code)),
-      15000
-    );
-
-    console.log("VERIFY_OTP_RESPONSE:", v);
-
-    if (!v?.ok) {
-      throw new Error((v as any)?.error || "VERIFY_FAILED");
-    }
-
-    const session =
-      (v as any)?.sessionToken ||
-      (v as any)?.token ||
-      (v as any)?.data?.sessionToken ||
-      (v as any)?.data?.token;
-
-    if (!session) {
-      throw new Error("NO_SESSION_FROM_BACKEND");
-    }
-
-await setPhone(String(phone));
-await setToken(String(session));
-await refreshFromStore();
-
-try {
-  await AsyncStorage.setItem(SECURE_KEYS.OTP_PHONE, String(phone));
-} catch {
-  throw new Error("PHONE_STORAGE_SYNC_FAILED");
-}
-
-return { ok: true };
-
-  } catch (e: any) {
-    console.log("VERIFY_OTP_ERROR_RAW:", e);
-    console.log("VERIFY_OTP_ERROR_MESSAGE:", e?.message);
-
-    const raw = String(
-      e?.message ||
-        e?.error ||
-        "VERIFY_FAILED"
-    );
-
-    if (
-      raw === "INVALID_CODE" ||
-      /invalid code/i.test(raw) ||
-      /code.*invalid/i.test(raw) ||
-      /not match/i.test(raw) ||
-      /mismatch/i.test(raw)
-    ) {
-      throw new Error("INVALID_CODE");
-    }
-
-    if (
-      raw === "TOKEN_INVALID_OR_EXPIRED" ||
-      /expired/i.test(raw)
-    ) {
-      throw new Error("TOKEN_INVALID_OR_EXPIRED");
-    }
-
-    if (
-      raw === "NO_SESSION_FROM_BACKEND" ||
-      /session/i.test(raw) ||
-      /token/i.test(raw)
-    ) {
-      throw new Error("NO_SESSION_FROM_BACKEND");
-    }
-
-    if (
-      raw === "REQUEST_TIMEOUT" ||
-      /timeout/i.test(raw)
-    ) {
-      throw new Error("REQUEST_TIMEOUT");
-    }
-
-    if (
-      raw === "OTP_FLOW_NOT_STARTED"
-    ) {
+    if (!phone) {
       throw new Error("OTP_FLOW_NOT_STARTED");
     }
 
-    throw new Error(raw);
-  }
-};
+    if (!/^\d{5,6}$/.test(String(code))) {
+      throw new Error("INVALID_CODE");
+    }
 
+    try {
+      const v = await withTimeout(
+        apiVerifyCode(String(phone), String(code)),
+        15000
+      );
+
+      console.log("VERIFY_OTP_RESPONSE:", v);
+
+      if (!v?.ok) {
+        throw new Error((v as any)?.error || "VERIFY_FAILED");
+      }
+
+      const session =
+        (v as any)?.sessionToken ||
+        (v as any)?.token ||
+        (v as any)?.data?.sessionToken ||
+        (v as any)?.data?.token;
+
+      if (!session) {
+        throw new Error("NO_SESSION_FROM_BACKEND");
+      }
+
+      await setPhone(String(phone));
+      await setToken(String(session));
+
+      return { ok: true };
+    } catch (e: any) {
+      console.log("VERIFY_OTP_ERROR_RAW:", e);
+      console.log("VERIFY_OTP_ERROR_MESSAGE:", e?.message);
+
+      const raw = String(
+        e?.message ||
+          e?.error ||
+          "VERIFY_FAILED"
+      );
+
+      if (
+        raw === "INVALID_CODE" ||
+        /invalid code/i.test(raw) ||
+        /code.*invalid/i.test(raw) ||
+        /not match/i.test(raw) ||
+        /mismatch/i.test(raw)
+      ) {
+        throw new Error("INVALID_CODE");
+      }
+
+      if (
+        raw === "TOKEN_INVALID_OR_EXPIRED" ||
+        /expired/i.test(raw)
+      ) {
+        throw new Error("TOKEN_INVALID_OR_EXPIRED");
+      }
+
+      if (
+        raw === "NO_SESSION_FROM_BACKEND" ||
+        /session/i.test(raw) ||
+        /token/i.test(raw)
+      ) {
+        throw new Error("NO_SESSION_FROM_BACKEND");
+      }
+
+      if (
+        raw === "REQUEST_TIMEOUT" ||
+        /timeout/i.test(raw)
+      ) {
+        throw new Error("REQUEST_TIMEOUT");
+      }
+
+      if (raw === "OTP_FLOW_NOT_STARTED") {
+        throw new Error("OTP_FLOW_NOT_STARTED");
+      }
+
+      throw new Error(raw);
+    }
+  };
 
   const value = useMemo<AuthContextValue>(
     () => ({
