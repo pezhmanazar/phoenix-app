@@ -683,10 +683,9 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
  * POST /api/public/tickets/:id/reply-upload
  * form-data: file? , text? , durationSec? , openedByName?
  */
-const replyUploadMiddleware = upload.single("attachment");
 publicTicketsRouter.post(
   "/:id/reply-upload",
-  upload.single("attachment"),
+  upload.single("file"),
   async (req, res) => {
     try {
       const identity = requireTicketIdentity(req);
@@ -704,80 +703,83 @@ publicTicketsRouter.post(
       });
 
       if (!exists) {
-        return res.status(404).json({
-          ok: false,
-          error: "TICKET_NOT_FOUND",
-        });
+        return res.status(404).json({ ok: false, error: "TICKET_NOT_FOUND" });
       }
 
       if (!ticketMatchesIdentity(exists, identity)) {
-        return res.status(403).json({
-          ok: false,
-          error: "TICKET_FORBIDDEN",
-        });
+        return res.status(403).json({ ok: false, error: "TICKET_FORBIDDEN" });
       }
 
-      const rawText =
-        typeof req.body?.text === "string"
-          ? req.body.text.trim()
-          : "";
+      const blocked = await checkTherapyAccessOrReject({
+        res,
+        type: exists.type,
+        openedById: exists.openedById,
+        contact: exists.contact,
+      });
+      if (blocked) return;
 
-      const hasText = rawText.length > 0;
+      const rawText = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+      const hasText = !!rawText;
 
-      const f = req.file;
-
-      if (!f && !hasText) {
-        return res.status(400).json({
-          ok: false,
-          error: "NO_CONTENT",
-        });
+      if (!req.file && !hasText) {
+        return res.status(400).json({ ok: false, error: "NO_CONTENT" });
       }
 
       let fileUrl = null;
       let mime = null;
       let size = null;
       let type = "text";
+      let durationSec = null;
 
-      if (f) {
-        fileUrl = "/" + f.path.replace(/\\/g, "/");
-        mime = f.mimetype;
-        size = f.size;
+      if (req.file) {
+        const { mimetype, size: fileSize, filename, destination } = req.file;
+        const relDir = destination.replace(/\\/g, "/");
 
-        if (mime?.startsWith("image/")) {
-          type = "image";
-        } else if (mime?.startsWith("audio/")) {
-          type = "voice";
-        } else {
-          type = "file";
+        fileUrl = `/${relDir}/${filename}`;
+        mime = mimetype || null;
+        size = fileSize || null;
+        type = mimeToMessageType(mimetype);
+
+        if (req.body?.durationSec !== undefined && req.body.durationSec !== "") {
+          const d = Number(req.body.durationSec);
+          if (!Number.isNaN(d) && d >= 0) durationSec = Math.floor(d);
         }
       }
 
       const created = await prisma.message.create({
         data: {
           ticketId: id,
-          senderType: "user",
-
+          sender: "user",
           type,
-
           text: hasText ? rawText : null,
-
           fileUrl,
           mime,
           size,
+          durationSec,
         },
+      });
+
+      await prisma.ticket.update({
+        where: { id },
+        data: { unread: true, updatedAt: new Date() },
+      });
+
+      const ticket = await prisma.ticket.findUnique({
+        where: { id },
+        include: { messages: { orderBy: { createdAt: "asc" } } },
       });
 
       return res.json({
         ok: true,
-        item: created,
+        ticket: withDisplayTitle(ticket),
+        message: created,
       });
     } catch (e) {
-      console.error("[reply-upload route error]", e);
-
+      console.error("[tickets.public.reply-upload] error:", e);
       return res.status(500).json({
         ok: false,
         error: "internal_error",
-        message: e?.message || "unknown_error",
+        detail: e?.message || "unknown_error",
       });
     }
   }
