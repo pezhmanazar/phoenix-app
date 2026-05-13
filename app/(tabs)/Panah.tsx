@@ -19,6 +19,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import PlanStatusBadge from "../../components/PlanStatusBadge";
 import { BACKEND_URL } from "../../constants/backend";
+import { useAuth } from "../../hooks/useAuth";
 import { useUser } from "../../hooks/useUser";
 
 const { height } = Dimensions.get("window");
@@ -40,20 +41,29 @@ type TicketWithMessages = {
 const SEEN_KEY = (type: "tech" | "therapy") => `support:lastSeenAdmin:${type}`;
 
 function getOpenedById(me: any) {
-  const phone = me?.phone;
   const id = me?.id;
-  return String(phone || id || "").trim();
+  return String(id || "").trim();
 }
-
-async function countUnreadForType(type: "tech" | "therapy", openedById: string): Promise<number> {
+async function countUnreadForType(
+  type: "tech" | "therapy",
+  openedById: string,
+  token: string
+): Promise<number> {
   try {
-    if (!openedById) return 0;
+    if (!openedById || !token) return 0;
+
     const qs: string[] = [];
     qs.push(`type=${encodeURIComponent(type)}`);
     qs.push(`openedById=${encodeURIComponent(openedById)}`);
     qs.push(`ts=${Date.now()}`);
+
     const url = `${BACKEND_URL}/api/public/tickets/open?${qs.join("&")}`;
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Cache-Control": "no-store",
+      },
+    });
 
     let json: any = null;
     try {
@@ -61,6 +71,7 @@ async function countUnreadForType(type: "tech" | "therapy", openedById: string):
     } catch {
       json = null;
     }
+
     if (!res.ok || !json?.ok || !json.ticket) return 0;
 
     const t: TicketWithMessages = json.ticket;
@@ -70,20 +81,18 @@ async function countUnreadForType(type: "tech" | "therapy", openedById: string):
 
     const lastSeenId = await AsyncStorage.getItem(SEEN_KEY(type));
 
-    // اگر هیچ‌وقت این چت باز نشده → همهٔ پیام‌های ادمین نخوانده‌اند
     if (!lastSeenId) return adminMsgs.length;
 
     const idx = adminMsgs.findIndex((m) => m.id === lastSeenId);
 
-    // اگر شناسه پیدا نشد → همه را نخوانده فرض کن
     if (idx === -1) return adminMsgs.length;
 
-    // تعداد پیام‌های بعد از آخرین پیام دیده‌شده
     return Math.max(0, adminMsgs.length - (idx + 1));
-    } catch {
+  } catch {
     return 0;
   }
 }
+
 
 /* ------------------------------ Modal تم‌دار (بدون Alert) ------------------------------ */
 
@@ -136,12 +145,14 @@ function ThemedSoonModal({
 }
 
 export default function Panah() {
-  const { colors } = useTheme();
-  const router = useRouter();
-  const navigation = useNavigation();
-  const insets = useSafeAreaInsets();
-  const { me } = useUser();
-  const [unreadCount, setUnreadCount] = useState(0);
+const { colors } = useTheme();
+const router = useRouter();
+const navigation = useNavigation();
+const insets = useSafeAreaInsets();
+const { me } = useUser();
+const { token, loading: authLoading } = useAuth();
+const [unreadCount, setUnreadCount] = useState(0);
+
 
   // ✅ NEW: مودال تم‌دار برای AI
   const [soonOpen, setSoonOpen] = useState(false);
@@ -156,10 +167,15 @@ export default function Panah() {
           if (!cancelled) setUnreadCount(0);
           return;
         }
-        const [therapyUnread, techUnread] = await Promise.all([
-          countUnreadForType("therapy", openedById),
-          countUnreadForType("tech", openedById),
-        ]);
+        if (authLoading || !token) {
+  if (!cancelled) setUnreadCount(0);
+  return;
+}
+
+const [therapyUnread, techUnread] = await Promise.all([
+  countUnreadForType("therapy", openedById, token),
+  countUnreadForType("tech", openedById, token),
+]);
         if (!cancelled) {
           setUnreadCount(therapyUnread + techUnread);
         }
@@ -169,8 +185,31 @@ export default function Panah() {
       return () => {
         cancelled = true;
       };
-    }, [me])
+    }, [me, token, authLoading])
   );
+
+  useEffect(() => {
+  if (authLoading || !token) return;
+
+  const openedById = getOpenedById(me);
+  if (!openedById) return;
+
+  const interval = setInterval(async () => {
+    try {
+      const [therapyUnread, techUnread] = await Promise.all([
+        countUnreadForType("therapy", openedById, token),
+        countUnreadForType("tech", openedById, token),
+      ]);
+
+      setUnreadCount(therapyUnread + techUnread);
+    } catch {
+      // intentionally ignored
+    }
+  }, 20000);
+
+  return () => clearInterval(interval);
+}, [me, token, authLoading]);
+
 
   /** تنظیم بج تب پناه بر اساس unreadCount */
   useEffect(() => {

@@ -15,6 +15,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import PlanStatusBadge from "../../../components/PlanStatusBadge";
 import { BACKEND_URL } from "../../../constants/backend";
+import { useAuth } from "../../../hooks/useAuth";
 import { useUser } from "../../../hooks/useUser";
 
 const DEFAULT_TITLES = {
@@ -64,9 +65,11 @@ function formatTime(input?: string | null) {
 }
 
 export default function RealSupport() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const { me } = useUser();
+const router = useRouter();
+const insets = useSafeAreaInsets();
+const { me } = useUser();
+const { token, loading: authLoading } = useAuth();
+
 
   const [therapySummary, setTherapySummary] = useState<TicketSummary | null>(null);
   const [techSummary, setTechSummary] = useState<TicketSummary | null>(null);
@@ -106,7 +109,23 @@ export default function RealSupport() {
         qs.push(`ts=${Date.now()}`);
         const url = `${BACKEND_URL}/api/public/tickets/open?${qs.join("&")}`;
 
-        const res = await fetch(url);
+        if (authLoading || !token) {
+  return {
+    hasTicket: false,
+    lastText: null,
+    lastFromAdmin: false,
+    lastAdminMsgId: null,
+    lastAdminMsgAt: null,
+    lastMsgAt: null,
+  };
+}
+
+const res = await fetch(url, {
+  headers: {
+    Authorization: `Bearer ${token}`,
+    "Cache-Control": "no-store",
+  },
+});
         let json: any = null;
         try {
           json = await res.json();
@@ -164,7 +183,7 @@ export default function RealSupport() {
         return null;
       }
     },
-    [getOpenedById]
+    [getOpenedById, token, authLoading]
   );
 
   const loadSeenIds = useCallback(async () => {
@@ -186,6 +205,7 @@ export default function RealSupport() {
     useCallback(() => {
       let cancelled = false;
       const load = async () => {
+        if (authLoading) return;
         setLoading(true);
         const [therapy, tech] = await Promise.all([
           fetchSummaryForType("therapy"),
@@ -202,7 +222,7 @@ export default function RealSupport() {
       return () => {
         cancelled = true;
       };
-    }, [fetchSummaryForType, loadSeenIds])
+    }, [fetchSummaryForType, loadSeenIds, authLoading])
   );
 
   const markSeenAndOpen = async (type: "tech" | "therapy", summary?: TicketSummary | null) => {
