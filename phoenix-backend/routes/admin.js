@@ -1097,13 +1097,49 @@ function isUuid(v) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v || ""));
 }
 
-router.get("/tickets/:id", async (req, res) => {
+router.get("/tickets/:id", allow("agent", "manager", "owner"), async (req, res) => {
   try {
-    const t = await prisma.ticket.findUnique({
-      where: { id: String(req.params.id) },
-      include: { messages: { orderBy: { createdAt: "asc" } } },
-    });
+    let t = await prisma.ticket.findUnique({
+  where: { id: String(req.params.id) },
+  include: {
+    messages: { orderBy: { createdAt: "asc" } },
+    assignedAdmin: {
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+      },
+    },
+  },
+});
     if (!t) return res.status(404).json({ ok: false, error: "not_found" });
+
+    // اگر هنوز مسئول ندارد، ادمین فعلی مسئول شود
+if (!t.assignedAdminId && req.admin?.id) {
+  await prisma.ticket.update({
+    where: { id: t.id },
+    data: {
+      assignedAdminId: req.admin.id,
+    },
+  });
+
+  t = await prisma.ticket.findUnique({
+    where: { id: t.id },
+    include: {
+      messages: { orderBy: { createdAt: "asc" } },
+      assignedAdmin: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+        },
+      },
+    },
+  });
+}
+
 
     // ✅ user lookup: openedById اگر UUID بود = userId، وگرنه با phone های ممکن
 let user = null;
