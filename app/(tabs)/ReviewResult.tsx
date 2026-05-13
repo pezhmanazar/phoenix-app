@@ -11,6 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 import { AUDIO_KEYS, mediaUrl } from "../../constants/media";
 
+
 /**
  * ✅ فقط API اصلی
  */
@@ -998,8 +999,11 @@ if (!token) {
         )}
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={[styles.card, { backgroundColor: palette.glass, borderColor: palette.border }]}>
+      <ScrollView
+  contentContainerStyle={[styles.content, { paddingBottom: 120 }]}
+  showsVerticalScrollIndicator={false}
+>
+          <View style={[styles.card, { backgroundColor: palette.glass, borderColor: palette.border }]}>
           {(loading || authLoading) && (
             <View style={{ paddingVertical: 18, alignItems: "center" }}>
               <ActivityIndicator color={palette.gold} />

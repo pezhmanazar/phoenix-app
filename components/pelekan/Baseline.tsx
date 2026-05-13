@@ -62,7 +62,6 @@ async function postJson(url: string, token: string, body: any) {
 
 export default function Baseline({ me, state, onRefresh }: Props) {
   const { token, loading: authLoading } = useAuth();
-  const phone = me?.phone as string | undefined;
 
   const palette = useMemo(
     () => ({
@@ -157,15 +156,6 @@ export default function Baseline({ me, state, onRefresh }: Props) {
   }, [completedResult?.level, palette.red, palette.gold, palette.lime]);
 
   const fetchBaselineState = useCallback(async () => {
-    if (!phone) {
-      setLoading(false);
-      setStep(null);
-      setCompletedResult(null);
-      setStatus("error");
-      setErrorMsg("PHONE_MISSING");
-      return;
-    }
-
     if (authLoading) {
       console.log("[Baseline/fetchState] skipped: authLoading");
       return;
@@ -185,10 +175,9 @@ export default function Baseline({ me, state, onRefresh }: Props) {
       setLoading(true);
       setErrorMsg(null);
 
-      const url = `${API_BASE}/state?phone=${encodeURIComponent(phone)}`;
+      const url = `${API_BASE}/state`;
 
       console.log("[Baseline/fetchState] request", {
-        phone,
         hasToken: !!token,
         tokenPreview: `${token.slice(0, 12)}...`,
         url,
@@ -262,24 +251,21 @@ export default function Baseline({ me, state, onRefresh }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [phone, token, authLoading]);
+  }, [token, authLoading]);
 
   useEffect(() => {
     console.log("[Baseline/useEffect]", {
       authLoading,
       hasToken: !!token,
       tokenPreview: token ? `${token.slice(0, 12)}...` : null,
-      phone: phone || null,
     });
 
     if (authLoading) return;
     fetchBaselineState();
-  }, [authLoading, token, phone, fetchBaselineState]);
+  }, [authLoading, token, fetchBaselineState]);
 
   const postAnswer = useCallback(
     async (payload: any) => {
-      if (!phone) return false;
-
       if (authLoading) {
         showAppModal("warning", "کمی صبر کن", "احراز هویت هنوز کامل نشده.");
         return false;
@@ -299,10 +285,7 @@ export default function Baseline({ me, state, onRefresh }: Props) {
           payload,
         });
 
-        const { res, json } = await postJson(`${API_BASE}/answer`, token, {
-          phone,
-          ...payload,
-        });
+        const { res, json } = await postJson(`${API_BASE}/answer`, token, payload);
 
         console.log("[Baseline/postAnswer] response", {
           status: res.status,
@@ -340,12 +323,10 @@ export default function Baseline({ me, state, onRefresh }: Props) {
         setBusy(false);
       }
     },
-    [phone, token, authLoading]
+    [token, authLoading]
   );
 
   const submit = useCallback(async () => {
-    if (!phone) return;
-
     if (authLoading) {
       showAppModal("warning", "کمی صبر کن", "احراز هویت هنوز کامل نشده.");
       return;
@@ -362,10 +343,9 @@ export default function Baseline({ me, state, onRefresh }: Props) {
       console.log("[Baseline/submit] request", {
         hasToken: !!token,
         tokenPreview: `${token.slice(0, 12)}...`,
-        phone,
       });
 
-      const { res, json } = await postJson(`${API_BASE}/submit`, token, { phone });
+      const { res, json } = await postJson(`${API_BASE}/submit`, token, {});
 
       console.log("[Baseline/submit] response", {
         status: res.status,
@@ -402,7 +382,7 @@ export default function Baseline({ me, state, onRefresh }: Props) {
     } finally {
       setBusy(false);
     }
-  }, [phone, token, authLoading, onRefresh, fetchBaselineState]);
+  }, [token, authLoading, onRefresh, fetchBaselineState]);
 
   const questionIndex = useMemo(() => {
     if (step?.type !== "question") return null;
@@ -470,6 +450,48 @@ export default function Baseline({ me, state, onRefresh }: Props) {
       );
     }
   }, [step, localSelected, postAnswer, fetchBaselineState, isLastQuestion, submit]);
+
+  const markSeen = useCallback(async () => {
+    if (authLoading) {
+      showAppModal("warning", "کمی صبر کن", "احراز هویت هنوز کامل نشده.");
+      return;
+    }
+
+    if (!token) {
+      showAppModal("error", "نیاز به ورود", "توکن احراز هویت پیدا نشد.");
+      return;
+    }
+
+    try {
+      setBusy(true);
+
+      console.log("[Baseline/seen] request", {
+        hasToken: !!token,
+        tokenPreview: `${token.slice(0, 12)}...`,
+      });
+
+      const { res, json } = await postJson(`${API_BASE}/seen`, token, {});
+
+      console.log("[Baseline/seen] response", {
+        status: res.status,
+        ok: res.ok,
+      });
+
+      console.log("[Baseline/seen] json", {
+        ok: json?.ok,
+        error: json?.error || null,
+        message: json?.message || null,
+      });
+    } catch (e: any) {
+      console.log("[Baseline/seen] catch", {
+        message: e?.message || null,
+      });
+    } finally {
+      setBusy(false);
+    }
+
+    await onRefresh?.();
+  }, [token, authLoading, onRefresh]);
 
   const Donut = ({ valuePercent }: { valuePercent: number }) => {
     const size = 132;
@@ -590,50 +612,7 @@ export default function Baseline({ me, state, onRefresh }: Props) {
 
               <Pressable
                 disabled={busy}
-                onPress={async () => {
-                  if (!phone) return;
-
-                  if (authLoading) {
-                    showAppModal("warning", "کمی صبر کن", "احراز هویت هنوز کامل نشده.");
-                    return;
-                  }
-
-                  if (!token) {
-                    showAppModal("error", "نیاز به ورود", "توکن احراز هویت پیدا نشد.");
-                    return;
-                  }
-
-                  try {
-                    setBusy(true);
-
-                    console.log("[Baseline/seen] request", {
-                      hasToken: !!token,
-                      tokenPreview: `${token.slice(0, 12)}...`,
-                      phone,
-                    });
-
-                    const { res, json } = await postJson(`${API_BASE}/seen`, token, { phone });
-
-                    console.log("[Baseline/seen] response", {
-                      status: res.status,
-                      ok: res.ok,
-                    });
-
-                    console.log("[Baseline/seen] json", {
-                      ok: json?.ok,
-                      error: json?.error || null,
-                      message: json?.message || null,
-                    });
-                  } catch (e: any) {
-                    console.log("[Baseline/seen] catch", {
-                      message: e?.message || null,
-                    });
-                  } finally {
-                    setBusy(false);
-                  }
-
-                  await onRefresh?.();
-                }}
+                onPress={markSeen}
                 style={[
                   styles.btnPrimary,
                   {

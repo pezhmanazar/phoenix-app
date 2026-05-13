@@ -1,18 +1,20 @@
 // app/pelekan/bastan/intro.tsx
 import { AUDIO_KEYS, mediaUrl } from "@/constants/media";
+import { useAuth } from "@/hooks/useAuth";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Audio } from "expo-av";
+import { Audio, AVPlaybackStatus } from "expo-av";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useUser } from "../../../hooks/useUser";
+
+type PlanStatus = "free" | "pro" | "expiring" | "expired";
 
 type BastanStateResponse = {
   ok: boolean;
   data?: {
-    user: { planStatus: "free" | "pro" | "expiring" | "expired"; daysLeft: number };
+    user: { planStatus: PlanStatus; daysLeft: number };
     intro: { completedAt: string | null; paywallNeededAfterIntro: boolean };
     start?: { completedAt: string | null; locked: boolean; paywallNeededAfterIntro: boolean };
   };
@@ -29,16 +31,16 @@ function fmt(ms: number) {
 export default function BastanIntroScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { me } = useUser();
-  const phone = String(me?.phone || "").trim();
+  const { token, loading: authLoading } = useAuth();
 
   const apiBase = "https://api.qoqnoos.app";
 
-  const AUDIO_URL = useMemo(() => {
-    return mediaUrl(AUDIO_KEYS.introOverall);
-  }, []);
+  const AUDIO_URL = useMemo(() => mediaUrl(AUDIO_KEYS.introOverall), []);
 
-  const STORAGE_POS_KEY = useMemo(() => `bastan_intro_pos_ms:${phone || "no_phone"}`, [phone]);
+  const STORAGE_POS_KEY = useMemo(() => {
+    const suffix = token ? String(token).slice(-16) : "no_token";
+    return `bastan_intro_pos_ms:${suffix}`;
+  }, [token]);
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -46,36 +48,28 @@ export default function BastanIntroScreen() {
   const [introDone, setIntroDone] = useState(false);
   const [, setPaywallAfterIntro] = useState(false);
 
-  // ✅ NEW (حداقلی و لازم): وضعیت پلن برای تصمیم‌گیری paywall در همان کلیک اول
-  const [planStatus, setPlanStatus] = useState<"free" | "pro" | "expiring" | "expired">("free");
+  const [planStatus, setPlanStatus] = useState<PlanStatus>("free");
   const isPro = planStatus === "pro" || planStatus === "expiring";
 
-  // Player state
   const soundRef = useRef<Audio.Sound | null>(null);
+
   const [, setIsLoaded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-
   const [posMs, setPosMs] = useState(0);
   const [durMs, setDurMs] = useState(1);
-
-  // ✅ NEW: show buffering icon to prevent repeated taps UX-wise
   const [isBuffering, setIsBuffering] = useState(false);
-
-  // ✅ NEW: width of progress track (for tap-to-seek)
   const [trackW, setTrackW] = useState(0);
 
-  // ✅ NEW: restore position
   const restorePosRef = useRef<number | null>(null);
-
-  // ✅ NEW: prevent double complete
   const completingRef = useRef(false);
 
-  // ✅ تغییر اصلی: دکمه همیشه فعال
   const canContinue = true;
 
   const fetchIntroState = useCallback(async () => {
-    if (!phone) {
-      setErr("NO_PHONE");
+    if (authLoading) return;
+
+    if (!token) {
+      setErr("UNAUTHORIZED");
       setLoading(false);
       return;
     }
@@ -84,10 +78,16 @@ export default function BastanIntroScreen() {
       setErr(null);
       setLoading(true);
 
-      const url = `${apiBase}/api/pelekan/bastan/state?phone=${encodeURIComponent(phone)}`;
-      const res = await fetch(url, { headers: { "Cache-Control": "no-store" } });
+      const res = await fetch(`${apiBase}/api/pelekan/bastan/state`, {
+        method: "GET",
+        headers: {
+          "Cache-Control": "no-store",
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       let json: BastanStateResponse | null = null;
+
       try {
         json = (await res.json()) as BastanStateResponse;
       } catch {
@@ -99,10 +99,12 @@ export default function BastanIntroScreen() {
         return;
       }
 
-      // ✅ NEW: plan status را ذخیره کن تا paywall همان بار اول درست تصمیم‌گیری شود
       setPlanStatus(json.data.user?.planStatus ?? "free");
 
-      const completedAt = json.data.start?.completedAt ?? json.data.intro?.completedAt ?? null;
+      const completedAt =
+        json.data.start?.completedAt ??
+        json.data.intro?.completedAt ??
+        null;
 
       const paywall =
         json.data.start?.paywallNeededAfterIntro ??
@@ -111,31 +113,35 @@ export default function BastanIntroScreen() {
 
       setIntroDone(!!completedAt);
       setPaywallAfterIntro(!!paywall);
-        } catch {
-      setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
+    } catch {
+      setErr("در دریافت یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
     } finally {
       setLoading(false);
     }
-  }, [phone]);
+  }, [authLoading, token]);
 
   const markIntroComplete = useCallback(async () => {
-    if (!phone) return;
+    if (!token) return;
     if (introDone) return;
     if (completingRef.current) return;
 
     completingRef.current = true;
 
-        try {
-      const url = `${apiBase}/api/pelekan/bastan/intro/complete`;
-      const res = await fetch(url, {
+    try {
+      const res = await fetch(`${apiBase}/api/pelekan/bastan/intro/complete`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-        body: JSON.stringify({ phone }),
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({}),
       });
 
-      let json: any = null;
+      let json: { ok?: boolean; error?: string } | null = null;
+
       try {
-        json = await res.json();
+        json = (await res.json()) as { ok?: boolean; error?: string };
       } catch {
         json = null;
       }
@@ -146,34 +152,39 @@ export default function BastanIntroScreen() {
 
       setIntroDone(true);
 
-      // ✅ وقتی کامل شد، دیگه ادامه از وسط معنی نداره؛ پاک می‌کنیم
       try {
         await AsyncStorage.removeItem(STORAGE_POS_KEY);
-      } catch {}
+      } catch {
+        // intentionally ignored
+      }
     } finally {
       completingRef.current = false;
     }
-  }, [phone, introDone, STORAGE_POS_KEY]);
+  }, [token, introDone, STORAGE_POS_KEY]);
 
   const unload = useCallback(async () => {
     try {
       const s = soundRef.current;
+
       if (s) {
-        // ✅ قبل از unload، پوزیشن رو ذخیره کن (اگر کامل نشده)
         try {
-          const st: any = await s.getStatusAsync();
-          if (st?.isLoaded && !introDone) {
+          const st = await s.getStatusAsync();
+          if (st.isLoaded && !introDone) {
             const p = Number(st.positionMillis ?? 0);
             if (p > 0) {
               await AsyncStorage.setItem(STORAGE_POS_KEY, String(p));
             }
           }
-        } catch {}
+        } catch {
+          // intentionally ignored
+        }
 
         await s.stopAsync().catch(() => {});
         await s.unloadAsync().catch(() => {});
       }
-    } catch {}
+    } catch {
+      // intentionally ignored
+    }
 
     soundRef.current = null;
     setIsLoaded(false);
@@ -192,13 +203,16 @@ export default function BastanIntroScreen() {
       playThroughEarpieceAndroid: false,
     });
 
-    // ✅ قبل از load، pos ذخیره شده رو بخونیم
-    if (!introDone && phone) {
+    if (!introDone && token) {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_POS_KEY);
         const n = raw ? Number(raw) : 0;
-        if (Number.isFinite(n) && n > 0) restorePosRef.current = n;
-      } catch {}
+        if (Number.isFinite(n) && n > 0) {
+          restorePosRef.current = n;
+        }
+      } catch {
+        // intentionally ignored
+      }
     } else {
       restorePosRef.current = null;
     }
@@ -206,24 +220,22 @@ export default function BastanIntroScreen() {
     const { sound } = await Audio.Sound.createAsync(
       { uri: AUDIO_URL },
       { shouldPlay: false },
-      async (st) => {
+      async (st: AVPlaybackStatus) => {
         if (!st.isLoaded) return;
 
         setIsLoaded(true);
         setIsPlaying(st.isPlaying);
         setPosMs(st.positionMillis ?? 0);
         setDurMs(st.durationMillis ?? 1);
-
-        // ✅ به محض اینکه واقعاً load شد، از حالت بافرینگ خارج شو
         setIsBuffering(false);
 
-        // ✅ اگر کاربر نزدیک پایان برد (seek) ولی didJustFinish نخورد
         const position = Number(st.positionMillis ?? 0);
         const duration = Number(st.durationMillis ?? 0);
         const nearEnd = duration > 0 && duration - position <= 800;
 
         if ((st.didJustFinish || nearEnd) && !introDone) {
           setIsPlaying(false);
+
           try {
             await markIntroComplete();
           } catch {
@@ -231,14 +243,13 @@ export default function BastanIntroScreen() {
           }
         }
 
-        // ✅ ذخیره‌ی پوزیشن (هر چند ثانیه، سبک)
-        if (!introDone && duration > 0) {
-          if (position > 0) {
-            try {
-              if (position % 3000 < 250) {
-                await AsyncStorage.setItem(STORAGE_POS_KEY, String(position));
-              }
-            } catch {}
+        if (!introDone && duration > 0 && position > 0) {
+          try {
+            if (position % 3000 < 250) {
+              await AsyncStorage.setItem(STORAGE_POS_KEY, String(position));
+            }
+          } catch {
+            // intentionally ignored
           }
         }
       }
@@ -246,32 +257,42 @@ export default function BastanIntroScreen() {
 
     soundRef.current = sound;
 
-    // ✅ بعد از load: اگر پوزیشن ذخیره داشتیم، ست کنیم
     try {
       const restore = restorePosRef.current;
       if (restore && restore > 0 && !introDone) {
-        const st: any = await sound.getStatusAsync();
-        const duration = Number(st?.durationMillis ?? 0);
-        const safeRestore = duration > 0 ? Math.min(restore, Math.max(0, duration - 1200)) : restore;
-        await sound.setPositionAsync(safeRestore);
+        const st = await sound.getStatusAsync();
+        if (st.isLoaded) {
+          const duration = Number(st.durationMillis ?? 0);
+          const safeRestore =
+            duration > 0
+              ? Math.min(restore, Math.max(0, duration - 1200))
+              : restore;
+
+          await sound.setPositionAsync(safeRestore);
+        }
       }
-    } catch {}
-  }, [AUDIO_URL, introDone, phone, STORAGE_POS_KEY, markIntroComplete]);
+    } catch {
+      // intentionally ignored
+    }
+  }, [AUDIO_URL, introDone, token, STORAGE_POS_KEY, markIntroComplete]);
 
   const togglePlay = useCallback(async () => {
     if (isBuffering) return;
 
     try {
-      if (!soundRef.current) setIsBuffering(true);
+      if (!soundRef.current) {
+        setIsBuffering(true);
+      }
 
       await loadIfNeeded();
+
       const s = soundRef.current;
       if (!s) {
         setIsBuffering(false);
         return;
       }
 
-      const st: any = await s.getStatusAsync();
+      const st = await s.getStatusAsync();
       if (!st.isLoaded) {
         setIsBuffering(false);
         return;
@@ -294,10 +315,11 @@ export default function BastanIntroScreen() {
     async (ms: number) => {
       try {
         await loadIfNeeded();
+
         const s = soundRef.current;
         if (!s) return;
 
-        const st: any = await s.getStatusAsync();
+        const st = await s.getStatusAsync();
         if (!st.isLoaded) return;
 
         const d = Number(st.durationMillis ?? durMs);
@@ -311,7 +333,7 @@ export default function BastanIntroScreen() {
             setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
           }
         }
-            } catch {
+      } catch {
         setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
       }
     },
@@ -320,14 +342,15 @@ export default function BastanIntroScreen() {
 
   useEffect(() => {
     fetchIntroState();
+
     return () => {
-      unload();
+      void unload();
     };
   }, [fetchIntroState, unload]);
 
   const progressPct = Math.min(1, posMs / Math.max(1, durMs));
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <SafeAreaView style={[styles.root, { paddingTop: insets.top }]} edges={["top", "left", "right"]}>
         <View style={styles.center}>
@@ -368,14 +391,16 @@ export default function BastanIntroScreen() {
 
         <Text style={styles.title}>شروع درمان</Text>
 
-        {/* ✅ تغییر اصلی متن: دیگر نگوییم دکمه قفل می‌شود */}
         <Text style={styles.desc}>
           {introDone
             ? "این ویس ثبت شده. هر وقت خواستی دوباره بهش گوش کن."
-            : " پیشنهاد میشه این بخش رو برای شناخت مسیر، کامل گوش کنی."}
+            : "پیشنهاد میشه این بخش رو برای شناخت مسیر، کامل گوش کنی."}
         </Text>
 
-        <View style={styles.progressTrack} onLayout={(e) => setTrackW(e?.nativeEvent?.layout?.width ?? 0)}>
+        <View
+          style={styles.progressTrack}
+          onLayout={(e) => setTrackW(e.nativeEvent.layout.width ?? 0)}
+        >
           <TouchableOpacity
             activeOpacity={0.9}
             style={{ flex: 1 }}
@@ -383,7 +408,7 @@ export default function BastanIntroScreen() {
               if (!trackW) return;
               const x = e.nativeEvent.locationX;
               const pct = Math.max(0, Math.min(1, x / trackW));
-              seekTo(Math.floor(pct * durMs));
+              void seekTo(Math.floor(pct * durMs));
             }}
           >
             <View style={[styles.progressFill, { width: `${Math.round(progressPct * 100)}%` }]} />
@@ -394,13 +419,11 @@ export default function BastanIntroScreen() {
           {fmt(posMs)} / {fmt(durMs)}
         </Text>
 
-        {/* ✅ ادامه (همیشه فعال) */}
         <TouchableOpacity
           activeOpacity={0.9}
           disabled={!canContinue}
           style={[styles.continueBtn, !canContinue && styles.continueBtnDisabled]}
           onPress={async () => {
-            // ✅ با هر بار زدن ادامه، intro را complete کن (ولی مانع UX نشو)
             try {
               if (!introDone) {
                 await markIntroComplete();
@@ -409,21 +432,24 @@ export default function BastanIntroScreen() {
               setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
               return;
             }
-            // ✅ شرط ساده و دقیق: اگر پرو نیست → paywall ؛ اگر پرو هست → ادامه پلکان
+
             if (!isPro) {
-              router.push("/(tabs)/Subscription" as any);
+              router.push("/(tabs)/Subscription");
               return;
             }
 
-            router.replace("/(tabs)/Pelekan" as any);
+            router.replace("/(tabs)/Pelekan");
           }}
         >
-          <Text style={[styles.continueText, !canContinue && styles.continueTextDisabled]}>ادامه</Text>
+          <Text style={[styles.continueText, !canContinue && styles.continueTextDisabled]}>
+            ادامه
+          </Text>
         </TouchableOpacity>
 
-        {/* ✅ پیام فقط وقتی پرو نیست */}
         {!isPro ? (
-          <Text style={styles.warningText}>برای ادامه‌ی مسیر، باید اشتراک پرو داشته باشی.</Text>
+          <Text style={styles.warningText}>
+            برای ادامه‌ی مسیر، باید اشتراک پرو داشته باشی.
+          </Text>
         ) : null}
       </View>
     </SafeAreaView>
@@ -491,8 +517,20 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
 
-  title: { color: "#F9FAFB", fontSize: 22, fontWeight: "900", textAlign: "center", marginTop: 6 },
-  desc: { color: "rgba(231,238,247,.75)", fontSize: 13, textAlign: "center", lineHeight: 20, marginBottom: 6 },
+  title: {
+    color: "#F9FAFB",
+    fontSize: 22,
+    fontWeight: "900",
+    textAlign: "center",
+    marginTop: 6,
+  },
+  desc: {
+    color: "rgba(231,238,247,.75)",
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 6,
+  },
 
   progressTrack: {
     width: "100%",
