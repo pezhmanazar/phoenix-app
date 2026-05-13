@@ -16,9 +16,27 @@ const prisma = new PrismaClient();
 const UPLOAD_ROOT =
   process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
 
+const ALLOWED_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "audio/m4a",
+  "audio/mp4",
+  "audio/mpeg",
+];
+
 const upload = multer({
   dest: path.join(UPLOAD_ROOT, "tickets"),
+  limits: {
+    fileSize: 15 * 1024 * 1024,
+  },
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+      return cb(null, true);
+    }
+    return cb(new Error("INVALID_FILE_TYPE"));
+  },
 });
+
 
 /* ================= helper پلن برای چت درمانگر ================= */
 /**
@@ -692,9 +710,35 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
  */
 publicTicketsRouter.post(
   "/:id/reply-upload",
-  upload.single("attachment"),
+  (req, res, next) => {
+    upload.single("attachment")(req, res, (err) => {
+      if (err) {
+        if (err.message === "INVALID_FILE_TYPE") {
+          return res.status(400).json({
+            ok: false,
+            error: "فرمت فایل مجاز نیست",
+          });
+        }
+
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({
+            ok: false,
+            error: "حجم فایل بیشتر از حد مجاز است",
+          });
+        }
+
+        return res.status(400).json({
+          ok: false,
+          error: "خطا در آپلود فایل",
+          detail: err.message,
+        });
+      }
+
+      next();
+    });
+  },
   async (req, res) => {
-    try {
+        try {
       const identity = requireTicketIdentity(req);
       const id = String(req.params.id);
 

@@ -700,15 +700,6 @@ const buildForm = async () => {
     }
 
 const fd = await buildForm();
-
-console.log("UPLOAD_DEBUG token?", !!token, token?.slice?.(0, 20));
-console.log("UPLOAD_DEBUG ticketId(param)", ticketId);
-console.log("UPLOAD_DEBUG ticketId(target)", targetId);
-console.log("UPLOAD_DEBUG hasText", !!text?.trim());
-console.log("UPLOAD_DEBUG hasImage", !!image);
-console.log("UPLOAD_DEBUG hasVoice", !!recURI);
-console.log("UPLOAD_DEBUG formData prepared");
-
 const updatedTicket = await uploadTicketReply({
   token,
   ticketId: targetId,
