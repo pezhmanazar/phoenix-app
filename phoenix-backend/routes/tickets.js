@@ -686,46 +686,7 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
 const replyUploadMiddleware = upload.single("attachment");
 publicTicketsRouter.post(
   "/:id/reply-upload",
-
-  (req, res, next) => {
-    replyUploadMiddleware(req, res, (err) => {
-      if (err) {
-        console.error("[reply-upload multer error]", {
-          name: err.name,
-          message: err.message,
-          code: err.code,
-          field: err.field,
-        });
-
-        return res.status(400).json({
-          ok: false,
-          error: "UPLOAD_ERROR",
-          multer: {
-            name: err.name,
-            message: err.message,
-            code: err.code,
-            field: err.field,
-          },
-        });
-      }
-
-      console.log("[reply-upload multer success]", {
-        body: req.body,
-        file: req.file
-          ? {
-              fieldname: req.file.fieldname,
-              originalname: req.file.originalname,
-              mimetype: req.file.mimetype,
-              size: req.file.size,
-              path: req.file.path,
-            }
-          : null,
-      });
-
-      next();
-    });
-  },
-
+  upload.single("attachment"),
   async (req, res) => {
     try {
       const identity = requireTicketIdentity(req);
@@ -765,12 +726,6 @@ publicTicketsRouter.post(
 
       const f = req.file;
 
-      console.log("[reply-upload handler]", {
-        hasFile: !!f,
-        hasText,
-        body: req.body,
-      });
-
       if (!f && !hasText) {
         return res.status(400).json({
           ok: false,
@@ -778,16 +733,43 @@ publicTicketsRouter.post(
         });
       }
 
+      let fileUrl = null;
+      let mime = null;
+      let size = null;
+      let type = "text";
+
+      if (f) {
+        fileUrl = "/" + f.path.replace(/\\/g, "/");
+        mime = f.mimetype;
+        size = f.size;
+
+        if (mime?.startsWith("image/")) {
+          type = "image";
+        } else if (mime?.startsWith("audio/")) {
+          type = "voice";
+        } else {
+          type = "file";
+        }
+      }
+
+      const created = await prisma.message.create({
+        data: {
+          ticketId: id,
+          senderType: "user",
+
+          type,
+
+          text: hasText ? rawText : null,
+
+          fileUrl,
+          mime,
+          size,
+        },
+      });
+
       return res.json({
         ok: true,
-        debug: {
-          hasFile: !!f,
-          fieldname: f?.fieldname || null,
-          mimetype: f?.mimetype || null,
-          originalname: f?.originalname || null,
-          size: f?.size || null,
-          body: req.body,
-        },
+        item: created,
       });
     } catch (e) {
       console.error("[reply-upload route error]", e);
@@ -800,7 +782,6 @@ publicTicketsRouter.post(
     }
   }
 );
-
 
 // ====================== اکسپورت‌ها ======================
 export default router;
