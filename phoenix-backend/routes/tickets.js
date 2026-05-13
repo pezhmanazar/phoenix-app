@@ -108,6 +108,13 @@ function buildIdentityOrWhere(identity) {
   ].filter(Boolean);
 }
 
+function mimeToMessageType(mime) {
+  if (!mime) return "file";
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("audio/")) return "voice";
+  return "file";
+}
+
 /* ====================== روتر پنل/ادمین (قدیمی) ====================== */
 
 const router = Router();
