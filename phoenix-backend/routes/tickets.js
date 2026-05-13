@@ -1,6 +1,7 @@
 // routes/tickets.js
 import { PrismaClient } from "@prisma/client";
 import { Router } from "express";
+import multer from "multer";
 import path from "path";
 import { allowAdmin, authAdmin } from "../middleware/authAdmin.js";
 import authUser from "../middleware/authUser.js";
@@ -14,6 +15,10 @@ const prisma = new PrismaClient();
 
 const UPLOAD_ROOT =
   process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
+
+const upload = multer({
+  dest: path.join(UPLOAD_ROOT, "tickets"),
+});
 
 /* ================= helper پلن برای چت درمانگر ================= */
 /**
@@ -678,7 +683,10 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
  * POST /api/public/tickets/:id/reply-upload
  * form-data: file? , text? , durationSec? , openedByName?
  */
-publicTicketsRouter.post("/:id/reply-upload", async (req, res) => {
+publicTicketsRouter.post(
+  "/:id/reply-upload",
+  upload.single("file"),
+  async (req, res) => {
   try {
     const identity = requireTicketIdentity(req);
     const id = String(req.params.id);

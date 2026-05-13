@@ -1,3 +1,4 @@
+//phoenix-app\app\support\tickets\[id].tsx
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
@@ -38,10 +39,19 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  createTicket,
+  sendTicketReply,
+  uploadTicketReply,
+} from "../../../api/tickets";
 import { BACKEND_URL } from "../../../constants/backend";
+import { useAuth } from "../../../hooks/useAuth";
 import { useUser } from "../../../hooks/useUser";
 import { getPlanStatus, PRO_FLAG_KEY } from "../../../lib/plan";
-
+import {
+  detectType,
+  extractErrorMessage,
+} from "../../../utils/tickets/helpers";
 // ✅ مسیر را اگر متفاوت است فقط همین خط را اصلاح کن
 import PlanStatusBadge from "../../../components/PlanStatusBadge";
 
@@ -75,13 +85,6 @@ type Ticket = {
 
 type PlanView = "free" | "pro" | "expiring" | "expired";
 
-/* برای پاس دادن کاربر به Composer */
-type UserIdentity = {
-  id?: string;
-  phone?: string;
-  fullName?: string | null;
-};
-
 /* ===== پاک کردن تاریخچه فقط سمت کلاینت (برای هر تیکت جدا) ===== */
 const clearKey = (ticketId: string) => `chat_cleared_at:${ticketId}`;
 
@@ -107,80 +110,6 @@ function msgTimeMs(m: Message): number {
   const d = new Date(s);
   const t = d.getTime();
   return Number.isFinite(t) ? t : 0;
-}
-
-/* تشخیص نوع پیام بر اساس mime یا url */
-function detectType(m?: string | null, url?: string | null): MessageType {
-  const mime = (m || "").toLowerCase();
-  if (mime.startsWith("image/")) return "image";
-  if (mime.startsWith("audio/")) return "voice";
-  if (mime) return "file";
-
-  const u = (url || "").toLowerCase();
-  if (
-    u.endsWith(".png") ||
-    u.endsWith(".jpg") ||
-    u.endsWith(".jpeg") ||
-    u.endsWith(".webp")
-  )
-    return "image";
-  if (
-    u.endsWith(".mp3") ||
-    u.endsWith(".wav") ||
-    u.endsWith(".m4a") ||
-    u.endsWith(".ogg")
-  )
-    return "voice";
-  if (u) return "file";
-  return "text";
-}
-
-/* گرفتن نام/شناسه کاربر از استوریج (فallback قدیمی) */
-async function getUserIdentity() {
-  try {
-    const keys = ["user_profile", "profile", "me", "phoenix_profile"];
-    let raw: string | null = null;
-    for (const k of keys) {
-      raw = await AsyncStorage.getItem(k);
-      if (raw) break;
-    }
-    const p = raw ? JSON.parse(raw) : {};
-    const openedById =
-      p?.id || p?.userId || p?.uid || p?.phone || p?.mobile || p?.email || "";
-    const openedByName =
-      p?.fullName || p?.name || p?.displayName || p?.phone || "کاربر";
-    return {
-      openedById: String(openedById || ""),
-      openedByName: String(openedByName || "کاربر"),
-    };
-  } catch {
-    return { openedById: "", openedByName: "کاربر" };
-  }
-}
-
-/* ترجیح: استفاده از me؛ در صورت نبود، fallback به getUserIdentity */
-async function resolveIdentity(fromUser?: UserIdentity | null) {
-  if (fromUser) {
-    const openedById = fromUser.phone || fromUser.id || "";
-    const openedByName = fromUser.fullName || fromUser.phone || "کاربر";
-    return {
-      openedById: String(openedById || ""),
-      openedByName: String(openedByName || "کاربر"),
-    };
-  }
-  return await getUserIdentity();
-}
-
-/* خواندن پیام خطا */
-function extractErrorMessage(err: any, fallback: string): string {
-  if (!err) return fallback;
-  if (typeof err === "string") return err;
-  if (typeof err.message === "string") return err.message;
-  try {
-    return JSON.stringify(err);
-  } catch {
-    return fallback;
-  }
 }
 
 /* ================= Image Lightbox ================= */
@@ -541,7 +470,6 @@ function Composer({
   ticketId,
   ticketType,
   isPro,
-  user,
   onTicketCreated,
   onSent,
   onMeasureHeight,
@@ -550,12 +478,12 @@ function Composer({
   ticketId: string;
   ticketType?: "tech" | "therapy" | null;
   isPro: boolean;
-  user?: UserIdentity | null;
   onTicketCreated?: (newId: string, fullTicket?: Ticket | null) => void;
   onSent: (updatedTicket?: Ticket | null) => void;
   onMeasureHeight?: (h: number) => void;
   onError: (msg: string) => void;
 }) {
+  const { token, isAuthenticated } = useAuth();
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -673,182 +601,130 @@ function Composer({
     setRecMs(0);
   };
 
-  const createTicketIfNeeded = async (textFallback: string) => {
-    if (!ticketType) return ticketId;
+ const createTicketIfNeeded = async (textFallback: string) => {
+  if (!ticketType) return ticketId;
 
-    const { openedById, openedByName } = await resolveIdentity(user);
+  if (!isAuthenticated || !token) {
+    throw new Error("برای ارسال پیام باید دوباره وارد حساب کاربری بشی.");
+  }
 
-    const payload = {
-      type: ticketType,
-      text:
-        textFallback && textFallback.trim()
-          ? textFallback.trim()
-          : "ضمیمه",
-      openedById,
-      openedByName,
-    };
+  const result = await createTicket({
+    token,
+    ticketType,
+    text: textFallback,
+  });
 
-    const res = await fetch(`${BACKEND_URL}/api/public/tickets/send`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    let json: any = null;
-    try {
-      json = await res.json();
-    } catch {
-      throw new Error("پاسخ سرور قابل خواندن نیست (JSON نبود).");
-    }
-
-    if (!res.ok || !json?.ok) {
-      const serverErr = typeof json?.error === "string" ? json.error : undefined;
-      const msg =
-        serverErr && serverErr.trim().length ? serverErr : "ساخت تیکت ناموفق بود";
-      throw new Error(msg);
-    }
-
-    const newId: unknown =
-      (json.ticket && json.ticket.id) || json.ticketId || json.id;
-    if (!newId || typeof newId !== "string") {
-      throw new Error("ساخت تیکت انجام شد اما شناسهٔ تیکت از سرور برنگشت.");
-    }
-
-    const fullTicket: Ticket | null = json.ticket ?? null;
-    onTicketCreated?.(newId, fullTicket);
-    return newId;
-  };
+  onTicketCreated?.(result.ticketId, result.ticket);
+  return result.ticketId;
+};
 
   const sendText = async () => {
-    if (!hasText) return;
-    if (planGuard()) return;
+  if (!hasText) return;
+  if (planGuard()) return;
 
-    try {
-      setSending(true);
-      const textPayload = text.trim();
+  try {
+    setSending(true);
+    const textPayload = text.trim();
 
-      let targetId = ticketId;
-      if (ticketType) {
-        targetId = await createTicketIfNeeded(textPayload);
-        setText("");
-        onSent();
-        return;
-      }
+    if (!isAuthenticated || !token) {
+      throw new Error("برای ارسال پیام باید دوباره وارد حساب کاربری بشی.");
+    }
 
-      const { openedById, openedByName } = await resolveIdentity(user);
-      const res = await fetch(
-        `${BACKEND_URL}/api/public/tickets/${targetId}/reply`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({ text: textPayload, openedById, openedByName }),
-        }
-      );
-
-      let json: any = null;
-      try {
-        json = await res.json();
-      } catch {}
-
-      if (!res.ok || !json?.ok) {
-        const msg = extractErrorMessage(json?.error, "ارسال ناموفق");
-        throw new Error(msg);
-      }
-
-      const updatedTicket: Ticket | null = json.ticket ?? null;
+    let targetId = ticketId;
+    if (ticketType) {
+      targetId = await createTicketIfNeeded(textPayload);
       setText("");
-      onSent(updatedTicket);
-    } catch (e: any) {
-      onError(extractErrorMessage(e, "خطا در ارسال متن"));
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const buildForm = async () => {
-    const fd = new FormData();
-    const { openedById, openedByName } = await resolveIdentity(user);
-    fd.append("openedById", String(openedById || ""));
-    fd.append("openedByName", String(openedByName || "کاربر"));
-    if (hasText) fd.append("text", text.trim());
-
-    if (image) {
-      const file: any = { uri: image.uri, name: image.name, type: image.type };
-      fd.append("file", file);
-      fd.append("attachment", file);
-    } else if (recURI) {
-      // ✅ حداکثر 5 دقیقه (۳۰۰ ثانیه) داخل UI هم enforce می‌کنیم
-      const durationSec = Math.min(300, Math.round(recMs / 1000));
-      const file: any = {
-        uri: recURI,
-        name: `voice_${Date.now()}.m4a`,
-        type: "audio/m4a",
-      };
-      fd.append("file", file);
-      fd.append("attachment", file);
-      fd.append("durationSec", String(durationSec));
+      onSent();
+      return;
     }
 
-    return fd;
-  };
+    const updatedTicket = await sendTicketReply({
+      token,
+      ticketId: targetId,
+      text: textPayload,
+    });
 
-  const tryPost = async (url: string, fd: FormData) => {
-    const res = await fetch(url, { method: "POST", body: fd });
-    let rawText = "";
-    try {
-      rawText = await res.text();
-    } catch {}
-    let json: any = null;
-    try {
-      json = rawText ? JSON.parse(rawText) : null;
-    } catch {
-      json = null;
-    }
-    return { res, json };
-  };
+    setText("");
+    onSent(updatedTicket);
+  } catch (e: any) {
+    onError(extractErrorMessage(e, "خطا در ارسال متن"));
+  } finally {
+    setSending(false);
+  }
+};
+
+const buildForm = async () => {
+  const fd = new FormData();
+
+  if (text?.trim()) {
+    fd.append("text", text.trim());
+  }
+
+  if (image) {
+    fd.append("attachment", {
+      uri: image.uri,
+      name: image.name,
+      type: image.type,
+    } as any);
+  } else if (recURI) {
+    const durationSec = Math.min(300, Math.round(recMs / 1000));
+
+    fd.append("attachment", {
+      uri: recURI,
+      name: `voice_${Date.now()}.m4a`,
+      type: "audio/m4a",
+    } as any);
+
+    fd.append("durationSec", String(durationSec));
+  }
+
+  return fd;
+};
+
 
   const sendUpload = async () => {
-    if (!hasAttachment && !hasText) return;
-    if (planGuard()) return;
+  if (!hasAttachment && !hasText) return;
+  if (planGuard()) return;
 
-    try {
-      setSending(true);
+  try {
+    setSending(true);
 
-      let targetId = ticketId;
-      if (ticketType) {
-        const firstText = hasText ? text.trim() : "ضمیمه";
-        targetId = await createTicketIfNeeded(firstText);
-      }
-
-      const fd = await buildForm();
-      let { res, json } = await tryPost(
-        `${BACKEND_URL}/api/public/tickets/${targetId}/reply-upload`,
-        fd
-      );
-
-      if (!res.ok || !json?.ok) {
-        const fd2 = await buildForm();
-        ({ res, json } = await tryPost(
-          `${BACKEND_URL}/api/public/tickets/${targetId}/reply`,
-          fd2
-        ));
-      }
-
-      if (!res.ok || !json?.ok) {
-        const msg = extractErrorMessage(json?.error, "ارسال ناموفق");
-        throw new Error(msg);
-      }
-
-      const updatedTicket: Ticket | null = json.ticket ?? null;
-      setText("");
-      resetAttachments();
-      onSent(updatedTicket);
-    } catch (e: any) {
-      onError(extractErrorMessage(e, "خطا در ارسال فایل یا ویس"));
-    } finally {
-      setSending(false);
+    if (!isAuthenticated || !token) {
+      throw new Error("برای ارسال پیام باید دوباره وارد حساب کاربری بشی.");
     }
-  };
+
+    let targetId = ticketId;
+    if (ticketType) {
+      const firstText = hasText ? text.trim() : "ضمیمه";
+      targetId = await createTicketIfNeeded(firstText);
+    }
+
+const fd = await buildForm();
+
+console.log("UPLOAD_DEBUG token?", !!token, token?.slice?.(0, 20));
+console.log("UPLOAD_DEBUG ticketId(param)", ticketId);
+console.log("UPLOAD_DEBUG ticketId(target)", targetId);
+console.log("UPLOAD_DEBUG hasText", !!text?.trim());
+console.log("UPLOAD_DEBUG hasImage", !!image);
+console.log("UPLOAD_DEBUG hasVoice", !!recURI);
+console.log("UPLOAD_DEBUG formData prepared");
+
+const updatedTicket = await uploadTicketReply({
+  token,
+  ticketId: targetId,
+  formData: fd,
+});
+
+    setText("");
+    resetAttachments();
+    onSent(updatedTicket);
+  } catch (e: any) {
+    onError(extractErrorMessage(e, "خطا در ارسال فایل یا ویس"));
+  } finally {
+    setSending(false);
+  }
+};
+
 
 
   return (
@@ -1027,6 +903,7 @@ export default function TicketDetail() {
   const insets = useSafeAreaInsets();
 
   const { me } = useUser();
+  const { token } = useAuth();
 
   const [planView, setPlanView] = useState<PlanView>("free");
   const [planLoaded, setPlanLoaded] = useState(false);
@@ -1050,6 +927,15 @@ export default function TicketDetail() {
   // ✅ پاکسازی محلی هر تیکت
   const [clearedAtMs, setClearedAtMs] = useState<number>(0);
   const [clearModal, setClearModal] = useState(false);
+  const authHeaders = useMemo(() => {
+  const headers: Record<string, string> = {};
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  return headers;
+}, [token]);
 
   useEffect(() => {
     const show = Keyboard.addListener(
@@ -1120,28 +1006,42 @@ export default function TicketDetail() {
     loadClearedAt(String(id)).then(setClearedAtMs).catch(() => setClearedAtMs(0));
   }, [id]);
 
-  const fetchTicket = useCallback(
+     const fetchTicket = useCallback(
     async (silent: boolean = false) => {
+      if (!id) return;
+
       if (typeFromParam) {
         if (!silent) setLoading(false);
         return;
       }
+
       try {
         if (!silent) setLoading(true);
+
         const url = `${BACKEND_URL}/api/public/tickets/${id}?ts=${Date.now()}`;
-        const res = await fetch(url);
+
+        const res = await fetch(url, {
+          headers: authHeaders,
+        });
+
         let json: any = null;
+
         try {
           json = await res.json();
-        } catch {}
-        if (json?.ok && json.ticket) setTicket(json.ticket);
+        } catch {
+          json = null;
+        }
+
+        if (res.ok && json?.ok && json.ticket) {
+          setTicket(json.ticket);
+        }
       } catch (e: any) {
         pushError(extractErrorMessage(e, "خطا در دریافت گفتگو"));
       } finally {
         if (!silent) setLoading(false);
       }
     },
-    [id, typeFromParam, pushError]
+    [id, typeFromParam, pushError, authHeaders]
   );
 
   useEffect(() => {
@@ -1154,26 +1054,33 @@ export default function TicketDetail() {
       if (!id) return;
 
       fetchTicket(true);
-      const interval = setInterval(() => fetchTicket(true), 8000);
+
+      const interval = setInterval(() => {
+        fetchTicket(true);
+      }, 8000);
+
       return () => clearInterval(interval);
     }, [id, typeFromParam, fetchTicket])
   );
 
   const tryOpenExisting = useCallback(async () => {
     if (!typeFromParam) return;
+
     try {
       setCheckingExisting(true);
 
-      const { openedById } = await resolveIdentity(me);
       const qs: string[] = [];
       qs.push(`type=${encodeURIComponent(typeFromParam)}`);
-      if (openedById) qs.push(`openedById=${encodeURIComponent(openedById)}`);
       qs.push(`ts=${Date.now()}`);
 
       const url = `${BACKEND_URL}/api/public/tickets/open?${qs.join("&")}`;
-      const res = await fetch(url);
+
+      const res = await fetch(url, {
+        headers: authHeaders,
+      });
 
       let json: any = null;
+
       try {
         json = await res.json();
       } catch {
@@ -1182,22 +1089,30 @@ export default function TicketDetail() {
 
       if (res.ok && json?.ok && json.ticket && json.ticket.id) {
         const t: Ticket = json.ticket;
+
         setTicket(t);
-        loadPins(t.id).then(setPins).catch(() => {});
+
+        loadPins(String(t.id))
+          .then(setPins)
+          .catch(() => {});
+
         router.replace(`/support/tickets/${t.id}`);
 
-        // ✅ اینجا هم برای تیکت جدید clearedAt جدا load شود
-        loadClearedAt(String(t.id)).then(setClearedAtMs).catch(() => setClearedAtMs(0));
+        loadClearedAt(String(t.id))
+          .then(setClearedAtMs)
+          .catch(() => setClearedAtMs(0));
       }
     } catch (e: any) {
       pushError(extractErrorMessage(e, "خطا در آماده‌سازی گفتگو"));
     } finally {
       setCheckingExisting(false);
     }
-  }, [typeFromParam, me, router, pushError]);
+  }, [typeFromParam, router, pushError, authHeaders]);
 
   useEffect(() => {
-    if (typeFromParam) tryOpenExisting();
+    if (typeFromParam) {
+      tryOpenExisting();
+    }
   }, [typeFromParam, tryOpenExisting]);
 
   useLayoutEffect(() => {
@@ -1625,27 +1540,27 @@ export default function TicketDetail() {
           )}
 
           <Composer
-            ticketId={String(id)}
-            ticketType={typeFromParam}
-            isPro={isProPlan}
-            user={me}
-            onError={pushError}
-            onTicketCreated={(newId, fullTicket) => {
-              router.replace(`/support/tickets/${newId}`);
-              if (fullTicket) setTicket(fullTicket);
-              else fetchTicket(true);
-              loadPins(newId).then(setPins);
+  ticketId={String(id)}
+  ticketType={typeFromParam}
+  isPro={isProPlan}
+  onError={pushError}
+  onTicketCreated={(newId, fullTicket) => {
+    router.replace(`/support/tickets/${newId}`);
+    if (fullTicket) setTicket(fullTicket);
+    else fetchTicket(true);
+    loadPins(newId).then(setPins);
 
-              // ✅ برای تیکت تازه ساخته‌شده clearedAt جدا را صفر کن
-              saveClearedAt(String(newId), 0).catch(() => {});
-              setClearedAtMs(0);
-            }}
-            onSent={(updatedTicket) => {
-              if (updatedTicket) setTicket(updatedTicket);
-              else fetchTicket(true);
-              requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
-            }}
-          />
+    // ✅ برای تیکت تازه ساخته‌شده clearedAt جدا را صفر کن
+    saveClearedAt(String(newId), 0).catch(() => {});
+    setClearedAtMs(0);
+  }}
+  onSent={(updatedTicket) => {
+    if (updatedTicket) setTicket(updatedTicket);
+    else fetchTicket(true);
+    requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
+  }}
+/>
+
         </View>
 
         {viewerUri ? (

@@ -7,11 +7,11 @@ import {
 } from "@react-navigation/native";
 import Constants from "expo-constants";
 import { useFonts } from "expo-font";
-import { router, Stack } from "expo-router";
+import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useMemo } from "react";
-import { I18nManager, Pressable, StyleSheet, Text, TextInput } from "react-native";
+import { I18nManager, StyleSheet, Text, TextInput } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { PhoenixProvider, usePhoenix } from "../hooks/PhoenixContext";
 // 🔌 Context modules
@@ -57,7 +57,7 @@ function RootStack() {
     <>
       <StatusBar style="auto" />
 
-      {isDev && (
+      {/* {isDev && (
         <Pressable
           onPress={() => router.push("/pay/index" as unknown as any)}
           style={{
@@ -73,7 +73,7 @@ function RootStack() {
         >
           <Text style={{ color: "#fff" }}>TEST PAY</Text>
         </Pressable>
-      )}
+      )} */}
 
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="splash" options={{ animation: "none" }} />
