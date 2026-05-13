@@ -38,11 +38,17 @@ model Ticket {
   openedById   String?
   openedByName String?
 
+  assignedAdminId String?
+  assignedAdmin   Admin?   @relation("AssignedTickets", fields: [assignedAdminId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   messages Message[]
+
+  @@index([assignedAdminId])
 }
+
 
 enum MessageType {
   text
@@ -86,8 +92,10 @@ model Admin {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  assignedTickets Ticket[] @relation("AssignedTickets")
   sessions AdminSession[]
 }
+
 
 model AdminSession {
   id        String    @id @default(uuid())
