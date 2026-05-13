@@ -120,10 +120,13 @@ function withDisplayTitle(ticket) {
 }
 
 function buildIdentityOrWhere(identity) {
-  return [
-    identity?.openedById ? { openedById: identity.openedById } : null,
-    identity?.contact ? { contact: identity.contact } : null,
-  ].filter(Boolean);
+if (identity?.openedById) {
+return [{ openedById: identity.openedById }];
+}
+if (identity?.contact) {
+return [{ contact: identity.contact }];
+}
+return [];
 }
 
 function mimeToMessageType(mime) {

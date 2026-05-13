@@ -81,9 +81,8 @@ export default function RealSupport() {
   };
 
   const getOpenedById = useCallback(() => {
-  const phone = (me as any)?.phone;
   const id = (me as any)?.id;
-  return String(phone || id || "").trim();
+  return String(id || "").trim();
 }, [me]);
 
   const fetchSummaryForType = useCallback(
