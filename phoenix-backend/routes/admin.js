@@ -994,17 +994,97 @@ router.get("/tickets", async (req, res) => {
     const whereFinal = { ...where, AND: [hasContentFilter] };
 
     const tickets = await prisma.ticket.findMany({
-      where: whereFinal,
-      orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
-      include: { messages: { orderBy: { createdAt: "asc" } } },
-      take: 200,
-    });
+  where: whereFinal,
+  orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
+  include: {
+    messages: { orderBy: { createdAt: "asc" } },
+  },
+  take: 200,
+});
 
-    const mapped = tickets.map((t) => ({
-      ...t,
-      title: t.openedByName || t.title,
-      displayTitle: t.openedByName || t.title,
-    }));
+// جمع‌آوری شماره‌ها و userId ها
+const userIds = [];
+const phones = [];
+
+for (const t of tickets) {
+  const openedByIdRaw = (t.openedById || "").trim();
+  const contactRaw = (t.contact || "").trim();
+
+  if (openedByIdRaw && isUuid(openedByIdRaw)) {
+    userIds.push(openedByIdRaw);
+  }
+
+  const candidates = [
+    contactRaw,
+    (!isUuid(openedByIdRaw) ? openedByIdRaw : ""),
+  ].filter(Boolean);
+
+  for (const p of candidates) {
+    const normalized = normalizePhone(p) || String(p).replace(/\D/g, "");
+    if (normalized) phones.push(normalized);
+    phones.push(p);
+  }
+}
+
+// یکتا
+const uniqUserIds = Array.from(new Set(userIds));
+const uniqPhones = Array.from(new Set(phones));
+
+// گرفتن همه کاربران مرتبط
+const users = await prisma.user.findMany({
+  where: {
+    OR: [
+      ...(uniqUserIds.length ? [{ id: { in: uniqUserIds } }] : []),
+      ...(uniqPhones.length ? [{ phone: { in: uniqPhones } }] : []),
+    ],
+  },
+  select: {
+    id: true,
+    phone: true,
+    fullName: true,
+    gender: true,
+    birthDate: true,
+    plan: true,
+    planExpiresAt: true,
+  },
+});
+
+    const mapped = tickets.map((t) => {
+  const openedByIdRaw = (t.openedById || "").trim();
+  const contactRaw = (t.contact || "").trim();
+
+  let user = null;
+
+  if (openedByIdRaw && isUuid(openedByIdRaw)) {
+    user = users.find((u) => u.id === openedByIdRaw) || null;
+  }
+
+  if (!user) {
+    const candidates = [
+      contactRaw,
+      (!isUuid(openedByIdRaw) ? openedByIdRaw : ""),
+    ].filter(Boolean);
+
+    const normalizedCandidates = candidates
+      .map((p) => normalizePhone(p) || String(p).replace(/\D/g, ""))
+      .filter(Boolean);
+
+    user =
+      users.find(
+        (u) =>
+          candidates.includes(u.phone) ||
+          normalizedCandidates.includes(u.phone)
+      ) || null;
+  }
+
+  return {
+    ...t,
+    title: t.openedByName || t.title,
+    displayTitle: t.openedByName || t.title,
+    user,
+  };
+});
+
 
     res.json({ ok: true, tickets: mapped });
   } catch (e) {
