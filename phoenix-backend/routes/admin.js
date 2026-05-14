@@ -1387,109 +1387,283 @@ function isUuid(v) {
 router.get("/tickets/:id", allow("agent", "manager", "owner"), async (req, res) => {
   try {
     let t = await prisma.ticket.findUnique({
-  where: { id: String(req.params.id) },
-  include: {
-    messages: { orderBy: { createdAt: "asc" } },
-    assignedAdmin: {
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-      },
-    },
-  },
-});
-    if (!t) return res.status(404).json({ ok: false, error: "not_found" });
-
-    // اگر هنوز مسئول ندارد، ادمین فعلی مسئول شود
-if (!t.assignedAdminId && req.admin?.id) {
-  await prisma.ticket.update({
-    where: { id: t.id },
-    data: {
-      assignedAdminId: req.admin.id,
-    },
-  });
-
-  t = await prisma.ticket.findUnique({
-    where: { id: t.id },
-    include: {
-      messages: { orderBy: { createdAt: "asc" } },
-      assignedAdmin: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
+      where: { id: String(req.params.id) },
+      include: {
+        messages: { orderBy: { createdAt: "asc" } },
+        assignedAdmin: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+          },
         },
       },
-    },
-  });
-}
+    });
 
+    if (!t) {
+      return res.status(404).json({ ok: false, error: "not_found" });
+    }
+
+    // اگر هنوز مسئول ندارد، ادمین فعلی مسئول شود
+    if (!t.assignedAdminId && req.admin?.id) {
+      await prisma.ticket.update({
+        where: { id: t.id },
+        data: {
+          assignedAdminId: req.admin.id,
+        },
+      });
+
+      t = await prisma.ticket.findUnique({
+        where: { id: t.id },
+        include: {
+          messages: { orderBy: { createdAt: "asc" } },
+          assignedAdmin: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          },
+        },
+      });
+    }
 
     // ✅ user lookup: openedById اگر UUID بود = userId، وگرنه با phone های ممکن
-let user = null;
+    let user = null;
 
-const openedByIdRaw = (t.openedById || "").trim();
-const contactRaw = (t.contact || "").trim();
+    const openedByIdRaw = (t.openedById || "").trim();
+    const contactRaw = (t.contact || "").trim();
 
-if (openedByIdRaw && isUuid(openedByIdRaw)) {
-  user = await prisma.user.findUnique({
-    where: { id: openedByIdRaw },
-    select: {
-      id: true,
-      phone: true,
-      fullName: true,
-      gender: true,
-      birthDate: true,
-      plan: true,
-      planExpiresAt: true,
-    },
-  }).catch(() => null);
-}
+    if (openedByIdRaw && isUuid(openedByIdRaw)) {
+      user = await prisma.user.findUnique({
+        where: { id: openedByIdRaw },
+        select: {
+          id: true,
+          phone: true,
+          fullName: true,
+          gender: true,
+          birthDate: true,
+          plan: true,
+          planExpiresAt: true,
+          createdAt: true,
+        },
+      }).catch(() => null);
+    }
 
-if (!user) {
-  // کاندیداهای شماره: contact + openedById (اگر UUID نبود احتمالاً شماره است)
-  const candidates = [
-    contactRaw,
-    (!isUuid(openedByIdRaw) ? openedByIdRaw : ""),
-  ].filter(Boolean);
+    if (!user) {
+      const candidates = [
+        contactRaw,
+        (!isUuid(openedByIdRaw) ? openedByIdRaw : ""),
+      ].filter(Boolean);
 
-  // نرمال‌سازی (09... / 989... / +98...)
-  const normalized = candidates
-    .map((p) => normalizePhone(p) || String(p).replace(/\D/g, ""))
-    .filter(Boolean);
+      const normalized = candidates
+        .map((p) => normalizePhone(p) || String(p).replace(/\D/g, ""))
+        .filter(Boolean);
 
-  // یکتا
-  const uniq = Array.from(new Set([...candidates, ...normalized])).filter(Boolean);
+      const uniq = Array.from(new Set([...candidates, ...normalized])).filter(Boolean);
 
-  if (uniq.length) {
-    user = await prisma.user.findFirst({
-      where: { phone: { in: uniq } },
-      select: {
-        id: true,
-        phone: true,
-        fullName: true,
-        gender: true,
-        birthDate: true,
-        plan: true,
-        planExpiresAt: true,
-      },
-    }).catch(() => null);
-  }
-}
+      if (uniq.length) {
+        user = await prisma.user.findFirst({
+          where: { phone: { in: uniq } },
+          select: {
+            id: true,
+            phone: true,
+            fullName: true,
+            gender: true,
+            birthDate: true,
+            plan: true,
+            planExpiresAt: true,
+            createdAt: true,
+          },
+        }).catch(() => null);
+      }
+    }
+
+    let therapySnapshot = null;
+
+    if (user?.id) {
+      const now = new Date();
+      const DAY = 24 * 60 * 60 * 1000;
+
+      const [
+        baselineAssessment,
+        activeStageProgress,
+        pelekanProgress,
+        previousTicketsCount,
+      ] = await Promise.all([
+        prisma.assessmentSession.findFirst({
+          where: {
+            userId: user.id,
+            status: "completed",
+            kind: "hb_baseline",
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+          select: {
+            id: true,
+            totalScore: true,
+            createdAt: true,
+            completedAt: true,
+            userId: true,
+            scalesJson: true,
+          },
+        }),
+
+        prisma.pelekanDayProgress.findFirst({
+          where: {
+            userId: user.id,
+            status: "active",
+          },
+          select: {
+            id: true,
+            startedAt: true,
+            userId: true,
+            day: {
+              select: {
+                stage: {
+                  select: {
+                    code: true,
+                    titleFa: true,
+                  },
+                },
+              },
+            },
+          },
+        }),
+
+        prisma.pelekanProgress.findFirst({
+          where: {
+            userId: user.id,
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+          select: {
+            id: true,
+            userId: true,
+            bastanIntroAudioCompletedAt: true,
+            createdAt: true,
+          },
+        }).catch(() => null),
+
+        prisma.ticket.count({
+          where: {
+            NOT: { id: t.id },
+            OR: [
+              { openedById: user.id },
+              ...(user.phone ? [{ contact: user.phone }] : []),
+            ],
+          },
+        }),
+      ]);
+
+      // baseline
+      let baseline = null;
+      if (baselineAssessment) {
+        const score = Number(baselineAssessment.totalScore || 0);
+        const percent = Math.max(0, Math.min(100, (score / 31) * 100));
+        const level = baselineAssessment?.scalesJson?.level || "unknown";
+
+        baseline = {
+          score,
+          percent: Number(percent.toFixed(1)),
+          level,
+          createdAt: baselineAssessment.createdAt || null,
+          completedAt: baselineAssessment.completedAt || null,
+        };
+      }
+
+      // current stage
+      let currentStage = null;
+      let stuckOver7d = false;
+
+      if (activeStageProgress?.day?.stage) {
+        const startedAt = activeStageProgress.startedAt || null;
+
+        let daysInStage = 0;
+        if (startedAt) {
+          daysInStage = (now.getTime() - new Date(startedAt).getTime()) / DAY;
+        }
+
+        stuckOver7d = daysInStage > 7;
+
+        currentStage = {
+          code: activeStageProgress.day.stage.code || "unknown",
+          title: activeStageProgress.day.stage.titleFa || "نامشخص",
+          startedAt,
+          daysInStage: Number(daysInStage.toFixed(1)),
+          stuckOver7d,
+        };
+      }
+
+      // subscription
+      const expiresAt = user.planExpiresAt || null;
+      const isExpired = expiresAt ? new Date(expiresAt).getTime() < now.getTime() : false;
+
+      let daysLeft = null;
+      if (expiresAt) {
+        daysLeft = Math.ceil((new Date(expiresAt).getTime() - now.getTime()) / DAY);
+      }
+
+      const subscription = {
+        plan: user.plan || "free",
+        expiresAt,
+        isExpired,
+        daysLeft,
+      };
+
+      // treatment
+      const treatment = {
+        hasStarted: !!pelekanProgress,
+        startedAt: pelekanProgress?.createdAt || null,
+        introCompletedAt: pelekanProgress?.bastanIntroAudioCompletedAt || null,
+      };
+
+      // risk
+      let riskLevel = "normal";
+
+      if (baseline?.level === "severe") {
+        riskLevel = "high";
+      } else if (stuckOver7d) {
+        riskLevel = "needs_followup";
+      } else if (subscription.isExpired && currentStage) {
+        riskLevel = "needs_followup";
+      }
+
+      therapySnapshot = {
+        baseline,
+        currentStage,
+        treatment,
+        subscription,
+        previousTicketsCount,
+        risk: {
+          level: riskLevel,
+        },
+        dates: {
+          userCreatedAt: user.createdAt || null,
+          treatmentStartedAt: treatment.startedAt,
+          introCompletedAt: treatment.introCompletedAt,
+          lastTicketMessageAt: t.messages?.length
+            ? t.messages[t.messages.length - 1].createdAt
+            : null,
+        },
+      };
+    }
 
     const withDisplay = {
       ...t,
       title: t.openedByName || t.title,
       displayTitle: t.openedByName || t.title,
-      user: user || null, // ✅ اینو فرانت لازم داره
+      user: user || null,
+      therapySnapshot,
     };
 
     return res.json({ ok: true, ticket: withDisplay });
   } catch (e) {
-    console.error("admin/tickets/:id error:", e?.message || "unknown_error");
+    console.error("admin/tickets/:id error:", e);
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
