@@ -543,7 +543,6 @@ router.get("/stats", allow("manager", "owner"), async (_req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-
 //* ✅ آنالیتیک پلکان
 router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) => {
   try {
@@ -557,22 +556,40 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
       reviewInProgress,
       reviewCompleted,
       treatingUsers,
-      activeTreatmentUsers,
+      activeTreatmentProgresses,
       waitingForProUsers,
       baselineScores,
       activeStageProgresses,
     ] = await Promise.all([
-      Promise.resolve(0),
+      // assessment در حال انجام
+      prisma.assessmentSession.count({
+        where: { status: "in_progress" },
+      }),
 
+      // assessment تکمیل‌شده
       prisma.assessmentSession.count({
         where: { status: "completed" },
       }),
 
-      Promise.resolve(0),
-      Promise.resolve(0),
-      Promise.resolve(0),
+      // فعلاً معادل دقیقی در schema نداریم
       Promise.resolve(0),
 
+      // review در حال انجام
+      prisma.pelekanReviewSession.count({
+        where: { status: "in_progress" },
+      }),
+
+      // review تکمیل شده یا آنلاک شده
+      prisma.pelekanReviewSession.count({
+        where: {
+          status: { in: ["completed_locked", "unlocked"] },
+        },
+      }),
+
+      // کاربرانی که وارد درمان پلکان شده‌اند
+      prisma.pelekanDayProgress.count(),
+
+      // progressهای فعال درمان
       prisma.pelekanDayProgress.findMany({
         where: { status: "active" },
         select: {
@@ -584,7 +601,7 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
               stage: {
                 select: {
                   code: true,
-                  title: true,
+                  titleFa: true,
                 },
               },
             },
@@ -592,10 +609,22 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
         },
       }),
 
-      Promise.resolve(0),
+      // کاربران free که review را کامل کرده‌اند ولی هنوز pro/vip نیستند
+      prisma.pelekanReviewSession.count({
+        where: {
+          status: { in: ["completed_locked", "unlocked"] },
+          user: {
+            plan: "free",
+          },
+        },
+      }),
 
+      // نمرات baseline
       prisma.assessmentSession.findMany({
-        where: { status: "completed" },
+        where: {
+          status: "completed",
+          kind: "hb_baseline",
+        },
         select: {
           id: true,
           totalScore: true,
@@ -604,6 +633,7 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
         },
       }),
 
+      // stage distribution
       prisma.pelekanDayProgress.findMany({
         where: { status: "active" },
         select: {
@@ -615,7 +645,7 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
               stage: {
                 select: {
                   code: true,
-                  title: true,
+                  titleFa: true,
                 },
               },
             },
@@ -629,7 +659,7 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
 
     for (const item of activeStageProgresses) {
       const stageCode = item.day?.stage?.code || "unknown";
-      const stageTitle = item.day?.stage?.title || "نامشخص";
+      const stageTitle = item.day?.stage?.titleFa || "نامشخص";
 
       if (!stageMap[stageCode]) {
         stageMap[stageCode] = {
@@ -687,7 +717,7 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
       scoreSum += score;
       scorePercentSum += percent;
 
-      // فعلاً چون AssessmentSession فیلد level ندارد
+      // چون level در schema وجود ندارد
       levelDistribution.unknown += 1;
 
       if (percent <= 30) percentBuckets["0_30"] += 1;
@@ -705,9 +735,7 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
       : 0;
 
     const uniqueActiveTreatmentUserIds = new Set(
-      activeTreatmentUsers
-        .map((item) => item.userId)
-        .filter(Boolean)
+      activeTreatmentProgresses.map((item) => item.userId).filter(Boolean)
     );
 
     return res.json({
@@ -747,6 +775,7 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 
 /* ====================== ✅ ANNOUNCEMENTS ====================== */
 
