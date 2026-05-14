@@ -562,30 +562,14 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
       baselineScores,
       activeStageProgresses,
     ] = await Promise.all([
-      prisma.user.count({
-        where: { tabState: "baseline_assessment" },
-      }),
-
+      Promise.resolve(0),
       prisma.assessmentSession.count({
         where: { status: "completed" },
       }),
-
-      prisma.user.count({
-        where: { tabState: "choose_path" },
-      }),
-
-      prisma.user.count({
-        where: { tabState: "review" },
-      }),
-
-      prisma.user.count({
-        where: { tabState: "review_result" },
-      }),
-
-      prisma.user.count({
-        where: { tabState: "treating" },
-      }),
-
+      Promise.resolve(0),
+      Promise.resolve(0),
+      Promise.resolve(0),
+      Promise.resolve(0),
       prisma.pelekanDayProgress.findMany({
         where: { status: "active" },
         select: {
@@ -604,13 +588,7 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
           },
         },
       }),
-
-      prisma.user.count({
-        where: {
-          tabState: { in: ["baseline_result", "choose_path", "review_result"] },
-          plan: "free",
-        },
-      }),
+      Promise.resolve(0),
 
       prisma.assessmentSession.findMany({
         where: { status: "completed" },
