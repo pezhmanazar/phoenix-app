@@ -211,10 +211,22 @@ router.get("/users", allow("agent", "manager", "owner"), async (req, res) => {
   try {
     const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
     const plan = typeof req.query.plan === "string" ? req.query.plan.trim() : "";
+
+    const baselineLevel =
+      typeof req.query.baselineLevel === "string" ? req.query.baselineLevel.trim() : "";
+
+    const hasBaselineRaw =
+      typeof req.query.hasBaseline === "string" ? req.query.hasBaseline.trim() : "";
+
+    const hasTreatmentRaw =
+      typeof req.query.hasTreatment === "string" ? req.query.hasTreatment.trim() : "";
+
+    const currentStageCode =
+      typeof req.query.currentStageCode === "string" ? req.query.currentStageCode.trim() : "";
+
     const page = Math.max(1, Number(req.query.page || 1) || 1);
     const limitRaw = Number(req.query.limit || 30) || 30;
     const limit = Math.min(100, Math.max(1, limitRaw));
-    const skip = (page - 1) * limit;
 
     const where = { AND: [] };
 
@@ -244,27 +256,132 @@ router.get("/users", allow("agent", "manager", "owner"), async (req, res) => {
 
     if (where.AND.length === 0) delete where.AND;
 
-    const [total, users] = await Promise.all([
-      prisma.user.count({ where }),
-      prisma.user.findMany({
-        where,
-        orderBy: [{ createdAt: "desc" }],
-        skip,
-        take: limit,
-        select: {
-          id: true,
-          phone: true,
-          fullName: true,
-          gender: true,
-          birthDate: true,
-          plan: true,
-          planExpiresAt: true,
-          profileCompleted: true,
-          createdAt: true,
-          updatedAt: true,
+    const rawUsers = await prisma.user.findMany({
+      where,
+      orderBy: [{ createdAt: "desc" }],
+      select: {
+        id: true,
+        phone: true,
+        fullName: true,
+        gender: true,
+        birthDate: true,
+        plan: true,
+        planExpiresAt: true,
+        profileCompleted: true,
+        createdAt: true,
+        updatedAt: true,
+
+        assessmentSessions: {
+          where: {
+            status: "completed",
+            kind: "hb_baseline",
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+          select: {
+            totalScore: true,
+            createdAt: true,
+            completedAt: true,
+            scalesJson: true,
+          },
         },
-      }),
-    ]);
+
+        pelekanProgresses: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+          select: {
+            createdAt: true,
+            bastanIntroAudioCompletedAt: true,
+          },
+        },
+
+        pelekanDayProgresses: {
+          where: {
+            status: "active",
+          },
+          take: 1,
+          select: {
+            startedAt: true,
+            day: {
+              select: {
+                stage: {
+                  select: {
+                    code: true,
+                    titleFa: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const mappedUsers = rawUsers.map((u) => {
+      const baselineAssessment = u.assessmentSessions?.[0] || null;
+      const pelekanProgress = u.pelekanProgresses?.[0] || null;
+      const activeStageProgress = u.pelekanDayProgresses?.[0] || null;
+
+      const baselineScore = baselineAssessment?.totalScore ?? null;
+      const baselineLevel = baselineAssessment?.scalesJson?.level || null;
+
+      const currentStageCode = activeStageProgress?.day?.stage?.code || null;
+      const currentStageTitle = activeStageProgress?.day?.stage?.titleFa || null;
+
+      const treatmentStartedAt = pelekanProgress?.createdAt || null;
+
+      return {
+        id: u.id,
+        phone: u.phone,
+        fullName: u.fullName,
+        gender: u.gender,
+        birthDate: u.birthDate,
+        plan: u.plan,
+        planExpiresAt: u.planExpiresAt,
+        profileCompleted: u.profileCompleted,
+        createdAt: u.createdAt,
+        updatedAt: u.updatedAt,
+
+        baselineScore,
+        baselineLevel,
+        treatmentStartedAt,
+        currentStageCode,
+        currentStageTitle,
+      };
+    });
+
+    const hasBaseline =
+      hasBaselineRaw === "true" ? true : hasBaselineRaw === "false" ? false : null;
+
+    const hasTreatment =
+      hasTreatmentRaw === "true" ? true : hasTreatmentRaw === "false" ? false : null;
+
+    const filteredUsers = mappedUsers.filter((u) => {
+      if (
+        baselineLevel &&
+        ["manageable", "moderate", "severe", "unknown"].includes(baselineLevel)
+      ) {
+        if ((u.baselineLevel || "unknown") !== baselineLevel) return false;
+      }
+
+      if (hasBaseline === true && u.baselineScore == null) return false;
+      if (hasBaseline === false && u.baselineScore != null) return false;
+
+      if (hasTreatment === true && !u.treatmentStartedAt) return false;
+      if (hasTreatment === false && !!u.treatmentStartedAt) return false;
+
+      if (currentStageCode && u.currentStageCode !== currentStageCode) return false;
+
+      return true;
+    });
+
+    const total = filteredUsers.length;
+    const skip = (page - 1) * limit;
+    const users = filteredUsers.slice(skip, skip + limit);
 
     return res.json({ ok: true, page, limit, total, users });
   } catch (e) {
@@ -272,6 +389,7 @@ router.get("/users", allow("agent", "manager", "owner"), async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 
 /**
  * ✅ Alias قدیمی (اگر جایی هنوز صدا می‌زند)
