@@ -616,11 +616,13 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
           },
         },
       }),
-
-      // کاربران free که review را کامل کرده‌اند ولی هنوز pro/vip نیستند
-      prisma.pelekanReviewSession.count({
+      
+      // کاربران free که ویس اینترو بستن را گوش کرده‌اند ولی هنوز pro نشده‌اند
+      prisma.pelekanProgress.count({
         where: {
-          status: { in: ["completed_locked", "unlocked"] },
+          bastanIntroAudioCompletedAt: {
+            not: null,
+          },
           user: {
             plan: "free",
           },
