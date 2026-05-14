@@ -544,7 +544,7 @@ router.get("/stats", allow("manager", "owner"), async (_req, res) => {
   }
 });
 
-//* ✅ آناتليك پلكان
+//* ✅ آنالیتیک پلکان
 router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) => {
   try {
     const now = new Date();
@@ -563,22 +563,25 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
       activeStageProgresses,
     ] = await Promise.all([
       Promise.resolve(0),
+
       prisma.assessmentSession.count({
         where: { status: "completed" },
       }),
+
       Promise.resolve(0),
       Promise.resolve(0),
       Promise.resolve(0),
       Promise.resolve(0),
+
       prisma.pelekanDayProgress.findMany({
         where: { status: "active" },
         select: {
           id: true,
           startedAt: true,
           userId: true,
-          pelekanDay: {
+          day: {
             select: {
-              pelekanStage: {
+              stage: {
                 select: {
                   code: true,
                   title: true,
@@ -588,6 +591,7 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
           },
         },
       }),
+
       Promise.resolve(0),
 
       prisma.assessmentSession.findMany({
@@ -595,7 +599,6 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
         select: {
           id: true,
           totalScore: true,
-          level: true,
           createdAt: true,
           userId: true,
         },
@@ -607,9 +610,9 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
           id: true,
           startedAt: true,
           userId: true,
-          pelekanDay: {
+          day: {
             select: {
-              pelekanStage: {
+              stage: {
                 select: {
                   code: true,
                   title: true,
@@ -625,8 +628,8 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
     let stuckInTreatmentOver7d = 0;
 
     for (const item of activeStageProgresses) {
-      const stageCode = item.pelekanDay?.pelekanStage?.code || "unknown";
-      const stageTitle = item.pelekanDay?.pelekanStage?.title || "نامشخص";
+      const stageCode = item.day?.stage?.code || "unknown";
+      const stageTitle = item.day?.stage?.title || "نامشخص";
 
       if (!stageMap[stageCode]) {
         stageMap[stageCode] = {
@@ -639,7 +642,9 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
         };
       }
 
-      const days = item.startedAt ? (now.getTime() - new Date(item.startedAt).getTime()) / DAY : 0;
+      const days = item.startedAt
+        ? (now.getTime() - new Date(item.startedAt).getTime()) / DAY
+        : 0;
 
       stageMap[stageCode].count += 1;
       stageMap[stageCode]._sumDays += days;
@@ -682,10 +687,8 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
       scoreSum += score;
       scorePercentSum += percent;
 
-      if (item.level === "manageable") levelDistribution.manageable += 1;
-      else if (item.level === "moderate") levelDistribution.moderate += 1;
-      else if (item.level === "severe") levelDistribution.severe += 1;
-      else levelDistribution.unknown += 1;
+      // فعلاً چون AssessmentSession فیلد level ندارد
+      levelDistribution.unknown += 1;
 
       if (percent <= 30) percentBuckets["0_30"] += 1;
       else if (percent <= 60) percentBuckets["31_60"] += 1;
@@ -701,6 +704,12 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
       ? Number((scorePercentSum / baselineScores.length).toFixed(1))
       : 0;
 
+    const uniqueActiveTreatmentUserIds = new Set(
+      activeTreatmentUsers
+        .map((item) => item.userId)
+        .filter(Boolean)
+    );
+
     return res.json({
       ok: true,
       data: {
@@ -712,7 +721,7 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
           reviewCompleted,
           waitingForProUsers,
           treatingUsers,
-          activeTreatmentUsers: activeTreatmentUsers.length,
+          activeTreatmentUsers: uniqueActiveTreatmentUserIds.size,
         },
 
         baseline: {
@@ -724,7 +733,7 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
         },
 
         treatment: {
-          activeUsers: activeTreatmentUsers.length,
+          activeUsers: uniqueActiveTreatmentUserIds.size,
           stageDistribution,
         },
 
@@ -734,11 +743,10 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
       },
     });
   } catch (e) {
-    console.error("admin/analytics/pelekan error:", e?.message || "unknown_error");
+    console.error("admin/analytics/pelekan error:", e);
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-
 
 /* ====================== ✅ ANNOUNCEMENTS ====================== */
 
