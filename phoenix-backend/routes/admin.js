@@ -544,6 +544,224 @@ router.get("/stats", allow("manager", "owner"), async (_req, res) => {
   }
 });
 
+//* ✅ آناتليك پلكان
+router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) => {
+  try {
+    const now = new Date();
+    const DAY = 24 * 60 * 60 * 1000;
+
+    const [
+      baselineInProgress,
+      baselineCompleted,
+      choosePathUsers,
+      reviewInProgress,
+      reviewCompleted,
+      treatingUsers,
+      activeTreatmentUsers,
+      waitingForProUsers,
+      baselineScores,
+      activeStageProgresses,
+    ] = await Promise.all([
+      prisma.user.count({
+        where: { tabState: "baseline_assessment" },
+      }),
+
+      prisma.assessmentSession.count({
+        where: { status: "completed" },
+      }),
+
+      prisma.user.count({
+        where: { tabState: "choose_path" },
+      }),
+
+      prisma.user.count({
+        where: { tabState: "review" },
+      }),
+
+      prisma.user.count({
+        where: { tabState: "review_result" },
+      }),
+
+      prisma.user.count({
+        where: { tabState: "treating" },
+      }),
+
+      prisma.pelekanDayProgress.findMany({
+        where: { status: "active" },
+        select: {
+          id: true,
+          startedAt: true,
+          userId: true,
+          pelekanDay: {
+            select: {
+              pelekanStage: {
+                select: {
+                  code: true,
+                  title: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+
+      prisma.user.count({
+        where: {
+          tabState: { in: ["baseline_result", "choose_path", "review_result"] },
+          plan: "free",
+        },
+      }),
+
+      prisma.assessmentSession.findMany({
+        where: { status: "completed" },
+        select: {
+          id: true,
+          totalScore: true,
+          level: true,
+          createdAt: true,
+          userId: true,
+        },
+      }),
+
+      prisma.pelekanDayProgress.findMany({
+        where: { status: "active" },
+        select: {
+          id: true,
+          startedAt: true,
+          userId: true,
+          pelekanDay: {
+            select: {
+              pelekanStage: {
+                select: {
+                  code: true,
+                  title: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const stageMap = {};
+    let stuckInTreatmentOver7d = 0;
+
+    for (const item of activeStageProgresses) {
+      const stageCode = item.pelekanDay?.pelekanStage?.code || "unknown";
+      const stageTitle = item.pelekanDay?.pelekanStage?.title || "نامشخص";
+
+      if (!stageMap[stageCode]) {
+        stageMap[stageCode] = {
+          code: stageCode,
+          title: stageTitle,
+          count: 0,
+          avgDays: 0,
+          stuckOver7d: 0,
+          _sumDays: 0,
+        };
+      }
+
+      const days = item.startedAt ? (now.getTime() - new Date(item.startedAt).getTime()) / DAY : 0;
+
+      stageMap[stageCode].count += 1;
+      stageMap[stageCode]._sumDays += days;
+
+      if (days > 7) {
+        stageMap[stageCode].stuckOver7d += 1;
+        stuckInTreatmentOver7d += 1;
+      }
+    }
+
+    const stageDistribution = Object.values(stageMap).map((s) => ({
+      code: s.code,
+      title: s.title,
+      count: s.count,
+      avgDays: s.count ? Number((s._sumDays / s.count).toFixed(1)) : 0,
+      stuckOver7d: s.stuckOver7d,
+    }));
+
+    let scoreSum = 0;
+    let scorePercentSum = 0;
+
+    const levelDistribution = {
+      manageable: 0,
+      moderate: 0,
+      severe: 0,
+      unknown: 0,
+    };
+
+    const percentBuckets = {
+      "0_30": 0,
+      "31_60": 0,
+      "61_80": 0,
+      "81_100": 0,
+    };
+
+    for (const item of baselineScores) {
+      const score = Number(item.totalScore || 0);
+      const percent = Math.max(0, Math.min(100, (score / 31) * 100));
+
+      scoreSum += score;
+      scorePercentSum += percent;
+
+      if (item.level === "manageable") levelDistribution.manageable += 1;
+      else if (item.level === "moderate") levelDistribution.moderate += 1;
+      else if (item.level === "severe") levelDistribution.severe += 1;
+      else levelDistribution.unknown += 1;
+
+      if (percent <= 30) percentBuckets["0_30"] += 1;
+      else if (percent <= 60) percentBuckets["31_60"] += 1;
+      else if (percent <= 80) percentBuckets["61_80"] += 1;
+      else percentBuckets["81_100"] += 1;
+    }
+
+    const baselineAvgScore = baselineScores.length
+      ? Number((scoreSum / baselineScores.length).toFixed(1))
+      : 0;
+
+    const baselineAvgPercent = baselineScores.length
+      ? Number((scorePercentSum / baselineScores.length).toFixed(1))
+      : 0;
+
+    return res.json({
+      ok: true,
+      data: {
+        funnel: {
+          baselineInProgress,
+          baselineCompleted,
+          choosePathUsers,
+          reviewInProgress,
+          reviewCompleted,
+          waitingForProUsers,
+          treatingUsers,
+          activeTreatmentUsers: activeTreatmentUsers.length,
+        },
+
+        baseline: {
+          completedCount: baselineScores.length,
+          avgScore: baselineAvgScore,
+          avgPercent: baselineAvgPercent,
+          levelDistribution,
+          percentBuckets,
+        },
+
+        treatment: {
+          activeUsers: activeTreatmentUsers.length,
+          stageDistribution,
+        },
+
+        stuck: {
+          treatmentOver7d: stuckInTreatmentOver7d,
+        },
+      },
+    });
+  } catch (e) {
+    console.error("admin/analytics/pelekan error:", e?.message || "unknown_error");
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+
 /* ====================== ✅ ANNOUNCEMENTS ====================== */
 
 function toBool(v) {
