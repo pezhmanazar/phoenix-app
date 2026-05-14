@@ -543,6 +543,7 @@ router.get("/stats", allow("manager", "owner"), async (_req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 //* ✅ آنالیتیک پلکان
 router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) => {
   try {
@@ -563,16 +564,21 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
     ] = await Promise.all([
       // assessment در حال انجام
       prisma.assessmentSession.count({
-        where: { status: "in_progress" },
-      }),
+  where: {
+    kind: "hb_baseline",
+    status: "in_progress",
+  },
+}),
 
       // assessment تکمیل‌شده
       prisma.assessmentSession.count({
-        where: { status: "completed" },
-      }),
-
+  where: {
+    kind: "hb_baseline",
+    status: "completed",
+  },
+}),
       // فعلاً معادل دقیقی در schema نداریم
-      Promise.resolve(0),
+      Promise.resolve(null),
 
       // review در حال انجام
       prisma.pelekanReviewSession.count({
@@ -587,7 +593,9 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
       }),
 
       // کاربرانی که وارد درمان پلکان شده‌اند
-      prisma.pelekanDayProgress.count(),
+      prisma.pelekanDayProgress.findMany({
+  select: { userId: true },
+}),
 
       // progressهای فعال درمان
       prisma.pelekanDayProgress.findMany({
@@ -626,11 +634,12 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
           kind: "hb_baseline",
         },
         select: {
-          id: true,
-          totalScore: true,
-          createdAt: true,
-          userId: true,
-        },
+  id: true,
+  totalScore: true,
+  createdAt: true,
+  userId: true,
+  scalesJson: true,
+},
       }),
 
       // stage distribution
@@ -717,8 +726,13 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
       scoreSum += score;
       scorePercentSum += percent;
 
-      // چون level در schema وجود ندارد
-      levelDistribution.unknown += 1;
+const level = item?.scalesJson?.level;
+
+if (level === "manageable") levelDistribution.manageable += 1;
+else if (level === "moderate") levelDistribution.moderate += 1;
+else if (level === "severe") levelDistribution.severe += 1;
+else levelDistribution.unknown += 1;
+
 
       if (percent <= 30) percentBuckets["0_30"] += 1;
       else if (percent <= 60) percentBuckets["31_60"] += 1;
@@ -738,17 +752,22 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
       activeTreatmentProgresses.map((item) => item.userId).filter(Boolean)
     );
 
+    const uniqueTreatingUserIds = new Set(
+  treatingUsers.map((item) => item.userId).filter(Boolean)
+);
+
+
     return res.json({
       ok: true,
       data: {
         funnel: {
           baselineInProgress,
           baselineCompleted,
-          choosePathUsers,
+          choosePathUsers: null,
           reviewInProgress,
           reviewCompleted,
           waitingForProUsers,
-          treatingUsers,
+          treatingUsers: uniqueTreatingUserIds.size,
           activeTreatmentUsers: uniqueActiveTreatmentUserIds.size,
         },
 
