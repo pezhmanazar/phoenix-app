@@ -559,6 +559,8 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
       treatingUsers,
       activeTreatmentProgresses,
       waitingForProUsers,
+      introCompletedUsers,
+      introCompletedProUsers,
       baselineScores,
       activeStageProgresses,
     ] = await Promise.all([
@@ -625,6 +627,27 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
           },
           user: {
             plan: "free",
+          },
+        },
+      }),
+
+            // همه کاربرانی که ویس اینترو بستن را کامل کرده‌اند
+      prisma.pelekanProgress.count({
+        where: {
+          bastanIntroAudioCompletedAt: {
+            not: null,
+          },
+        },
+      }),
+
+      // کاربرانی که ویس اینترو بستن را کامل کرده‌اند و pro هستند
+      prisma.pelekanProgress.count({
+        where: {
+          bastanIntroAudioCompletedAt: {
+            not: null,
+          },
+          user: {
+            plan: "pro",
           },
         },
       }),
@@ -762,13 +785,15 @@ else levelDistribution.unknown += 1;
     return res.json({
       ok: true,
       data: {
-        funnel: {
+                funnel: {
           baselineInProgress,
           baselineCompleted,
           choosePathUsers: null,
           reviewInProgress,
           reviewCompleted,
           waitingForProUsers,
+          introCompletedUsers,
+          introCompletedProUsers,
           treatingUsers: uniqueTreatingUserIds.size,
           activeTreatmentUsers: uniqueActiveTreatmentUserIds.size,
         },
