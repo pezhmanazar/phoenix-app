@@ -1,7 +1,7 @@
 // middleware/adminAuth.js
-import { PrismaClient } from "@prisma/client";
+import pkg from "@prisma/client";
+const { PrismaClient } = pkg;
 const prisma = new PrismaClient();
-
 export default async function adminAuth(req, res, next) {
   try {
     const key = req.header("x-api-key");
