@@ -288,18 +288,13 @@ router.get("/users", allow("agent", "manager", "owner"), async (req, res) => {
           },
         },
 
-        pelekanProgresses: {
-          orderBy: {
-            createdAt: "desc",
-          },
-          take: 1,
+        pelekanProgress: {
           select: {
             createdAt: true,
             bastanIntroAudioCompletedAt: true,
           },
         },
-
-        pelekanDayProgresses: {
+        pelekanDayProgress: {
           where: {
             status: "active",
           },
@@ -321,10 +316,10 @@ router.get("/users", allow("agent", "manager", "owner"), async (req, res) => {
       },
     });
 
-    const mappedUsers = rawUsers.map((u) => {
+      const mappedUsers = rawUsers.map((u) => {
       const baselineAssessment = u.assessmentSessions?.[0] || null;
-      const pelekanProgress = u.pelekanProgresses?.[0] || null;
-      const activeStageProgress = u.pelekanDayProgresses?.[0] || null;
+      const pelekanProgress = u.pelekanProgress || null;
+      const activeStageProgress = u.pelekanDayProgress?.[0] || null;
 
       const baselineScore = baselineAssessment?.totalScore ?? null;
       const baselineLevel = baselineAssessment?.scalesJson?.level || null;
