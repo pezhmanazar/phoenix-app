@@ -32,7 +32,8 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.set("etag", false);
 const PORT = process.env.PORT || 4000;
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*";
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "https://qoqnoos.app";
+const ALLOWED_ORIGINS = ALLOWED_ORIGIN.split(",").map((s) => s.trim()).filter(Boolean);
 
 // پوشه‌ی سایت استاتیک ققنوس
 const PUBLIC_DIR = path.join(process.cwd(), "public");
@@ -43,13 +44,24 @@ app.set("trust proxy", true);
 
 app.use(
   cors({
-    origin: ALLOWED_ORIGIN,
+    origin(origin, callback) {
+      if (!origin) return callback(null, true);
+      if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+      return callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "x-admin-token", "x-api-key"],
   })
 );
-app.options("*", cors());
+app.options("*", cors({
+  origin(origin, callback) {
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    return callback(new Error("Not allowed by CORS"));
+  },
+  credentials: true,
+}));
 app.use(morgan("dev"));
 
 
