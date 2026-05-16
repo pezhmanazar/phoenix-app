@@ -1,5 +1,7 @@
 // routes/tickets.js
-import { PrismaClient } from "@prisma/client";
+import pkg from "@prisma/client";
+const { PrismaClient } = pkg;
+
 import { Router } from "express";
 import multer from "multer";
 import path from "path";

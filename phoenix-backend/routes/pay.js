@@ -1,6 +1,8 @@
 // phoenix-app/phoenix-backend/routes/pay.js
 
-import { PrismaClient } from "@prisma/client";
+import pkg from "@prisma/client";
+const { PrismaClient } = pkg;
+
 import express from "express";
 
 import { finalizeSubscription } from "../utils/subscription.js";

@@ -1,5 +1,7 @@
 // scripts/seed-owner.js
-import { PrismaClient } from "@prisma/client";
+import pkg from "@prisma/client";
+const { PrismaClient } = pkg;
+
 import bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
