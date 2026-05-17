@@ -338,6 +338,21 @@ app.get("/api/admin/me", adminAuth, (req, res) =>
 
 app.use("/api/pelekan", pelekanRouter);
 app.use("/api/pelekan/review", pelekanReviewRoutes);
+//------------------- version cheak -----------
+
+app.get("/api/app/version", (_req, res) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
+
+  res.json({
+    ok: true,
+    latestVersion: "1.0.1",
+    updateUrl: "https://qoqnoos.app/",
+    forceUpdate: false,
+  });
+});
+
 // ---------- 404 ----------
 app.use((req, res) =>
   res.status(404).json({ ok: false, error: "not_found" })
