@@ -318,7 +318,7 @@ router.get("/users", allow("agent", "manager", "owner"), async (req, res) => {
 
       const mappedUsers = rawUsers.map((u) => {
       const baselineAssessment = u.assessmentSessions?.[0] || null;
-      const pelekanProgress = u.pelekanProgress || null;
+      const pelekanProgress = u.pelekanProgress?.[0] || null;
       const activeStageProgress = u.pelekanDayProgress?.[0] || null;
 
       const baselineScore = baselineAssessment?.totalScore ?? null;
@@ -328,6 +328,9 @@ router.get("/users", allow("agent", "manager", "owner"), async (req, res) => {
       const currentStageTitle = activeStageProgress?.day?.stage?.titleFa || null;
 
       const treatmentStartedAt = pelekanProgress?.createdAt || null;
+      const introAudioCompletedAt = pelekanProgress?.bastanIntroAudioCompletedAt || null;
+      const waitingForPro = !!introAudioCompletedAt && u.plan === "free";
+
 
       return {
         id: u.id,
@@ -344,6 +347,8 @@ router.get("/users", allow("agent", "manager", "owner"), async (req, res) => {
         baselineScore,
         baselineLevel,
         treatmentStartedAt,
+        introAudioCompletedAt,
+        waitingForPro,
         currentStageCode,
         currentStageTitle,
       };
