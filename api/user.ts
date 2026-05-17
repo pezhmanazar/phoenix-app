@@ -150,15 +150,37 @@ export async function upsertUserByPhone(
   phone: string,
   payload: Partial<UserRecord>
 ): Promise<ApiResp<UserRecord>> {
-  const p = normalizeIranPhone(phone);
+  // phone فعلاً فقط برای سازگاری با کدهای قدیمی نگه داشته شده.
+  // بک‌اند کاربر را از روی توکن می‌شناسد، نه از روی phone ارسالی.
+  normalizeIranPhone(phone);
+
   const url = userUrl(`/api/users/upsert`);
+
+  const safePayload: Partial<UserRecord> = {};
+
+  if (typeof payload.fullName === "string") {
+    safePayload.fullName = payload.fullName;
+  }
+
+  if (typeof payload.gender === "string") {
+    safePayload.gender = payload.gender;
+  }
+
+  if (payload.birthDate !== undefined) {
+    safePayload.birthDate = payload.birthDate;
+  }
+
+  if (typeof payload.profileCompleted === "boolean") {
+    safePayload.profileCompleted = payload.profileCompleted;
+  }
 
   return doJson<UserRecord>(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...payload, phone: p }),
+    body: JSON.stringify(safePayload),
   });
 }
+
 
 // DELETE برای ریست پروفایل (اگر روی بک‌اند پیاده شده باشد)
 export async function resetUserByPhone(
