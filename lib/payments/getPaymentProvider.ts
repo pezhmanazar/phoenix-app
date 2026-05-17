@@ -10,8 +10,19 @@ export type PaymentApi = {
   restorePurchases(phone: string): Promise<void>;
 };
 
+function readPaymentProvider(): PaymentProviderId {
+  const fromExpoConfig = (Constants.expoConfig?.extra as any)?.PAYMENT_PROVIDER;
+  const fromManifestExtra = (Constants.manifest as any)?.extra?.PAYMENT_PROVIDER;
+  const fromManifest2Extra =
+    (Constants as any)?.manifest2?.extra?.expoClient?.extra?.PAYMENT_PROVIDER;
+
+  const raw = fromExpoConfig || fromManifestExtra || fromManifest2Extra;
+
+  return raw === "bazaar" ? "bazaar" : "zarinpal";
+}
+
 export async function getPaymentProvider(): Promise<PaymentApi> {
-  const provider = (Constants.expoConfig?.extra as any)?.PAYMENT_PROVIDER as PaymentProviderId | undefined;
+  const provider = readPaymentProvider();
 
   if (provider === "bazaar") {
     const mod = await import("./providers/bazaarProvider");

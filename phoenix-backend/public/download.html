@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <link rel="icon" type="image/png" href="/static/img/favicon.png" />
-   <!-- <link href="https://cdn.jsdelivr.net/npm/vazirmatn@33.003/Vazirmatn-font-face.css" rel="stylesheet"> -->
+  <!-- <link href="https://cdn.jsdelivr.net/npm/vazirmatn@33.003/Vazirmatn-font-face.css" rel="stylesheet"> -->
 
   <style>
     :root{
@@ -39,7 +39,6 @@
       margin: 0 auto;
     }
 
-    /* Background glows */
     .bg{
       position: fixed;
       inset: 0;
@@ -67,7 +66,6 @@
       opacity:.18;
     }
 
-    /* ===== Loader (مثل index) ===== */
     #pageLoader{
       position: fixed;
       inset: 0;
@@ -117,7 +115,6 @@
     .loader-text .t1{ font-weight: 900; font-size: 13px; color: rgba(232,236,241,0.95); }
     .loader-text .t2{ margin-top: 3px; font-size: 12px; color: rgba(154,164,178,0.95); }
 
-    /* Header */
     header{
       position: sticky;
       top:0;
@@ -194,7 +191,6 @@
       justify-content: flex-end;
     }
 
-    /* Buttons */
     .btn{
       display:inline-flex;
       align-items:center;
@@ -230,7 +226,6 @@
       background: rgba(255,255,255,0.06);
     }
 
-    /* ✅ CTA استاندارد داخل کارت (برای هم‌شکل شدن APK و به‌زودی) */
     .cta-btn{
       width: 100%;
       min-height: 56px;
@@ -244,7 +239,6 @@
       text-align:center;
     }
 
-    /* iOS "به‌زودی" سبز (هم‌اندازه با APK) */
     .btn-soon{
       cursor: default;
       color: #07110b;
@@ -254,7 +248,6 @@
     }
     .btn-soon:hover{ transform: none; }
 
-    /* لینک طلایی داخل note */
     .gold-link{
       color: rgba(212,175,55,0.98);
       font-weight: 900;
@@ -262,7 +255,6 @@
     }
     .gold-link:hover{ text-decoration: underline; }
 
-    /* Mobile header */
     .menu-toggle { display: none; }
     .hamburger{ display:none; }
     .mobile-cta{ display:none; }
@@ -357,7 +349,6 @@
       .menu-toggle:checked ~ .mobile-menu{ display:block; }
     }
 
-    /* Page */
     .page{ padding: 34px 0 6px; }
 
     .hero{
@@ -401,11 +392,9 @@
     .grid{
       margin-top: 14px;
       display:grid;
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: 1fr;
       gap: 12px;
-    }
-    @media (max-width: 900px){
-      .grid{ grid-template-columns: 1fr; }
+      max-width: 720px;
     }
 
     .card{
@@ -466,7 +455,6 @@
       font-size: 12px;
     }
 
-    /* ✅ دکمه‌های بالای فوتر (cta-row) وسط‌چین */
     .cta-row{
       margin-top:14px;
       display:flex;
@@ -477,8 +465,8 @@
     }
 
     .label-muted{
-     margin: 0 0 10px;
-     color: var(--muted);
+      margin: 0 0 10px;
+      color: var(--muted);
     }
 
     .direct-row{
@@ -500,7 +488,6 @@
     }
     .note strong{ color: rgba(212,175,55,0.95); }
 
-    /* Footer + Trust */
     footer{
       margin-top: 26px;
       padding: 22px 0 38px;
@@ -532,7 +519,6 @@
 </head>
 
 <body>
-  <!-- Loader -->
   <div id="pageLoader" aria-label="در حال بارگذاری">
     <div class="loader-card">
       <div class="loader-mark"><div class="spinner"></div></div>
@@ -574,7 +560,6 @@
           <a href="/terms.html">قوانین استفاده</a>
         </nav>
 
-        <!-- ✅ mobile download icon from /static/img/download.png -->
         <a class="btn btn-primary mobile-cta" href="#get" aria-label="رفتن به بخش دانلود">
           <img src="/static/img/download.png" alt="">
         </a>
@@ -601,75 +586,70 @@
   <main class="container">
     <section class="page">
       <div class="hero" id="get">
-        <div class="kicker">سریع‌ترین راه شروع بازسازی</div>
+        <div class="kicker">سریع‌ترین راه شروع بازسازی بعد از جدایی و شکست عشقی</div>
         <h1>دانلود ققنوس</h1>
-        <!--p>
-          پیشنهاد ما اینه ققنوس رو از مارکت‌های رسمی نصب کنی. اگه به هر دلیلی مارکت دریافت اپ نداری، دانلود مستقیم هم در دسترسه؛
-          در ضمن نسخه iOS به‌زودی اضافه می‌شه.
-        </p-->
+        <p>
+          ققنوس رو می‌تونی به‌صورت مستقیم برای اندروید دریافت کنی، از کافه‌بازار نصب کنی،
+          یا منتظر نسخه iOS (PWA) باشی که به‌زودی منتشر می‌شه.
+        </p>
       </div>
 
       <div class="grid">
+        <!-- Direct Download -->
+        <div class="card">
+          <div class="card-title">
+            <h2>دانلود مستقیم اندروید</h2>
+            <span class="badge">پیشنهاد ویژه</span>
+          </div>
+
+          <p class="label label-muted">
+            مزیت دانلود مستقیم: فعال‌سازی اشتراک با قیمت مناسب‌تر.
+          </p>
+
+          <div class="direct-row">
+            <a class="btn btn-primary cta-btn" href="https://example.com/DIRECT_APK" target="_blank" rel="noopener" aria-label="دانلود مستقیم فایل APK">
+              دانلود مستقیم APK
+            </a>
+          </div>
+
+          <div class="note">
+            <strong>نکته:</strong> اگه بعد از دانلود مستقیم، گوشی برای نصب هشدار داد یا اجازه خواست،
+            کافیه به مرورگر اجازه نصب اپ بدی تا نصب بدون مشکل انجام بشه.
+          </div>
+        </div>
+
         <!-- Bazaar -->
         <div class="card">
           <div class="card-title">
             <h2>دانلود از کافه‌بازار</h2>
           </div>
+
+          <p class="label label-muted">
+            اگه ترجیح می‌دی از مارکت رسمی نصب کنی، ققنوس از طریق بازار هم در دسترسه.
+          </p>
+
           <a class="store-btn" href="https://example.com/BAZAAR_LINK" target="_blank" rel="noopener" aria-label="دانلود ققنوس از کافه‌بازار">
             <img src="/static/img/bazaar.png" alt="دریافت از بازار">
             <div class="label">باز کردن صفحه ققنوس در بازار</div>
           </a>
         </div>
 
-        <!-- Myket -->
-        <div class="card">
-          <div class="card-title">
-            <h2>دانلود از مایکت</h2>
-          </div>
-          <a class="store-btn" href="https://example.com/MAYKET_LINK" target="_blank" rel="noopener" aria-label="دانلود ققنوس از مایکت">
-            <img src="/static/img/mayket.png" alt="دریافت از مایکت">
-            <div class="label">باز کردن صفحه ققنوس در مایکت</div>
-          </a>
-        </div>
-
-        <!-- Direct Download -->
-        <div class="card">
-          <div class="card-title">
-            <h2>دانلود مستقیم (Android)</h2>
-          </div>
-          <p class="label label-muted">
-            اگه مارکت‌ها در دسترس نبودند، می‌تونی فایل نصبی اپ رو مستقیم دریافت کنی.
-          </p>
-
-          <div class="direct-row">
-            <!-- ✅ هم‌اندازه/هم‌شکل با "به‌زودی" -->
-            <a class="btn btn-primary cta-btn" href="https://example.com/DIRECT_APK" target="_blank" rel="noopener" aria-label="دانلود مستقیم فایل APK">
-              دانلود APK
-            </a>
-          </div>
-
-          <div class="note">
-            <strong>نکته:</strong> اگه دانلود مستقیم انجام دادی و گوشی برای نصب خطا داد، طبیعیه؛.
-             فقط کافیه به مرورگر اجازه نصب اپ رو بدی تا اپ بدون مشکل نصب بشه.
-          </div>
-        </div>
-
         <!-- iOS -->
         <div class="card">
           <div class="card-title">
-            <h2>نسخه iOS</h2>
+            <h2>نسخه iOS (PWA)</h2>
           </div>
+
           <p class="label label-muted">
-            نسخه iPhone در حال آماده‌سازیه. این بخش به محض انتشار فعال می‌شه.
+            نسخه مخصوص iPhone هنوز در حال آماده‌سازیه و به‌زودی فعال می‌شه.
           </p>
 
-          <!-- ✅ هم‌اندازه/هم‌شکل با APK -->
           <a class="btn btn-soon cta-btn" href="javascript:void(0)" aria-disabled="true">به‌زودی…</a>
 
           <div class="note">
-            اگه دوست داری اطلاع‌رسانی انتشار نسخه iOS رو دریافت کنی، از صفحه
-            <a class="gold-link" href="/contact.html">تماس</a>
-            به ما پیام بده تا راه ارتباطیت ثبت بشه.
+            اگر دوست داری از زمان انتشار نسخه iOS باخبر شوی، از صفحه
+            <a class="gold-link" href="/contact.html">تماس با ما</a>
+            به ما پیام بده تا راه ارتباطی‌ات ثبت شود.
           </div>
         </div>
       </div>

@@ -54,43 +54,15 @@ function RootStack() {
   const isDev = __DEV__;
 
   return (
-    <>
-      <StatusBar style="auto" />
-
-      {/* {isDev && (
-        <Pressable
-          onPress={() => router.push("/pay/index" as unknown as any)}
-          style={{
-            position: "absolute",
-            right: 12,
-            bottom: 120,
-            zIndex: 9999,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            borderRadius: 12,
-            backgroundColor: "rgba(255,255,255,0.12)",
-          }}
-        >
-          <Text style={{ color: "#fff" }}>TEST PAY</Text>
-        </Pressable>
-      )} */}
-
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="splash" options={{ animation: "none" }} />
-        <Stack.Screen name="gate" options={{ animation: "fade" }} />
-        <Stack.Screen name="onboarding" options={{ animation: "fade" }} />
-        <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
-        <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
-        {!isBazaar && (
-          <Stack.Screen name="pay/index" options={{ animation: "fade" }} />
-        )}
-        {!isBazaar && (
-          <Stack.Screen name="pay/result" options={{ animation: "fade" }} />
-        )}
-        <Stack.Screen name="modal" options={{ presentation: "modal" }} />
-      </Stack>
-    </>
-  );
+  <Stack screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="splash" options={{ animation: "none" }} />
+    <Stack.Screen name="gate" options={{ animation: "fade" }} />
+    <Stack.Screen name="onboarding" options={{ animation: "fade" }} />
+    <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
+    <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
+    <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+  </Stack>
+);
 }
 function ThemeBridge() {
   const { navTheme, isDark } = usePhoenix();
@@ -99,10 +71,12 @@ function ThemeBridge() {
     [navTheme, isDark]
   );
   return (
-    <ThemeProvider value={theme}>
-      <RootStack />
-    </ThemeProvider>
-  );
+  <ThemeProvider value={theme}>
+    <StatusBar style="auto" />
+    <RootStack />
+  </ThemeProvider>
+);
+
 }
 /* ---------------- Root Layout ---------------- */
 export default function RootLayout() {

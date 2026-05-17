@@ -164,17 +164,8 @@ export default function PelekanTab() {
     const isInitial = !!opts?.initial;
     const sessionToken = token;
 
-    console.log("[Pelekan/fetchState] start", {
-      isInitial,
-      reason: opts?.reason || null,
-      hasToken: !!sessionToken,
-      tokenPreview: sessionToken ? `${sessionToken.slice(0, 12)}...` : null,
-      authLoading,
-    });
-
     // ✅ اگر یک fetch در جریان است، یکی دیگه راه ننداز
     if (inFlightRef.current) {
-      console.log("[Pelekan/fetchState] skipped: in flight");
       return;
     }
     inFlightRef.current = true;
@@ -184,31 +175,19 @@ export default function PelekanTab() {
       else setRefreshing(true);
 
       if (!sessionToken) {
-        console.log("[Pelekan/fetchState] no token -> initialState");
         setState(initialState);
         return;
       }
-
       const qs = new URLSearchParams();
       if (enterTreatment) qs.set("enterTreatment", enterTreatment);
 
       const url = `https://api.qoqnoos.app/api/pelekan/state${qs.toString() ? `?${qs.toString()}` : ""}`;
-
-      console.log("[Pelekan/fetchState] request", {
-        url,
-        authHeaderPreview: `Bearer ${sessionToken.slice(0, 12)}...`,
-      });
 
       const res = await fetch(url, {
         headers: {
           "Cache-Control": "no-store",
           Authorization: `Bearer ${sessionToken}`,
         },
-      });
-
-      console.log("[Pelekan/fetchState] response", {
-        status: res.status,
-        ok: res.ok,
       });
 
       let json: any = null;
@@ -218,15 +197,8 @@ export default function PelekanTab() {
         json = null;
       }
 
-      console.log("[Pelekan/fetchState] json", {
-        ok: json?.ok,
-        hasData: !!json?.data,
-        message: json?.message || null,
-      });
-
       if (!res.ok || !json?.ok) {
-        console.log("[Pelekan/fetchState] failed -> initialState");
-        setState(initialState);
+                setState(initialState);
         return;
       }
 
@@ -310,12 +282,6 @@ export default function PelekanTab() {
   );
 
  useEffect(() => {
-  console.log("[Pelekan/useEffect]", {
-    authLoading,
-    hasToken: !!token,
-    tokenPreview: token ? `${token.slice(0, 12)}...` : null,
-  });
-
   if (authLoading) return;
   fetchState({ initial: true, reason: "mount_or_token_change" });
 }, [authLoading, token, fetchState]);

@@ -20,15 +20,30 @@ export default function Splash({ durationMs = 900, nextRoute = "/gate" }: Props)
   // برای اینکه hide و navigate دوبار اجرا نشه
   const didStart = useRef(false);
   const didHideNative = useRef(false);
+const didLayout = useRef(false);
+const didLoadLogo = useRef(false);
 
-  // ✅ مهم‌ترین بخش ضد چشمک: فقط وقتی این صفحه واقعاً رندر/چیدمان شد، اسپلش نیتیو رو hide کن
-  const onLayoutRoot = useCallback(async () => {
-    if (didHideNative.current) return;
-    didHideNative.current = true;
-    try {
-      await SplashScreen.hideAsync();
-    } catch {}
-  }, []);
+const tryHideNativeSplash = useCallback(async () => {
+  if (didHideNative.current) return;
+  if (!didLayout.current) return;
+  if (!didLoadLogo.current) return;
+
+  didHideNative.current = true;
+
+  try {
+    await SplashScreen.hideAsync();
+  } catch {}
+}, []);
+
+const onLayoutRoot = useCallback(() => {
+  didLayout.current = true;
+  tryHideNativeSplash();
+}, [tryHideNativeSplash]);
+
+const onLogoLoadEnd = useCallback(() => {
+  didLoadLogo.current = true;
+  tryHideNativeSplash();
+}, [tryHideNativeSplash]);
 
   useEffect(() => {
     if (didStart.current) return;
@@ -69,7 +84,12 @@ export default function Splash({ durationMs = 900, nextRoute = "/gate" }: Props)
   return (
     <View style={styles.root} onLayout={onLayoutRoot}>
       <Animated.View style={[styles.center, { opacity, transform: [{ scale }] }]}>
-        <Image source={LOGO} style={styles.logo} resizeMode="contain" />
+        <Image
+  source={LOGO}
+  style={styles.logo}
+  resizeMode="contain"
+  onLoadEnd={onLogoLoadEnd}
+/>
       </Animated.View>
     </View>
   );
