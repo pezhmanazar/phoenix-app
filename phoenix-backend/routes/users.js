@@ -172,27 +172,23 @@ if (!phone) {
 router.post("/upsert", authUser, async (req, res) => {
   try {
     const phone = normalizePhone(req.user?.phone);
-if (!phone) {
-  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
-}
+    if (!phone) {
+      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+    }
 
     const {
       fullName,
       gender,
       birthDate,
       profileCompleted,
-      avatarUrl,      // در Prisma نداریم، نادیده می‌گیریم
-      plan,
-      planExpiresAt,
-      lastLoginAt,    // در Prisma نداریم، نادیده می‌گیریم
+      avatarUrl,   // در Prisma نداریم، نادیده می‌گیریم
+      lastLoginAt, // در Prisma نداریم، نادیده می‌گیریم
     } = req.body || {};
 
     console.log("[users.upsert] HIT");
 
     const birthDateValue = parseDateOrNull(birthDate);
-    const planExpiresValue = parseDateOrNull(planExpiresAt);
 
-    // فقط وقتی فیلدها واقعا پر هستن، تو update می‌ذاریم
     const updateData = {};
 
     if (typeof fullName === "string" && fullName.trim().length > 0) {
@@ -211,16 +207,8 @@ if (!phone) {
       updateData.profileCompleted = profileCompleted;
     }
 
-    if (plan !== undefined) {
-      updateData.plan = plan;
-    }
-
-    if (planExpiresAt !== undefined) {
-      updateData.planExpiresAt = planExpiresValue;
-    }
-
-    // اگر هیچ آپدیتی نیست، فقط همان رکورد فعلی را برگردان
-        if (Object.keys(updateData).length === 0) {
+    // اگر هیچ آپدیتی نیست، همان رکورد فعلی را برگردان
+    if (Object.keys(updateData).length === 0) {
       const existing = await prisma.user.findUnique({ where: { phone } });
       console.log("[users.upsert] NO_UPDATE");
       return res.json({ ok: true, data: existing });
@@ -237,8 +225,8 @@ if (!phone) {
             : null,
         birthDate: birthDateValue,
         profileCompleted: !!profileCompleted,
-        plan: plan || "free",
-        planExpiresAt: planExpiresValue,
+        plan: "free",
+        planExpiresAt: null,
       },
       update: updateData,
     });
@@ -246,7 +234,7 @@ if (!phone) {
     console.log("[users.upsert] UPSERT_RESULT success");
 
     return res.json({ ok: true, data: user });
-    } catch (e) {
+  } catch (e) {
     console.error("[users.upsert] error:", e?.message || "unknown_error");
     const code = e?.code ? String(e.code) : "";
     const errorLabel =
