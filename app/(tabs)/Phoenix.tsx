@@ -191,6 +191,7 @@ export default function Phoenix() {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [hasAppUpdate, setHasAppUpdate] = useState(false);
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
+  const [updateUrl, setUpdateUrl] = useState<string | null>(null);
 
 
   // ✅ from pelekan/state
@@ -267,6 +268,7 @@ export default function Phoenix() {
       const result = await checkAppUpdate();
       setHasAppUpdate(!!result.hasUpdate);
       setLatestVersion(result.latestVersion || null);
+      setUpdateUrl(result.updateUrl || null);
     } catch {
       setHasAppUpdate(false);
       setLatestVersion(null);
@@ -357,7 +359,7 @@ export default function Phoenix() {
     return (
       (Constants?.expoConfig as any)?.version ||
       (Constants?.manifest as any)?.version ||
-      "1.0.0"
+      "نامشخص"
     );
   }, []);
 
@@ -614,7 +616,11 @@ export default function Phoenix() {
 
             <TouchableOpacity
               activeOpacity={0.9}
-              onPress={openSite}
+              onPress={() => {
+  if (updateUrl) {
+    Linking.openURL(updateUrl);
+  }
+}}
               style={styles.sheetRowBtn}
             >
               <Ionicons
