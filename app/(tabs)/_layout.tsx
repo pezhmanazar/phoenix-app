@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BACKEND_URL } from "../../constants/backend";
 import { useUser } from "../../hooks/useUser";
+import { checkAppUpdate } from "../../lib/appUpdate";
 
 /* ===== helpers برای unread ===== */
 const SEEN_KEY = (type: "tech" | "therapy") => `support:lastSeenAdmin:${type}`;
@@ -162,6 +163,8 @@ export default function TabsLayout() {
   const { me } = useUser();
 
   const [unreadCount, setUnreadCount] = useState(0);
+  const [hasAppUpdate, setHasAppUpdate] = useState(false);
+  const isCheckingUpdateRef = useRef(false);
   const isRefreshingRef = useRef(false);
 
   const refreshUnread = useCallback(async () => {
@@ -186,6 +189,21 @@ export default function TabsLayout() {
     isRefreshingRef.current = false;
   }
 }, [me]);
+
+const refreshAppUpdate = useCallback(async () => {
+  if (isCheckingUpdateRef.current) return;
+
+  isCheckingUpdateRef.current = true;
+
+  try {
+    const result = await checkAppUpdate();
+    setHasAppUpdate(!!result.hasUpdate);
+  } catch {
+    setHasAppUpdate(false);
+  } finally {
+    isCheckingUpdateRef.current = false;
+  }
+}, []);
 
   // mount + هر 20 ثانیه + برگشت از background
   useEffect(() => {
@@ -237,6 +255,21 @@ const sub = AppState.addEventListener("change", (nextState) => {
     if (!me) return;
     refreshUnread();
   }, [me, refreshUnread]);
+
+  useEffect(() => {
+  refreshAppUpdate();
+
+  const sub = AppState.addEventListener("change", (nextState) => {
+    if (nextState === "active") {
+      refreshAppUpdate();
+    }
+  });
+
+  return () => {
+    sub.remove();
+  };
+}, [refreshAppUpdate]);
+
 
   return (
     <Tabs
@@ -374,14 +407,36 @@ tabBarLabelStyle: {
       />
 
       <Tabs.Screen
-        name="Phoenix"
-        options={{
-          title: "پروفایل",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-circle-outline" color={color} size={size} />
-          ),
-        }}
-      />
+  name="Phoenix"
+  options={{
+    title: "پروفایل",
+    tabBarIcon: ({ color, size }) => (
+      <View style={{ position: "relative" }}>
+        <Ionicons name="person-circle-outline" color={color} size={size} />
+
+        {hasAppUpdate && (
+  <View
+    style={{
+      position: "absolute",
+      top: -6,
+      right: -8,
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      backgroundColor: "#D4AF37",
+      borderWidth: 1.5,
+      borderColor: "#0b0f14",
+      alignItems: "center",
+      justifyContent: "center",
+    }}
+  >
+    <Ionicons name="arrow-up" size={10} color="#0b0f14" />
+  </View>
+)}
+      </View>
+    ),
+  }}
+/>
 
       <Tabs.Screen
         name="Subscription"

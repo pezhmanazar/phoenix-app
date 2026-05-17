@@ -20,6 +20,7 @@ import EditProfileModal from "../../components/EditProfileModal";
 import Screen from "../../components/Screen";
 import { usePhoenix } from "../../hooks/PhoenixContext";
 import { useUser } from "../../hooks/useUser";
+import { checkAppUpdate } from "../../lib/appUpdate";
 
 import PlanStatusBadge from "../../components/PlanStatusBadge";
 import { getPlanStatus } from "../../lib/plan";
@@ -188,6 +189,9 @@ export default function Phoenix() {
 
   const [editVisible, setEditVisible] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [hasAppUpdate, setHasAppUpdate] = useState(false);
+  const [latestVersion, setLatestVersion] = useState<string | null>(null);
+
 
   // ✅ from pelekan/state
   const [streakDays, setStreakDays] = useState<number>(0);
@@ -256,6 +260,21 @@ export default function Phoenix() {
     refresh?.().catch(() => {});
     fetchProgressStats().catch(() => {});
   }, [refresh, fetchProgressStats]);
+
+  useEffect(() => {
+  const run = async () => {
+    try {
+      const result = await checkAppUpdate();
+      setHasAppUpdate(!!result.hasUpdate);
+      setLatestVersion(result.latestVersion || null);
+    } catch {
+      setHasAppUpdate(false);
+      setLatestVersion(null);
+    }
+  };
+
+  run();
+}, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -362,6 +381,26 @@ export default function Phoenix() {
     paddingBottom: 18,
   }}
 >
+{hasAppUpdate && (
+  <TouchableOpacity
+    activeOpacity={0.9}
+    onPress={() => setAboutOpen(true)}
+    style={styles.updateBanner}
+  >
+    <Ionicons name="arrow-up-circle" size={20} color="#0b0f14" />
+
+    <Text style={styles.updateBannerText}>
+      نسخه جدید ققنوس منتشر شده
+    </Text>
+
+    <Ionicons
+      name="chevron-forward"
+      size={18}
+      color="#0b0f14"
+      style={{ transform: [{ scaleX: -1 }] }}
+    />
+  </TouchableOpacity>
+)}
 
         {/* کارت پروفایل */}
         <View style={styles.profileCard}>
@@ -450,9 +489,26 @@ export default function Phoenix() {
           <GlassCard>
             <View style={styles.linkRow}>
               <View style={styles.linkRight}>
-                <Ionicons name="information-circle" size={18} color="#E5E7EB" />
+               <Ionicons name="information-circle" size={18} color="#E5E7EB" />
+
                 <Text style={styles.linkTitle}>درباره ققنوس</Text>
-              </View>
+
+                {hasAppUpdate && (
+    <View
+      style={{
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        backgroundColor: "#D4AF37",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Ionicons name="arrow-up" size={10} color="#0b0f14" />
+    </View>
+  )}
+</View>
+
               <Ionicons
                 name="chevron-forward"
                 size={18}
@@ -492,16 +548,39 @@ export default function Phoenix() {
 
           <View style={styles.sheetCard}>
             <View style={styles.sheetRow}>
-              <Ionicons
-                name="information-circle-outline"
-                size={18}
-                color="#E5E7EB"
-              />
-              <Text style={styles.sheetRowText}>نسخه اپ</Text>
-              <Text style={styles.sheetRowRight}>
-                {toPersianDigits(version)}
-              </Text>
-            </View>
+  <Ionicons
+    name="information-circle-outline"
+    size={18}
+    color="#E5E7EB"
+  />
+
+  <Text style={styles.sheetRowText}>
+  {hasAppUpdate ? "ققنوس رو الان به‌روزرسانی کن" : "نسخه اپ"}
+  </Text>
+
+  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 6 }}>
+    {/* نسخه فعلی */}
+    <Text style={styles.sheetRowRight}>
+      {toPersianDigits(version)}
+    </Text>
+
+    {/* بج طلایی برای آپدیت */}
+    {hasAppUpdate && (
+      <View
+        style={{
+          width: 16,
+          height: 16,
+          borderRadius: 8,
+          backgroundColor: "#D4AF37",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Ionicons name="arrow-up" size={10} color="#0b0f14" />
+      </View>
+    )}
+  </View>
+</View>
 
             <TouchableOpacity
               activeOpacity={0.9}
@@ -543,7 +622,29 @@ export default function Phoenix() {
                 size={18}
                 color="#D4AF37"
               />
-              <Text style={styles.sheetRowText}>به‌روزرسانی اپ</Text>
+              <Text
+               style={[
+                 styles.sheetRowText,
+                 hasAppUpdate && { color: "#60A5FA" },
+                 ]}
+                >
+                به‌روزرسانی اپ
+              </Text>
+
+              {hasAppUpdate && (
+  <View
+    style={{
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      backgroundColor: "#D4AF37",
+      alignItems: "center",
+      justifyContent: "center",
+    }}
+  >
+    <Ionicons name="arrow-up" size={10} color="#0b0f14" />
+  </View>
+)}
               <Ionicons
                 name="chevron-forward"
                 size={18}
@@ -872,5 +973,23 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     fontSize: 12,
     textAlign: "left",
+  },
+    updateBanner: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#D4AF37",
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+
+  updateBannerText: {
+    flex: 1,
+    textAlign: "right",
+    color: "#0b0f14",
+    fontWeight: "900",
+    fontSize: 13,
+    marginHorizontal: 8,
   },
 });

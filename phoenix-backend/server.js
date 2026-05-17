@@ -338,7 +338,7 @@ app.get("/api/admin/me", adminAuth, (req, res) =>
 
 app.use("/api/pelekan", pelekanRouter);
 app.use("/api/pelekan/review", pelekanReviewRoutes);
-//------------------- version cheak -----------
+//------------------- version -----------
 
 app.get("/api/app/version", (_req, res) => {
   res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
@@ -347,7 +347,7 @@ app.get("/api/app/version", (_req, res) => {
 
   res.json({
     ok: true,
-    latestVersion: "1.0.1",
+    latestVersion: "1.0.0",
     updateUrl: "https://qoqnoos.app/",
     forceUpdate: false,
   });
