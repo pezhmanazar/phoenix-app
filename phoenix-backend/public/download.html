@@ -15,6 +15,8 @@
       --muted:#9aa4b2;
       --gold:#D4AF37;
       --orange:#E98A15;
+      --green:#22c55e;
+      --green2:#10b981;
 
       --glass: rgba(255,255,255,0.05);
       --glass2: rgba(255,255,255,0.03);
@@ -394,10 +396,12 @@
       display:grid;
       grid-template-columns: 1fr;
       gap: 12px;
-      max-width: 720px;
+      width: 100%;
+      max-width: none;
     }
 
     .card{
+      width: 100%;
       background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02));
       border: 1px solid var(--border2);
       border-radius: 20px;
@@ -467,6 +471,12 @@
     .label-muted{
       margin: 0 0 10px;
       color: var(--muted);
+    }
+
+    .benefit-text{
+      color: var(--green);
+      font-weight: 900;
+      text-shadow: 0 0 18px rgba(34,197,94,0.14);
     }
 
     .direct-row{
@@ -602,7 +612,7 @@
             <span class="badge">پیشنهاد ویژه</span>
           </div>
 
-          <p class="label label-muted">
+          <p class="label label-muted benefit-text">
             مزیت دانلود مستقیم: فعال‌سازی اشتراک با قیمت مناسب‌تر.
           </p>
 
