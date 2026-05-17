@@ -614,23 +614,17 @@ router.get("/status", async (req, res) => {
     }
 
     return res.json({
-      ok: true,
-      authority: sub.authority,
-      status: sub.status,
-      refId: sub.refId,
-      amount: sub.amount,
-      plan: sub.plan,
-      months: sub.months,
-      expiresAt: sub.expiresAt ? new Date(sub.expiresAt).toISOString() : null,
-      paidAt: sub.paidAt ? new Date(sub.paidAt).toISOString() : null,
-      phone: sub.phone || null,
-      provider: sub.provider || null,
-      metaJson: sub.metaJson ?? null,
-      userPlan: sub.user?.plan || null,
-      userPlanExpiresAt: sub.user?.planExpiresAt
-        ? new Date(sub.user.planExpiresAt).toISOString()
-        : null,
-    });
+  ok: true,
+  authority: sub.authority,
+  status: sub.status,
+  refId: sub.refId,
+  amount: sub.amount,
+  plan: sub.plan,
+  months: sub.months,
+  expiresAt: sub.expiresAt ? new Date(sub.expiresAt).toISOString() : null,
+  paidAt: sub.paidAt ? new Date(sub.paidAt).toISOString() : null,
+  provider: sub.provider || null,
+});
     } catch (e) {
     console.error("PAY_STATUS_ERR", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });

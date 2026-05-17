@@ -17,9 +17,8 @@ type PayStatusResp =
       plan: string;
       months: number;
       expiresAt: string | null;
-      phone: string | null;
-      userPlan: string | null;
-      userPlanExpiresAt: string | null;
+      paidAt?: string | null;
+      provider?: string | null;
     };
 
 export default function PayResultScreen() {
