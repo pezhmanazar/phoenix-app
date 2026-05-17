@@ -1,62 +1,62 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
-# dependencies
-node_modules/
-
-# Expo
-.expo/
-dist/
-web-build/
-expo-env.d.ts
-
-# Native
-.kotlin/
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-
-# Metro
-.metro-health-check*
-
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
-
-# macOS
-.DS_Store
-*.pem
-
-# local env files
-.env*.local
-
-# typescript
-*.tsbuildinfo
-
-app-example
-
-# generated native folders
-/ios
-/android
-.env .env.*
-.env
-phoenix-backend\uploads\
-phoenix-backend\prisma\dev.db
-phoenix-backend/uploads/
-phoenix-backend/prisma/dev.db
-*.bundle
-# Phoenix backend ignored files
-phoenix-backend/node_modules/
-phoenix-backend/.env
-phoenix-backend/logs/
-phoenix-backend/uploads/
-phoenix-backend/*.zip
-phoenix-backend/*.tar.gz
-
-# Local backup files
+# dependencies 
+node_modules/ 
+phoenix-backend/node_modules/ 
+ 
+# Expo 
+.expo/ 
+dist/ 
+web-build/ 
+expo-env.d.ts 
+ 
+# Native / generated 
+.kotlin/ 
+ios/ 
+android/ 
+ 
+# Metro 
+.metro-health-check* 
+ 
+# debug logs 
+npm-debug.* 
+yarn-debug.* 
+yarn-error.* 
+ 
+# macOS 
+.DS_Store 
+ 
+# secrets / local env 
+.env 
+.env.* 
+!.env.example 
+!.env.production.example 
+phoenix-backend/.env 
+ 
+# TypeScript 
+*.tsbuildinfo 
+ 
+# app examples 
+app-example/ 
+ 
+# certificates / keys 
+*.pem 
+*.jks 
+*.p8 
+*.p12 
+*.key 
+*.mobileprovision 
+ 
+# patch leftovers 
+*.orig.* 
+ 
+# bundles / archives 
+*.bundle 
+*.zip 
+*.tar.gz 
+ 
+# backend runtime files 
+phoenix-backend/logs/ 
+phoenix-backend/uploads/ 
+phoenix-backend/prisma/dev.db 
+ 
+# local backup folders 
 server-backup-extract/
-*.tar.gz
-*.zip
