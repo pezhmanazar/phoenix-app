@@ -48,3 +48,15 @@ phoenix-backend\prisma\dev.db
 phoenix-backend/uploads/
 phoenix-backend/prisma/dev.db
 *.bundle
+# Phoenix backend ignored files
+phoenix-backend/node_modules/
+phoenix-backend/.env
+phoenix-backend/logs/
+phoenix-backend/uploads/
+phoenix-backend/*.zip
+phoenix-backend/*.tar.gz
+
+# Local backup files
+server-backup-extract/
+*.tar.gz
+*.zip
