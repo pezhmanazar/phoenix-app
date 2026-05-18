@@ -2,6 +2,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Tabs } from "expo-router";
+import { Image } from "react-native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   AppState,
@@ -59,7 +60,7 @@ async function countUnreadBatch(
   openedById: string
 ): Promise<{ therapy: number; tech: number }> {
   try {
-        if (!openedById) {
+    if (!openedById) {
       return { therapy: 0, tech: 0 };
     }
 
@@ -92,11 +93,10 @@ async function countUnreadBatch(
       therapy: countUnreadFromTicket(therapyTicket, therapyLastSeenId),
       tech: countUnreadFromTicket(techTicket, techLastSeenId),
     };
-    } catch {
+  } catch {
     return { therapy: 0, tech: 0 };
   }
 }
-
 
 /* ===== Background شیشه‌ای + گلو برای tabBar ===== */
 function TabBarGlassBackground() {
@@ -109,13 +109,12 @@ function TabBarGlassBackground() {
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: "rgba(8,10,18,0.88)",
-        borderTopWidth: 0.7,
-        borderTopColor: "rgba(255,255,255,0.10)",
+        backgroundColor: "rgba(24,26,34,0.98)",
+        borderTopWidth: 1,
+        borderTopColor: "rgba(212,175,55,0.26)",
         overflow: "hidden",
       }}
     >
-      {/* glow طلایی سمت چپ */}
       <View
         style={{
           position: "absolute",
@@ -128,7 +127,6 @@ function TabBarGlassBackground() {
         }}
       />
 
-      {/* glow نارنجی سمت راست */}
       <View
         style={{
           position: "absolute",
@@ -141,7 +139,6 @@ function TabBarGlassBackground() {
         }}
       />
 
-      {/* لایه‌ی شیشه‌ای خیلی ملایم */}
       <View
         style={{
           position: "absolute",
@@ -149,13 +146,50 @@ function TabBarGlassBackground() {
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: "rgba(255,255,255,0.025)",
+          backgroundColor: "rgba(255,255,255,0.075)",
         }}
       />
     </View>
   );
 }
 
+/* ===== wrapper برای آیکن تب ===== */
+function TabIconBox({
+  focused,
+  source,
+  badge,
+}: {
+  focused: boolean;
+  source: any;
+  badge?: React.ReactNode;
+}) {
+  return (
+    <View
+      style={{
+        width: 48,
+        height: 48,
+        borderRadius: 17,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: focused ? "rgba(212,175,55,0.14)" : "rgba(255,255,255,0.025)",
+        borderWidth: focused ? 1 : 0,
+        borderColor: focused ? "rgba(212,175,55,0.28)" : "transparent",
+        position: "relative",
+      }}
+    >
+      <Image
+        source={source}
+        style={{
+          width: 39,
+          height: 39,
+          resizeMode: "contain",
+          opacity: focused ? 1 : 0.76,
+        }}
+      />
+      {badge}
+    </View>
+  );
+}
 
 /* ===== خود layout تب‌ها ===== */
 export default function TabsLayout() {
@@ -168,44 +202,43 @@ export default function TabsLayout() {
   const isRefreshingRef = useRef(false);
 
   const refreshUnread = useCallback(async () => {
-  if (isRefreshingRef.current) return;
+    if (isRefreshingRef.current) return;
 
-  isRefreshingRef.current = true;
+    isRefreshingRef.current = true;
 
-  try {
-    const openedById = getOpenedById(me);
-    if (!openedById) {
-      setUnreadCount(0);
-      return;
-    }
+    try {
+      const openedById = getOpenedById(me);
+      if (!openedById) {
+        setUnreadCount(0);
+        return;
+      }
 
-    const unread = await countUnreadBatch(openedById);
-    const total = unread.therapy + unread.tech;
+      const unread = await countUnreadBatch(openedById);
+      const total = unread.therapy + unread.tech;
 
-    setUnreadCount((prev) => (prev !== total ? total : prev));
+      setUnreadCount((prev) => (prev !== total ? total : prev));
     } catch {
-    // silent fail
-  } finally {
-    isRefreshingRef.current = false;
-  }
-}, [me]);
+      // silent fail
+    } finally {
+      isRefreshingRef.current = false;
+    }
+  }, [me]);
 
-const refreshAppUpdate = useCallback(async () => {
-  if (isCheckingUpdateRef.current) return;
+  const refreshAppUpdate = useCallback(async () => {
+    if (isCheckingUpdateRef.current) return;
 
-  isCheckingUpdateRef.current = true;
+    isCheckingUpdateRef.current = true;
 
-  try {
-    const result = await checkAppUpdate();
-    setHasAppUpdate(!!result.hasUpdate);
-  } catch {
-    setHasAppUpdate(false);
-  } finally {
-    isCheckingUpdateRef.current = false;
-  }
-}, []);
+    try {
+      const result = await checkAppUpdate();
+      setHasAppUpdate(!!result.hasUpdate);
+    } catch {
+      setHasAppUpdate(false);
+    } finally {
+      isCheckingUpdateRef.current = false;
+    }
+  }, []);
 
-  // mount + هر 20 ثانیه + برگشت از background
   useEffect(() => {
     let cancelled = false;
     let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -217,38 +250,38 @@ const refreshAppUpdate = useCallback(async () => {
     };
 
     const stopInterval = () => {
-  if (intervalId) {
-    clearInterval(intervalId);
-    intervalId = null;
-  }
-};
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
 
-const startInterval = () => {
-  stopInterval();
-  intervalId = setInterval(run, 20000);
-};
+    const startInterval = () => {
+      stopInterval();
+      intervalId = setInterval(run, 20000);
+    };
 
-if (appState.current === "active") {
-  run();
-  startInterval();
-}
+    if (appState.current === "active") {
+      run();
+      startInterval();
+    }
 
-const sub = AppState.addEventListener("change", (nextState) => {
-  appState.current = nextState;
+    const sub = AppState.addEventListener("change", (nextState) => {
+      appState.current = nextState;
 
-  if (nextState === "active") {
-    run();
-    startInterval();
-  } else {
-    stopInterval();
-  }
-});
+      if (nextState === "active") {
+        run();
+        startInterval();
+      } else {
+        stopInterval();
+      }
+    });
 
     return () => {
-  cancelled = true;
-  stopInterval();
-  sub.remove();
-};
+      cancelled = true;
+      stopInterval();
+      sub.remove();
+    };
   }, [refreshUnread]);
 
   useEffect(() => {
@@ -257,77 +290,71 @@ const sub = AppState.addEventListener("change", (nextState) => {
   }, [me, refreshUnread]);
 
   useEffect(() => {
-  refreshAppUpdate();
+    refreshAppUpdate();
 
-  const sub = AppState.addEventListener("change", (nextState) => {
-    if (nextState === "active") {
-      refreshAppUpdate();
-    }
-  });
+    const sub = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        refreshAppUpdate();
+      }
+    });
 
-  return () => {
-    sub.remove();
-  };
-}, [refreshAppUpdate]);
-
+    return () => {
+      sub.remove();
+    };
+  }, [refreshAppUpdate]);
 
   return (
     <Tabs
       initialRouteName="Pelekan"
-      // تغییر سایز تب بار //
-     screenOptions={{
-  headerShown: false,
-  tabBarHideOnKeyboard: true,
-
-  tabBarActiveTintColor: "#ffffff",
-  tabBarInactiveTintColor: "rgba(255,255,255,0.45)",
-
-  tabBarBackground: () => <TabBarGlassBackground />,
-
-  tabBarStyle: {
-  position: "absolute",
-  left: 0,
-  right: 0,
-  bottom: 0,
-  height: 62 + insets.bottom, // قبلاً 56 بود
-  paddingTop: 6,              // قبلاً 4 بود
-  paddingBottom: insets.bottom > 0 ? insets.bottom : 8, // قبلاً 6 بود
-  borderTopWidth: 0,
-  backgroundColor: "transparent",
-  elevation: 0,
-  shadowOpacity: 0,
-  overflow: "hidden",
-},
-
-tabBarItemStyle: {
-  height: 56, // قبلاً 50 بود
-  justifyContent: "center",
-  alignItems: "center",
-  paddingVertical: 0,
-  marginVertical: 0,
-},
-
-tabBarLabelStyle: {
-  fontSize: 10,
-  fontWeight: "600",
-  marginTop: 1,   // قبلاً 0 بود
-  marginBottom: 2,
-  lineHeight: 12,
-  textAlign: "center",
-},
-
-}}
-
-
+      screenOptions={{
+        headerShown: false,
+        tabBarHideOnKeyboard: true, 
+        tabBarShowLabel: true, // متن تب بارها
+        tabBarLabelStyle: {
+       fontSize: 11,
+      },
+        tabBarActiveTintColor: "#ffffff",
+        tabBarInactiveTintColor: "rgba(255,255,255,0.45)",
+        tabBarBackground: () => <TabBarGlassBackground />,
+        tabBarStyle: {
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 74 + insets.bottom,
+          paddingTop: 8,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
+          borderTopWidth: 0,
+          backgroundColor: "transparent",
+          elevation: 0,
+          shadowOpacity: 0,
+          overflow: "hidden",
+        },
+        tabBarItemStyle: {
+          height: 62,
+          justifyContent: "center",
+          alignItems: "center",
+          paddingVertical: 0,
+          marginVertical: 0,
+        },
+      }}
     >
-      <Tabs.Screen name="index" options={{ href: null }} />
+      <Tabs.Screen
+        name="index"
+        options={{
+          href: null,
+        }}
+      />
 
       <Tabs.Screen
         name="Pelekan"
         options={{
           title: "پلکان",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="trending-up-outline" color={color} size={size} />
+          tabBarIcon: ({ focused }) => (
+            <TabIconBox
+              focused={focused}
+              source={require("../../assets/images/pelekan-icon.png")}
+            />
           ),
         }}
       />
@@ -336,11 +363,10 @@ tabBarLabelStyle: {
         name="Panahgah"
         options={{
           title: "پناهگاه",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons
-              name="shield-checkmark-outline"
-              color={color}
-              size={size}
+          tabBarIcon: ({ focused }) => (
+            <TabIconBox
+              focused={focused}
+              source={require("../../assets/images/panahgah-icon.png")}
             />
           ),
         }}
@@ -350,8 +376,11 @@ tabBarLabelStyle: {
         name="Mashaal"
         options={{
           title: "مشعل",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="flame-outline" color={color} size={size} />
+          tabBarIcon: ({ focused }) => (
+            <TabIconBox
+              focused={focused}
+              source={require("../../assets/images/mashaal-icon.png")}
+            />
           ),
         }}
       />
@@ -360,38 +389,39 @@ tabBarLabelStyle: {
         name="Panah"
         options={{
           title: "پناه",
-          tabBarIcon: ({ color, size }) => (
-            <View style={{ position: "relative" }}>
-              <Ionicons name="chatbubbles-outline" color={color} size={size} />
-
-              {unreadCount > 0 && (
-                <View
-  style={{
-    position: "absolute",
-    top: -4,
-    right: -10,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: "#EF4444",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 3,
-  }}
->
-
-                  <Text
+          tabBarIcon: ({ focused }) => (
+            <TabIconBox
+              focused={focused}
+              source={require("../../assets/images/panah-icon.png")}
+              badge={
+                unreadCount > 0 ? (
+                  <View
                     style={{
-                      color: "#fff",
-                      fontSize: 10,
-                      fontWeight: "900",
+                      position: "absolute",
+                      top: 4,
+                      right: 2,
+                      minWidth: 18,
+                      height: 18,
+                      borderRadius: 9,
+                      backgroundColor: "#EF4444",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      paddingHorizontal: 3,
                     }}
                   >
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </Text>
-                </View>
-              )}
-            </View>
+                    <Text
+                      style={{
+                        color: "#fff",
+                        fontSize: 10,
+                        fontWeight: "900",
+                      }}
+                    >
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </Text>
+                  </View>
+                ) : null
+              }
+            />
           ),
         }}
       />
@@ -400,43 +430,48 @@ tabBarLabelStyle: {
         name="Rooznegar"
         options={{
           title: "روزنگار",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="calendar-outline" color={color} size={size} />
+          tabBarIcon: ({ focused }) => (
+            <TabIconBox
+              focused={focused}
+              source={require("../../assets/images/rooznegar-icon.png")}
+            />
           ),
         }}
       />
 
       <Tabs.Screen
-  name="Phoenix"
-  options={{
-    title: "پروفایل",
-    tabBarIcon: ({ color, size }) => (
-      <View style={{ position: "relative" }}>
-        <Ionicons name="person-circle-outline" color={color} size={size} />
-
-        {hasAppUpdate && (
-  <View
-    style={{
-      position: "absolute",
-      top: -6,
-      right: -8,
-      width: 16,
-      height: 16,
-      borderRadius: 8,
-      backgroundColor: "#D4AF37",
-      borderWidth: 1.5,
-      borderColor: "#0b0f14",
-      alignItems: "center",
-      justifyContent: "center",
-    }}
-  >
-    <Ionicons name="arrow-up" size={10} color="#0b0f14" />
-  </View>
-)}
-      </View>
-    ),
-  }}
-/>
+        name="Phoenix"
+        options={{
+          title: "پروفایل",
+          tabBarIcon: ({ focused }) => (
+            <TabIconBox
+              focused={focused}
+              source={require("../../assets/images/phoenix-icon.png")}
+              badge={
+                hasAppUpdate ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: 2,
+                      right: 1,
+                      width: 16,
+                      height: 16,
+                      borderRadius: 8,
+                      backgroundColor: "#D4AF37",
+                      borderWidth: 1.5,
+                      borderColor: "#0b0f14",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Ionicons name="arrow-up" size={10} color="#0b0f14" />
+                  </View>
+                ) : null
+              }
+            />
+          ),
+        }}
+      />
 
       <Tabs.Screen
         name="Subscription"
@@ -444,13 +479,14 @@ tabBarLabelStyle: {
           href: null,
         }}
       />
-<Tabs.Screen
-  name="ReviewResult"
-  options={{
-    href: null, // ✅ مخفی در تب‌بار
-    title: "نتیجه آزمون",
-  }}
-/>
+
+      <Tabs.Screen
+        name="ReviewResult"
+        options={{
+          href: null,
+          title: "نتیجه آزمون",
+        }}
+      />
     </Tabs>
   );
 }
