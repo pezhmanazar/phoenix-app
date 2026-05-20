@@ -12,6 +12,7 @@ import {
   requireTicketIdentity,
   ticketMatchesIdentity,
 } from "./_ticketIdentity.js";
+import { uploadBufferToS3, getSignedFileUrl } from "../utils/s3.js";
 
 const prisma = new PrismaClient();
 
@@ -27,17 +28,16 @@ const ALLOWED_MIME_TYPES = [
 ];
 
 const upload = multer({
-  dest: path.join(UPLOAD_ROOT, "tickets"),
+  storage: multer.memoryStorage(),
   limits: {
     fileSize: 15 * 1024 * 1024,
   },
   fileFilter: (req, file, cb) => {
-    if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
-      return cb(null, true);
-    }
+    if (ALLOWED_MIME_TYPES.includes(file.mimetype)) return cb(null, true);
     return cb(new Error("INVALID_FILE_TYPE"));
   },
 });
+
 
 
 /* ================= helper پلن برای چت درمانگر ================= */
@@ -136,6 +136,34 @@ function mimeToMessageType(mime) {
   if (mime.startsWith("image/")) return "image";
   if (mime.startsWith("audio/")) return "voice";
   return "file";
+}
+
+async function attachSignedUrlsToTicket(ticket) {
+  if (!ticket?.messages?.length) return ticket;
+
+  const messages = await Promise.all(
+    ticket.messages.map(async (msg) => {
+      if (!msg.fileUrl) return msg;
+
+      try {
+        return {
+          ...msg,
+          fileViewUrl: await getSignedFileUrl(msg.fileUrl),
+        };
+      } catch (e) {
+        console.error("[signed-url] error:", e?.message || e);
+        return {
+          ...msg,
+          fileViewUrl: null,
+        };
+      }
+    })
+  );
+
+  return {
+    ...ticket,
+    messages,
+  };
 }
 
 /* ====================== روتر پنل/ادمین (قدیمی) ====================== */
@@ -523,16 +551,18 @@ publicTicketsRouter.get("/:id", async (req, res) => {
     }
 
     if (!ticketMatchesIdentity(t, identity)) {
-      return res.status(403).json({
-        ok: false,
-        error: "TICKET_FORBIDDEN",
-      });
-    }
+  return res.status(403).json({
+    ok: false,
+    error: "TICKET_FORBIDDEN",
+  });
+}
 
-    return res.json({
-      ok: true,
-      ticket: withDisplayTitle(t),
-    });
+const ticketWithSignedUrls = await attachSignedUrlsToTicket(t);
+
+return res.json({
+  ok: true,
+  ticket: withDisplayTitle(ticketWithSignedUrls),
+});
   } catch (e) {
     console.error("[tickets.public.detail] error:", e?.message || "unknown_error");
     return sendPublicRouteError(res, e);
@@ -818,19 +848,40 @@ publicTicketsRouter.post(
       let durationSec = null;
 
       if (req.file) {
-        const { mimetype, size: fileSize, filename, destination } = req.file;
-        const relDir = destination.replace(/\\/g, "/");
+  const { mimetype, size: fileSize, buffer }
 
-        fileUrl = `/${relDir}/${filename}`;
-        mime = mimetype || null;
-        size = fileSize || null;
-        type = mimeToMessageType(mimetype);
+    = req.file;
 
-        if (req.body?.durationSec !== undefined && req.body.durationSec !== "") {
-          const d = Number(req.body.durationSec);
-          if (!Number.isNaN(d) && d >= 0) durationSec = Math.floor(d);
-        }
-      }
+  // ساخت کلید منحصربه‌فرد برای فایل در S3
+  const timestamp = Date.now();
+  const key = `tickets/${id}/${timestamp}_${req.file.originalname}`;
+
+  // آپلود در پارس‌پک از طریق هِلپر
+  try {
+    const uploaded = await uploadBufferToS3({
+      key,
+      buffer,
+      contentType: mimetype,
+    });
+
+    fileUrl = key; // در دیتابیس فقط کلید ذخیره می‌شود
+    mime = mimetype || null;
+    size = fileSize || null;
+    type = mimeToMessageType(mimetype);
+
+    if (req.body?.durationSec !== undefined && req.body.durationSec !== "") {
+      const d = Number(req.body.durationSec);
+      if (!Number.isNaN(d) && d >= 0) durationSec = Math.floor(d);
+    }
+  } catch (uploadErr) {
+    console.error("[upload-to-s3] error:", uploadErr);
+    return res.status(500).json({
+      ok: false,
+      error: "UPLOAD_FAILED",
+      detail: uploadErr.message,
+    });
+  }
+}
 
       const created = await prisma.message.create({
         data: {
