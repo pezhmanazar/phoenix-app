@@ -1993,52 +1993,48 @@ router.get(
   allow("agent", "manager", "owner"),
   async (req, res) => {
     try {
-      const messageId = Number(req.params.messageId);
-      if (!Number.isFinite(messageId)) {
-        return res.status(400).json({ message: "شناسه پیام نامعتبر است." });
+      const messageId = String(req.params.messageId || "").trim();
+      if (!messageId) {
+        return res.status(400).json({ ok: false, error: "invalid_message_id" });
       }
 
-      const msg = await prisma.ticketMessage.findUnique({
+      const msg = await prisma.message.findUnique({
         where: { id: messageId },
-        include: {
-          ticket: {
-            select: {
-              id: true,
-              userId: true,
-            },
-          },
+        select: {
+          id: true,
+          fileUrl: true,
+          mime: true,
+          ticketId: true,
         },
       });
 
-      if (!msg || !msg.fileKey) {
-        return res.status(404).json({ message: "فایل این پیام پیدا نشد." });
+      if (!msg || !msg.fileUrl) {
+        return res.status(404).json({ ok: false, error: "file_not_found" });
       }
 
       const bucket = process.env.S3_BUCKET;
       if (!bucket) {
-        return res.status(500).json({ message: "S3 bucket تنظیم نشده است." });
+        return res.status(500).json({ ok: false, error: "s3_bucket_missing" });
       }
+
+      const key = msg.fileUrl;
 
       const command = new GetObjectCommand({
         Bucket: bucket,
-        Key: msg.fileKey,
+        Key: key,
       });
 
       const s3res = await s3.send(command);
 
       res.setHeader(
         "Content-Type",
-        msg.fileMimeType || s3res.ContentType || "application/octet-stream"
+        msg.mime || s3res.ContentType || "application/octet-stream"
       );
 
-      const safeName =
-        msg.fileName && String(msg.fileName).trim()
-          ? String(msg.fileName).trim()
-          : `ticket-file-${messageId}`;
-
+      const fileName = key.split("/").pop() || `file-${messageId}`;
       res.setHeader(
         "Content-Disposition",
-        `inline; filename*=UTF-8''${encodeURIComponent(safeName)}`
+        `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`
       );
 
       if (s3res.ContentLength != null) {
@@ -2046,16 +2042,17 @@ router.get(
       }
 
       if (!s3res.Body) {
-        return res.status(404).json({ message: "محتوای فایل یافت نشد." });
+        return res.status(404).json({ ok: false, error: "empty_file_body" });
       }
 
       s3res.Body.pipe(res);
-    } catch (err) {
-      console.error("admin ticket message file error:", err);
-      return res.status(500).json({ message: "خطا در دریافت فایل پیام." });
+    } catch (e) {
+      console.error("admin ticket message file error:", e);
+      return res.status(500).json({ ok: false, error: "internal_error" });
     }
   }
 );
+
 
 
 /* ====== 👇👇👇 ایجاد ادمین فقط توسط Owner 👇👇👇 ====== */
