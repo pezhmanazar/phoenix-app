@@ -4,12 +4,14 @@ import crypto from "crypto";
 import { Router } from "express";
 import prisma from "../utils/prisma.js";
 
+
 // ⬇️ افزوده‌های مرحله ویس/فایل
 import fs from "fs";
 import multer from "multer";
 import path from "path";
 
 const router = Router();
+const { uploadBufferToS3 } = require("../utils/s3");
 
 // Helper: ساعت به جلو
 const inHours = (h) => new Date(Date.now() + h * 3600 * 1000);
@@ -1904,36 +1906,19 @@ router.post("/tickets/:id/delete", allow("manager", "owner"), async (req, res) =
 /* ====================== ⬇️ reply-upload ====================== */
 
 const MAX_UPLOAD = 25 * 1024 * 1024;
-function ensureDirSync(dir) {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-}
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    const now = new Date();
-    const dir = path.join(
-      "uploads",
-      String(now.getFullYear()),
-      String(now.getMonth() + 1).toString().padStart(2, "0")
-    );
-    ensureDirSync(dir);
-    cb(null, dir);
-  },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname || "").toLowerCase();
-    const base = crypto.randomBytes(16).toString("hex");
-    cb(null, `${base}${ext || ""}`);
-  },
-});
+
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: MAX_UPLOAD },
 });
+
 function mimeToMessageType(mime = "") {
   const m = String(mime).toLowerCase();
   if (m.startsWith("audio/")) return "voice";
   if (m.startsWith("image/")) return "image";
   return "file";
 }
+
 
 router.post(
   "/tickets/:id/reply-upload",
@@ -1947,9 +1932,22 @@ router.post(
 
       if (!req.file) return res.status(400).json({ ok: false, error: "file_required" });
 
-      const { mimetype, size, filename, destination } = req.file;
-      const relDir = destination.replace(/\\/g, "/");
-      const fileUrl = `/${relDir}/${filename}`;
+      const { mimetype, size, buffer, originalname } = req.file;
+
+// ساختن کلید S3
+const ext = path.extname(originalname || "").toLowerCase();
+const base = crypto.randomBytes(16).toString("hex");
+
+const key = `tickets/${id}/${base}${ext || ""}`;
+
+// آپلود فایل به S3
+await uploadBufferToS3({
+  buffer,
+  key,
+  contentType: mimetype || "application/octet-stream",
+});
+
+const fileUrl = key;
 
       const messageType = mimeToMessageType(mimetype);
       const text = req.body?.text ? String(req.body.text).trim() : null;

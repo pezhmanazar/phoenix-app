@@ -1413,18 +1413,17 @@ export default function TicketDetail() {
     (navigation as any)?.setOptions?.({ title });
   }, [ticket, navigation, typeFromParam]);
 
-  useEffect(() => {
-    if (!ticket?.messages?.length) return;
+useEffect(() => {
+  if (!ticket?.messages?.length) return;
+  if (didInitialScroll.current) return;
 
-    didInitialScroll.current = false;
+  const raf = requestAnimationFrame(() => {
+    scrollRef.current?.scrollToEnd({ animated: false });
+    didInitialScroll.current = true;
+  });
 
-  const t = setTimeout(() => {
-  scrollRef.current?.scrollToEnd({ animated: false });
-  didInitialScroll.current = true;
-}, 350);
-
-    return () => clearTimeout(t);
-  }, [ticket?.messages?.length]);
+  return () => cancelAnimationFrame(raf);
+}, [ticket?.messages?.length]);
 
   useEffect(() => {
     if (!typeFromParam && id) loadPins(id).then(setPins);
@@ -1484,10 +1483,6 @@ export default function TicketDetail() {
     } catch {}
 
     pushError("تاریخچه این گفتگو در گوشیت پاک شد.");
-
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollToEnd({ animated: false });
-    });
   }, [id, pushError]);
 
   const renderMessage = useCallback((m: Message) => {
