@@ -3,7 +3,7 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { Router } from "express";
 import prisma from "../utils/prisma.js";
-
+import { uploadBufferToS3 } from "../utils/s3.js";
 
 // ⬇️ افزوده‌های مرحله ویس/فایل
 import fs from "fs";
@@ -11,7 +11,6 @@ import multer from "multer";
 import path from "path";
 
 const router = Router();
-const { uploadBufferToS3 } = require("../utils/s3");
 
 // Helper: ساعت به جلو
 const inHours = (h) => new Date(Date.now() + h * 3600 * 1000);
