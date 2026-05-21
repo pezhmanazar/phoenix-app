@@ -1988,6 +1988,76 @@ const fileUrl = key;
   }
 );
 
+router.get(
+  "/tickets/messages/:messageId/file",
+  allow("agent", "manager", "owner"),
+  async (req, res) => {
+    try {
+      const messageId = Number(req.params.messageId);
+      if (!Number.isFinite(messageId)) {
+        return res.status(400).json({ message: "شناسه پیام نامعتبر است." });
+      }
+
+      const msg = await prisma.ticketMessage.findUnique({
+        where: { id: messageId },
+        include: {
+          ticket: {
+            select: {
+              id: true,
+              userId: true,
+            },
+          },
+        },
+      });
+
+      if (!msg || !msg.fileKey) {
+        return res.status(404).json({ message: "فایل این پیام پیدا نشد." });
+      }
+
+      const bucket = process.env.S3_BUCKET;
+      if (!bucket) {
+        return res.status(500).json({ message: "S3 bucket تنظیم نشده است." });
+      }
+
+      const command = new GetObjectCommand({
+        Bucket: bucket,
+        Key: msg.fileKey,
+      });
+
+      const s3res = await s3.send(command);
+
+      res.setHeader(
+        "Content-Type",
+        msg.fileMimeType || s3res.ContentType || "application/octet-stream"
+      );
+
+      const safeName =
+        msg.fileName && String(msg.fileName).trim()
+          ? String(msg.fileName).trim()
+          : `ticket-file-${messageId}`;
+
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename*=UTF-8''${encodeURIComponent(safeName)}`
+      );
+
+      if (s3res.ContentLength != null) {
+        res.setHeader("Content-Length", String(s3res.ContentLength));
+      }
+
+      if (!s3res.Body) {
+        return res.status(404).json({ message: "محتوای فایل یافت نشد." });
+      }
+
+      s3res.Body.pipe(res);
+    } catch (err) {
+      console.error("admin ticket message file error:", err);
+      return res.status(500).json({ message: "خطا در دریافت فایل پیام." });
+    }
+  }
+);
+
+
 /* ====== 👇👇👇 ایجاد ادمین فقط توسط Owner 👇👇👇 ====== */
 router.post("/admins", allow("owner"), async (req, res) => {
   try {
