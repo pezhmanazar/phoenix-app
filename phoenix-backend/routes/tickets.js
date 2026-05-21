@@ -146,14 +146,27 @@ async function attachSignedUrlsToTicket(ticket) {
       if (!msg.fileUrl) return msg;
 
       try {
+        const signedUrl = await getSignedFileUrl(msg.fileUrl);
+
         return {
           ...msg,
-          fileViewUrl: await getSignedFileUrl(msg.fileUrl),
+
+          // کلید خام داخل S3
+          fileKey: msg.fileUrl,
+
+          // برای سازگاری با فرانت فعلی، fileUrl را قابل نمایش می‌کنیم
+          fileUrl: signedUrl,
+
+          // اگر جایی در فرانت fileViewUrl استفاده شد، این هم موجود باشد
+          fileViewUrl: signedUrl,
         };
       } catch (e) {
         console.error("[signed-url] error:", e?.message || e);
+
         return {
           ...msg,
+          fileKey: msg.fileUrl,
+          fileUrl: null,
           fileViewUrl: null,
         };
       }
@@ -847,10 +860,8 @@ publicTicketsRouter.post(
       let type = "text";
       let durationSec = null;
 
-      if (req.file) {
-  const { mimetype, size: fileSize, buffer }
-
-    = req.file;
+  if (req.file) {
+  const { mimetype, size: fileSize, buffer } = req.file;
 
   // ساخت کلید منحصربه‌فرد برای فایل در S3
   const timestamp = Date.now();
@@ -858,11 +869,11 @@ publicTicketsRouter.post(
 
   // آپلود در پارس‌پک از طریق هِلپر
   try {
-    const uploaded = await uploadBufferToS3({
-      key,
-      buffer,
-      contentType: mimetype,
-    });
+    await uploadBufferToS3({
+  key,
+  buffer,
+  contentType: mimetype,
+});
 
     fileUrl = key; // در دیتابیس فقط کلید ذخیره می‌شود
     mime = mimetype || null;
@@ -902,15 +913,41 @@ publicTicketsRouter.post(
       });
 
       const ticket = await prisma.ticket.findUnique({
-        where: { id },
-        include: { messages: { orderBy: { createdAt: "asc" } } },
-      });
+  where: { id },
+  include: { messages: { orderBy: { createdAt: "asc" } } },
+});
 
-      return res.json({
-        ok: true,
-        ticket: withDisplayTitle(ticket),
-        message: created,
-      });
+const ticketWithSignedUrls = await attachSignedUrlsToTicket(ticket);
+
+let messageWithSignedUrl = created;
+
+if (created?.fileUrl) {
+  try {
+    const signedUrl = await getSignedFileUrl(created.fileUrl);
+
+    messageWithSignedUrl = {
+      ...created,
+      fileKey: created.fileUrl,
+      fileUrl: signedUrl,
+      fileViewUrl: signedUrl,
+    };
+  } catch (e) {
+    console.error("[signed-url.created-message] error:", e?.message || e);
+
+    messageWithSignedUrl = {
+      ...created,
+      fileKey: created.fileUrl,
+      fileUrl: null,
+      fileViewUrl: null,
+    };
+  }
+}
+
+return res.json({
+  ok: true,
+  ticket: withDisplayTitle(ticketWithSignedUrls),
+  message: messageWithSignedUrl,
+});
     } catch (e) {
       console.error("[tickets.public.reply-upload] error:", e);
       return res.status(500).json({
