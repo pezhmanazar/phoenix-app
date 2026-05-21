@@ -22,6 +22,7 @@ import type { ViewStyle } from "react-native";
 import {
   ActivityIndicator,
   Animated,
+  BackHandler,
   Easing,
   Image,
   Keyboard,
@@ -32,6 +33,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  FlatList,
   StyleSheet,
   Text,
   TextInput,
@@ -54,6 +56,7 @@ import {
 } from "../../../utils/tickets/helpers";
 // ✅ مسیر را اگر متفاوت است فقط همین خط را اصلاح کن
 import PlanStatusBadge from "../../../components/PlanStatusBadge";
+import AppBannerModal from "@/components/ui/AppBannerModal";
 
 /* ===== انواع ===== */
 type MessageType = "text" | "voice" | "image" | "file";
@@ -119,10 +122,12 @@ function ImageLightbox({
   uri,
   visible,
   onClose,
+  authHeaders,
 }: {
   uri: string;
   visible: boolean;
   onClose: () => void;
+  authHeaders?: Record<string, string>;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
   const lastTap = useRef<number>(0);
@@ -158,10 +163,10 @@ function ImageLightbox({
         </Pressable>
         <Pressable style={styles.lbArea} onPress={onDoubleTap}>
           <Animated.Image
-            source={{ uri }}
-            style={[styles.lbImage, { transform: [{ scale }] }]}
-            resizeMode="contain"
-          />
+  source={{ uri, headers: authHeaders }}
+  style={[styles.lbImage, { transform: [{ scale }] }]}
+  resizeMode="contain"
+/>
         </Pressable>
       </View>
     </Modal>
@@ -170,7 +175,6 @@ function ImageLightbox({
 
 /* ================= Voice Player ================= */
 let currentSound: Audio.Sound | null = null;
-let setGlobalPlaying: ((activeId: string | null) => void) | null = null;
 
 function Waveform({
   progress = 0,
@@ -219,14 +223,17 @@ function VoicePlayer({
   uri,
   durationSec,
   dark = false,
+  authHeaders,
 }: {
   id: string;
   uri: string;
   durationSec?: number | null;
   dark?: boolean;
+  authHeaders?: Record<string, string>;
 }) {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [buffering, setBuffering] = useState(false);
   const [progress, setProgress] = useState(0);
   const [pos, setPos] = useState(0);
   const [dur, setDur] = useState((durationSec ?? 0) * 1000);
@@ -237,28 +244,15 @@ function VoicePlayer({
   const isDragging = useRef(false);
 
   useEffect(() => {
-    setGlobalPlaying = async (activeId: string | null) => {
-      if (activeId !== id && sound) {
-        try {
-          await sound.stopAsync();
-          await sound.unloadAsync();
-        } catch {}
-        setSound(null);
-        setPlaying(false);
-        setProgress(0);
-        setPos(0);
-        setFinished(false);
-      }
-    };
-  }, [id, sound]);
-
-  useEffect(() => {
     Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true,
-    }).catch(() => {});
+  allowsRecordingIOS: false,
+  playsInSilentModeIOS: true,
+  staysActiveInBackground: false,
+  shouldDuckAndroid: true,
+  playThroughEarpieceAndroid: false,
+}).catch((e) => {
+  console.log("AUDIO_MODE_ERR", e);
+});
     return () => {
       if (sound) sound.unloadAsync().catch(() => {});
       if (currentSound === sound) currentSound = null;
@@ -271,71 +265,205 @@ function VoicePlayer({
     } catch {}
   };
 
-  const ensureLoaded = useCallback(
-    async (autoplay: boolean) => {
-      if (sound) return sound;
-      const { sound: s } = await Audio.Sound.createAsync(
-        { uri },
-        { shouldPlay: autoplay }
-      );
-      setSound(s);
-      s.setOnPlaybackStatusUpdate((st: any) => {
-        if (!st?.isLoaded) return;
-        if (typeof st.durationMillis === "number") setDur(st.durationMillis);
-        if (!isDragging.current && typeof st.positionMillis === "number") {
-          setPos(st.positionMillis);
-          if (st.durationMillis)
-            setProgress(st.positionMillis / st.durationMillis);
-        }
-        if (st.didJustFinish) {
-          setPlaying(false);
-          setFinished(true);
-          setProgress(1);
-          setPos(st.durationMillis || 0);
-        } else {
-          setPlaying(st.isPlaying);
-        }
-      });
-      await applyRate(s, rate);
-      return s;
+const ensureLoaded = useCallback(async () => {
+  if (sound) {
+    try {
+      const existingStatus = await sound.getStatusAsync();
+
+      if (existingStatus.isLoaded) {
+        return sound;
+      }
+
+      console.log("VOICE_EXISTING_NOT_LOADED_RECREATE", id, existingStatus);
+
+      try {
+        await sound.unloadAsync();
+      } catch {}
+
+      setSound(null);
+
+      if (currentSound === sound) {
+        currentSound = null;
+      }
+    } catch (e) {
+      console.log("VOICE_EXISTING_STATUS_ERR", id, e);
+
+      try {
+        await sound.unloadAsync();
+      } catch {}
+
+      setSound(null);
+
+      if (currentSound === sound) {
+        currentSound = null;
+      }
+    }
+  }
+
+  setBuffering(true);
+  setPlaying(false);
+
+  console.log("VOICE_CREATE_START", id, uri, {
+    hasAuth: !!authHeaders?.Authorization,
+  });
+
+  const absoluteUri = uri.startsWith("http") ? uri : `${BACKEND_URL}${uri}`;
+
+  const { sound: s, status } = await Audio.Sound.createAsync(
+    {
+      uri: absoluteUri,
+      headers: {
+        ...(authHeaders || {}),
+        Connection: "keep-alive",
+      },
     },
-    [sound, uri, rate]
+    {
+      shouldPlay: false,
+      progressUpdateIntervalMillis: 250,
+    }
   );
 
+  console.log("VOICE_CREATE_OK", id, status);
+
+  setSound(s);
+
+  s.setOnPlaybackStatusUpdate((st: any) => {
+    if (!st?.isLoaded) {
+      if (st?.error) {
+        console.log("VOICE_STATUS_ERROR", id, st.error);
+      }
+
+      setBuffering(false);
+      setPlaying(false);
+      return;
+    }
+
+    if (typeof st.durationMillis === "number") {
+      setDur(st.durationMillis);
+    }
+
+    if (!isDragging.current && typeof st.positionMillis === "number") {
+      setPos(st.positionMillis);
+
+      if (st.durationMillis) {
+        setProgress(st.positionMillis / st.durationMillis);
+      }
+    }
+
+    if (st.didJustFinish) {
+      setBuffering(false);
+      setPlaying(false);
+      setFinished(true);
+      setProgress(1);
+      setPos(st.durationMillis || 0);
+      return;
+    }
+
+    if (st.isPlaying) {
+      setBuffering(false);
+      setPlaying(true);
+      return;
+    }
+
+    if (st.isBuffering && st.shouldPlay) {
+      setBuffering(true);
+      setPlaying(false);
+      return;
+    }
+
+    setPlaying(false);
+
+    if (!st.shouldPlay) {
+      setBuffering(false);
+    }
+  });
+
+  await applyRate(s, rate);
+
+  return s;
+}, [sound, uri, rate, id, authHeaders]);
+
+
   const onToggle = useCallback(async () => {
-    if (!uri) return;
-    try {
-      if (currentSound && currentSound !== sound) {
-        try {
-          await currentSound.stopAsync();
-          await currentSound.unloadAsync();
-        } catch {}
-        currentSound = null;
-        setGlobalPlaying && setGlobalPlaying(id);
-      }
-      const s = await ensureLoaded(true);
-      currentSound = s;
+  if (!uri) return;
+  if (buffering) return;
 
-      if (finished || (dur && pos >= dur - 300)) {
-        try {
-          await s.setPositionAsync(0);
-        } catch {}
-        setFinished(false);
-        setPos(0);
-        setProgress(0);
-      }
+  try {
+    console.log("VOICE_TOGGLE", id, uri);
 
-      const st = await s.getStatusAsync();
-      if ("isPlaying" in st && st.isPlaying) {
-        await s.pauseAsync();
-        setPlaying(false);
-      } else {
-        await applyRate(s, rate);
-        await s.playAsync();
-        setPlaying(true);
-      }
-    } catch {}
-  }, [id, uri, sound, finished, pos, dur, ensureLoaded, rate]);
+    if (currentSound && currentSound !== sound) {
+  try {
+    await currentSound.stopAsync();
+    await currentSound.unloadAsync();
+  } catch {}
+  currentSound = null;
+}
+
+    const s = await ensureLoaded();
+    currentSound = s;
+
+    if (finished || (dur && pos >= dur - 300)) {
+      try {
+        await s.setPositionAsync(0);
+      } catch {}
+      setFinished(false);
+      setPos(0);
+      setProgress(0);
+    }
+
+    const st = await s.getStatusAsync();
+
+    console.log("VOICE_STATUS_BEFORE_PLAY", id, st);
+
+    if (!st.isLoaded) {
+      console.log("VOICE_NOT_LOADED", id, st);
+      setBuffering(false);
+      setPlaying(false);
+      return;
+    }
+
+    if (st.isPlaying) {
+      await s.pauseAsync();
+      setBuffering(false);
+      setPlaying(false);
+      console.log("VOICE_PAUSED", id);
+      return;
+    }
+
+    setBuffering(true);
+    setPlaying(false);
+
+    await applyRate(s, rate);
+    await s.setVolumeAsync(1);
+    await s.playAsync();
+
+    const afterPlay = await s.getStatusAsync();
+
+    if (afterPlay.isLoaded && afterPlay.isPlaying) {
+      setBuffering(false);
+      setPlaying(true);
+    } else if (afterPlay.isLoaded && afterPlay.isBuffering) {
+      setBuffering(true);
+      setPlaying(false);
+    }
+
+    console.log("VOICE_PLAY_REQUESTED", id);
+  } catch (e) {
+    setBuffering(false);
+    setPlaying(false);
+    console.log("VOICE_TOGGLE_ERR", id, uri, e);
+  }
+}, [
+  id,
+  uri,
+  sound,
+  finished,
+  pos,
+  dur,
+  ensureLoaded,
+  rate,
+  buffering,
+]);
 
   const pan = useRef(
     PanResponder.create({
@@ -401,23 +529,31 @@ function VoicePlayer({
         }}
       >
         <TouchableOpacity
-          onPress={onToggle}
-          style={{
-            backgroundColor: dark ? "#fff" : "rgba(255,255,255,0.10)",
-            borderWidth: 1,
-            borderColor: dark ? "rgba(0,0,0,0.10)" : "rgba(255,255,255,0.18)",
-            paddingVertical: 8,
-            paddingHorizontal: 10,
-            borderRadius: 10,
-          }}
-          activeOpacity={0.85}
-        >
-          <Ionicons
-            name={playing ? "pause" : "play"}
-            size={16}
-            color={dark ? "#000" : "#fff"}
-          />
-        </TouchableOpacity>
+  onPress={onToggle}
+  style={{
+    backgroundColor: dark ? "#fff" : "rgba(255,255,255,0.10)",
+    borderWidth: 1,
+    borderColor: dark ? "rgba(0,0,0,0.10)" : "rgba(255,255,255,0.18)",
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    minWidth: 38,
+    alignItems: "center",
+    justifyContent: "center",
+  }}
+  activeOpacity={0.85}
+  disabled={buffering}
+>
+  {buffering ? (
+    <ActivityIndicator size="small" color={dark ? "#000" : "#fff"} />
+  ) : (
+    <Ionicons
+      name={playing ? "pause" : "play"}
+      size={16}
+      color={dark ? "#000" : "#fff"}
+    />
+  )}
+</TouchableOpacity>
 
         {dur ? (
           <Text style={{ color: subTint, fontSize: 11, fontWeight: "800" }}>
@@ -476,6 +612,8 @@ function Composer({
   onSent,
   onMeasureHeight,
   onError,
+  onLocalImageUploaded,
+  onUploadingChange,
 }: {
   ticketId: string;
   ticketType?: "tech" | "therapy" | null;
@@ -484,6 +622,8 @@ function Composer({
   onSent: (updatedTicket?: Ticket | null) => void;
   onMeasureHeight?: (h: number) => void;
   onError: (msg: string) => void;
+  onLocalImageUploaded?: (messageId: string, localUri: string) => void;
+  onUploadingChange?: (uploading: boolean) => void;
 }) {
   const { token, isAuthenticated } = useAuth();
   const [text, setText] = useState("");
@@ -499,6 +639,7 @@ function Composer({
 
   const hasText = text.trim().length > 0;
   const hasAttachment = !!image || !!recURI;
+  const isUploadingAttachment = sending && hasAttachment;
 
   const isTherapy = ticketType === "therapy";
   const lockedForPlan = isTherapy && !isPro;
@@ -523,10 +664,10 @@ function Composer({
       return;
     }
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: false,
-      quality: 0.85,
-    });
+  mediaTypes: ["images"],
+  allowsMultipleSelection: false,
+  quality: 0.85,
+});
     if (!res.canceled && res.assets?.[0]) {
       const a = res.assets[0];
       setImage({
@@ -648,6 +789,7 @@ function Composer({
 
     setText("");
     onSent(updatedTicket);
+
   } catch (e: any) {
     onError(extractErrorMessage(e, "خطا در ارسال متن"));
   } finally {
@@ -689,11 +831,15 @@ const buildForm = async () => {
   if (planGuard()) return;
 
   try {
-    setSending(true);
+  setSending(true);
+  onUploadingChange?.(true);
+
 
     if (!isAuthenticated || !token) {
       throw new Error("برای ارسال پیام باید دوباره وارد حساب کاربری بشی.");
     }
+
+    const localImageUri = image?.uri || null;
 
     let targetId = ticketId;
     if (ticketType) {
@@ -701,31 +847,42 @@ const buildForm = async () => {
       targetId = await createTicketIfNeeded(firstText);
     }
 
-const fd = await buildForm();
-const updatedTicket = await uploadTicketReply({
-  token,
-  ticketId: targetId,
-  formData: fd,
-});
+    const fd = await buildForm();
+
+    const updatedTicket = await uploadTicketReply({
+      token,
+      ticketId: targetId,
+      formData: fd,
+    });
+
+    if (localImageUri && updatedTicket?.messages?.length) {
+      const lastImageMessage = [...updatedTicket.messages]
+        .reverse()
+        .find((m) => m.sender === "user" && (m.type || detectType(m.mime, m.fileUrl)) === "image");
+
+      if (lastImageMessage?.id) {
+        onLocalImageUploaded?.(lastImageMessage.id, localImageUri);
+      }
+    }
 
     setText("");
     resetAttachments();
     onSent(updatedTicket);
   } catch (e: any) {
-    onError(extractErrorMessage(e, "خطا در ارسال فایل یا ویس"));
-  } finally {
-    setSending(false);
-  }
+  resetAttachments();
+  onError(extractErrorMessage(e, "خطا در ارسال فایل یا ویس"));
+} finally {
+  setSending(false);
+  onUploadingChange?.(false);
+}
 };
-
-
 
   return (
     <View style={styles.composerWrap} onLayout={onLayout}>
       <TextInput
         value={text}
         onChangeText={setText}
-        placeholder="پیام خودت رو بفرست در اسرع وقت بهت جواب میدیم…"
+        placeholder="پیام خودت رو بفرست؛ در اسرع وقت بهت جواب می‌دیم…"
         placeholderTextColor="rgba(231,238,247,.55)"
         style={styles.composerInput}
         multiline
@@ -758,22 +915,23 @@ const updatedTicket = await uploadTicketReply({
           ) : null}
           <View style={{ flex: 1 }} />
           <TouchableOpacity
-            onPress={resetAttachments}
-            style={styles.trashBtn}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="trash" size={16} color="#fff" />
-          </TouchableOpacity>
+  onPress={resetAttachments}
+  style={[styles.trashBtn, { opacity: sending ? 0.5 : 1 }]}
+  activeOpacity={0.85}
+  disabled={sending}
+>
+  <Ionicons name="trash" size={16} color="#fff" />
+</TouchableOpacity>
         </View>
       ) : null}
 
       <View style={styles.composerActions}>
         <TouchableOpacity
-          onPress={pickImage}
-          style={[styles.iconBtn, { opacity: lockedForPlan ? 0.5 : 1 }]}
-          activeOpacity={0.8}
-          disabled={lockedForPlan}
-        >
+  onPress={pickImage}
+  style={[styles.iconBtn, { opacity: lockedForPlan || sending ? 0.5 : 1 }]}
+  activeOpacity={0.8}
+  disabled={lockedForPlan || sending}
+>
           <Ionicons name="attach" size={18} color="#E5E7EB" />
         </TouchableOpacity>
 
@@ -803,19 +961,44 @@ const updatedTicket = await uploadTicketReply({
             </TouchableOpacity>
           </View>
         ) : hasAttachment ? (
-          <TouchableOpacity
-            onPress={sendUpload}
-            style={[styles.sendBtn, { opacity: lockedForPlan ? 0.5 : 1 }]}
-            disabled={sending || lockedForPlan}
-            activeOpacity={0.9}
-          >
-            {sending ? (
-              <ActivityIndicator color="#111827" />
-            ) : (
-              <Text style={styles.sendBtnText}>ارسال ضمیمه</Text>
-            )}
-          </TouchableOpacity>
-        ) : hasText ? (
+  <View
+  style={{
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+  }}
+>
+    {isUploadingAttachment ? (
+      <Text
+  style={{
+    color: "#FDE68A",
+    fontSize: 11,
+    fontWeight: "900",
+    position: "absolute",
+    left: -190,
+    width: 180,
+    textAlign: "right",
+  }}
+        numberOfLines={2}
+      >
+        صبور باش، پیامت در حال بارگذاریه…
+      </Text>
+    ) : null}
+
+    <TouchableOpacity
+      onPress={sendUpload}
+      style={[styles.sendBtn, { opacity: lockedForPlan ? 0.5 : 1 }]}
+      disabled={sending || lockedForPlan}
+      activeOpacity={0.9}
+    >
+      {sending ? (
+        <ActivityIndicator color="#111827" />
+      ) : (
+        <Text style={styles.sendBtnText}>ارسال ضمیمه</Text>
+      )}
+    </TouchableOpacity>
+  </View>
+) : hasText ? (
           <TouchableOpacity
             onPress={sendText}
             style={[
@@ -836,11 +1019,11 @@ const updatedTicket = await uploadTicketReply({
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            onPress={startRecording}
-            style={styles.roundBtn}
-            activeOpacity={0.85}
-            disabled={lockedForPlan}
-          >
+  onPress={startRecording}
+  style={[styles.roundBtn, { opacity: lockedForPlan || sending ? 0.5 : 1 }]}
+  activeOpacity={0.85}
+  disabled={lockedForPlan || sending}
+>
             <Ionicons name="mic" size={18} color="#E5E7EB" />
           </TouchableOpacity>
         )}
@@ -888,6 +1071,51 @@ function prettyTsJalali(input?: string) {
   }
 }
 
+function toBackendFileUrl(url?: string | null): string | undefined {
+  if (!url) return undefined;
+
+  if (/^https?:\/\//i.test(url)) {
+    return url;
+  }
+
+  const path = url.startsWith("/") ? url : `/${url}`;
+  return `${BACKEND_URL}${path}`;
+}
+
+function isSameTicketSnapshot(prev: Ticket | null, next: Ticket | null): boolean {
+  if (!prev || !next) return false;
+
+  if (prev.id !== next.id) return false;
+  if (prev.status !== next.status) return false;
+  if (prev.type !== next.type) return false;
+  if (prev.title !== next.title) return false;
+  if ((prev.contact || null) !== (next.contact || null)) return false;
+
+  const prevMessages = prev.messages || [];
+  const nextMessages = next.messages || [];
+
+  if (prevMessages.length !== nextMessages.length) return false;
+
+  for (let i = 0; i < prevMessages.length; i++) {
+    const a = prevMessages[i];
+    const b = nextMessages[i];
+
+    if (a.id !== b.id) return false;
+    if (a.sender !== b.sender) return false;
+    if ((a.type || null) !== (b.type || null)) return false;
+    if ((a.text || null) !== (b.text || null)) return false;
+    if ((a.fileUrl || null) !== (b.fileUrl || null)) return false;
+    if ((a.fileViewUrl || null) !== (b.fileViewUrl || null)) return false;
+    if ((a.fileKey || null) !== (b.fileKey || null)) return false;
+    if ((a.mime || null) !== (b.mime || null)) return false;
+    if ((a.durationSec || null) !== (b.durationSec || null)) return false;
+    if ((a.ts || null) !== (b.ts || null)) return false;
+    if ((a.createdAt || null) !== (b.createdAt || null)) return false;
+  }
+
+  return true;
+}
+
 /* ================= صفحه تیکت ================= */
 export default function TicketDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -909,10 +1137,15 @@ export default function TicketDetail() {
 
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
+  const [localImagePreviews, setLocalImagePreviews] = useState<Record<string, string>>({});
+  const [isUploadingReply, setIsUploadingReply] = useState(false);
+  
 
   const [banner, setBanner] = useState<string>("");
+  const [exitModalVisible, setExitModalVisible] = useState(false);
+  const exitActionRef = useRef<(() => void) | null>(null);
 
-  const scrollRef = useRef<ScrollView | null>(null);
+  const scrollRef = useRef<FlatList<Message> | null>(null);
   const didInitialScroll = useRef(false);
   const msgPositions = useRef<Record<string, number>>({});
   const mediaUrlMapRef = useRef<Record<string, string>>({});
@@ -921,25 +1154,28 @@ export default function TicketDetail() {
   // ✅ پاکسازی محلی هر تیکت
   const [clearedAtMs, setClearedAtMs] = useState<number>(0);
   const [clearModal, setClearModal] = useState(false);
+
   const authHeaders = useMemo(() => {
-  const headers: Record<string, string> = {};
+    const headers: Record<string, string> = {};
 
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
 
-  return headers;
-}, [token]);
+    return headers;
+  }, [token]);
 
   useEffect(() => {
     const show = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
       () => {}
     );
+
     const hide = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
       () => {}
     );
+
     return () => {
       show.remove();
       hide.remove();
@@ -951,6 +1187,43 @@ export default function TicketDetail() {
     if (!clean) return;
     setBanner(clean);
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (!isUploadingReply) return false;
+
+        exitActionRef.current = () => {
+          setIsUploadingReply(false);
+          router.back();
+        };
+
+        setExitModalVisible(true);
+        return true;
+      };
+
+      const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+
+      return () => sub.remove();
+    }, [isUploadingReply, router])
+  );
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("beforeRemove", (e: any) => {
+      if (!isUploadingReply) return;
+
+      e.preventDefault();
+
+      exitActionRef.current = () => {
+        setIsUploadingReply(false);
+        navigation.dispatch(e.data.action);
+      };
+
+      setExitModalVisible(true);
+    });
+
+    return unsubscribe;
+  }, [navigation, isUploadingReply]);
 
   /* سنک وضعیت پلن از روی me */
   const syncPlanView = useCallback(async () => {
@@ -971,7 +1244,9 @@ export default function TicketDetail() {
           const d = typeof status.daysLeft === "number" ? status.daysLeft : null;
           if (d != null && d > 0 && d <= 7) view = "expiring";
           else view = "pro";
-        } else view = "free";
+        } else {
+          view = "free";
+        }
       } else {
         view = status.isPro || flagIsPro ? "pro" : "free";
       }
@@ -1000,7 +1275,7 @@ export default function TicketDetail() {
     loadClearedAt(String(id)).then(setClearedAtMs).catch(() => setClearedAtMs(0));
   }, [id]);
 
-     const fetchTicket = useCallback(
+  const fetchTicket = useCallback(
     async (silent: boolean = false) => {
       if (!id) return;
 
@@ -1027,7 +1302,13 @@ export default function TicketDetail() {
         }
 
         if (res.ok && json?.ok && json.ticket) {
-          setTicket(json.ticket);
+          setTicket((prev) => {
+            if (isSameTicketSnapshot(prev, json.ticket)) {
+              return prev;
+            }
+
+            return json.ticket;
+          });
         }
       } catch (e: any) {
         pushError(extractErrorMessage(e, "خطا در دریافت گفتگو"));
@@ -1084,7 +1365,13 @@ export default function TicketDetail() {
       if (res.ok && json?.ok && json.ticket && json.ticket.id) {
         const t: Ticket = json.ticket;
 
-        setTicket(t);
+        setTicket((prev) => {
+          if (isSameTicketSnapshot(prev, t)) {
+            return prev;
+          }
+
+          return t;
+        });
 
         loadPins(String(t.id))
           .then(setPins)
@@ -1114,28 +1401,29 @@ export default function TicketDetail() {
       | "tech"
       | "therapy"
       | null;
+
     if (!titleType) return;
+
     const title =
       titleType === "therapy"
         ? "درمانگر ققنوس"
         : "پشتیبان فنی";
+
     // @ts-ignore
     (navigation as any)?.setOptions?.({ title });
   }, [ticket, navigation, typeFromParam]);
 
   useEffect(() => {
     if (!ticket?.messages?.length) return;
-    let tries = 0;
-    let rafId: number;
-    const scrollSmoothToEnd = () => {
-      scrollRef.current?.scrollToEnd({ animated: true });
-      if (++tries < 8) rafId = requestAnimationFrame(scrollSmoothToEnd);
-    };
-    rafId = requestAnimationFrame(scrollSmoothToEnd);
-    didInitialScroll.current = true;
-    return () => {
-      if (rafId) cancelAnimationFrame(rafId);
-    };
+
+    didInitialScroll.current = false;
+
+  const t = setTimeout(() => {
+  scrollRef.current?.scrollToEnd({ animated: false });
+  didInitialScroll.current = true;
+}, 350);
+
+    return () => clearTimeout(t);
   }, [ticket?.messages?.length]);
 
   useEffect(() => {
@@ -1144,27 +1432,37 @@ export default function TicketDetail() {
 
   const togglePin = async (mid: string) => {
     if (typeFromParam || !id) return;
+
     const exist = pins.includes(mid);
     const next = exist ? pins.filter((x) => x !== mid) : [...pins, mid];
+
     setPins(next);
     await savePins(id, next);
   };
 
   const jumpToMessage = (mid: string) => {
     const y = msgPositions.current[mid];
+
     if (typeof y !== "number" || !scrollRef.current) return;
-    scrollRef.current.scrollTo({ y: Math.max(0, y - 72), animated: true });
+
+    scrollRef.current.scrollToOffset({
+      offset: Math.max(0, y - 72),
+      animated: true,
+    });
   };
 
   const pinnedList = useMemo(() => {
     if (!ticket) return [];
+
     const byId = new Map(ticket.messages.map((m) => [m.id, m]));
+
     return pins.map((pid) => byId.get(pid)).filter(Boolean) as Message[];
   }, [pins, ticket]);
 
   const chatType = (ticket?.type || typeFromParam) as "tech" | "therapy" | null;
   const isTherapyChat = chatType === "therapy";
   const isProPlan = planView === "pro" || planView === "expiring";
+
   const headerTitle =
     chatType === "therapy"
       ? "درمانگر ققنوس"
@@ -1172,7 +1470,9 @@ export default function TicketDetail() {
 
   const doClearLocal = useCallback(async () => {
     if (!id) return;
+
     const now = Date.now();
+
     await saveClearedAt(String(id), now);
     setClearedAtMs(now);
     setClearModal(false);
@@ -1184,12 +1484,165 @@ export default function TicketDetail() {
     } catch {}
 
     pushError("تاریخچه این گفتگو در گوشیت پاک شد.");
-    requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: false }));
+
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollToEnd({ animated: false });
+    });
   }, [id, pushError]);
+
+  const renderMessage = useCallback((m: Message) => {
+    const isAdmin = m.sender === "admin";
+    const alignSelf: ViewStyle["alignSelf"] = isAdmin ? "flex-start" : "flex-end";
+
+    const bubbleStyle: ViewStyle[] = [
+      styles.msg,
+      isAdmin ? styles.msgAdmin : styles.msgUser,
+      { alignSelf },
+    ];
+
+    const textColor = isAdmin ? "#F9FAFB" : "#E5E7EB";
+    const subColor = isAdmin ? "rgba(249,250,251,.72)" : "rgba(231,238,247,.62)";
+
+    const rawIncomingURL = m.fileViewUrl || m.fileUrl || undefined;
+    const incomingURL = toBackendFileUrl(rawIncomingURL);
+
+    const fullURL = incomingURL;
+    const type: MessageType = m.type || detectType(m.mime, m.fileUrl);
+
+    const localPreviewUri =
+      type === "image" ? localImagePreviews[m.id] : undefined;
+
+    const imageUriToRender = localPreviewUri || fullURL;
+
+    const isPinned = pins.includes(m.id);
+    const stamp = prettyTsJalali(m.ts || m.createdAt);
+
+    return (
+      <View
+        key={m.id}
+        style={bubbleStyle}
+        onLayout={(e) => {
+          msgPositions.current[m.id] = e.nativeEvent.layout.y;
+        }}
+      >
+        <View style={styles.msgTopRow}>
+          <Text style={[styles.msgWho, { color: textColor }]}>
+            {isAdmin ? "پاسخ پشتیبانی" : "شما"}
+          </Text>
+
+          <TouchableOpacity
+            onPress={() => togglePin(m.id)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons
+              name={isPinned ? "star" : "star-outline"}
+              size={15}
+              color={isAdmin ? "#FBBF24" : "#D4AF37"}
+            />
+          </TouchableOpacity>
+        </View>
+
+        {type === "image" && imageUriToRender ? (
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => {
+              setViewerUri(imageUriToRender);
+              setViewerVisible(true);
+            }}
+            style={{ marginTop: 6 }}
+          >
+            <Image
+              source={
+                localPreviewUri
+                  ? { uri: localPreviewUri }
+                  : imageUriToRender
+                  ? { uri: imageUriToRender, headers: authHeaders }
+                  : undefined
+              }
+              style={styles.msgImage}
+              resizeMode="cover"
+              onLoadStart={() =>
+                console.log("IMAGE_LOAD_START", m.id, imageUriToRender, {
+                  local: !!localPreviewUri,
+                })
+              }
+              onLoad={() =>
+                console.log("IMAGE_LOAD_OK", m.id, imageUriToRender, {
+                  local: !!localPreviewUri,
+                })
+              }
+              onError={(e) =>
+                console.log("IMAGE_LOAD_ERR", m.id, imageUriToRender, e.nativeEvent)
+              }
+            />
+
+            <Text style={[styles.msgHint, { color: subColor }]}>
+              برای بزرگ‌نمایی لمس کنید
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+
+        {type === "voice" && fullURL ? (
+          <View style={{ marginTop: 6 }}>
+            <VoicePlayer
+              id={m.id}
+              uri={fullURL}
+              durationSec={m.durationSec ?? undefined}
+              authHeaders={authHeaders}
+            />
+          </View>
+        ) : null}
+
+        {type === "file" && fullURL ? (
+          <TouchableOpacity
+            onPress={async () => {
+              const ok = await Linking.canOpenURL(fullURL);
+              if (ok) Linking.openURL(fullURL);
+              else pushError("لینک فایل قابل باز شدن نیست.");
+            }}
+            activeOpacity={0.9}
+            style={styles.filePill}
+          >
+            <Ionicons name="document-attach" size={18} color="#E5E7EB" />
+
+            <Text style={{ color: "#E5E7EB", fontWeight: "900", fontSize: 12 }}>
+              دانلود فایل
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+
+        {!!m.text && (
+          <Text
+            style={{
+              marginTop: 6,
+              color: textColor,
+              lineHeight: 18,
+              fontWeight: "700",
+              fontSize: 12,
+            }}
+          >
+            {m.text}
+          </Text>
+        )}
+
+        {stamp ? (
+          <Text style={[styles.stamp, { color: subColor }]}>
+            {stamp}
+          </Text>
+        ) : null}
+      </View>
+    );
+  }, [pins, localImagePreviews, authHeaders, pushError]);
+
+  const renderItem = useCallback(
+  ({ item }: { item: Message }) => renderMessage(item),
+  [renderMessage]
+);
 
   /* حالت قفلِ چت درمانگر وقتی پلن PRO نیست */
   if (planLoaded && isTherapyChat && !isProPlan) {
     const isExpiredView = planView === "expired";
+
     return (
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: "#0b0f14" }}
@@ -1213,13 +1666,14 @@ export default function TicketDetail() {
 
             <View style={styles.headerCenter}>
               <Text style={styles.headerTitle} numberOfLines={1}>
-               درمانگر ققنوس
+                درمانگر ققنوس
               </Text>
             </View>
 
             <View style={styles.headerLeft}>
               <View style={styles.headerLeftRow}>
                 <PlanStatusBadge me={me} showExpiringText />
+
                 <TouchableOpacity
                   onPress={() => setClearModal(true)}
                   activeOpacity={0.85}
@@ -1237,19 +1691,26 @@ export default function TicketDetail() {
           <View style={styles.lockWrap}>
             <View style={styles.lockCard}>
               <View pointerEvents="none" style={styles.lockCardGlow} />
+
               <View style={styles.lockIcon}>
                 <Ionicons name="lock-closed" size={22} color="#D4AF37" />
               </View>
+
               <Text style={styles.lockTitle}>
                 {isExpiredView ? "اشتراکت منقضی شده" : "این بخش مخصوص اعضای PRO است"}
               </Text>
+
               <Text style={styles.lockBody}>
                 {isExpiredView
                   ? "برای باز شدن دوباره‌ی چت درمانگر، اشتراک پرو رو تمدید کن. تا اون‌موقع می‌تونی از پشتیبانی فنی یا پشتیبان هوشمند استفاده کنی."
                   : "برای ارسال پیام به درمانگر، باید اشتراک PRO را از تب «پرداخت» فعال کنی. در این فاصله می‌تونی از پشتیبانی فنی یا پشتیبان هوشمند استفاده کنی."}
               </Text>
 
-              <TouchableOpacity onPress={() => router.back()} activeOpacity={0.9} style={styles.lockBtn}>
+              <TouchableOpacity
+                onPress={() => router.back()}
+                activeOpacity={0.9}
+                style={styles.lockBtn}
+              >
                 <Text style={styles.lockBtnText}>برگشت</Text>
                 <Ionicons name="chevron-forward" size={18} color="#E5E7EB" />
               </TouchableOpacity>
@@ -1257,21 +1718,38 @@ export default function TicketDetail() {
           </View>
 
           {/* ✅ مودال پاکسازی */}
-          <Modal visible={clearModal} transparent animationType="fade" onRequestClose={() => setClearModal(false)}>
+          <Modal
+            visible={clearModal}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setClearModal(false)}
+          >
             <Pressable style={styles.modalOverlay} onPress={() => setClearModal(false)}>
               <Pressable style={styles.modalCard} onPress={() => {}}>
                 <View style={styles.modalIcon}>
                   <Ionicons name="trash" size={20} color="#ef4444" />
                 </View>
+
                 <Text style={styles.modalTitle}>پاک کردن تاریخچه گفتگو</Text>
+
                 <Text style={styles.modalBody}>
                   این کار پیام‌ها رو در گوشی تو پاک میکنه.
                 </Text>
+
                 <View style={styles.modalRow}>
-                  <TouchableOpacity onPress={() => setClearModal(false)} activeOpacity={0.9} style={styles.modalBtnGhost}>
+                  <TouchableOpacity
+                    onPress={() => setClearModal(false)}
+                    activeOpacity={0.9}
+                    style={styles.modalBtnGhost}
+                  >
                     <Text style={styles.modalBtnGhostText}>انصراف</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={doClearLocal} activeOpacity={0.9} style={styles.modalBtnDanger}>
+
+                  <TouchableOpacity
+                    onPress={doClearLocal}
+                    activeOpacity={0.9}
+                    style={styles.modalBtnDanger}
+                  >
                     <Text style={styles.modalBtnDangerText}>پاک کن</Text>
                   </TouchableOpacity>
                 </View>
@@ -1290,9 +1768,11 @@ export default function TicketDetail() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <Stack.Screen options={{ headerShown: false }} />
+
         <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
           <View pointerEvents="none" style={styles.bgGlowTop} />
           <View pointerEvents="none" style={styles.bgGlowBottom} />
+
           <View style={styles.center}>
             <ActivityIndicator color="#D4AF37" />
             <Text style={styles.centerText}>در حال آماده‌سازی گفتگو…</Text>
@@ -1309,9 +1789,11 @@ export default function TicketDetail() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <Stack.Screen options={{ headerShown: false }} />
+
         <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
           <View pointerEvents="none" style={styles.bgGlowTop} />
           <View pointerEvents="none" style={styles.bgGlowBottom} />
+
           <View style={styles.center}>
             <ActivityIndicator color="#D4AF37" />
             <Text style={styles.centerText}>در حال بارگذاری گفتگو…</Text>
@@ -1321,129 +1803,19 @@ export default function TicketDetail() {
     );
   }
 
-  const renderMessage = (m: Message) => {
-  const isAdmin = m.sender === "admin";
-  const alignSelf: ViewStyle["alignSelf"] = isAdmin ? "flex-start" : "flex-end";
-
-  const bubbleStyle: ViewStyle[] = [
-    styles.msg,
-    isAdmin ? styles.msgAdmin : styles.msgUser,
-    { alignSelf },
-  ];
-
-  const textColor = isAdmin ? "#F9FAFB" : "#E5E7EB";
-  const subColor = isAdmin ? "rgba(249,250,251,.72)" : "rgba(231,238,247,.62)";
-
-  const incomingURL = m.fileViewUrl || m.fileUrl || undefined;
-
-  if (incomingURL && !mediaUrlMapRef.current[m.id]) {
-    mediaUrlMapRef.current[m.id] = incomingURL;
-  }
-
-  const fullURL = mediaUrlMapRef.current[m.id] || incomingURL;
-  const type: MessageType = m.type || detectType(m.mime, m.fileUrl);
-  const isPinned = pins.includes(m.id);
-  const stamp = prettyTsJalali(m.ts || m.createdAt);
-
-  console.log("RENDER_MESSAGE", {
-    id: m.id,
-    type,
-    incomingURL,
-    fullURL,
-    fileUrl: m.fileUrl,
-    fileViewUrl: m.fileViewUrl,
-  });
-
-  return (
-    <View
-      key={m.id}
-      style={bubbleStyle}
-      onLayout={(e) => {
-        msgPositions.current[m.id] = e.nativeEvent.layout.y;
-      }}
-    >
-      <View style={styles.msgTopRow}>
-        <Text style={[styles.msgWho, { color: textColor }]}>
-          {isAdmin ? "پاسخ پشتیبانی" : "شما"}
-        </Text>
-        <TouchableOpacity
-          onPress={() => togglePin(m.id)}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons
-            name={isPinned ? "star" : "star-outline"}
-            size={15}
-            color={isAdmin ? "#FBBF24" : "#D4AF37"}
-          />
-        </TouchableOpacity>
-      </View>
-
-      {type === "image" && fullURL ? (
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => {
-            setViewerUri(fullURL);
-            setViewerVisible(true);
-          }}
-          style={{ marginTop: 6 }}
-        >
-          <Image
-            source={{ uri: fullURL }}
-            style={styles.msgImage}
-            resizeMode="cover"
-            onLoadStart={() => console.log("IMAGE_LOAD_START", m.id, fullURL)}
-            onLoad={() => console.log("IMAGE_LOAD_OK", m.id, fullURL)}
-            onError={(e) => console.log("IMAGE_LOAD_ERR", m.id, fullURL, e.nativeEvent)}
-          />
-          <Text style={[styles.msgHint, { color: subColor }]}>برای بزرگ‌نمایی لمس کنید</Text>
-        </TouchableOpacity>
-      ) : null}
-
-      {type === "voice" && fullURL ? (
-        <View style={{ marginTop: 6 }}>
-          <VoicePlayer id={m.id} uri={fullURL} durationSec={m.durationSec ?? undefined} />
-        </View>
-      ) : null}
-
-      {type === "file" && fullURL ? (
-        <TouchableOpacity
-          onPress={async () => {
-            const ok = await Linking.canOpenURL(fullURL);
-            if (ok) Linking.openURL(fullURL);
-            else pushError("لینک فایل قابل باز شدن نیست.");
-          }}
-          activeOpacity={0.9}
-          style={styles.filePill}
-        >
-          <Ionicons name="document-attach" size={18} color="#E5E7EB" />
-          <Text style={{ color: "#E5E7EB", fontWeight: "900", fontSize: 12 }}>
-            دانلود فایل
-          </Text>
-        </TouchableOpacity>
-      ) : null}
-
-      {!!m.text && (
-        <Text style={{ marginTop: 6, color: textColor, lineHeight: 18, fontWeight: "700", fontSize: 12 }}>
-          {m.text}
-        </Text>
-      )}
-
-      {stamp ? <Text style={[styles.stamp, { color: subColor }]}>{stamp}</Text> : null}
-    </View>
-  );
-};
-
   // ✅ پیام‌ها بعد از clearedAt فقط نمایش داده شوند
   const visibleMessages =
-    !clearedAtMs ? (ticket?.messages || []) : (ticket?.messages || []).filter((m) => msgTimeMs(m) >= clearedAtMs);
+    !clearedAtMs
+      ? (ticket?.messages || [])
+      : (ticket?.messages || []).filter((m) => msgTimeMs(m) >= clearedAtMs);
 
   const hasMessages = visibleMessages.length > 0;
 
   return (
     <KeyboardAvoidingView
-  style={{ flex: 1, backgroundColor: "#0b0f14" }}
-  behavior={Platform.OS === "ios" ? "padding" : "padding"}
->
+      style={{ flex: 1, backgroundColor: "#0b0f14" }}
+      behavior={Platform.OS === "ios" ? "padding" : "padding"}
+    >
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
@@ -1453,9 +1825,13 @@ export default function TicketDetail() {
         {/* ✅ Header مثل index: back + title + badge + trash */}
         <View style={[styles.headerBar, { paddingTop: 10 }]}>
           <TouchableOpacity
-            style={styles.backBtn}
+            style={[styles.backBtn, { opacity: isUploadingReply ? 0.5 : 1 }]}
             activeOpacity={0.7}
-            onPress={() => router.back()}
+            onPress={() => {
+              if (isUploadingReply) return;
+              router.back();
+            }}
+            disabled={isUploadingReply}
           >
             <Ionicons name="arrow-forward" size={22} color="#E5E7EB" />
           </TouchableOpacity>
@@ -1469,6 +1845,7 @@ export default function TicketDetail() {
           <View style={styles.headerLeft}>
             <View style={styles.headerLeftRow}>
               <PlanStatusBadge me={me} showExpiringText />
+
               <TouchableOpacity
                 onPress={() => setClearModal(true)}
                 activeOpacity={0.85}
@@ -1494,9 +1871,16 @@ export default function TicketDetail() {
               {pinnedList.map((pm) => {
                 const t = pm.text?.trim();
                 const typ = detectType(pm.mime, pm.fileUrl);
+
                 const label =
                   (t && (t.length > 24 ? t.slice(0, 24) + "…" : t)) ||
-                  (typ === "voice" ? "ویس" : typ === "image" ? "عکس" : typ === "file" ? "فایل" : "پیام");
+                  (typ === "voice"
+                    ? "ویس"
+                    : typ === "image"
+                    ? "عکس"
+                    : typ === "file"
+                    ? "فایل"
+                    : "پیام");
 
                 return (
                   <TouchableOpacity
@@ -1506,6 +1890,7 @@ export default function TicketDetail() {
                     activeOpacity={0.9}
                   >
                     <Ionicons name="star" size={13} color="#D4AF37" />
+
                     <Text style={styles.pinText} numberOfLines={1}>
                       {label}
                     </Text>
@@ -1516,97 +1901,169 @@ export default function TicketDetail() {
           </View>
         ) : null}
 
-        <ScrollView
-  ref={scrollRef}
-  style={{ backgroundColor: "#0b0f14" }}
-  keyboardShouldPersistTaps="handled"
-  contentContainerStyle={{
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    rowGap: 8,
-    direction: "ltr",
-    paddingBottom: insets.bottom + 160,
-  }}
-  showsVerticalScrollIndicator={false}
-  onContentSizeChange={() => {
-    if (!didInitialScroll.current) {
-      scrollRef.current?.scrollToEnd({ animated: false });
-      didInitialScroll.current = true;
-    }
-  }}
->
-
-          {hasMessages ? visibleMessages.map(renderMessage) : <View style={{ paddingTop: 40 }} />}
-          {!hasMessages ? (
+        <FlatList
+          ref={scrollRef}
+          data={visibleMessages}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          style={{ backgroundColor: "#0b0f14" }}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{
+            paddingHorizontal: 14,
+            paddingTop: 12,
+            rowGap: 8,
+            direction: "ltr",
+            paddingBottom: insets.bottom + 140,
+          }}
+          showsVerticalScrollIndicator={false}
+          initialNumToRender={12}
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          removeClippedSubviews={true}
+          ListEmptyComponent={
             <View style={styles.emptyWrap}>
-              <Ionicons name="chatbubble-ellipses-outline" size={18} color="rgba(231,238,247,.65)" />
+              <Ionicons
+                name="chatbubble-ellipses-outline"
+                size={18}
+                color="rgba(231,238,247,.65)"
+              />
+
               <Text style={styles.emptyText}>
                 {clearedAtMs
                   ? "تاریخچه این گفتگو در گوشی شما پاک شده. پیام‌های جدید از اینجا به بعد نمایش داده می‌شن."
                   : "هنوز پیامی در این گفتگو ثبت نشده."}
               </Text>
             </View>
-          ) : null}
-        </ScrollView>
+          }
+        />
 
-        <View style={[styles.composerDock, { paddingBottom: Math.max(10, insets.bottom + 8) }]} pointerEvents="box-none">
+        <View
+          style={[
+            styles.composerDock,
+            { paddingBottom: Math.max(10, insets.bottom + 8) },
+          ]}
+          pointerEvents="box-none"
+        >
           {chatType === "therapy" && !isProPlan && (
             <View style={styles.inlineLock}>
               <Ionicons name="lock-closed" size={16} color="#D4AF37" />
-              <Text style={styles.inlineLockText}>ارسال پیام به درمانگر فقط برای اعضای PRO فعاله.</Text>
+
+              <Text style={styles.inlineLockText}>
+                ارسال پیام به درمانگر فقط برای اعضای PRO فعاله.
+              </Text>
             </View>
           )}
 
           <Composer
-  ticketId={String(id)}
-  ticketType={typeFromParam}
-  isPro={isProPlan}
-  onError={pushError}
-  onTicketCreated={(newId, fullTicket) => {
-    router.replace(`/support/tickets/${newId}`);
-    if (fullTicket) setTicket(fullTicket);
-    else fetchTicket(true);
-    loadPins(newId).then(setPins);
+            ticketId={String(id)}
+            ticketType={typeFromParam}
+            isPro={isProPlan}
+            onError={pushError}
+            onUploadingChange={setIsUploadingReply}
+            onLocalImageUploaded={(messageId, localUri) => {
+              setLocalImagePreviews((prev) => ({
+                ...prev,
+                [messageId]: localUri,
+              }));
+            }}
+            onTicketCreated={(newId, fullTicket) => {
+              router.replace(`/support/tickets/${newId}`);
 
-    // ✅ برای تیکت تازه ساخته‌شده clearedAt جدا را صفر کن
-    saveClearedAt(String(newId), 0).catch(() => {});
-    setClearedAtMs(0);
-  }}
-  onSent={(updatedTicket) => {
-    if (updatedTicket) setTicket(updatedTicket);
-    else fetchTicket(true);
-    requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
-  }}
-/>
+              if (fullTicket) {
+                setTicket((prev) => {
+                  if (isSameTicketSnapshot(prev, fullTicket)) {
+                    return prev;
+                  }
 
+                  return fullTicket;
+                });
+              } else {
+                fetchTicket(true);
+              }
+
+              loadPins(newId).then(setPins);
+
+              // ✅ برای تیکت تازه ساخته‌شده clearedAt جدا را صفر کن
+              saveClearedAt(String(newId), 0).catch(() => {});
+              setClearedAtMs(0);
+            }}
+            onSent={(updatedTicket) => {
+              if (updatedTicket) {
+                setTicket((prev) => {
+                  if (isSameTicketSnapshot(prev, updatedTicket)) {
+                    return prev;
+                  }
+
+                  return updatedTicket;
+                });
+              } else {
+                fetchTicket(true);
+              }
+
+              requestAnimationFrame(() => {
+  scrollRef.current?.scrollToEnd({ animated: true });
+});
+            }}
+          />
         </View>
 
         {viewerUri ? (
-          <ImageLightbox uri={viewerUri} visible={viewerVisible} onClose={() => setViewerVisible(false)} />
+          <ImageLightbox
+            uri={viewerUri || ""}
+            visible={viewerVisible}
+            onClose={() => setViewerVisible(false)}
+            authHeaders={authHeaders}
+          />
         ) : null}
 
         {/* ✅ مودال پاکسازی (سمت کاربر) */}
-        <Modal visible={clearModal} transparent animationType="fade" onRequestClose={() => setClearModal(false)}>
+        <Modal
+          visible={clearModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setClearModal(false)}
+        >
           <Pressable style={styles.modalOverlay} onPress={() => setClearModal(false)}>
             <Pressable style={styles.modalCard} onPress={() => {}}>
               <View style={styles.modalIcon}>
                 <Ionicons name="trash" size={20} color="#ef4444" />
               </View>
+
               <Text style={styles.modalTitle}>پاک کردن تاریخچه گفتگو</Text>
+
               <Text style={styles.modalBody}>
                 با این کار پیام‌های ارسالی و دریافتی در گوشیت پاک میشه .
               </Text>
+
               <View style={styles.modalRow}>
-                <TouchableOpacity onPress={() => setClearModal(false)} activeOpacity={0.9} style={styles.modalBtnGhost}>
+                <TouchableOpacity
+                  onPress={() => setClearModal(false)}
+                  activeOpacity={0.9}
+                  style={styles.modalBtnGhost}
+                >
                   <Text style={styles.modalBtnGhostText}>انصراف</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={doClearLocal} activeOpacity={0.9} style={styles.modalBtnDanger}>
+
+                <TouchableOpacity
+                  onPress={doClearLocal}
+                  activeOpacity={0.9}
+                  style={styles.modalBtnDanger}
+                >
                   <Text style={styles.modalBtnDangerText}>پاک کن</Text>
                 </TouchableOpacity>
               </View>
             </Pressable>
           </Pressable>
         </Modal>
+
+        <AppBannerModal
+          visible={exitModalVisible}
+          kind="warning"
+          title="ارسال پیام در حال انجامه"
+          message="پیام هنوز در حال بارگذاریه. اگه خارج بشی ممکنه ارسال کامل نشه."
+          closeText="می‌مونم"
+          onClose={() => setExitModalVisible(false)}
+        />
       </SafeAreaView>
     </KeyboardAvoidingView>
   );

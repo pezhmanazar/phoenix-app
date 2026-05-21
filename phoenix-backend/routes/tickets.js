@@ -440,6 +440,16 @@ publicTicketsRouter.get("/messages/:messageId/file", async (req, res) => {
     });
     if (blocked) return;
 
+    console.log("[tickets.public.file] message debug:", {
+  messageId: message.id,
+  sender: message.sender,
+  type: message.type,
+  fileUrl: message.fileUrl,
+  mime: message.mime,
+  size: message.size,
+});
+
+
     const object = await getS3ObjectStream(message.fileUrl);
 
     const contentType =
