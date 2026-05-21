@@ -682,14 +682,16 @@ publicTicketsRouter.post("/send", async (req, res) => {
     });
 
     const fresh = await prisma.ticket.findUnique({
-      where: { id: ticket.id },
-      include: { messages: { orderBy: { createdAt: "asc" } } },
-    });
+  where: { id: ticket.id },
+  include: { messages: { orderBy: { createdAt: "asc" } } },
+});
 
-    return res.json({
-      ok: true,
-      ticket: withDisplayTitle(fresh),
-    });
+const freshWithSignedUrls = await attachSignedUrlsToTicket(fresh);
+
+return res.json({
+  ok: true,
+  ticket: withDisplayTitle(freshWithSignedUrls),
+});
   } catch (e) {
     console.error("[tickets.public.send] error:", e?.message || "unknown_error");
     return sendPublicRouteError(res, e);
@@ -775,15 +777,17 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
       data: { unread: true, updatedAt: new Date() },
     });
 
-    const ticket = await prisma.ticket.findUnique({
-      where: { id },
-      include: { messages: { orderBy: { createdAt: "asc" } } },
-    });
+  const ticket = await prisma.ticket.findUnique({
+  where: { id },
+  include: { messages: { orderBy: { createdAt: "asc" } } },
+});
 
-    return res.json({
-      ok: true,
-      ticket: withDisplayTitle(ticket),
-    });
+const ticketWithSignedUrls = await attachSignedUrlsToTicket(ticket);
+
+return res.json({
+  ok: true,
+  ticket: withDisplayTitle(ticketWithSignedUrls),
+});
   } catch (e) {
     console.error("[tickets.public.reply] error:", e?.message || "unknown_error");
     return sendPublicRouteError(res, e);
