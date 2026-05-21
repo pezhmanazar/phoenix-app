@@ -430,9 +430,13 @@ publicTicketsRouter.get("/", async (req, res) => {
       },
     });
 
+    const listWithSignedUrls = await Promise.all(
+      list.map((ticket) => attachSignedUrlsToTicket(ticket))
+    );
+
     return res.json({
       ok: true,
-      tickets: list.map(withDisplayTitle),
+      tickets: listWithSignedUrls.map(withDisplayTitle),
     });
   } catch (e) {
     console.error("[tickets.public.list] error:", e?.message || "unknown_error");
@@ -479,9 +483,10 @@ publicTicketsRouter.get("/open", async (req, res) => {
       });
     }
 
+    const ticketWithSignedUrls = await attachSignedUrlsToTicket(t);
     return res.json({
       ok: true,
-      ticket: withDisplayTitle(t),
+      ticket: withDisplayTitle(ticketWithSignedUrls),
     });
   } catch (e) {
     console.error("[tickets.public.open] error:", e?.message || "unknown_error");
@@ -523,11 +528,14 @@ publicTicketsRouter.get("/open-batch", async (req, res) => {
       }),
     ]);
 
+    const techWithSignedUrls = await attachSignedUrlsToTicket(tech);
+    const therapyWithSignedUrls = await attachSignedUrlsToTicket(therapy);
+    
     return res.json({
       ok: true,
       tickets: {
-        tech: withDisplayTitle(tech),
-        therapy: withDisplayTitle(therapy),
+        tech: withDisplayTitle(techWithSignedUrls),
+        therapy: withDisplayTitle(therapyWithSignedUrls),
       },
     });
   } catch (e) {
