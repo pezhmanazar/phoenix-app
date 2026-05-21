@@ -3,8 +3,9 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { Router } from "express";
 import prisma from "../utils/prisma.js";
-import { uploadBufferToS3 } from "../utils/s3.js";
+import { uploadBufferToS3, getSignedFileUrl } from "../utils/s3.js";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
+
 
 // ⬇️ افزوده‌های مرحله ویس/فایل
 import fs from "fs";
@@ -12,6 +13,35 @@ import multer from "multer";
 import path from "path";
 
 const router = Router();
+async function attachSignedUrlsToMessages(messages = []) {
+  return Promise.all(
+    messages.map(async (m) => {
+      if (!m?.fileUrl) return m;
+
+      try {
+        const signedUrl = await getSignedFileUrl(m.fileUrl);
+
+        return {
+          ...m,
+          signedUrl,
+          fileSignedUrl: signedUrl,
+        };
+      } catch (e) {
+        console.error("attachSignedUrlsToMessages error:", {
+          messageId: m.id,
+          fileUrl: m.fileUrl,
+          error: e?.message || e,
+        });
+
+        return {
+          ...m,
+          signedUrl: null,
+          fileSignedUrl: null,
+        };
+      }
+    })
+  );
+}
 
 // Helper: ساعت به جلو
 const inHours = (h) => new Date(Date.now() + h * 3600 * 1000);
@@ -1773,15 +1803,18 @@ router.get("/tickets/:id", allow("agent", "manager", "owner"), async (req, res) 
       };
     }
 
-    const withDisplay = {
-      ...t,
-      title: t.openedByName || t.title,
-      displayTitle: t.openedByName || t.title,
-      user: user || null,
-      therapySnapshot,
-    };
+const messagesWithSignedUrls = await attachSignedUrlsToMessages(t.messages || []);
 
-    return res.json({ ok: true, ticket: withDisplay });
+const withDisplay = {
+  ...t,
+  messages: messagesWithSignedUrls,
+  title: t.openedByName || t.title,
+  displayTitle: t.openedByName || t.title,
+  user: user || null,
+  therapySnapshot,
+};
+
+return res.json({ ok: true, ticket: withDisplay });
   } catch (e) {
     console.error("admin/tickets/:id error:", e);
     return res.status(500).json({ ok: false, error: "internal_error" });
