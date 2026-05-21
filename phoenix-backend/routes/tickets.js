@@ -320,6 +320,81 @@ router.get("/:id", allowAdmin("agent", "manager", "owner"), async (req, res) => 
 });
 
 /**
+ * GET /api/tickets/messages/:messageId/file
+ * دریافت فایل پیام برای ادمین
+ */
+router.get(
+  "/messages/:messageId/file",
+  allowAdmin("agent", "manager", "owner"),
+  async (req, res) => {
+    try {
+      const messageId = String(req.params.messageId);
+
+      const message = await prisma.message.findUnique({
+        where: { id: messageId },
+        include: {
+          ticket: {
+            select: {
+              id: true,
+            },
+          },
+        },
+      });
+
+      if (!message || !message.fileUrl || !message.ticket) {
+        return res.status(404).json({
+          ok: false,
+          error: "FILE_NOT_FOUND",
+        });
+      }
+
+      const object = await getS3ObjectStream(message.fileUrl);
+
+      const contentType =
+        message.mime ||
+        object.ContentType ||
+        "application/octet-stream";
+
+      if (contentType) {
+        res.setHeader("Content-Type", contentType);
+      }
+
+      if (message.size || object.ContentLength) {
+        res.setHeader(
+          "Content-Length",
+          String(message.size || object.ContentLength)
+        );
+      }
+
+      res.setHeader("Content-Disposition", "inline");
+      res.setHeader("Cache-Control", "private, max-age=3600");
+
+      if (!object.Body) {
+        return res.status(404).json({
+          ok: false,
+          error: "FILE_BODY_NOT_FOUND",
+        });
+      }
+
+      object.Body.pipe(res);
+    } catch (e) {
+      console.error("[tickets.admin.file] error:", e);
+
+      if (!res.headersSent) {
+        return res.status(500).json({
+          ok: false,
+          error: "FILE_STREAM_FAILED",
+          detail: e?.message || "unknown_error",
+        });
+      }
+
+      res.end();
+    }
+  }
+);
+
+
+/**
  * POST /api/tickets/:id/reply
  * body: { text }
  * sender = "admin"
@@ -439,16 +514,6 @@ publicTicketsRouter.get("/messages/:messageId/file", async (req, res) => {
       contact: message.ticket.contact,
     });
     if (blocked) return;
-
-    console.log("[tickets.public.file] message debug:", {
-  messageId: message.id,
-  sender: message.sender,
-  type: message.type,
-  fileUrl: message.fileUrl,
-  mime: message.mime,
-  size: message.size,
-});
-
 
     const object = await getS3ObjectStream(message.fileUrl);
 
