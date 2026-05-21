@@ -69,3 +69,16 @@ export async function getSignedFileUrl(key) {
     expiresIn,
   });
 }
+
+export async function getS3ObjectStream(key) {
+  if (!key) {
+    throw new Error("getS3ObjectStream: key is required");
+  }
+
+  const command = new GetObjectCommand({
+    Bucket: PANAH_S3_BUCKET,
+    Key: key,
+  });
+
+  return s3Client.send(command);
+}

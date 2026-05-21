@@ -65,6 +65,8 @@ type Message = {
   type?: MessageType;
   text?: string | null;
   fileUrl?: string | null;
+  fileViewUrl?: string | null;
+  fileKey?: string | null;
   mime?: string | null;
   durationSec?: number | null;
   ts?: string;
@@ -913,6 +915,7 @@ export default function TicketDetail() {
   const scrollRef = useRef<ScrollView | null>(null);
   const didInitialScroll = useRef(false);
   const msgPositions = useRef<Record<string, number>>({});
+  const mediaUrlMapRef = useRef<Record<string, string>>({});
   const [pins, setPins] = useState<string[]>([]);
 
   // ✅ پاکسازی محلی هر تیکت
@@ -1319,92 +1322,116 @@ export default function TicketDetail() {
   }
 
   const renderMessage = (m: Message) => {
-    const isAdmin = m.sender === "admin";
-    const alignSelf: ViewStyle["alignSelf"] = isAdmin ? "flex-start" : "flex-end";
+  const isAdmin = m.sender === "admin";
+  const alignSelf: ViewStyle["alignSelf"] = isAdmin ? "flex-start" : "flex-end";
 
-    const bubbleStyle: ViewStyle[] = [
-      styles.msg,
-      isAdmin ? styles.msgAdmin : styles.msgUser,
-      { alignSelf },
-    ];
+  const bubbleStyle: ViewStyle[] = [
+    styles.msg,
+    isAdmin ? styles.msgAdmin : styles.msgUser,
+    { alignSelf },
+  ];
 
-    const textColor = isAdmin ? "#F9FAFB" : "#E5E7EB";
-    const subColor = isAdmin ? "rgba(249,250,251,.72)" : "rgba(231,238,247,.62)";
+  const textColor = isAdmin ? "#F9FAFB" : "#E5E7EB";
+  const subColor = isAdmin ? "rgba(249,250,251,.72)" : "rgba(231,238,247,.62)";
 
-    const fullURL = m.fileUrl ? `${BACKEND_URL}${m.fileUrl}` : undefined;
-    const type: MessageType = m.type || detectType(m.mime, m.fileUrl);
-    const isPinned = pins.includes(m.id);
-    const stamp = prettyTsJalali(m.ts || m.createdAt);
+  const incomingURL = m.fileViewUrl || m.fileUrl || undefined;
 
-    return (
-      <View
-        key={m.id}
-        style={bubbleStyle}
-        onLayout={(e) => {
-          msgPositions.current[m.id] = e.nativeEvent.layout.y;
-        }}
-      >
-        <View style={styles.msgTopRow}>
-          <Text style={[styles.msgWho, { color: textColor }]}>
-            {isAdmin ? "پاسخ پشتیبانی" : "شما"}
-          </Text>
-          <TouchableOpacity
-            onPress={() => togglePin(m.id)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons
-              name={isPinned ? "star" : "star-outline"}
-              size={15}
-              color={isAdmin ? "#FBBF24" : "#D4AF37"}
-            />
-          </TouchableOpacity>
-        </View>
+  if (incomingURL && !mediaUrlMapRef.current[m.id]) {
+    mediaUrlMapRef.current[m.id] = incomingURL;
+  }
 
-        {type === "image" && fullURL ? (
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => {
-              setViewerUri(fullURL);
-              setViewerVisible(true);
-            }}
-            style={{ marginTop: 6 }}
-          >
-            <Image source={{ uri: fullURL }} style={styles.msgImage} resizeMode="cover" />
-            <Text style={[styles.msgHint, { color: subColor }]}>برای بزرگ‌نمایی لمس کنید</Text>
-          </TouchableOpacity>
-        ) : null}
+  const fullURL = mediaUrlMapRef.current[m.id] || incomingURL;
+  const type: MessageType = m.type || detectType(m.mime, m.fileUrl);
+  const isPinned = pins.includes(m.id);
+  const stamp = prettyTsJalali(m.ts || m.createdAt);
 
-        {type === "voice" && fullURL ? (
-          <View style={{ marginTop: 6 }}>
-            <VoicePlayer id={m.id} uri={fullURL} durationSec={m.durationSec ?? undefined} />
-          </View>
-        ) : null}
+  console.log("RENDER_MESSAGE", {
+    id: m.id,
+    type,
+    incomingURL,
+    fullURL,
+    fileUrl: m.fileUrl,
+    fileViewUrl: m.fileViewUrl,
+  });
 
-        {type === "file" && fullURL ? (
-          <TouchableOpacity
-            onPress={async () => {
-              const ok = await Linking.canOpenURL(fullURL);
-              if (ok) Linking.openURL(fullURL);
-              else pushError("لینک فایل قابل باز شدن نیست.");
-            }}
-            activeOpacity={0.9}
-            style={styles.filePill}
-          >
-            <Ionicons name="document-attach" size={18} color="#E5E7EB" />
-            <Text style={{ color: "#E5E7EB", fontWeight: "900", fontSize: 12 }}>دانلود فایل</Text>
-          </TouchableOpacity>
-        ) : null}
-
-        {!!m.text && (
-          <Text style={{ marginTop: 6, color: textColor, lineHeight: 18, fontWeight: "700", fontSize: 12 }}>
-            {m.text}
-          </Text>
-        )}
-
-        {stamp ? <Text style={[styles.stamp, { color: subColor }]}>{stamp}</Text> : null}
+  return (
+    <View
+      key={m.id}
+      style={bubbleStyle}
+      onLayout={(e) => {
+        msgPositions.current[m.id] = e.nativeEvent.layout.y;
+      }}
+    >
+      <View style={styles.msgTopRow}>
+        <Text style={[styles.msgWho, { color: textColor }]}>
+          {isAdmin ? "پاسخ پشتیبانی" : "شما"}
+        </Text>
+        <TouchableOpacity
+          onPress={() => togglePin(m.id)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons
+            name={isPinned ? "star" : "star-outline"}
+            size={15}
+            color={isAdmin ? "#FBBF24" : "#D4AF37"}
+          />
+        </TouchableOpacity>
       </View>
-    );
-  };
+
+      {type === "image" && fullURL ? (
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => {
+            setViewerUri(fullURL);
+            setViewerVisible(true);
+          }}
+          style={{ marginTop: 6 }}
+        >
+          <Image
+            source={{ uri: fullURL }}
+            style={styles.msgImage}
+            resizeMode="cover"
+            onLoadStart={() => console.log("IMAGE_LOAD_START", m.id, fullURL)}
+            onLoad={() => console.log("IMAGE_LOAD_OK", m.id, fullURL)}
+            onError={(e) => console.log("IMAGE_LOAD_ERR", m.id, fullURL, e.nativeEvent)}
+          />
+          <Text style={[styles.msgHint, { color: subColor }]}>برای بزرگ‌نمایی لمس کنید</Text>
+        </TouchableOpacity>
+      ) : null}
+
+      {type === "voice" && fullURL ? (
+        <View style={{ marginTop: 6 }}>
+          <VoicePlayer id={m.id} uri={fullURL} durationSec={m.durationSec ?? undefined} />
+        </View>
+      ) : null}
+
+      {type === "file" && fullURL ? (
+        <TouchableOpacity
+          onPress={async () => {
+            const ok = await Linking.canOpenURL(fullURL);
+            if (ok) Linking.openURL(fullURL);
+            else pushError("لینک فایل قابل باز شدن نیست.");
+          }}
+          activeOpacity={0.9}
+          style={styles.filePill}
+        >
+          <Ionicons name="document-attach" size={18} color="#E5E7EB" />
+          <Text style={{ color: "#E5E7EB", fontWeight: "900", fontSize: 12 }}>
+            دانلود فایل
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+
+      {!!m.text && (
+        <Text style={{ marginTop: 6, color: textColor, lineHeight: 18, fontWeight: "700", fontSize: 12 }}>
+          {m.text}
+        </Text>
+      )}
+
+      {stamp ? <Text style={[styles.stamp, { color: subColor }]}>{stamp}</Text> : null}
+    </View>
+  );
+};
 
   // ✅ پیام‌ها بعد از clearedAt فقط نمایش داده شوند
   const visibleMessages =

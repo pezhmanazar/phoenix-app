@@ -12,7 +12,10 @@ import {
   requireTicketIdentity,
   ticketMatchesIdentity,
 } from "./_ticketIdentity.js";
-import { uploadBufferToS3, getSignedFileUrl } from "../utils/s3.js";
+import {
+  uploadBufferToS3,
+  getS3ObjectStream,
+} from "../utils/s3.js";
 
 const prisma = new PrismaClient();
 
@@ -138,46 +141,42 @@ function mimeToMessageType(mime) {
   return "file";
 }
 
+function buildPublicFileUrl(messageId) {
+  const base = process.env.API_PUBLIC_BASE_URL || process.env.BACKEND_URL || "";
+
+  if (base) {
+    return `${base.replace(/\/$/, "")}/api/public/tickets/messages/${messageId}/file`;
+  }
+
+  return `/api/public/tickets/messages/${messageId}/file`;
+}
+
 async function attachSignedUrlsToTicket(ticket) {
   if (!ticket?.messages?.length) return ticket;
 
-  const messages = await Promise.all(
-    ticket.messages.map(async (msg) => {
-      if (!msg.fileUrl) return msg;
+  const messages = ticket.messages.map((msg) => {
+    if (!msg.fileUrl) return msg;
 
-      try {
-        const signedUrl = await getSignedFileUrl(msg.fileUrl);
+    const fileViewUrl = buildPublicFileUrl(msg.id);
 
-        return {
-          ...msg,
+    return {
+      ...msg,
 
-          // کلید خام داخل S3
-          fileKey: msg.fileUrl,
+      // کلید واقعی داخل S3
+      fileKey: msg.fileUrl,
 
-          // برای سازگاری با فرانت فعلی، fileUrl را قابل نمایش می‌کنیم
-          fileUrl: signedUrl,
-
-          // اگر جایی در فرانت fileViewUrl استفاده شد، این هم موجود باشد
-          fileViewUrl: signedUrl,
-        };
-      } catch (e) {
-        console.error("[signed-url] error:", e?.message || e);
-
-        return {
-          ...msg,
-          fileKey: msg.fileUrl,
-          fileUrl: null,
-          fileViewUrl: null,
-        };
-      }
-    })
-  );
+      // برای نمایش در فرانت از endpoint ثابت استفاده می‌کنیم
+      fileUrl: fileViewUrl,
+      fileViewUrl,
+    };
+  });
 
   return {
     ...ticket,
     messages,
   };
 }
+
 
 /* ====================== روتر پنل/ادمین (قدیمی) ====================== */
 
@@ -394,6 +393,94 @@ router.patch("/:id/status", allowAdmin("manager", "owner"), async (req, res) => 
 
 export const publicTicketsRouter = Router();
 publicTicketsRouter.use(authUser);
+
+/**
+ * GET /api/public/tickets/messages/:messageId/file
+ * فایل پیام را به صورت private از S3 می‌خواند و به کاربر مجاز می‌دهد
+ */
+publicTicketsRouter.get("/messages/:messageId/file", async (req, res) => {
+  try {
+    const identity = requireTicketIdentity(req);
+    const messageId = String(req.params.messageId);
+
+    const message = await prisma.message.findUnique({
+      where: { id: messageId },
+      include: {
+        ticket: {
+          select: {
+            id: true,
+            type: true,
+            openedById: true,
+            contact: true,
+            openedByName: true,
+          },
+        },
+      },
+    });
+
+    if (!message || !message.fileUrl || !message.ticket) {
+      return res.status(404).json({
+        ok: false,
+        error: "FILE_NOT_FOUND",
+      });
+    }
+
+    if (!ticketMatchesIdentity(message.ticket, identity)) {
+      return res.status(403).json({
+        ok: false,
+        error: "TICKET_FORBIDDEN",
+      });
+    }
+
+    const blocked = await checkTherapyAccessOrReject({
+      res,
+      type: message.ticket.type,
+      openedById: message.ticket.openedById,
+      contact: message.ticket.contact,
+    });
+    if (blocked) return;
+
+    const object = await getS3ObjectStream(message.fileUrl);
+
+    const contentType =
+      message.mime ||
+      object.ContentType ||
+      "application/octet-stream";
+
+    if (contentType) {
+      res.setHeader("Content-Type", contentType);
+    }
+
+    if (message.size || object.ContentLength) {
+      res.setHeader("Content-Length", String(message.size || object.ContentLength));
+    }
+
+    res.setHeader("Content-Disposition", "inline");
+    res.setHeader("Cache-Control", "private, max-age=3600");
+
+    if (!object.Body) {
+      return res.status(404).json({
+        ok: false,
+        error: "FILE_BODY_NOT_FOUND",
+      });
+    }
+
+    object.Body.pipe(res);
+  } catch (e) {
+    console.error("[tickets.public.file] error:", e);
+
+    if (!res.headersSent) {
+      return res.status(500).json({
+        ok: false,
+        error: "FILE_STREAM_FAILED",
+        detail: e?.message || "unknown_error",
+      });
+    }
+
+    res.end();
+  }
+});
+
 
 /**
  * GET /api/public/tickets
@@ -934,25 +1021,14 @@ const ticketWithSignedUrls = await attachSignedUrlsToTicket(ticket);
 let messageWithSignedUrl = created;
 
 if (created?.fileUrl) {
-  try {
-    const signedUrl = await getSignedFileUrl(created.fileUrl);
+  const fileViewUrl = buildPublicFileUrl(created.id);
 
-    messageWithSignedUrl = {
-      ...created,
-      fileKey: created.fileUrl,
-      fileUrl: signedUrl,
-      fileViewUrl: signedUrl,
-    };
-  } catch (e) {
-    console.error("[signed-url.created-message] error:", e?.message || e);
-
-    messageWithSignedUrl = {
-      ...created,
-      fileKey: created.fileUrl,
-      fileUrl: null,
-      fileViewUrl: null,
-    };
-  }
+  messageWithSignedUrl = {
+    ...created,
+    fileKey: created.fileUrl,
+    fileUrl: fileViewUrl,
+    fileViewUrl,
+  };
 }
 
 return res.json({
