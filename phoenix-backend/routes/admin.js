@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { Router } from "express";
 import prisma from "../utils/prisma.js";
 import { uploadBufferToS3 } from "../utils/s3.js";
+const { GetObjectCommand } = require("@aws-sdk/client-s3");
 
 // ⬇️ افزوده‌های مرحله ویس/فایل
 import fs from "fs";
