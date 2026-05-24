@@ -1208,7 +1208,7 @@ export default function TicketDetail() {
   const [checkingExisting, setCheckingExisting] = useState(!!typeFromParam);
 
   const [viewerVisible, setViewerVisible] = useState(false);
-  const [composerHeight, setComposerHeight] = useState(88); ///////
+  const [composerHeight, setComposerHeight] = useState(88);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [localImagePreviews, setLocalImagePreviews] = useState<Record<string, string>>({});
@@ -1221,7 +1221,9 @@ export default function TicketDetail() {
 
   const scrollRef = useRef<FlatList<Message> | null>(null);
   const didInitialScroll = useRef(false);
+  const lastMessageIdRef = useRef<string | null>(null);
   const msgPositions = useRef<Record<string, number>>({});
+
   const mediaUrlMapRef = useRef<Record<string, string>>({});
   const [pins, setPins] = useState<string[]>([]);
 
@@ -1496,18 +1498,6 @@ export default function TicketDetail() {
     (navigation as any)?.setOptions?.({ title });
   }, [ticket, navigation, typeFromParam]);
 
-useEffect(() => {
-  if (!ticket?.messages?.length) return;
-  if (didInitialScroll.current) return;
-
-  const raf = requestAnimationFrame(() => {
-    scrollRef.current?.scrollToEnd({ animated: false });
-    didInitialScroll.current = true;
-  });
-
-  return () => cancelAnimationFrame(raf);
-}, [ticket?.messages?.length]);
-
   useEffect(() => {
     if (!typeFromParam && id) loadPins(id).then(setPins);
   }, [id, typeFromParam]);
@@ -1523,15 +1513,17 @@ useEffect(() => {
   };
 
   const jumpToMessage = (mid: string) => {
-    const y = msgPositions.current[mid];
+  const index = visibleMessages.findIndex((m) => m.id === mid);
 
-    if (typeof y !== "number" || !scrollRef.current) return;
+  if (index < 0 || !scrollRef.current) return;
 
-    scrollRef.current.scrollToOffset({
-      offset: Math.max(0, y - 72),
-      animated: true,
-    });
-  };
+  scrollRef.current.scrollToIndex({
+    index,
+    animated: true,
+    viewPosition: 0.25,
+  });
+};
+
 
   const pinnedList = useMemo(() => {
     if (!ticket) return [];
@@ -1716,6 +1708,46 @@ useEffect(() => {
   ({ item }: { item: Message }) => renderMessage(item),
   [renderMessage]
 );
+
+useEffect(() => {
+  const allMessages = ticket?.messages || [];
+
+  const currentVisibleMessages =
+    !clearedAtMs
+      ? allMessages
+      : allMessages.filter((m) => msgTimeMs(m) >= clearedAtMs);
+
+  if (!currentVisibleMessages.length) {
+    lastMessageIdRef.current = null;
+    return;
+  }
+
+  const lastMessage = currentVisibleMessages[currentVisibleMessages.length - 1];
+  const previousLastId = lastMessageIdRef.current;
+
+  // بار اول فقط ثبت کن، اسکرول اولیه جدا با onContentSizeChange انجام می‌شود
+  if (!previousLastId) {
+    lastMessageIdRef.current = lastMessage.id;
+    return;
+  }
+
+  // اگر پیام آخر عوض نشده، کاری نکن
+  if (previousLastId === lastMessage.id) return;
+
+  lastMessageIdRef.current = lastMessage.id;
+
+  // فقط وقتی پیام جدید از ادمین آمده، اسکرول کن پایین
+  if (lastMessage.sender === "admin") {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+
+      setTimeout(() => {
+        scrollRef.current?.scrollToEnd({ animated: true });
+      }, 180);
+    });
+  }
+}, [ticket?.messages, clearedAtMs]);
+
 
   /* حالت قفلِ چت درمانگر وقتی پلن PRO نیست */
   if (planLoaded && isTherapyChat && !isProPlan) {
@@ -1984,7 +2016,7 @@ useEffect(() => {
         ) : null}
 
         <View style={{ flex: 1 }}>
-  <FlatList
+    <FlatList
     ref={scrollRef}
     data={visibleMessages}
     renderItem={renderItem}
@@ -1993,10 +2025,29 @@ useEffect(() => {
     keyboardShouldPersistTaps="handled"
     keyboardDismissMode="interactive"
     showsVerticalScrollIndicator={false}
-    initialNumToRender={12}
-    maxToRenderPerBatch={10}
-    windowSize={7}
-    removeClippedSubviews={true}
+    initialNumToRender={Math.max(20, visibleMessages.length)}
+    maxToRenderPerBatch={20}
+    windowSize={15}
+    removeClippedSubviews={false}
+    onScrollToIndexFailed={(info) => {
+  setTimeout(() => {
+    scrollRef.current?.scrollToIndex({
+      index: info.index,
+      animated: true,
+      viewPosition: 0.25,
+    });
+  }, 250);
+}}
+    onContentSizeChange={() => {
+      if (!didInitialScroll.current && visibleMessages.length > 0) {
+        scrollRef.current?.scrollToEnd({ animated: false });
+
+        setTimeout(() => {
+          scrollRef.current?.scrollToEnd({ animated: false });
+          didInitialScroll.current = true;
+        }, 120);
+      }
+    }}
     contentContainerStyle={{
       paddingHorizontal: 14,
       paddingTop: 12,
