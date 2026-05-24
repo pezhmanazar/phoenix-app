@@ -70,7 +70,7 @@ export async function getSignedFileUrl(key) {
   });
 }
 
-export async function getS3ObjectStream(key) {
+export async function getS3ObjectStream(key, range) {
   if (!key) {
     throw new Error("getS3ObjectStream: key is required");
   }
@@ -78,6 +78,7 @@ export async function getS3ObjectStream(key) {
   const command = new GetObjectCommand({
     Bucket: PANAH_S3_BUCKET,
     Key: key,
+    ...(range ? { Range: range } : {}),
   });
 
   return s3Client.send(command);

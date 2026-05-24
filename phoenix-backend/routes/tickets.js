@@ -472,6 +472,7 @@ publicTicketsRouter.use(authUser);
 /**
  * GET /api/public/tickets/messages/:messageId/file
  * فایل پیام را به صورت private از S3 می‌خواند و به کاربر مجاز می‌دهد
+ * پشتیبانی از Range برای پخش درست ویس/ویدیو در موبایل
  */
 publicTicketsRouter.get("/messages/:messageId/file", async (req, res) => {
   try {
@@ -515,23 +516,9 @@ publicTicketsRouter.get("/messages/:messageId/file", async (req, res) => {
     });
     if (blocked) return;
 
-    const object = await getS3ObjectStream(message.fileUrl);
+    const rangeHeader = req.headers.range || null;
 
-    const contentType =
-      message.mime ||
-      object.ContentType ||
-      "application/octet-stream";
-
-    if (contentType) {
-      res.setHeader("Content-Type", contentType);
-    }
-
-    if (message.size || object.ContentLength) {
-      res.setHeader("Content-Length", String(message.size || object.ContentLength));
-    }
-
-    res.setHeader("Content-Disposition", "inline");
-    res.setHeader("Cache-Control", "private, max-age=3600");
+    const object = await getS3ObjectStream(message.fileUrl, rangeHeader);
 
     if (!object.Body) {
       return res.status(404).json({
@@ -539,6 +526,55 @@ publicTicketsRouter.get("/messages/:messageId/file", async (req, res) => {
         error: "FILE_BODY_NOT_FOUND",
       });
     }
+
+    const contentType =
+      message.mime ||
+      object.ContentType ||
+      "application/octet-stream";
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Disposition", "inline");
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    res.setHeader("Accept-Ranges", "bytes");
+
+    if (rangeHeader) {
+      res.status(206);
+
+      if (object.ContentRange) {
+        res.setHeader("Content-Range", object.ContentRange);
+      }
+
+      if (object.ContentLength) {
+        res.setHeader("Content-Length", String(object.ContentLength));
+      }
+    } else {
+      res.status(200);
+
+      if (message.size || object.ContentLength) {
+        res.setHeader(
+          "Content-Length",
+          String(message.size || object.ContentLength)
+        );
+      }
+    }
+
+    object.Body.on("error", (err) => {
+      console.error("[tickets.public.file] stream body error:", err);
+      if (!res.headersSent) {
+        res.status(500).json({
+          ok: false,
+          error: "FILE_BODY_STREAM_FAILED",
+        });
+      } else {
+        res.destroy(err);
+      }
+    });
+
+    req.on("close", () => {
+      if (object.Body && typeof object.Body.destroy === "function") {
+        object.Body.destroy();
+      }
+    });
 
     object.Body.pipe(res);
   } catch (e) {
@@ -555,6 +591,7 @@ publicTicketsRouter.get("/messages/:messageId/file", async (req, res) => {
     res.end();
   }
 });
+
 
 
 /**
