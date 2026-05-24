@@ -234,6 +234,7 @@ function VoicePlayer({
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [playing, setPlaying] = useState(false);
   const [buffering, setBuffering] = useState(false);
+  const [playError, setPlayError] = useState(false);
   const [progress, setProgress] = useState(0);
   const [pos, setPos] = useState(0);
   const [dur, setDur] = useState((durationSec ?? 0) * 1000);
@@ -242,6 +243,8 @@ function VoicePlayer({
 
   const wfWidth = useRef(1);
   const isDragging = useRef(false);
+  const toggleLockRef = useRef(false);
+  const replayGraceUntilRef = useRef(0);
 
   useEffect(() => {
     Audio.setAudioModeAsync({
@@ -359,17 +362,23 @@ const ensureLoaded = useCallback(async () => {
       return;
     }
 
-    if (st.isPlaying) {
+        if (st.isPlaying) {
       setBuffering(false);
       setPlaying(true);
+      setPlayError(false);
       return;
     }
 
     if (st.isBuffering && st.shouldPlay) {
-      setBuffering(true);
-      setPlaying(false);
-      return;
-    }
+        if (Date.now() < replayGraceUntilRef.current) {
+          setBuffering(false);
+          setPlaying(true);
+          return;
+        }
+          setBuffering(true);
+          setPlaying(false);
+          return;
+        }
 
     setPlaying(false);
 
@@ -386,10 +395,17 @@ const ensureLoaded = useCallback(async () => {
 
   const onToggle = useCallback(async () => {
   if (!uri) return;
-  if (buffering) return;
+
+  if (toggleLockRef.current) {
+    console.log("VOICE_TOGGLE_LOCKED", id);
+    return;
+  }
+
+  toggleLockRef.current = true;
 
   try {
     console.log("VOICE_TOGGLE", id, uri);
+    setPlayError(false);
 
     if (currentSound && currentSound !== sound) {
   try {
@@ -402,16 +418,7 @@ const ensureLoaded = useCallback(async () => {
     const s = await ensureLoaded();
     currentSound = s;
 
-    if (finished || (dur && pos >= dur - 300)) {
-      try {
-        await s.setPositionAsync(0);
-      } catch {}
-      setFinished(false);
-      setPos(0);
-      setProgress(0);
-    }
-
-    const st = await s.getStatusAsync();
+        const st = await s.getStatusAsync();
 
     console.log("VOICE_STATUS_BEFORE_PLAY", id, st);
 
@@ -427,6 +434,44 @@ const ensureLoaded = useCallback(async () => {
       setBuffering(false);
       setPlaying(false);
       console.log("VOICE_PAUSED", id);
+      return;
+    }
+
+          if (finished || st.didJustFinish || (dur && pos >= dur - 300)) {
+      console.log("VOICE_SEEK_TO_START_FOR_REPLAY", id);
+
+      setBuffering(true);
+      setPlaying(false);
+
+      setFinished(false);
+      setPos(0);
+      setProgress(0);
+
+      replayGraceUntilRef.current = Date.now() + 1200;
+      setBuffering(false);
+      setPlaying(true);
+
+      await applyRate(s, rate);
+
+      await s.setVolumeAsync(1);
+
+      await s.playFromPositionAsync(0);
+
+      const replayStatus = await s.getStatusAsync();
+
+      console.log("VOICE_REPLAY_STATUS_AFTER_SEEK", id, replayStatus);
+
+      if (replayStatus.isLoaded && replayStatus.isPlaying) {
+        setBuffering(false);
+        setPlaying(true);
+      } else if (replayStatus.isLoaded && replayStatus.isBuffering) {
+        setBuffering(true);
+        setPlaying(false);
+      } else {
+        setBuffering(false);
+        setPlaying(false);
+      }
+
       return;
     }
 
@@ -448,10 +493,13 @@ const ensureLoaded = useCallback(async () => {
     }
 
     console.log("VOICE_PLAY_REQUESTED", id);
-  } catch (e) {
+      } catch (e) {
     setBuffering(false);
     setPlaying(false);
+    setPlayError(true);
     console.log("VOICE_TOGGLE_ERR", id, uri, e);
+  } finally {
+    toggleLockRef.current = false;
   }
 }, [
   id,
@@ -462,7 +510,6 @@ const ensureLoaded = useCallback(async () => {
   dur,
   ensureLoaded,
   rate,
-  buffering,
 ]);
 
   const pan = useRef(
@@ -573,6 +620,19 @@ const ensureLoaded = useCallback(async () => {
           </Text>
         </TouchableOpacity>
       </View>
+            {(buffering || playError) ? (
+        <View style={{ alignItems: "flex-end", marginTop: 2 }}>
+          <Text
+            style={{
+              fontSize: 10,
+              fontWeight: "800",
+              color: playError ? "#ef4444" : subTint,
+            }}
+          >
+            {playError ? "پخش نشد" : "در حال آماده‌سازی…"}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -690,7 +750,7 @@ function Composer({
 
       // اگر به سقف رسید، به کاربر واضح بگو
       if (auto) {
-        onError("ضبط به سقف مجاز رسید: محدودیت ویس در هر بار ضبط، ۵ دقیقه‌ست.");
+        onError("ضبط به سقف مجاز رسید: محدودیت ویس در هر بار ضبط، ۵ دقیقه‌ست؛ روی ارسال ضمیمه بزن تا ویسی که ضبط کردی ارسال بشه");
       }
 
       try {
@@ -718,14 +778,26 @@ function Composer({
         Audio.RecordingOptionsPresets.HIGH_QUALITY
       );
 
-      rec.setOnRecordingStatusUpdate((st) => {
+            rec.setOnRecordingStatusUpdate(async (st) => {
         if (!st.canRecord) return;
         const ms = st.durationMillis ?? 0;
         setRecMs(ms);
 
-        // ✅ قفل واقعی: اگر رسید به 5 دقیقه، همونجا stop
         if (ms >= MAX_VOICE_MS) {
-          stopRecording(true).catch(() => {});
+          try {
+            await rec.stopAndUnloadAsync();
+            const uri = rec.getURI();
+            setRecURI(uri || null);
+          } catch {}
+
+          setRecording(null);
+          setRecMs(MAX_VOICE_MS);
+
+          onError("ضبط به سقف مجاز رسید: محدودیت ویس در هر بار ضبط، ۵ دقیقه‌ست.");
+
+          try {
+            await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+          } catch {}
         }
       });
 
@@ -1136,6 +1208,8 @@ export default function TicketDetail() {
   const [checkingExisting, setCheckingExisting] = useState(!!typeFromParam);
 
   const [viewerVisible, setViewerVisible] = useState(false);
+  const [composerHeight, setComposerHeight] = useState(88); ///////
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [localImagePreviews, setLocalImagePreviews] = useState<Record<string, string>>({});
   const [isUploadingReply, setIsUploadingReply] = useState(false);
@@ -1154,6 +1228,7 @@ export default function TicketDetail() {
   // ✅ پاکسازی محلی هر تیکت
   const [clearedAtMs, setClearedAtMs] = useState<number>(0);
   const [clearModal, setClearModal] = useState(false);
+  
 
   const authHeaders = useMemo(() => {
     const headers: Record<string, string> = {};
@@ -1166,21 +1241,29 @@ export default function TicketDetail() {
   }, [token]);
 
   useEffect(() => {
-    const show = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      () => {}
-    );
+  const show = Keyboard.addListener(
+    Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+    (e) => {
+      if (Platform.OS === "android") {
+        setKeyboardHeight(e.endCoordinates?.height || 0);
+      }
+    }
+  );
 
-    const hide = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => {}
-    );
+  const hide = Keyboard.addListener(
+    Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+    () => {
+      if (Platform.OS === "android") {
+        setKeyboardHeight(0);
+      }
+    }
+  );
 
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
+  return () => {
+    show.remove();
+    hide.remove();
+  };
+}, []);
 
   const pushError = useCallback((msg: string) => {
     const clean = (msg || "").trim();
@@ -1640,9 +1723,10 @@ useEffect(() => {
 
     return (
       <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: "#0b0f14" }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
+  style={{ flex: 1, backgroundColor: "#0b0f14" }}
+  behavior={Platform.OS === "ios" ? "padding" : undefined}
+  keyboardVerticalOffset={Platform.OS === "ios" ? 0 : undefined}
+>
         <Stack.Screen options={{ headerShown: false }} />
 
         <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
@@ -1760,7 +1844,8 @@ useEffect(() => {
     return (
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: "#0b0f14" }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : undefined}
       >
         <Stack.Screen options={{ headerShown: false }} />
 
@@ -1781,7 +1866,8 @@ useEffect(() => {
     return (
       <KeyboardAvoidingView
         style={{ flex: 1, backgroundColor: "#0b0f14" }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : undefined}
       >
         <Stack.Screen options={{ headerShown: false }} />
 
@@ -1808,9 +1894,10 @@ useEffect(() => {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: "#0b0f14" }}
-      behavior={Platform.OS === "ios" ? "padding" : "padding"}
-    >
+  style={{ flex: 1, backgroundColor: "#0b0f14" }}
+  behavior={Platform.OS === "ios" ? "padding" : undefined}
+  keyboardVerticalOffset={Platform.OS === "ios" ? 0 : undefined}
+>
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
@@ -1896,49 +1983,55 @@ useEffect(() => {
           </View>
         ) : null}
 
-        <FlatList
-          ref={scrollRef}
-          data={visibleMessages}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.id}
-          style={{ backgroundColor: "#0b0f14" }}
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{
-            paddingHorizontal: 14,
-            paddingTop: 12,
-            rowGap: 8,
-            direction: "ltr",
-            paddingBottom: insets.bottom + 140,
-          }}
-          showsVerticalScrollIndicator={false}
-          initialNumToRender={12}
-          maxToRenderPerBatch={10}
-          windowSize={7}
-          removeClippedSubviews={true}
-          ListEmptyComponent={
-            <View style={styles.emptyWrap}>
-              <Ionicons
-                name="chatbubble-ellipses-outline"
-                size={18}
-                color="rgba(231,238,247,.65)"
-              />
-
-              <Text style={styles.emptyText}>
-                {clearedAtMs
-                  ? "تاریخچه این گفتگو در گوشی شما پاک شده. پیام‌های جدید از اینجا به بعد نمایش داده می‌شن."
-                  : "هنوز پیامی در این گفتگو ثبت نشده."}
-              </Text>
-            </View>
-          }
+        <View style={{ flex: 1 }}>
+  <FlatList
+    ref={scrollRef}
+    data={visibleMessages}
+    renderItem={renderItem}
+    keyExtractor={(item) => item.id}
+    style={{ flex: 1, backgroundColor: "#0b0f14" }}
+    keyboardShouldPersistTaps="handled"
+    keyboardDismissMode="interactive"
+    showsVerticalScrollIndicator={false}
+    initialNumToRender={12}
+    maxToRenderPerBatch={10}
+    windowSize={7}
+    removeClippedSubviews={true}
+    contentContainerStyle={{
+      paddingHorizontal: 14,
+      paddingTop: 12,
+      paddingBottom: 12,
+      rowGap: 8,
+      direction: "ltr",
+      flexGrow: 1,
+    }}
+    ListEmptyComponent={
+      <View style={styles.emptyWrap}>
+        <Ionicons
+          name="chatbubble-ellipses-outline"
+          size={18}
+          color="rgba(231,238,247,.65)"
         />
 
-        <View
-          style={[
-            styles.composerDock,
-            { paddingBottom: Math.max(10, insets.bottom + 8) },
-          ]}
-          pointerEvents="box-none"
-        >
+        <Text style={styles.emptyText}>
+          {clearedAtMs
+            ? "تاریخچه این گفتگو در گوشی شما پاک شده. پیام‌های جدید از اینجا به بعد نمایش داده می‌شن."
+            : "هنوز پیامی در این گفتگو ثبت نشده."}
+        </Text>
+      </View>
+    }
+  />
+
+  <View
+  style={[
+    styles.composerDock,
+    {
+      paddingBottom: Math.max(10, insets.bottom + 8),
+      marginBottom: Platform.OS === "android" ? keyboardHeight : 0,
+    },
+  ]}
+  pointerEvents="box-none"
+>
           {chatType === "therapy" && !isProPlan && (
             <View style={styles.inlineLock}>
               <Ionicons name="lock-closed" size={16} color="#D4AF37" />
@@ -1953,6 +2046,7 @@ useEffect(() => {
             ticketId={String(id)}
             ticketType={typeFromParam}
             isPro={isProPlan}
+            onMeasureHeight={setComposerHeight}
             onError={pushError}
             onUploadingChange={setIsUploadingReply}
             onLocalImageUploaded={(messageId, localUri) => {
@@ -2000,6 +2094,7 @@ useEffect(() => {
 });
             }}
           />
+        </View>
         </View>
 
         {viewerUri ? (
@@ -2304,16 +2399,12 @@ const styles = StyleSheet.create({
 
   /* composer dock */
   composerDock: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,.08)",
-    backgroundColor: "rgba(3,7,18,0.92)",
-  },
+  backgroundColor: "#0b0f14",
+  borderTopWidth: 1,
+  borderTopColor: "rgba(255,255,255,.06)",
+  paddingTop: 8,
+  paddingHorizontal: 10,
+},
   inlineLock: {
     flexDirection: "row-reverse",
     alignItems: "center",
