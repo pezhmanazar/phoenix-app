@@ -577,8 +577,20 @@ publicTicketsRouter.get("/messages/:messageId/file", async (req, res) => {
     });
 
     object.Body.pipe(res);
-  } catch (e) {
+    } catch (e) {
     console.error("[tickets.public.file] error:", e);
+
+    const isInvalidRange =
+      e?.name === "InvalidRange" ||
+      e?.Code === "InvalidRange" ||
+      e?.$metadata?.httpStatusCode === 416;
+
+    if (isInvalidRange) {
+      if (!res.headersSent) {
+        return res.status(416).end();
+      }
+      return res.end();
+    }
 
     if (!res.headersSent) {
       return res.status(500).json({
