@@ -64,11 +64,17 @@ export async function createTicket(params: {
     text: text.trim() ? text.trim() : "ضمیمه",
   };
 
-  const res = await fetch(`${BACKEND_URL}/api/public/tickets/send`, {
-    method: "POST",
-    headers: requireAuthHeaders(token, true),
-    body: JSON.stringify(payload),
-  });
+  let res: Response;
+
+  try {
+    res = await fetch(`${BACKEND_URL}/api/public/tickets/send`, {
+      method: "POST",
+      headers: requireAuthHeaders(token, true),
+      body: JSON.stringify(payload),
+    });
+  } catch {
+  throw new Error("NETWORK_UPLOAD_ERROR");
+}
 
   const json = await parseJsonResponse(res);
 
@@ -101,14 +107,19 @@ export async function sendTicketReply(params: {
 }): Promise<Ticket | null> {
   const { token, ticketId, text } = params;
 
-  const res = await fetch(`${BACKEND_URL}/api/public/tickets/${ticketId}/reply`, {
-    method: "POST",
-    headers: requireAuthHeaders(token, true),
-    body: JSON.stringify({
-      text: text.trim(),
-    }),
-  });
+  let res: Response;
 
+  try {
+    res = await fetch(`${BACKEND_URL}/api/public/tickets/${ticketId}/reply`, {
+      method: "POST",
+      headers: requireAuthHeaders(token, true),
+      body: JSON.stringify({
+        text: text.trim(),
+      }),
+    });
+  } catch {
+  throw new Error("NETWORK_UPLOAD_ERROR");
+}
 
   let json: any = null;
   try {
@@ -126,6 +137,7 @@ export async function sendTicketReply(params: {
   return json.ticket ?? null;
 }
 
+
 export async function uploadTicketReply(params: {
   token: string;
   ticketId: string;
@@ -133,40 +145,60 @@ export async function uploadTicketReply(params: {
 }): Promise<Ticket | null> {
   const { token, ticketId, formData } = params;
 
-  const res = await fetch(
-    `${BACKEND_URL}/api/public/tickets/${ticketId}/reply-upload`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: formData,
+  // ⏱ مقدار تایم‌اوت: ۲۰ ثانیه (می‌تونی بعداً تنظیمش کنی)
+  const TIMEOUT_MS = 20000;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, TIMEOUT_MS);
+
+  try {
+    const res = await fetch(
+      `${BACKEND_URL}/api/public/tickets/${ticketId}/reply-upload`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+        signal: controller.signal,
+      }
+    );
+
+    let rawText = "";
+    try {
+      rawText = await res.text();
+    } catch {
+      // اگر حتی متن رو هم نتونست بخونه، می‌ذاریم خالی بمونه
     }
-  );
 
-  let rawText = "";
-  try {
-    rawText = await res.text();
-  } catch {}
+    let json: any = null;
+    try {
+      json = rawText ? JSON.parse(rawText) : null;
+    } catch {
+      json = null;
+    }
 
-  let json: any = null;
-  try {
-    json = rawText ? JSON.parse(rawText) : null;
-  } catch {
-    json = null;
+    console.log("UPLOAD_RESPONSE_STATUS", res.status);
+    console.log("UPLOAD_RESPONSE_RAW", rawText);
+
+    // اگر status اوکی نیست یا پاسخ JSON درست با ok: true نیست
+    if (!res.ok || !json?.ok) {
+      throw new Error("NETWORK_UPLOAD_ERROR");
+    }
+
+    return json.ticket ?? null;
+  } catch (err: any) {
+    // اگر به خاطر abort (تایم‌اوت) یا هر خطای شبکه‌ای دیگه بود
+    if (err?.name === "AbortError") {
+      console.log("UPLOAD_ABORTED_DUE_TO_TIMEOUT");
+    } else {
+      console.log("UPLOAD_FAILED", err?.message || String(err));
+    }
+
+    throw new Error("NETWORK_UPLOAD_ERROR");
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  console.log("UPLOAD_RESPONSE_STATUS", res.status);
-  console.log("UPLOAD_RESPONSE_RAW", rawText);
-
-  if (!res.ok || !json?.ok) {
-    const msg =
-      typeof json?.error === "string" && json.error.trim()
-        ? json.error
-        : rawText?.trim() || `Upload failed with status ${res.status}`;
-
-    throw new Error(msg);
-  }
-
-  return json.ticket ?? null;
 }

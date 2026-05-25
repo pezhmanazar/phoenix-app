@@ -254,8 +254,7 @@ function VoicePlayer({
   shouldDuckAndroid: true,
   playThroughEarpieceAndroid: false,
 }).catch((e) => {
-  console.log("AUDIO_MODE_ERR", e);
-});
+  });
     return () => {
       if (sound) sound.unloadAsync().catch(() => {});
       if (currentSound === sound) currentSound = null;
@@ -276,9 +275,6 @@ const ensureLoaded = useCallback(async () => {
       if (existingStatus.isLoaded) {
         return sound;
       }
-
-      console.log("VOICE_EXISTING_NOT_LOADED_RECREATE", id, existingStatus);
-
       try {
         await sound.unloadAsync();
       } catch {}
@@ -288,9 +284,7 @@ const ensureLoaded = useCallback(async () => {
       if (currentSound === sound) {
         currentSound = null;
       }
-    } catch (e) {
-      console.log("VOICE_EXISTING_STATUS_ERR", id, e);
-
+    } catch {
       try {
         await sound.unloadAsync();
       } catch {}
@@ -306,13 +300,9 @@ const ensureLoaded = useCallback(async () => {
   setBuffering(true);
   setPlaying(false);
 
-  console.log("VOICE_CREATE_START", id, uri, {
-    hasAuth: !!authHeaders?.Authorization,
-  });
-
   const absoluteUri = uri.startsWith("http") ? uri : `${BACKEND_URL}${uri}`;
 
-  const { sound: s, status } = await Audio.Sound.createAsync(
+  const { sound: s } = await Audio.Sound.createAsync(
     {
       uri: absoluteUri,
       headers: {
@@ -326,16 +316,12 @@ const ensureLoaded = useCallback(async () => {
     }
   );
 
-  console.log("VOICE_CREATE_OK", id, status);
-
   setSound(s);
 
   s.setOnPlaybackStatusUpdate((st: any) => {
     if (!st?.isLoaded) {
       if (st?.error) {
-        console.log("VOICE_STATUS_ERROR", id, st.error);
       }
-
       setBuffering(false);
       setPlaying(false);
       return;
@@ -390,22 +376,19 @@ const ensureLoaded = useCallback(async () => {
   await applyRate(s, rate);
 
   return s;
-}, [sound, uri, rate, id, authHeaders]);
-
+}, [sound, uri, rate, authHeaders]);
 
   const onToggle = useCallback(async () => {
   if (!uri) return;
 
   if (toggleLockRef.current) {
-    console.log("VOICE_TOGGLE_LOCKED", id);
-    return;
+        return;
   }
 
   toggleLockRef.current = true;
 
   try {
-    console.log("VOICE_TOGGLE", id, uri);
-    setPlayError(false);
+        setPlayError(false);
 
     if (currentSound && currentSound !== sound) {
   try {
@@ -418,12 +401,9 @@ const ensureLoaded = useCallback(async () => {
     const s = await ensureLoaded();
     currentSound = s;
 
-        const st = await s.getStatusAsync();
-
-    console.log("VOICE_STATUS_BEFORE_PLAY", id, st);
+    const st = await s.getStatusAsync();
 
     if (!st.isLoaded) {
-      console.log("VOICE_NOT_LOADED", id, st);
       setBuffering(false);
       setPlaying(false);
       return;
@@ -433,12 +413,10 @@ const ensureLoaded = useCallback(async () => {
       await s.pauseAsync();
       setBuffering(false);
       setPlaying(false);
-      console.log("VOICE_PAUSED", id);
       return;
     }
 
-          if (finished || st.didJustFinish || (dur && pos >= dur - 300)) {
-      console.log("VOICE_SEEK_TO_START_FOR_REPLAY", id);
+      if (finished || st.didJustFinish || (dur && pos >= dur - 300)) {
 
       setBuffering(true);
       setPlaying(false);
@@ -458,8 +436,6 @@ const ensureLoaded = useCallback(async () => {
       await s.playFromPositionAsync(0);
 
       const replayStatus = await s.getStatusAsync();
-
-      console.log("VOICE_REPLAY_STATUS_AFTER_SEEK", id, replayStatus);
 
       if (replayStatus.isLoaded && replayStatus.isPlaying) {
         setBuffering(false);
@@ -491,18 +467,14 @@ const ensureLoaded = useCallback(async () => {
       setBuffering(true);
       setPlaying(false);
     }
-
-    console.log("VOICE_PLAY_REQUESTED", id);
-      } catch (e) {
+      } catch {
     setBuffering(false);
     setPlaying(false);
     setPlayError(true);
-    console.log("VOICE_TOGGLE_ERR", id, uri, e);
   } finally {
     toggleLockRef.current = false;
   }
 }, [
-  id,
   uri,
   sound,
   finished,
@@ -863,8 +835,29 @@ function Composer({
     onSent(updatedTicket);
 
   } catch (e: any) {
-    onError(extractErrorMessage(e, "خطا در ارسال متن"));
-  } finally {
+  const rawMsg =
+    e?.message ||
+    e?.toString?.() ||
+    "";
+
+  const msg = String(rawMsg || "").trim();
+  const msgLower = msg.toLowerCase();
+
+  const isNetworkError =
+    msg === "NETWORK_UPLOAD_ERROR" ||
+    msgLower.includes("network request failed") ||
+    msgLower.includes("failed to fetch") ||
+    msgLower.includes("timeout") ||
+    msgLower.includes("504") ||
+    msgLower.includes("fetch") ||
+    msgLower.includes("aborterror");
+
+  if (isNetworkError) {
+    onError("خطا در شبکه. لطفاً چند دقیقه‌ی دیگه دوباره تلاش کن.");
+  } else {
+    onError(msg || "خطا در ارسال متن");
+  }
+} finally {
     setSending(false);
   }
 };
@@ -941,12 +934,33 @@ const buildForm = async () => {
     resetAttachments();
     onSent(updatedTicket);
   } catch (e: any) {
-  resetAttachments();
-  onError(extractErrorMessage(e, "خطا در ارسال فایل یا ویس"));
+  const rawMsg =
+    e?.message ||
+    e?.toString?.() ||
+    "";
+
+  const msg = String(rawMsg || "").trim();
+  const msgLower = msg.toLowerCase();
+
+  const isNetworkError =
+    msg === "NETWORK_UPLOAD_ERROR" ||
+    msgLower.includes("network request failed") ||
+    msgLower.includes("failed to fetch") ||
+    msgLower.includes("timeout") ||
+    msgLower.includes("504") ||
+    msgLower.includes("fetch") ||
+    msgLower.includes("route") ||
+    msgLower.includes("aborterror");
+
+  if (isNetworkError) {
+    onError("خطا در شبکه. لطفاً چند دقیقه‌ی دیگه دوباره تلاش کن.");
+  } else {
+    onError(msg || "خطا در ارسال فایل یا ویس.");
+  }
 } finally {
-  setSending(false);
-  onUploadingChange?.(false);
-}
+    setSending(false);
+    onUploadingChange?.(false);
+  }
 };
 
   return (
@@ -1208,7 +1222,7 @@ export default function TicketDetail() {
   const [checkingExisting, setCheckingExisting] = useState(!!typeFromParam);
 
   const [viewerVisible, setViewerVisible] = useState(false);
-  const [composerHeight, setComposerHeight] = useState(88);
+  const [, setComposerHeight] = useState(88);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [localImagePreviews, setLocalImagePreviews] = useState<Record<string, string>>({});
@@ -1223,8 +1237,6 @@ export default function TicketDetail() {
   const didInitialScroll = useRef(false);
   const lastMessageIdRef = useRef<string | null>(null);
   const msgPositions = useRef<Record<string, number>>({});
-
-  const mediaUrlMapRef = useRef<Record<string, string>>({});
   const [pins, setPins] = useState<string[]>([]);
 
   // ✅ پاکسازی محلی هر تیکت
@@ -1502,7 +1514,7 @@ export default function TicketDetail() {
     if (!typeFromParam && id) loadPins(id).then(setPins);
   }, [id, typeFromParam]);
 
-  const togglePin = async (mid: string) => {
+    const togglePin = useCallback(async (mid: string) => {
     if (typeFromParam || !id) return;
 
     const exist = pins.includes(mid);
@@ -1510,7 +1522,7 @@ export default function TicketDetail() {
 
     setPins(next);
     await savePins(id, next);
-  };
+  }, [typeFromParam, id, pins]);
 
   const jumpToMessage = (mid: string) => {
   const index = visibleMessages.findIndex((m) => m.id === mid);
@@ -1622,29 +1634,16 @@ export default function TicketDetail() {
             style={{ marginTop: 6 }}
           >
             <Image
-              source={
-                localPreviewUri
-                  ? { uri: localPreviewUri }
-                  : imageUriToRender
-                  ? { uri: imageUriToRender, headers: authHeaders }
-                  : undefined
-              }
-              style={styles.msgImage}
-              resizeMode="cover"
-              onLoadStart={() =>
-                console.log("IMAGE_LOAD_START", m.id, imageUriToRender, {
-                  local: !!localPreviewUri,
-                })
-              }
-              onLoad={() =>
-                console.log("IMAGE_LOAD_OK", m.id, imageUriToRender, {
-                  local: !!localPreviewUri,
-                })
-              }
-              onError={(e) =>
-                console.log("IMAGE_LOAD_ERR", m.id, imageUriToRender, e.nativeEvent)
-              }
-            />
+  source={
+    localPreviewUri
+      ? { uri: localPreviewUri }
+      : imageUriToRender
+      ? { uri: imageUriToRender, headers: authHeaders }
+      : undefined
+  }
+  style={styles.msgImage}
+  resizeMode="cover"
+/>
 
             <Text style={[styles.msgHint, { color: subColor }]}>
               برای بزرگ‌نمایی لمس کنید
@@ -1702,7 +1701,7 @@ export default function TicketDetail() {
         ) : null}
       </View>
     );
-  }, [pins, localImagePreviews, authHeaders, pushError]);
+  }, [pins, localImagePreviews, authHeaders, pushError, togglePin]);
 
   const renderItem = useCallback(
   ({ item }: { item: Message }) => renderMessage(item),
@@ -1921,8 +1920,6 @@ useEffect(() => {
     !clearedAtMs
       ? (ticket?.messages || [])
       : (ticket?.messages || []).filter((m) => msgTimeMs(m) >= clearedAtMs);
-
-  const hasMessages = visibleMessages.length > 0;
 
   return (
     <KeyboardAvoidingView

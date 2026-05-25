@@ -37,8 +37,34 @@ export function detectType(
 
 export function extractErrorMessage(err: any, fallback: string): string {
   if (!err) return fallback;
-  if (typeof err === "string") return err;
-  if (typeof err.message === "string") return err.message;
+
+  const rawMessage =
+    typeof err === "string"
+      ? err
+      : typeof err?.message === "string"
+      ? err.message
+      : "";
+
+  const message = String(rawMessage || "").trim();
+  const messageLower = message.toLowerCase();
+
+  const isNetworkError =
+    message === "NETWORK_UPLOAD_ERROR" ||
+    messageLower.includes("network request failed") ||
+    messageLower.includes("failed to fetch") ||
+    messageLower.includes("internet") ||
+    messageLower.includes("network error") ||
+    messageLower.includes("timeout") ||
+    messageLower.includes("aborterror") ||
+    messageLower.includes("load failed");
+
+  if (isNetworkError) {
+    return "اینترنت شما قطعه یا شبکه مشکل داره";
+  }
+
+  if (message) {
+    return message;
+  }
 
   try {
     return JSON.stringify(err);
@@ -46,3 +72,4 @@ export function extractErrorMessage(err: any, fallback: string): string {
     return fallback;
   }
 }
+
