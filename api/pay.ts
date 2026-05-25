@@ -3,7 +3,7 @@ import { BACKEND_URL as RAW_BACKEND_URL } from "../constants/env";
 
 // همون تیپ‌های user.ts
 type ApiOk<T> = { ok: true; data: T };
-type ApiErr = { ok: false; error: string };
+type ApiErr = { ok: false; error: string; debug?: any; status?: number };
 export type ApiResp<T> = ApiOk<T> | ApiErr;
 
 export type StartReq = {
@@ -74,7 +74,9 @@ async function doJson<T>(
   input: RequestInfo,
   init?: RequestInit
 ): Promise<ApiResp<T>> {
+  console.log("DEBUG_URL_CHECK:", `${input}`); 
   try {
+    console.log("[DO_JSON_CALL]", input, init);
     const res = await fetch(input, {
       ...init,
       headers: {
@@ -94,7 +96,17 @@ async function doJson<T>(
 
     // اگر سرور خودش خطا برگردونده یا status بد است
     if (!res.ok || json?.ok === false) {
-      return { ok: false, error: json?.error || `HTTP_${res.status}` };
+      const errObj: ApiErr = {
+        ok: false,
+        error: json?.error || `HTTP_${res.status}`,
+        debug: json?.debug,
+        status: res.status,
+      };
+
+      // این لاگ توی کنسول اپ (Metro / Chrome / devtools) دیده میشه
+      console.log("[API_ERROR]", input, errObj);
+
+      return errObj;
     }
 
     // اگر از قبل data داشت (مثل بقیه‌ی APIها)، همون را پاس می‌دهیم

@@ -336,6 +336,7 @@ export default function SubscriptionScreen() {
       });
 
       if (!start.ok) {
+  console.log("START_PAY_ERROR:", start);
   openPayModal({
     kind: "failed",
     message: getFriendlyErrorMessage(start.error || ""),
