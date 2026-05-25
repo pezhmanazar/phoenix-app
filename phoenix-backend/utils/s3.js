@@ -26,7 +26,7 @@ export const s3Bucket = PANAH_S3_BUCKET;
 export const s3Client = new S3Client({
   region: PANAH_S3_REGION,
   endpoint: PANAH_S3_ENDPOINT,
-  forcePathStyle: true,
+  forcePathStyle: false,
   credentials: {
     accessKeyId: PANAH_S3_ACCESS_KEY,
     secretAccessKey: PANAH_S3_SECRET_KEY,
