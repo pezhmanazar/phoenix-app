@@ -112,6 +112,7 @@ router.post("/start", async (req, res) => {
     const phone = normalizeIranPhone(String(body.phone || ""));
     const amount = Number(body.amount || 0);
     const description = String(body.description || "پرداخت اشتراک ققنوس");
+    console.log("PAY_START_STEP", "NORMALIZED", { phone, amount });
 
     if (!phone) {
       return res.status(400).json({ ok: false, error: "PHONE_INVALID" });
@@ -127,6 +128,7 @@ router.post("/start", async (req, res) => {
       days: body.days,
       months: body.months,
     });
+    console.log("PAY_START_STEP", "PLAN_RESOLVED", { plan, months });
 
     const callback = PAY_REAL
       ? PAY_CALLBACK_URL
@@ -184,6 +186,7 @@ router.post("/start", async (req, res) => {
       metadata: { mobile: phone },
     };
 
+    console.log("PAY_START_STEP", "BEFORE_ZARINPAL_FETCH", { requestUrl, payload });
     const zpRes = await fetch(requestUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
