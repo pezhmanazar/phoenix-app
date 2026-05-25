@@ -238,9 +238,14 @@ router.post("/start", async (req, res) => {
       gatewayUrl,
       description,
     });
-    } catch (e) {
-    console.error("PAY_START_ERR", e?.message || "unknown_error");
-    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+      } catch (e) {
+    // لاگ کامل خطا برای دیباگ
+    console.error("PAY_START_ERR_DETAILS:", e); 
+    return res.status(500).json({ 
+      ok: false, 
+      error: "SERVER_ERROR", 
+      debug: e?.message // این رو اضافه کردیم تا توی اپ خطای واقعی رو ببینی
+    });
   }
 });
 
