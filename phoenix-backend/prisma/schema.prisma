@@ -71,9 +71,15 @@ model Message {
   mime        String?
   size        Int?
   durationSec Int?
-  createdAt   DateTime    @default(now())
+
+  clientMessageId String?
+  requestStatus   String? @default("completed")
+
+  createdAt DateTime @default(now())
 
   @@index([ticketId])
+  @@unique([ticketId, sender, clientMessageId])
+  @@index([clientMessageId])
 }
 
 enum AdminRole {
