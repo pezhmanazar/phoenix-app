@@ -669,6 +669,12 @@ function Composer({
     name: string;
   } | null>(null);
 
+  const [textClientMessageId, setTextClientMessageId] = useState<string | null>(null);
+  const [uploadClientMessageId, setUploadClientMessageId] = useState<string | null>(null);
+
+  const makeClientMessageId = (prefix: "msg" | "upload") =>
+    `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
   const hasText = text.trim().length > 0;
   const hasAttachment = !!image || !!recURI;
   const isUploadingAttachment = sending && hasAttachment;
@@ -702,11 +708,12 @@ function Composer({
 });
     if (!res.canceled && res.assets?.[0]) {
       const a = res.assets[0];
+      setUploadClientMessageId(null);
       setImage({
-        uri: a.uri,
-        type: a.mimeType || "image/jpeg",
-        name: a.fileName || `photo_${Date.now()}.jpg`,
-      });
+      uri: a.uri,
+      type: a.mimeType || "image/jpeg",
+      name: a.fileName || `photo_${Date.now()}.jpg`,
+    });
     }
   };
 
@@ -734,6 +741,7 @@ function Composer({
 
   const startRecording = async () => {
     if (planGuard()) return;
+    setUploadClientMessageId(null);
     Keyboard.dismiss();
     try {
       const { granted } = await Audio.requestPermissionsAsync();
@@ -783,10 +791,11 @@ function Composer({
   };
 
   const resetAttachments = () => {
-    setImage(null);
-    setRecURI(null);
-    setRecMs(0);
-  };
+  setUploadClientMessageId(null);
+  setImage(null);
+  setRecURI(null);
+  setRecMs(0);
+};
 
  const createTicketIfNeeded = async (textFallback: string) => {
   if (!ticketType) return ticketId;
@@ -825,14 +834,22 @@ function Composer({
       return;
     }
 
-    const updatedTicket = await sendTicketReply({
-      token,
-      ticketId: targetId,
-      text: textPayload,
-    });
+const clientMessageId = textClientMessageId || makeClientMessageId("msg");
+if (!textClientMessageId) {
+  setTextClientMessageId(clientMessageId);
+}
 
-    setText("");
-    onSent(updatedTicket);
+const updatedTicket = await sendTicketReply({
+  token,
+  ticketId: targetId,
+  text: textPayload,
+  clientMessageId,
+});
+
+setText("");
+setTextClientMessageId(null);
+onSent(updatedTicket);
+
 
   } catch (e: any) {
   const rawMsg =
@@ -908,17 +925,23 @@ const buildForm = async () => {
 
     let targetId = ticketId;
     if (ticketType) {
-      const firstText = hasText ? text.trim() : "ضمیمه";
+      const firstText = hasText ? text.trim() : "سلام";
       targetId = await createTicketIfNeeded(firstText);
     }
 
     const fd = await buildForm();
 
-    const updatedTicket = await uploadTicketReply({
-      token,
-      ticketId: targetId,
-      formData: fd,
-    });
+  const clientMessageId = uploadClientMessageId || makeClientMessageId("upload");
+if (!uploadClientMessageId) {
+  setUploadClientMessageId(clientMessageId);
+}
+  const updatedTicket = await uploadTicketReply({
+  token,
+  ticketId: targetId,
+  formData: fd,
+  clientMessageId,
+});
+
 
     if (localImageUri && updatedTicket?.messages?.length) {
       const lastImageMessage = [...updatedTicket.messages]
@@ -930,9 +953,11 @@ const buildForm = async () => {
       }
     }
 
-    setText("");
-    resetAttachments();
-    onSent(updatedTicket);
+  setText("");
+  setUploadClientMessageId(null);
+  resetAttachments();
+  onSent(updatedTicket);
+
   } catch (e: any) {
   const rawMsg =
     e?.message ||
@@ -967,7 +992,10 @@ const buildForm = async () => {
     <View style={styles.composerWrap} onLayout={onLayout}>
       <TextInput
         value={text}
-        onChangeText={setText}
+        onChangeText={(value) => {
+        setText(value);
+        setTextClientMessageId(null);
+        }}
         placeholder="پیام خودت رو بفرست؛ در اسرع وقت بهت جواب می‌دیم…"
         placeholderTextColor="rgba(231,238,247,.55)"
         style={styles.composerInput}
@@ -2061,11 +2089,19 @@ useEffect(() => {
           color="rgba(231,238,247,.65)"
         />
 
-        <Text style={styles.emptyText}>
-          {clearedAtMs
-            ? "تاریخچه این گفتگو در گوشی شما پاک شده. پیام‌های جدید از اینجا به بعد نمایش داده می‌شن."
-            : "هنوز پیامی در این گفتگو ثبت نشده."}
-        </Text>
+  <Text style={styles.emptyText}>
+  {clearedAtMs ? (
+    "تاریخچه این گفتگو در گوشی شما پاک شده. پیام‌های جدید از اینجا به بعد نمایش داده می‌شن."
+  ) : (
+    <>
+      <Text>هنوز پیامی در این گفتگو ثبت نشده؛</Text>
+      {"\n"}
+      <Text style={styles.emptyTextHighlight}>
+        لطفا پیام اول خودت رو به شکل متنی ارسال کن.
+      </Text>
+    </>
+  )}
+</Text>
       </View>
     }
   />
@@ -2411,13 +2447,16 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   emptyText: {
-    flex: 1,
-    color: "rgba(231,238,247,.72)",
-    fontSize: 12,
-    fontWeight: "800",
-    lineHeight: 18,
-    textAlign: "right",
-  },
+  color: "rgba(231,238,247,.72)",
+  fontSize: 12,
+  fontWeight: "700",
+  textAlign: "center",
+  lineHeight: 20,
+},
+emptyTextHighlight: {
+  color: "#D4AF37",
+  fontWeight: "900",
+},
 
   /* lightbox */
   lbBackdrop: {

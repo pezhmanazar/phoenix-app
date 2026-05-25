@@ -2,6 +2,9 @@
 import { BACKEND_URL } from "../constants/backend";
 
 export type TicketMessageType = "text" | "voice" | "image" | "file";
+function createClientMessageId() {
+  return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
 
 export type TicketMessage = {
   id: string;
@@ -56,13 +59,15 @@ export async function createTicket(params: {
   token: string;
   ticketType: "tech" | "therapy";
   text: string;
+  clientMessageId?: string;
 }): Promise<{ ticketId: string; ticket: Ticket | null }> {
   const { token, ticketType, text } = params;
 
   const payload = {
-    type: ticketType,
-    text: text.trim() ? text.trim() : "ضمیمه",
-  };
+  type: ticketType,
+  text: text.trim() ? text.trim() : "سلام",
+  clientMessageId: params.clientMessageId || createClientMessageId(),
+};
 
   let res: Response;
 
@@ -104,6 +109,7 @@ export async function sendTicketReply(params: {
   token: string;
   ticketId: string;
   text: string;
+  clientMessageId?: string;
 }): Promise<Ticket | null> {
   const { token, ticketId, text } = params;
 
@@ -114,8 +120,9 @@ export async function sendTicketReply(params: {
       method: "POST",
       headers: requireAuthHeaders(token, true),
       body: JSON.stringify({
-        text: text.trim(),
-      }),
+      text: text.trim(),
+      clientMessageId: params.clientMessageId || createClientMessageId(),
+    }),
     });
   } catch {
   throw new Error("NETWORK_UPLOAD_ERROR");
@@ -142,8 +149,13 @@ export async function uploadTicketReply(params: {
   token: string;
   ticketId: string;
   formData: FormData;
+  clientMessageId?: string;
 }): Promise<Ticket | null> {
   const { token, ticketId, formData } = params;
+
+  if (!formData.has("clientMessageId")) {
+    formData.append("clientMessageId", params.clientMessageId || createClientMessageId());
+  }
 
   // ⏱ مقدار تایم‌اوت: ۲۰ ثانیه (می‌تونی بعداً تنظیمش کنی)
   const TIMEOUT_MS = 20000;
