@@ -38,6 +38,16 @@ export async function uploadBufferToS3({ key, buffer, contentType }) {
     throw new Error("uploadBufferToS3: key and buffer are required");
   }
 
+  // DEBUG (temporary)
+  console.log("[PANAH_S3 upload]", {
+    endpoint: PANAH_S3_ENDPOINT,
+    region: PANAH_S3_REGION,
+    bucket: PANAH_S3_BUCKET,
+    forcePathStyle: true,
+    key,
+    contentType,
+  });
+
   const command = new PutObjectCommand({
     Bucket: PANAH_S3_BUCKET,
     Key: key,
@@ -52,6 +62,7 @@ export async function uploadBufferToS3({ key, buffer, contentType }) {
     key,
   };
 }
+
 
 
 export async function getSignedFileUrl(key) {
