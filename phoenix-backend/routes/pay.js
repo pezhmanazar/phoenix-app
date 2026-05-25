@@ -239,12 +239,11 @@ router.post("/start", async (req, res) => {
       description,
     });
       } catch (e) {
-    // لاگ کامل خطا برای دیباگ
-    console.error("PAY_START_ERR_DETAILS:", e); 
+    console.error("PAY_START_ERR_DETAILS:", e); // این در ترمینال سرور لاگ می‌شود
     return res.status(500).json({ 
       ok: false, 
       error: "SERVER_ERROR", 
-      debug: e?.message // این رو اضافه کردیم تا توی اپ خطای واقعی رو ببینی
+      debug: e?.message || "unknown_error" // این به اپلیکیشن فرستاده می‌شود
     });
   }
 });
