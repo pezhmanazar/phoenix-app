@@ -810,7 +810,7 @@ return res.json({
 publicTicketsRouter.post("/send", async (req, res) => {
   try {
     const identity = requireTicketIdentity(req);
-    const { type, text, openedByName } = req.body || {};
+    const { type, text, openedByName, clientMessageId } = req.body || {};
 
     const msgText = typeof text === "string" ? text.trim() : "";
     if (!msgText) {
@@ -819,6 +819,15 @@ publicTicketsRouter.post("/send", async (req, res) => {
         error: "TEXT_REQUIRED",
       });
     }
+    const normalizedClientMessageId =
+  typeof clientMessageId === "string" ? clientMessageId.trim() : "";
+
+if (!normalizedClientMessageId) {
+  return res.status(400).json({
+    ok: false,
+    error: "CLIENT_MESSAGE_ID_REQUIRED",
+  });
+}
 
     const tType = String(type || "tech").toLowerCase();
     if (tType !== "tech" && tType !== "therapy") {
@@ -878,14 +887,47 @@ publicTicketsRouter.post("/send", async (req, res) => {
       });
     }
 
-    await prisma.message.create({
-      data: {
+    let createdMessage;
+
+try {
+  createdMessage = await prisma.message.create({
+    data: {
+      ticketId: ticket.id,
+      sender: "user",
+      type: "text",
+      text: msgText,
+      clientMessageId: normalizedClientMessageId,
+      requestStatus: "completed",
+    },
+  });
+} catch (e) {
+  if (e?.code === "P2002") {
+    const existingMessage = await prisma.message.findFirst({
+      where: {
         ticketId: ticket.id,
         sender: "user",
-        type: "text",
-        text: msgText,
+        clientMessageId: normalizedClientMessageId,
       },
     });
+
+    const freshDuplicateTicket = await prisma.ticket.findUnique({
+      where: { id: ticket.id },
+      include: { messages: { orderBy: { createdAt: "asc" } } },
+    });
+
+    const freshDuplicateTicketWithSignedUrls =
+      await attachSignedUrlsToTicket(freshDuplicateTicket);
+
+    return res.json({
+      ok: true,
+      duplicated: true,
+      message: existingMessage,
+      ticket: withDisplayTitle(freshDuplicateTicketWithSignedUrls),
+    });
+  }
+
+  throw e;
+}
 
     await prisma.ticket.update({
       where: { id: ticket.id },
@@ -902,6 +944,7 @@ const freshWithSignedUrls = await attachSignedUrlsToTicket(fresh);
 return res.json({
   ok: true,
   ticket: withDisplayTitle(freshWithSignedUrls),
+  message: createdMessage,
 });
   } catch (e) {
     console.error("[tickets.public.send] error:", e?.message || "unknown_error");
@@ -917,7 +960,7 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
   try {
     const identity = requireTicketIdentity(req);
     const id = String(req.params.id);
-    const { text, openedByName } = req.body || {};
+    const { text, openedByName, clientMessageId } = req.body || {};
 
     const msgText = typeof text === "string" ? text.trim() : "";
     if (!msgText) {
@@ -926,6 +969,17 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
         error: "TEXT_REQUIRED",
       });
     }
+
+    const normalizedClientMessageId =
+  typeof clientMessageId === "string" ? clientMessageId.trim() : "";
+
+if (!normalizedClientMessageId) {
+  return res.status(400).json({
+    ok: false,
+    error: "CLIENT_MESSAGE_ID_REQUIRED",
+  });
+}
+
 
     const exists = await prisma.ticket.findUnique({
       where: { id },
@@ -974,14 +1028,47 @@ publicTicketsRouter.post("/:id/reply", async (req, res) => {
       });
     }
 
-    await prisma.message.create({
-      data: {
+    let createdMessage;
+
+try {
+  createdMessage = await prisma.message.create({
+    data: {
+      ticketId: id,
+      sender: "user",
+      type: "text",
+      text: msgText,
+      clientMessageId: normalizedClientMessageId,
+      requestStatus: "completed",
+    },
+  });
+} catch (e) {
+  if (e?.code === "P2002") {
+    const existingMessage = await prisma.message.findFirst({
+      where: {
         ticketId: id,
         sender: "user",
-        type: "text",
-        text: msgText,
+        clientMessageId: normalizedClientMessageId,
       },
     });
+
+    const duplicateTicket = await prisma.ticket.findUnique({
+      where: { id },
+      include: { messages: { orderBy: { createdAt: "asc" } } },
+    });
+
+    const duplicateTicketWithSignedUrls =
+      await attachSignedUrlsToTicket(duplicateTicket);
+
+    return res.json({
+      ok: true,
+      duplicated: true,
+      message: existingMessage,
+      ticket: withDisplayTitle(duplicateTicketWithSignedUrls),
+    });
+  }
+
+  throw e;
+}
 
     await prisma.ticket.update({
       where: { id },
@@ -998,6 +1085,7 @@ const ticketWithSignedUrls = await attachSignedUrlsToTicket(ticket);
 return res.json({
   ok: true,
   ticket: withDisplayTitle(ticketWithSignedUrls),
+  message: createdMessage,
 });
   } catch (e) {
     console.error("[tickets.public.reply] error:", e?.message || "unknown_error");
