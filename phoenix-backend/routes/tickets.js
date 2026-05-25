@@ -1095,7 +1095,7 @@ return res.json({
 
 /**
  * POST /api/public/tickets/:id/reply-upload
- * form-data: file? , text? , durationSec? , openedByName?
+ * form-data: attachment? , text? , durationSec? , openedByName? , clientMessageId
  */
 publicTicketsRouter.post(
   "/:id/reply-upload",
@@ -1127,7 +1127,7 @@ publicTicketsRouter.post(
     });
   },
   async (req, res) => {
-        try {
+    try {
       const identity = requireTicketIdentity(req);
       const id = String(req.params.id);
 
@@ -1143,11 +1143,17 @@ publicTicketsRouter.post(
       });
 
       if (!exists) {
-        return res.status(404).json({ ok: false, error: "TICKET_NOT_FOUND" });
+        return res.status(404).json({
+          ok: false,
+          error: "TICKET_NOT_FOUND",
+        });
       }
 
       if (!ticketMatchesIdentity(exists, identity)) {
-        return res.status(403).json({ ok: false, error: "TICKET_FORBIDDEN" });
+        return res.status(403).json({
+          ok: false,
+          error: "TICKET_FORBIDDEN",
+        });
       }
 
       const blocked = await checkTherapyAccessOrReject({
@@ -1158,11 +1164,41 @@ publicTicketsRouter.post(
       });
       if (blocked) return;
 
-      const rawText = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+      const normalizedClientMessageId =
+        typeof req.body?.clientMessageId === "string"
+          ? req.body.clientMessageId.trim()
+          : "";
+
+      if (!normalizedClientMessageId) {
+        return res.status(400).json({
+          ok: false,
+          error: "CLIENT_MESSAGE_ID_REQUIRED",
+        });
+      }
+
+      const rawText =
+        typeof req.body?.text === "string" ? req.body.text.trim() : "";
       const hasText = !!rawText;
 
       if (!req.file && !hasText) {
-        return res.status(400).json({ ok: false, error: "NO_CONTENT" });
+        return res.status(400).json({
+          ok: false,
+          error: "NO_CONTENT",
+        });
+      }
+
+      const latestName = (req.body?.openedByName || exists.openedByName || "کاربر")
+        .toString()
+        .trim();
+
+      if (latestName && latestName !== exists.openedByName) {
+        await prisma.ticket.update({
+          where: { id },
+          data: {
+            openedByName: latestName,
+            title: latestName,
+          },
+        });
       }
 
       let fileUrl = null;
@@ -1171,52 +1207,99 @@ publicTicketsRouter.post(
       let type = "text";
       let durationSec = null;
 
-  if (req.file) {
-  const { mimetype, size: fileSize, buffer } = req.file;
+      if (req.file) {
+        const { mimetype, size: fileSize, buffer } = req.file;
 
-  // ساخت کلید منحصربه‌فرد برای فایل در S3
-  const timestamp = Date.now();
-  const key = `tickets/${id}/${timestamp}_${req.file.originalname}`;
+        const timestamp = Date.now();
+        const key = `tickets/${id}/${timestamp}_${req.file.originalname}`;
 
-  // آپلود در پارس‌پک از طریق هِلپر
-  try {
-    await uploadBufferToS3({
-  key,
-  buffer,
-  contentType: mimetype,
-});
+        try {
+          await uploadBufferToS3({
+            key,
+            buffer,
+            contentType: mimetype,
+          });
 
-    fileUrl = key; // در دیتابیس فقط کلید ذخیره می‌شود
-    mime = mimetype || null;
-    size = fileSize || null;
-    type = mimeToMessageType(mimetype);
+          fileUrl = key;
+          mime = mimetype || null;
+          size = fileSize || null;
+          type = mimeToMessageType(mimetype);
 
-    if (req.body?.durationSec !== undefined && req.body.durationSec !== "") {
-      const d = Number(req.body.durationSec);
-      if (!Number.isNaN(d) && d >= 0) durationSec = Math.floor(d);
-    }
-  } catch (uploadErr) {
-    console.error("[upload-to-s3] error:", uploadErr);
-    return res.status(500).json({
-      ok: false,
-      error: "UPLOAD_FAILED",
-      detail: uploadErr.message,
-    });
-  }
-}
+          if (
+            req.body?.durationSec !== undefined &&
+            req.body.durationSec !== ""
+          ) {
+            const d = Number(req.body.durationSec);
+            if (!Number.isNaN(d) && d >= 0) durationSec = Math.floor(d);
+          }
+        } catch (uploadErr) {
+          console.error("[upload-to-s3] error:", uploadErr);
+          return res.status(500).json({
+            ok: false,
+            error: "UPLOAD_FAILED",
+            detail: uploadErr.message,
+          });
+        }
+      }
 
-      const created = await prisma.message.create({
-        data: {
-          ticketId: id,
-          sender: "user",
-          type,
-          text: hasText ? rawText : null,
-          fileUrl,
-          mime,
-          size,
-          durationSec,
-        },
-      });
+      let created;
+
+      try {
+        created = await prisma.message.create({
+          data: {
+            ticketId: id,
+            sender: "user",
+            type,
+            text: hasText ? rawText : null,
+            fileUrl,
+            mime,
+            size,
+            durationSec,
+            clientMessageId: normalizedClientMessageId,
+            requestStatus: "completed",
+          },
+        });
+      } catch (e) {
+        if (e?.code === "P2002") {
+          const existingMessage = await prisma.message.findFirst({
+            where: {
+              ticketId: id,
+              sender: "user",
+              clientMessageId: normalizedClientMessageId,
+            },
+          });
+
+          const duplicateTicket = await prisma.ticket.findUnique({
+            where: { id },
+            include: { messages: { orderBy: { createdAt: "asc" } } },
+          });
+
+          const duplicateTicketWithSignedUrls =
+            await attachSignedUrlsToTicket(duplicateTicket);
+
+          let existingMessageWithSignedUrl = existingMessage;
+
+          if (existingMessage?.fileUrl) {
+            const fileViewUrl = buildPublicFileUrl(existingMessage.id);
+
+            existingMessageWithSignedUrl = {
+              ...existingMessage,
+              fileKey: existingMessage.fileUrl,
+              fileUrl: fileViewUrl,
+              fileViewUrl,
+            };
+          }
+
+          return res.json({
+            ok: true,
+            duplicated: true,
+            message: existingMessageWithSignedUrl,
+            ticket: withDisplayTitle(duplicateTicketWithSignedUrls),
+          });
+        }
+
+        throw e;
+      }
 
       await prisma.ticket.update({
         where: { id },
@@ -1224,40 +1307,40 @@ publicTicketsRouter.post(
       });
 
       const ticket = await prisma.ticket.findUnique({
-  where: { id },
-  include: { messages: { orderBy: { createdAt: "asc" } } },
-});
-
-const ticketWithSignedUrls = await attachSignedUrlsToTicket(ticket);
-
-let messageWithSignedUrl = created;
-
-if (created?.fileUrl) {
-  const fileViewUrl = buildPublicFileUrl(created.id);
-
-  messageWithSignedUrl = {
-    ...created,
-    fileKey: created.fileUrl,
-    fileUrl: fileViewUrl,
-    fileViewUrl,
-  };
-}
-
-return res.json({
-  ok: true,
-  ticket: withDisplayTitle(ticketWithSignedUrls),
-  message: messageWithSignedUrl,
-});
-    } catch (e) {
-      console.error("[tickets.public.reply-upload] error:", e);
-      return res.status(500).json({
-        ok: false,
-        error: "internal_error",
-        detail: e?.message || "unknown_error",
+        where: { id },
+        include: { messages: { orderBy: { createdAt: "asc" } } },
       });
+
+      const ticketWithSignedUrls = await attachSignedUrlsToTicket(ticket);
+
+      let messageWithSignedUrl = created;
+
+      if (created?.fileUrl) {
+        const fileViewUrl = buildPublicFileUrl(created.id);
+
+        messageWithSignedUrl = {
+          ...created,
+          fileKey: created.fileUrl,
+          fileUrl: fileViewUrl,
+          fileViewUrl,
+        };
+      }
+
+      return res.json({
+        ok: true,
+        ticket: withDisplayTitle(ticketWithSignedUrls),
+        message: messageWithSignedUrl,
+      });
+    } catch (e) {
+      console.error(
+        "[tickets.public.reply-upload] error:",
+        e?.message || "unknown_error"
+      );
+      return sendPublicRouteError(res, e);
     }
   }
 );
+
 
 // ====================== اکسپورت‌ها ======================
 export default router;
