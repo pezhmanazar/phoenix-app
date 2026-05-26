@@ -95,8 +95,6 @@ router.post("/start", async (req, res) => {
     const body = req.body || {};
     const phone = normalizeIranPhone(String(body.phone || ""));
     const planKey = String(body.planKey || "").trim();
-    const requestedPlan =
-      body.plan === "vip" ? "vip" : body.plan === "free" ? "free" : "pro";
 
     if (!phone) {
       return res.status(400).json({
@@ -123,7 +121,7 @@ router.post("/start", async (req, res) => {
 
     const amount = Number(selectedPricing.amount || 0);
     const months = Number(selectedPricing.months || 0);
-    const plan = selectedPricing.plan || requestedPlan;
+    const plan = selectedPricing.plan;
     const expiresAt = new Date();
     expiresAt.setMonth(expiresAt.getMonth() + months);
 
