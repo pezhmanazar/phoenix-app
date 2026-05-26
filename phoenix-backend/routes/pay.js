@@ -88,7 +88,6 @@ function buildAndroidIntentLink({ ok, authority }) {
 }
 
 router.post("/start", async (req, res) => {
-  console.log("PAY_START_BODY:", req.body);
   setCORS(res);
   if (req.method === "OPTIONS") return res.status(204).end();
 
