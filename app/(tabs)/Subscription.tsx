@@ -336,14 +336,12 @@ export default function SubscriptionScreen() {
       });
 
       if (!start.ok) {
-  console.log("START_PAY_ERROR:", start);
-  openPayModal({
-    kind: "failed",
-    message: getFriendlyErrorMessage(start.error || ""),
-  });
-  return;
-}
-
+        openPayModal({
+          kind: "failed",
+          message: getFriendlyErrorMessage(start.error || ""),
+        });
+        return;
+      }
       if (!start.data) {
         openPayModal({
           kind: "failed",

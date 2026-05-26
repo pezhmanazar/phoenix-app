@@ -50,12 +50,12 @@ export type VerifyResp = {
 function getBackendBase() {
   const base = (RAW_BACKEND_URL || "").trim();
 
-  // اگر چیزی تنظیم نشده → مستقیم qoqnoos.app
-  if (!base) return "https://qoqnoos.app";
+  // اگر چیزی تنظیم نشده → مستقیم API اصلی
+  if (!base) return "https://api.qoqnoos.app";
 
-  // اگر هر نوع دامنه vercel بود → اجباری qoqnoos.app
+  // اگر هر نوع دامنه vercel بود → اجباری API اصلی
   if (base.includes("vercel.app")) {
-    return "https://qoqnoos.app";
+    return "https://api.qoqnoos.app";
   }
 
   // در بقیه حالت‌ها همون env
@@ -74,9 +74,7 @@ async function doJson<T>(
   input: RequestInfo,
   init?: RequestInit
 ): Promise<ApiResp<T>> {
-  console.log("DEBUG_URL_CHECK:", `${input}`); 
   try {
-    console.log("[DO_JSON_CALL]", input, init);
     const res = await fetch(input, {
       ...init,
       headers: {
@@ -91,35 +89,32 @@ async function doJson<T>(
     try {
       json = text ? JSON.parse(text) : null;
     } catch {
-      return { ok: false, error: "INVALID_JSON" };
-    }
-
-    // اگر سرور خودش خطا برگردونده یا status بد است
-    if (!res.ok || json?.ok === false) {
-      const errObj: ApiErr = {
+      return {
         ok: false,
-        error: json?.error || `HTTP_${res.status}`,
-        debug: json?.debug,
+        error: "INVALID_JSON",
         status: res.status,
       };
-
-      // این لاگ توی کنسول اپ (Metro / Chrome / devtools) دیده میشه
-      console.log("[API_ERROR]", input, errObj);
-
-      return errObj;
     }
 
-    // اگر از قبل data داشت (مثل بقیه‌ی APIها)، همون را پاس می‌دهیم
+    if (!res.ok || json?.ok === false) {
+      return {
+        ok: false,
+        error: json?.error || `HTTP_${res.status}`,
+        status: res.status,
+      };
+    }
+
     if (json && typeof json === "object" && "data" in json) {
       return json as ApiResp<T>;
     }
 
-    // 🔥 مخصوص pay/start و pay/verify:
-    // json شکلی مثل { ok:true, code, authority, ... } دارد
     const { ok, ...rest } = json || {};
     return { ok: true, data: rest as T };
   } catch (e: any) {
-    return { ok: false, error: e?.message || "NETWORK_ERROR" };
+    return {
+      ok: false,
+      error: e?.message || "NETWORK_ERROR",
+    };
   }
 }
 

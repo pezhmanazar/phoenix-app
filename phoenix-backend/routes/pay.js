@@ -103,7 +103,6 @@ function buildAndroidIntentLink({ ok, authority }) {
 }
 
 router.post("/start", async (req, res) => {
-  console.log("PAY_START_HIT", new Date().toISOString(), req.body);
   setCORS(res);
   if (req.method === "OPTIONS") return res.status(204).end();
 
@@ -112,7 +111,6 @@ router.post("/start", async (req, res) => {
     const phone = normalizeIranPhone(String(body.phone || ""));
     const amount = Number(body.amount || 0);
     const description = String(body.description || "پرداخت اشتراک ققنوس");
-    console.log("PAY_START_STEP", "NORMALIZED", { phone, amount });
 
     if (!phone) {
       return res.status(400).json({ ok: false, error: "PHONE_INVALID" });
@@ -128,8 +126,7 @@ router.post("/start", async (req, res) => {
       days: body.days,
       months: body.months,
     });
-    console.log("PAY_START_STEP", "PLAN_RESOLVED", { plan, months });
-
+    
     const callback = PAY_REAL
       ? PAY_CALLBACK_URL
       : String(body.callback || "") || `${req.protocol}://${req.get("host")}/api/pay/verify`;
@@ -186,7 +183,6 @@ router.post("/start", async (req, res) => {
       metadata: { mobile: phone },
     };
 
-    console.log("PAY_START_STEP", "BEFORE_ZARINPAL_FETCH", { requestUrl, payload });
     const zpRes = await fetch(requestUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -243,11 +239,10 @@ router.post("/start", async (req, res) => {
       description,
     });
       } catch (e) {
-    console.error("PAY_START_ERR_DETAILS:", e); // این در ترمینال سرور لاگ می‌شود
-    return res.status(500).json({ 
-      ok: false, 
-      error: "SERVER_ERROR", 
-      debug: e?.message || "unknown_error" // این به اپلیکیشن فرستاده می‌شود
+    console.error("PAY_START_ERR:", e?.message || "unknown_error");
+    return res.status(500).json({
+      ok: false,
+      error: "SERVER_ERROR",
     });
   }
 });
