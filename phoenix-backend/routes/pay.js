@@ -124,6 +124,9 @@ router.post("/start", async (req, res) => {
     const amount = Number(selectedPricing.amount || 0);
     const months = Number(selectedPricing.months || 0);
     const plan = selectedPricing.plan || requestedPlan;
+    const expiresAt = new Date();
+    expiresAt.setMonth(expiresAt.getMonth() + months);
+
 
     if (!amount || amount < 1000) {
       return res.status(400).json({
@@ -162,6 +165,7 @@ router.post("/start", async (req, res) => {
           refId: "PENDING",
           amount,
           months,
+          expiresAt,
           plan,
           status: "pending",
           provider: "zarinpal",
@@ -223,18 +227,19 @@ router.post("/start", async (req, res) => {
     const gatewayUrl = `${ZP_GATEWAY_BASE}${authority}`;
 
     await prisma.subscription.create({
-      data: {
-        userId: user.id,
-        phone,
-        authority,
-        refId: "PENDING",
-        amount,
-        months,
-        plan,
-        status: "pending",
-        provider: "zarinpal",
-      },
-    });
+  data: {
+    userId: user.id,
+    phone,
+    authority,
+    refId: "PENDING",
+    amount,
+    months,
+    expiresAt,
+    plan,
+    status: "pending",
+    provider: "zarinpal",
+  },
+});
 
     return res.json({
       ok: true,
