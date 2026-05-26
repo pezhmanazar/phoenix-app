@@ -9,7 +9,6 @@ export type ApiResp<T> = ApiOk<T> | ApiErr;
 export type StartReq = {
   phone: string;
   description?: string;
-  plan?: "pro" | "vip" | "free";
   planKey: "p30" | "p90" | "p180";
 };
 

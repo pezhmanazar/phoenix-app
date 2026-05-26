@@ -344,13 +344,12 @@ useEffect(() => {
 
       // --- ۱) شروع پرداخت ---
       const start = await startPay({
-  phone: phone!,
-  plan: "pro",
-  planKey: option.key === "p30" || option.key === "p90" || option.key === "p180"
-    ? option.key
-    : "p30",
-});
-
+      phone: phone!,
+      planKey:
+         option.key === "p30" || option.key === "p90" || option.key === "p180"
+         ? option.key
+         : "p30",
+        });
       if (!start.ok) {
         openPayModal({
           kind: "failed",
