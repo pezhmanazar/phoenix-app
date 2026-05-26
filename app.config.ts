@@ -15,6 +15,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     name: config.name ?? "qoqnoos",
     slug: config.slug ?? "phoenix-app",
     version: config.version ?? "1.0.0",
+    plugins: [...(config.plugins ?? []), "expo-audio"],
 
     extra: {
       ...(config.extra || {}),
