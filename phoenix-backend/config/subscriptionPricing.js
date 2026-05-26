@@ -1,6 +1,4 @@
-// config/subscriptionPricing.js
-
-const SUBSCRIPTION_PRICING = {
+export const SUBSCRIPTION_PRICING = {
   bazaar: {
     p30: {
       price: "۴۹۹,۰۰۰ تومان",
@@ -56,7 +54,7 @@ const SUBSCRIPTION_PRICING = {
   },
 };
 
-function getPublicSubscriptionPricing() {
+export function getPublicSubscriptionPricing() {
   return {
     bazaar: {
       p30: {
@@ -95,12 +93,6 @@ function getPublicSubscriptionPricing() {
   };
 }
 
-function getZarinpalPlanConfig(planKey) {
+export function getZarinpalPlanConfig(planKey) {
   return SUBSCRIPTION_PRICING.zarinpal[planKey] || null;
 }
-
-module.exports = {
-  SUBSCRIPTION_PRICING,
-  getPublicSubscriptionPricing,
-  getZarinpalPlanConfig,
-};
