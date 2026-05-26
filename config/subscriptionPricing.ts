@@ -1,4 +1,4 @@
-export const SUBSCRIPTION_PRICING = {
+export const SUBSCRIPTION_PRICING_FALLBACK = {
   bazaar: {
     p30: {
       price: "۴۹۹,۰۰۰ تومان",
@@ -6,7 +6,7 @@ export const SUBSCRIPTION_PRICING = {
       amount: 399000,
     },
     p90: {
-      price: "۱,۰۹۹,۰۰۰  تومان",
+      price: "۱,۰۹۹,۰۰۰ تومان",
       oldPrice: "۱,۴۹۷,۰۰۰ تومان",
       amount: 899000,
     },
@@ -36,5 +36,6 @@ export const SUBSCRIPTION_PRICING = {
   },
 } as const;
 
-export type SubscriptionProviderKey = keyof typeof SUBSCRIPTION_PRICING;
-export type SubscriptionPlanKey = keyof typeof SUBSCRIPTION_PRICING["bazaar"];
+export type SubscriptionProviderKey = keyof typeof SUBSCRIPTION_PRICING_FALLBACK;
+export type SubscriptionPlanKey = keyof typeof SUBSCRIPTION_PRICING_FALLBACK["bazaar"];
+export type SubscriptionPricingShape = typeof SUBSCRIPTION_PRICING_FALLBACK;

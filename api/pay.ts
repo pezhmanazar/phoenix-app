@@ -8,13 +8,9 @@ export type ApiResp<T> = ApiOk<T> | ApiErr;
 
 export type StartReq = {
   phone: string;
-  amount: number;
   description?: string;
-
-  // ✅ اضافه شد برای تست و تعیین مدت
-  months?: number;
   plan?: "pro" | "vip" | "free";
-  days?: number; // اختیاری (اگر یه روز خواستی بفرستی)
+  planKey: "p30" | "p90" | "p180";
 };
 
 export type StartResp = {
@@ -28,8 +24,6 @@ export type StartResp = {
 export type VerifyReq = {
   authority: string;
   status: "OK" | "NOK";
-  amount: number;
-  phone: string;
 };
 
 export type VerifyResp = {
@@ -136,8 +130,6 @@ export async function verifyPay(
   const url = new URL(toUrl("/api/pay/verify"));
   url.searchParams.set("authority", q.authority);
   url.searchParams.set("status", q.status);
-  url.searchParams.set("amount", String(q.amount));
-  url.searchParams.set("phone", q.phone);
 
   return doJson<VerifyResp>(url.toString(), {
     method: "GET",

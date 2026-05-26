@@ -20,7 +20,11 @@ import { getFriendlyErrorMessage } from "../../lib/errors/getFriendlyErrorMessag
 import * as WebBrowser from "expo-web-browser";
 import { toJalaali } from "jalaali-js";
 import { startPay } from "../../api/pay"; // ✅ فقط startPay
-import { SUBSCRIPTION_PRICING } from "../../config/subscriptionPricing";
+import {
+  SUBSCRIPTION_PRICING_FALLBACK,
+  type SubscriptionPricingShape,
+} from "../../config/subscriptionPricing";
+import { getSubscriptionPricing } from "../../api/subscriptionPricing";
 import { getPaymentProvider } from "../../lib/payments/getPaymentProvider";
 import { getPlanStatus } from "../../lib/plan";
 
@@ -30,12 +34,12 @@ type PlanOption = {
   key: PlanKey;
   title: string;
   subtitle: string;
-  price: string; // قیمت نهایی
-  oldPrice?: string; // قیمت قبل (خط‌خورده)
-  amount?: number; // مبلغ نهایی برای پرداخت
+  price: string; 
+  oldPrice?: string;
   badge?: string;
   badgeType?: "best" | "value" | "premium";
 };
+
 
 type PayResultKind = "success" | "failed" | "cancelled";
 
@@ -83,7 +87,30 @@ export default function SubscriptionScreen() {
   const { phone, isAuthenticated } = useAuth();
   const { me, refresh, refreshing } = useUser() as any;
   const [providerKey, setProviderKey] = useState<"bazaar" | "zarinpal">("zarinpal");
-  const providerPrices = SUBSCRIPTION_PRICING[providerKey];
+  const [pricing, setPricing] = useState<SubscriptionPricingShape>(
+  SUBSCRIPTION_PRICING_FALLBACK
+);
+
+const providerPrices = pricing[providerKey];
+
+useEffect(() => {
+  let mounted = true;
+
+  getSubscriptionPricing()
+    .then((res) => {
+      if (!mounted) return;
+      if (res.ok && res.data) {
+        setPricing(res.data);
+      }
+    })
+    .catch(() => {
+      // fallback already applied
+    });
+
+  return () => {
+    mounted = false;
+  };
+}, []);
 
 
       useEffect(() => {
@@ -111,7 +138,6 @@ export default function SubscriptionScreen() {
     subtitle: "برای عبور اولیه از رابطه قبلی",
     price: providerPrices.p30.price,
     oldPrice: providerPrices.p30.oldPrice,
-    amount: providerPrices.p30.amount,
     badge: "پیشنهادی",
     badgeType: "best",
   },
@@ -121,7 +147,6 @@ export default function SubscriptionScreen() {
     subtitle: "برای عبور عمیق‌تر و تثبیت تغییر رفتاری",
     oldPrice: providerPrices.p90.oldPrice,
     price: providerPrices.p90.price,
-    amount: providerPrices.p90.amount,
     badge: "پرفروش‌ترین",
     badgeType: "value",
   },
@@ -131,7 +156,6 @@ export default function SubscriptionScreen() {
     subtitle: "برای بازسازی کامل و مسیر بی‌وقفه تا انتها",
     oldPrice: providerPrices.p180.oldPrice,
     price: providerPrices.p180.price,
-    amount: providerPrices.p180.amount,
     badge: "بیشترین صرفه اقتصادی",
     badgeType: "premium",
   },
@@ -242,13 +266,13 @@ export default function SubscriptionScreen() {
   const isProActive = planView === "pro" || planView === "expiring";
 
   async function handleBuy(option: PlanOption) {
-    if (!option.amount) {
-      openPayModal({
-        kind: "failed",
-        message: "این پلن هنوز فعال نشده.",
-      });
-      return;
-    }
+    if (!option.price) {
+    openPayModal({
+      kind: "failed",
+      message: "این پلن هنوز فعال نشده.",
+    });
+    return;
+  }
     if (!isAuthenticated || !phone) {
       openPayModal({
         kind: "failed",
@@ -319,21 +343,13 @@ export default function SubscriptionScreen() {
       }
 
       // --- ۱) شروع پرداخت ---
-      const months =
-        option.key === "p30"
-          ? 1
-          : option.key === "p90"
-          ? 3
-          : option.key === "p180"
-          ? 6
-          : 1;
-
       const start = await startPay({
-        phone: phone!,
-        amount: option.amount,
-        months, // ✅ خیلی مهم
-        plan: "pro", // ✅ صریح
-      });
+  phone: phone!,
+  plan: "pro",
+  planKey: option.key === "p30" || option.key === "p90" || option.key === "p180"
+    ? option.key
+    : "p30",
+});
 
       if (!start.ok) {
         openPayModal({
@@ -666,7 +682,7 @@ export default function SubscriptionScreen() {
 
             {plans.map((p) => {
               const isLoading = payingKey === p.key;
-              const disabled = !p.amount || isLoading || waitingForPayRefresh;
+              const disabled = !p.price || isLoading || waitingForPayRefresh;
 
               const borderColor =
                 p.badgeType === "best"
@@ -687,17 +703,17 @@ export default function SubscriptionScreen() {
                   : "rgba(255,255,255,.03)";
 
               let ctaLabel = "شروع اشتراک";
-              if (p.amount) {
+                if (p.price) {
                 if (planView === "pro" || planView === "expiring") {
-                  ctaLabel = "تغییر  یا  تمدید اشتراک";
+                ctaLabel = "تغییر  یا  تمدید اشتراک";
                 } else if (planView === "expired") {
-                  ctaLabel = "تمدید اشتراک";
+                ctaLabel = "تمدید اشتراک";
                 } else {
-                  ctaLabel = "شروع اشتراک";
+                ctaLabel = "شروع اشتراک";
                 }
-              } else {
+                } else {
                 ctaLabel = "به‌زودی";
-              }
+                }
 
               const showOld = !!p.oldPrice && p.oldPrice !== p.price;
 
@@ -792,13 +808,13 @@ export default function SubscriptionScreen() {
                       {showOld && <Text style={styles.oldPriceText}>{p.oldPrice}</Text>}
 
                       <Text
-                        style={[
-                          styles.priceText,
-                          { color: p.amount ? "#FBBF24" : "#9CA3AF" },
-                        ]}
+                       style={[
+                       styles.priceText,
+                       { color: disabled ? "#9CA3AF" : "#FBBF24" },
+                      ]}
                       >
-                        {p.price}
-                      </Text>
+                      {p.price}
+                    </Text>
                     </View>
 
                     <TouchableOpacity

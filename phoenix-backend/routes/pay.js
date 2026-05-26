@@ -4,6 +4,10 @@ import pkg from "@prisma/client";
 const { PrismaClient } = pkg;
 
 import express from "express";
+import {
+  getPublicSubscriptionPricing,
+  getZarinpalPlanConfig,
+} from "../config/subscriptionPricing.js";
 
 import { finalizeSubscription } from "../utils/subscription.js";
 
@@ -57,25 +61,6 @@ function normalizeIranPhone(v = "") {
   return "";
 }
 
-function resolvePlanFromInput({ amount, plan, days, months }) {
-  const p = String(plan || "pro");
-  if (Number(months) > 0) return { plan: p, months: Number(months) };
-
-  if (Number(days) > 0) {
-    const d = Number(days);
-    if (d >= 180) return { plan: p, months: 6 };
-    if (d >= 90) return { plan: p, months: 3 };
-    if (d >= 30) return { plan: p, months: 1 };
-    return { plan: p, months: 1 };
-  }
-
-  if (amount === 399000 || amount === 10000) return { plan: "pro", months: 1 };
-  if (amount === 899000) return { plan: "pro", months: 3 };
-  if (amount === 1199000) return { plan: "pro", months: 6 };
-
-  return { plan: p, months: 1 };
-}
-
 function buildResultUrl({ ok, authority }) {
   const params = new URLSearchParams({
     ok: ok ? "1" : "0",
@@ -109,24 +94,48 @@ router.post("/start", async (req, res) => {
   try {
     const body = req.body || {};
     const phone = normalizeIranPhone(String(body.phone || ""));
-    const amount = Number(body.amount || 0);
-    const description = String(body.description || "پرداخت اشتراک ققنوس");
+    const planKey = String(body.planKey || "").trim();
+    const requestedPlan =
+      body.plan === "vip" ? "vip" : body.plan === "free" ? "free" : "pro";
 
     if (!phone) {
-      return res.status(400).json({ ok: false, error: "PHONE_INVALID" });
+      return res.status(400).json({
+        ok: false,
+        error: "PHONE_REQUIRED",
+      });
     }
+
+    if (!planKey || !["p30", "p90", "p180"].includes(planKey)) {
+      return res.status(400).json({
+        ok: false,
+        error: "INVALID_PLAN_KEY",
+      });
+    }
+
+    const selectedPricing = getZarinpalPlanConfig(planKey);
+
+    if (!selectedPricing) {
+      return res.status(400).json({
+        ok: false,
+        error: "PLAN_NOT_FOUND",
+      });
+    }
+
+    const amount = Number(selectedPricing.amount || 0);
+    const months = Number(selectedPricing.months || 0);
+    const plan = selectedPricing.plan || requestedPlan;
 
     if (!amount || amount < 1000) {
-      return res.status(400).json({ ok: false, error: "AMOUNT_INVALID" });
+      return res.status(400).json({
+        ok: false,
+        error: "INVALID_AMOUNT",
+      });
     }
 
-    const { plan, months } = resolvePlanFromInput({
-      amount,
-      plan: body.plan,
-      days: body.days,
-      months: body.months,
-    });
-    
+    const description =
+      String(body.description || "").trim() ||
+      `خرید اشتراک ${plan} ققنوس - ${planKey}`;
+
     const callback = PAY_REAL
       ? PAY_CALLBACK_URL
       : String(body.callback || "") || `${req.protocol}://${req.get("host")}/api/pay/verify`;
@@ -193,9 +202,9 @@ router.post("/start", async (req, res) => {
 
     if (!zpRes.ok || !json) {
       console.error(
-  "[pay/start] ZARINPAL_REQUEST_FAILED:",
-  `status=${zpRes.status}`
-);
+        "[pay/start] ZARINPAL_REQUEST_FAILED:",
+        `status=${zpRes.status}`
+      );
       return res.status(502).json({ ok: false, error: "ZARINPAL_REQUEST_FAILED" });
     }
 
@@ -204,17 +213,14 @@ router.post("/start", async (req, res) => {
     if (!data || data.code !== 100) {
       const code = data?.code ?? errors?.code ?? "UNKNOWN";
       console.error(
-  "[pay/start] ZARINPAL_ERROR:",
-  `code=${code}`
-);
+        "[pay/start] ZARINPAL_ERROR:",
+        `code=${code}`
+      );
       return res.status(502).json({ ok: false, error: `ZP_ERROR_${code}` });
     }
 
     const authority = String(data.authority || "").trim();
     const gatewayUrl = `${ZP_GATEWAY_BASE}${authority}`;
-    const expiresAt = new Date();
-    expiresAt.setMonth(expiresAt.getMonth() + Number(months || 1));
-
 
     await prisma.subscription.create({
       data: {
@@ -225,7 +231,6 @@ router.post("/start", async (req, res) => {
         amount,
         months,
         plan,
-        expiresAt,
         status: "pending",
         provider: "zarinpal",
       },
@@ -238,7 +243,7 @@ router.post("/start", async (req, res) => {
       gatewayUrl,
       description,
     });
-      } catch (e) {
+  } catch (e) {
     console.error("PAY_START_ERR:", e?.message || "unknown_error");
     return res.status(500).json({
       ok: false,
@@ -246,6 +251,22 @@ router.post("/start", async (req, res) => {
     });
   }
 });
+
+router.get("/pricing", async (_req, res) => {
+  try {
+    return res.json({
+      ok: true,
+      data: getPublicSubscriptionPricing(),
+    });
+  } catch (e) {
+    console.error("PAY_PRICING_ERROR", e);
+    return res.status(500).json({
+      ok: false,
+      error: "PRICING_UNAVAILABLE",
+    });
+  }
+});
+
 
 router.get("/verify", async (req, res) => {
   setCORS(res);
