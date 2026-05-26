@@ -28,7 +28,7 @@ export const SUBSCRIPTION_PRICING = {
 
   zarinpal: {
     p30: {
-      price: "۳۹۹,۰۰۰ تومان",
+      price: "۱۲۳,۰۰۰ تومان",
       oldPrice: undefined,
       amount: 399000,
       months: 1,
@@ -36,7 +36,7 @@ export const SUBSCRIPTION_PRICING = {
       plan: "pro",
     },
     p90: {
-      price: "۸۹۹,۰۰۰ تومان",
+      price: "۸۰۹,۰۰۰ تومان",
       oldPrice: "۱,۱۹۷,۰۰۰ تومان",
       amount: 899000,
       months: 3,
@@ -44,7 +44,7 @@ export const SUBSCRIPTION_PRICING = {
       plan: "pro",
     },
     p180: {
-      price: "۱,۴۹۹,۰۰۰ تومان",
+      price: "۱,۶۷۹,۰۰۰ تومان",
       oldPrice: "۲,۳۹۴,۰۰۰ تومان",
       amount: 1499000,
       months: 6,
