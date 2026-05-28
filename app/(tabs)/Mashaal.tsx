@@ -2,7 +2,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
-import { Audio } from "expo-av";
+import {
+  createAudioPlayer,
+  setAudioModeAsync,
+  type AudioPlayer,
+  type AudioStatus,
+} from "expo-audio";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -70,7 +75,7 @@ function InlineAudioPlayer({
     glass2: string;
   };
 }) {
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const playerRef = useRef<AudioPlayer | null>(null);
 
   const opLockRef = useRef(false);
   const mountedRef = useRef(true);
@@ -81,7 +86,6 @@ function InlineAudioPlayer({
   const [playing, setPlaying] = useState(false);
   const [loadingAudio, setLoadingAudio] = useState(false);
 
-  // ✅ این دو تا باید قبل از Play هم پر باشن
   const [posMs, setPosMs] = useState(0);
   const [durMs, setDurMs] = useState(0);
 
@@ -119,7 +123,6 @@ function InlineAudioPlayer({
     [storageKey]
   );
 
-  // ✅ 1) هیدریت اولیه از AsyncStorage: قبل از Play هم UI پر باشه
   const hydrateFromStorage = useCallback(async () => {
     try {
       const raw = await AsyncStorage.getItem(storageKey);
@@ -132,18 +135,16 @@ function InlineAudioPlayer({
       const p = Number(parsed.positionMillis || 0);
       const d = Number(parsed.durationMillis || 0);
 
-      // ✅ روی UI همون لحظه نشون بده
       if (mountedRef.current) {
         setPosMs(Math.max(0, p));
         setDurMs(Math.max(0, d));
       }
 
-      // ✅ منطق ادامه/تکمیل
       if (d > 0) {
         if (p > 0 && p < d - 1500) {
-          resumeFromRef.current = p; // وسط → ادامه
+          resumeFromRef.current = p;
         } else {
-          resumeFromRef.current = Math.min(d, Math.max(0, p)); // آخر/نزدیک آخر → همون آخر بماند
+          resumeFromRef.current = Math.min(d, Math.max(0, p));
         }
       } else {
         resumeFromRef.current = Math.max(0, p);
@@ -154,107 +155,121 @@ function InlineAudioPlayer({
   }, [storageKey]);
 
   const unload = useCallback(async () => {
-    const s = soundRef.current;
-    soundRef.current = null;
+    const p = playerRef.current;
+    playerRef.current = null;
 
     try {
-      if (s) {
-        await s.stopAsync().catch(() => {});
-        await s.unloadAsync().catch(() => {});
+      if (p) {
+        try {
+          if (p.isLoaded) {
+            const currentMs = Math.max(0, Math.floor((p.currentTime || 0) * 1000));
+            const durationMs = Math.max(0, Math.floor((p.duration || 0) * 1000));
+            await maybeSaveProgress(currentMs, durationMs, true);
+          }
+        } catch {}
+
+        try {
+          p.pause();
+        } catch {}
+
+        try {
+          p.remove();
+        } catch {}
       }
     } finally {
       if (!mountedRef.current) return;
       setPlaying(false);
       setLoadingAudio(false);
-      // ✅ اینجا ریست نمی‌کنیم به 0، چون می‌خوایم حتی بعد برگشت هم پیشرفت معلوم باشه
-      // setPosMs(0);
-      // setDurMs(0);
     }
-  }, []);
+  }, [maybeSaveProgress]);
 
-  const ensureLoaded = useCallback(async () => {
-    if (soundRef.current) return;
-
-    setLoadingAudio(true);
-
-    // ✅ قبل از load هم حتماً از استوریج بخون (برای resumeFromRef + UI)
-    await hydrateFromStorage();
-
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
-    }).catch(() => {});
-
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: url },
-      { shouldPlay: false, isLooping: false },
-      (st) => {
+  const attachStatusListener = useCallback(
+    (player: AudioPlayer) => {
+      player.addListener("playbackStatusUpdate", (st: AudioStatus) => {
         if (!st?.isLoaded) return;
         if (!mountedRef.current) return;
 
-        const p = Number(st.positionMillis || 0);
-        const d = Number(st.durationMillis || 0);
+        const p = Math.max(0, Math.floor((st.currentTime || 0) * 1000));
+        const d = Math.max(0, Math.floor((st.duration || 0) * 1000));
 
-        setPlaying(!!st.isPlaying);
+        setPlaying(!!st.playing);
         setPosMs(p);
         setDurMs(d);
 
-        maybeSaveProgress(p, d, !!st.didJustFinish);
+        void maybeSaveProgress(p, d, !!st.didJustFinish);
 
         if (st.didJustFinish) {
           setPlaying(false);
         }
-      }
-    );
+      });
+    },
+    [maybeSaveProgress]
+  );
 
-    soundRef.current = sound;
+  const ensureLoaded = useCallback(async () => {
+    if (playerRef.current) return;
 
-    // ✅ بعد از load برو به نقطه ذخیره‌شده (حتی اگر آخر باشد)
+    setLoadingAudio(true);
+
+    await hydrateFromStorage();
+
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: false,
+      interruptionMode: "duckOthers",
+      shouldRouteThroughEarpiece: false,
+    }).catch(() => {});
+
+    const player = createAudioPlayer({ uri: url }, { updateInterval: 250 });
+    player.loop = false;
+    player.volume = 1;
+
+    attachStatusListener(player);
+    playerRef.current = player;
+
     const target = Math.max(0, Math.floor(resumeFromRef.current || 0));
     if (target > 0) {
-      await sound.setPositionAsync(target).catch(() => {});
-      // ✅ برای اطمینان UI هم همان لحظه درست شود
+      await player.seekTo(target / 1000).catch(() => {});
       if (mountedRef.current) setPosMs(target);
     }
 
-    if (!mountedRef.current) return;
-    setLoadingAudio(false);
-  }, [url, hydrateFromStorage, maybeSaveProgress]);
+    if (mountedRef.current) {
+      setDurMs(Math.max(0, Math.floor((player.duration || 0) * 1000)));
+      setPlaying(!!player.playing);
+      setLoadingAudio(false);
+    }
+  }, [url, hydrateFromStorage, attachStatusListener]);
 
   const togglePlayPause = useCallback(() => {
     return lock(async () => {
-      if (!soundRef.current) {
+      if (!playerRef.current) {
         await ensureLoaded();
       }
 
-      const s = soundRef.current;
-      if (!s) return;
-
-      setLoadingAudio(true);
-
-      const st = await s.getStatusAsync().catch(() => null);
-      if (!st || !st.isLoaded) {
+      const p = playerRef.current;
+      if (!p || !p.isLoaded) {
         if (mountedRef.current) setLoadingAudio(false);
         return;
       }
 
-      if (st.isPlaying) {
-        await s.pauseAsync().catch(() => {});
+      setLoadingAudio(true);
+
+      if (p.playing) {
+        p.pause();
         if (!mountedRef.current) return;
         setPlaying(false);
         setLoadingAudio(false);
         return;
       }
 
-      // ✅ اگر ته فایل بود، با Play برگرد اول
-      if (Number(st.positionMillis || 0) >= Number(st.durationMillis || 0) - 250) {
-        await s.setPositionAsync(0).catch(() => {});
+      const currentMs = Math.max(0, Math.floor((p.currentTime || 0) * 1000));
+      const durationMs = Math.max(0, Math.floor((p.duration || 0) * 1000));
+
+      if (durationMs > 0 && currentMs >= durationMs - 250) {
+        await p.seekTo(0).catch(() => {});
       }
 
-      await s.playAsync().catch(() => {});
+      p.play();
       if (!mountedRef.current) return;
       setPlaying(true);
       setLoadingAudio(false);
@@ -264,17 +279,14 @@ function InlineAudioPlayer({
   const seekTo = useCallback(
     (ratio: number) => {
       return lock(async () => {
-        const s = soundRef.current;
-        if (!s) return;
+        const p = playerRef.current;
+        if (!p || !p.isLoaded) return;
 
-        const st = await s.getStatusAsync().catch(() => null);
-        if (!st || !st.isLoaded) return;
-
-        const d = Number(st.durationMillis || durMs || 0);
+        const d = Math.max(0, Math.floor((p.duration || durMs / 1000) * 1000));
         if (d <= 0) return;
 
         const target = Math.max(0, Math.min(d, Math.floor(d * ratio)));
-        await s.setPositionAsync(target).catch(() => {});
+        await p.seekTo(target / 1000).catch(() => {});
         await maybeSaveProgress(target, d, true);
 
         if (mountedRef.current) setPosMs(target);
@@ -283,30 +295,26 @@ function InlineAudioPlayer({
     [durMs, maybeSaveProgress]
   );
 
-  // ✅ 2) فقط با mount شدن کامپوننت، پیشرفت رو هیدریت کن (بدون load فایل)
   useEffect(() => {
     mountedRef.current = true;
     hydrateFromStorage();
     return () => {
       mountedRef.current = false;
-      unload();
+      void unload();
     };
   }, [hydrateFromStorage, unload]);
 
   return (
     <View style={[styles.audioRow, { borderColor: palette.border2, backgroundColor: palette.glass2 }]}>
       <View style={styles.audioInnerRow}>
-        {/* تایمر راست */}
         <Text style={[styles.audioTimeInline, { color: palette.sub2 }]}>
           {formatMs(posMs)} / {formatMs(durMs)}
         </Text>
 
-        {/* بار وسط */}
         <View style={styles.audioBarCol}>
           <SeekBar progress={progress} palette={{ border2: palette.border2, gold: palette.gold }} onSeek={seekTo} />
         </View>
 
-        {/* پلی چپ */}
         <Pressable
           style={({ pressed }) => [
             styles.audioPlayBtn,
@@ -326,6 +334,7 @@ function InlineAudioPlayer({
     </View>
   );
 }
+
 
 function SeekBar({
   progress,

@@ -1,6 +1,11 @@
 // app/panahgah/[id].tsx
 import { Ionicons } from "@expo/vector-icons";
-import { Audio, AVPlaybackStatusSuccess } from "expo-av";
+import {
+  createAudioPlayer,
+  setAudioModeAsync,
+  type AudioPlayer,
+  type AudioStatus,
+} from "expo-audio";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -55,7 +60,9 @@ function fmtMs(ms: number) {
 }
 
 function BigAudioPlayer({ url }: { url: string }) {
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const playerRef = useRef<AudioPlayer | null>(null);
+  const currentUrlRef = useRef<string>("");
+
   const mountedRef = useRef(true);
   const opLockRef = useRef(false);
 
@@ -76,15 +83,7 @@ function BigAudioPlayer({ url }: { url: string }) {
     }
   };
 
-  const unload = useCallback(async () => {
-    const s = soundRef.current;
-    soundRef.current = null;
-    try {
-      if (s) {
-        await s.stopAsync().catch(() => {});
-        await s.unloadAsync().catch(() => {});
-      }
-    } catch {}
+  const resetUi = useCallback(() => {
     if (!mountedRef.current) return;
     setIsLoaded(false);
     setIsPlaying(false);
@@ -93,71 +92,104 @@ function BigAudioPlayer({ url }: { url: string }) {
     setDurMs(1);
   }, []);
 
-  const loadIfNeeded = useCallback(async () => {
-    if (soundRef.current) return;
+  const unload = useCallback(async () => {
+    const p = playerRef.current;
+    playerRef.current = null;
+    currentUrlRef.current = "";
 
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
+    try {
+      if (p) {
+        try {
+          p.pause();
+        } catch {}
+        try {
+          p.remove();
+        } catch {}
+      }
+    } catch {}
+
+    resetUi();
+  }, [resetUi]);
+
+  const attachStatusListener = useCallback((player: AudioPlayer) => {
+    player.addListener("playbackStatusUpdate", (st: AudioStatus) => {
+      if (!mountedRef.current) return;
+
+      setIsLoaded(!!st.isLoaded);
+      setIsPlaying(!!st.playing);
+      setPosMs(Math.max(0, Math.floor((st.currentTime || 0) * 1000)));
+      setDurMs(Math.max(1, Math.floor((st.duration || 0) * 1000)));
+      setIsBuffering(!!st.isBuffering);
+
+      if (st.didJustFinish) {
+        setIsPlaying(false);
+      }
+    });
+  }, []);
+
+  const loadIfNeeded = useCallback(async () => {
+    if (playerRef.current && currentUrlRef.current === url) return;
+
+    if (playerRef.current && currentUrlRef.current !== url) {
+      await unload();
+    }
+
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: false,
+      interruptionMode: "duckOthers",
+      shouldRouteThroughEarpiece: false,
     }).catch(() => {});
 
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: url },
-      { shouldPlay: false, isLooping: false },
-      (st) => {
-        const s = st as AVPlaybackStatusSuccess;
-        if (!s?.isLoaded) return;
-        if (!mountedRef.current) return;
-        setIsLoaded(true);
-        setIsPlaying(!!s.isPlaying);
-        setPosMs(Number(s.positionMillis || 0));
-        setDurMs(Math.max(1, Number(s.durationMillis || 1)));
-        setIsBuffering(false);
-        if (s.didJustFinish) setIsPlaying(false);
-      }
-    );
+    const player = createAudioPlayer({ uri: url }, { updateInterval: 250 });
+    player.loop = false;
+    player.volume = 1;
 
-    soundRef.current = sound;
+    attachStatusListener(player);
+
+    playerRef.current = player;
+    currentUrlRef.current = url;
+
     if (!mountedRef.current) return;
-    setIsLoaded(true);
+
+    setIsLoaded(!!player.isLoaded);
+    setIsPlaying(!!player.playing);
+    setPosMs(Math.max(0, Math.floor((player.currentTime || 0) * 1000)));
+    setDurMs(Math.max(1, Math.floor((player.duration || 0) * 1000)));
     setIsBuffering(false);
-  }, [url]);
+  }, [url, unload, attachStatusListener]);
 
   const togglePlay = useCallback(() => {
     return lock(async () => {
       if (isBuffering) return;
-      if (!soundRef.current) setIsBuffering(true);
+
+      if (!playerRef.current) setIsBuffering(true);
       await loadIfNeeded();
-      const s = soundRef.current;
-      if (!s) {
+
+      const p = playerRef.current;
+      if (!p || !p.isLoaded) {
         if (mountedRef.current) setIsBuffering(false);
         return;
       }
-      const st = (await s.getStatusAsync().catch(() => null)) as
-        | AVPlaybackStatusSuccess
-        | null;
-      if (!st || !st.isLoaded) {
-        if (mountedRef.current) setIsBuffering(false);
-        return;
-      }
-      setIsBuffering(false);
-      if (st.isPlaying) {
-        await s.pauseAsync().catch(() => {});
+
+      if (p.playing) {
+        p.pause();
         if (!mountedRef.current) return;
+        setIsBuffering(false);
         setIsPlaying(false);
         return;
       }
-      if (
-        Number(st.positionMillis || 0) >=
-        Number(st.durationMillis || 0) - 250
-      ) {
-        await s.setPositionAsync(0).catch(() => {});
+
+      const pos = Math.floor((p.currentTime || 0) * 1000);
+      const dur = Math.floor((p.duration || 0) * 1000);
+
+      if (pos >= dur - 250) {
+        await p.seekTo(0).catch(() => {});
       }
-      await s.playAsync().catch(() => {});
+
+      p.play();
       if (!mountedRef.current) return;
+      setIsBuffering(false);
       setIsPlaying(true);
     });
   }, [isBuffering, loadIfNeeded]);
@@ -166,15 +198,12 @@ function BigAudioPlayer({ url }: { url: string }) {
     (ms: number) => {
       return lock(async () => {
         await loadIfNeeded();
-        const s = soundRef.current;
-        if (!s) return;
-        const st = (await s.getStatusAsync().catch(() => null)) as
-          | AVPlaybackStatusSuccess
-          | null;
-        if (!st || !st.isLoaded) return;
-        const d = Math.max(1, Number(st.durationMillis ?? durMs ?? 1));
+        const p = playerRef.current;
+        if (!p || !p.isLoaded) return;
+
+        const d = Math.max(1, Math.floor((p.duration || durMs || 1) * 1000));
         const clamped = Math.max(0, Math.min(ms, d));
-        await s.setPositionAsync(clamped).catch(() => {});
+        await p.seekTo(clamped / 1000).catch(() => {});
       });
     },
     [durMs, loadIfNeeded]
@@ -187,6 +216,15 @@ function BigAudioPlayer({ url }: { url: string }) {
       unload();
     };
   }, [unload]);
+
+  useEffect(() => {
+    if (!playerRef.current) return;
+    if (currentUrlRef.current === url) return;
+
+    lock(async () => {
+      await unload();
+    });
+  }, [url, unload]);
 
   const progressPct = Math.min(1, posMs / Math.max(1, durMs));
 

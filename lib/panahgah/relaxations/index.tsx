@@ -1,6 +1,11 @@
 // lib/panahgah/relaxations/index.tsx
 import { Ionicons } from "@expo/vector-icons";
-import { Audio, AVPlaybackStatusSuccess } from "expo-av";
+import {
+  createAudioPlayer,
+  setAudioModeAsync,
+  type AudioPlayer,
+  type AudioStatus,
+} from "expo-audio";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
@@ -117,7 +122,7 @@ function CoachAudioPlayer({
 }) {
   const url = useMemo(() => mediaUrl(audioKey), [audioKey]);
 
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const playerRef = useRef<AudioPlayer | null>(null);
   const currentUrlRef = useRef<string>("");
 
   const mountedRef = useRef(true);
@@ -151,120 +156,130 @@ function CoachAudioPlayer({
   }, []);
 
   const fadeOutAndStop = useCallback(async (ms = 320) => {
-    const s = soundRef.current;
-    if (!s) return;
+    const p = playerRef.current;
+    if (!p) return;
 
     if (fadingRef.current) return;
     fadingRef.current = true;
 
     try {
-      const st = (await s.getStatusAsync().catch(() => null)) as AVPlaybackStatusSuccess | null;
-      const wasPlaying = !!st?.isLoaded && !!st?.isPlaying;
+      const wasPlaying = !!p.isLoaded && !!p.playing;
 
       if (wasPlaying) {
         const steps = 8;
         const stepMs = Math.max(20, Math.floor(ms / steps));
-
-        // از ولوم فعلی شروع کنیم (اگر نبود 1)
-        let startVol = 1;
-        try {
-          // @ts-ignore
-          if (typeof (st as any)?.volume === "number") startVol = (st as any).volume;
-        } catch {}
+        const startVol = typeof p.volume === "number" ? p.volume : 1;
 
         for (let i = 0; i < steps; i++) {
           const v = startVol * (1 - (i + 1) / steps);
-          await s.setVolumeAsync(Math.max(0, v)).catch(() => {});
+          try {
+            p.volume = Math.max(0, v);
+          } catch {}
           await new Promise((r) => setTimeout(r, stepMs));
         }
       }
 
-      await s.pauseAsync().catch(() => {});
-      await s.stopAsync().catch(() => {});
-      await s.setVolumeAsync(1).catch(() => {});
+      try {
+        p.pause();
+      } catch {}
+
+      try {
+        await p.seekTo(0);
+      } catch {}
+
+      try {
+        p.volume = 1;
+      } catch {}
     } finally {
       fadingRef.current = false;
     }
   }, []);
 
   const unload = useCallback(async () => {
-    const s = soundRef.current;
-    soundRef.current = null;
+    const p = playerRef.current;
+    playerRef.current = null;
     currentUrlRef.current = "";
 
     try {
-      if (s) {
-        await s.unloadAsync().catch(() => {});
+      if (p) {
+        try {
+          p.pause();
+        } catch {}
+        try {
+          p.remove();
+        } catch {}
       }
     } catch {}
 
     resetUi();
   }, [resetUi]);
 
+  const attachStatusListener = useCallback(
+    (player: AudioPlayer) => {
+      player.addListener("playbackStatusUpdate", (st: AudioStatus) => {
+        if (!mountedRef.current) return;
+
+        const nextLoaded = !!st.isLoaded;
+        const nextPlaying = !!st.playing;
+        const nextPosMs = Math.max(0, Math.floor((st.currentTime || 0) * 1000));
+        const nextDurMs = Math.max(1, Math.floor((st.duration || 0) * 1000));
+
+        setIsLoaded(nextLoaded);
+        setIsPlaying(nextPlaying);
+        setPosMs(nextPosMs);
+        setDurMs(nextDurMs);
+        setIsBuffering(!!st.isBuffering);
+
+        if (st.didJustFinish) {
+          setIsPlaying(false);
+          onFinished?.();
+        }
+      });
+    },
+    [onFinished]
+  );
+
   const loadIfNeeded = useCallback(async () => {
-    // اگر URL عوض شده، اول قبلی رو fade و unload کن
-    if (soundRef.current && currentUrlRef.current && currentUrlRef.current !== url) {
+    if (playerRef.current && currentUrlRef.current && currentUrlRef.current !== url) {
       await fadeOutAndStop(300).catch(() => {});
       await unload();
     }
 
-    if (soundRef.current && currentUrlRef.current === url) return;
+    if (playerRef.current && currentUrlRef.current === url) return;
 
     setIsBuffering(true);
 
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: false,
+      interruptionMode: "duckOthers",
+      shouldRouteThroughEarpiece: false,
     }).catch(() => {});
 
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: url },
-      { shouldPlay: false, isLooping: false },
-      (st) => {
-        const s = st as AVPlaybackStatusSuccess;
-        if (!s?.isLoaded) return;
-        if (!mountedRef.current) return;
+    const player = createAudioPlayer({ uri: url }, { updateInterval: 250 });
+    player.loop = false;
+    player.volume = 1;
 
-        setIsLoaded(true);
-        setIsPlaying(!!s.isPlaying);
-        setPosMs(Number(s.positionMillis || 0));
-        setDurMs(Math.max(1, Number(s.durationMillis || 1)));
+    attachStatusListener(player);
 
-        // @ts-ignore
-        if (typeof (s as any).isBuffering === "boolean") {
-          // @ts-ignore
-          setIsBuffering(!!(s as any).isBuffering);
-        } else {
-          setIsBuffering(false);
-        }
-
-        if (s.didJustFinish) {
-          setIsPlaying(false);
-          onFinished?.();
-        }
-      }
-    );
-
-    soundRef.current = sound;
+    playerRef.current = player;
     currentUrlRef.current = url;
 
     if (!mountedRef.current) return;
-    setIsLoaded(true);
-    setIsBuffering(false);
-  }, [url, onFinished, fadeOutAndStop, unload]);
 
-  // ✅ وقتی روش عوض شد (URL تغییر کرد) → قبلی fade-out + unload
+    setIsLoaded(!!player.isLoaded);
+    setIsPlaying(!!player.playing);
+    setPosMs(Math.max(0, Math.floor((player.currentTime || 0) * 1000)));
+    setDurMs(Math.max(1, Math.floor((player.duration || 0) * 1000)));
+    setIsBuffering(false);
+  }, [url, fadeOutAndStop, unload, attachStatusListener]);
+
   useEffect(() => {
-    // اگر هنوز چیزی لود نشده، فقط state رو ریست کن
-    if (!soundRef.current) {
+    if (!playerRef.current) {
       resetUi();
       return;
     }
 
-    // اگر URL عوض شده:
     if (currentUrlRef.current && currentUrlRef.current !== url) {
       lock(async () => {
         setIsBuffering(true);
@@ -282,23 +297,16 @@ function CoachAudioPlayer({
       if (isBuffering) return;
       if (fadingRef.current) return;
 
-      if (!soundRef.current) setIsBuffering(true);
+      if (!playerRef.current) setIsBuffering(true);
       await loadIfNeeded();
 
-      const s = soundRef.current;
-      if (!s) {
+      const p = playerRef.current;
+      if (!p || !p.isLoaded) {
         if (mountedRef.current) setIsBuffering(false);
         return;
       }
 
-      const st = (await s.getStatusAsync().catch(() => null)) as AVPlaybackStatusSuccess | null;
-      if (!st || !st.isLoaded) {
-        if (mountedRef.current) setIsBuffering(false);
-        return;
-      }
-
-      if (st.isPlaying) {
-        // ✅ pause با fade-out خیلی کوتاه (نرم‌تر)
+      if (p.playing) {
         setIsBuffering(true);
         await fadeOutAndStop(180).catch(() => {});
         if (!mountedRef.current) return;
@@ -307,14 +315,18 @@ function CoachAudioPlayer({
         return;
       }
 
-      // اگر به انتها رسیده بود، از اول
-      if (Number(st.positionMillis || 0) >= Number(st.durationMillis || 0) - 250) {
-        await s.setPositionAsync(0).catch(() => {});
+      const pos = Math.floor((p.currentTime || 0) * 1000);
+      const dur = Math.floor((p.duration || 0) * 1000);
+
+      if (pos >= dur - 250) {
+        await p.seekTo(0).catch(() => {});
       }
 
       setIsBuffering(true);
-      await s.setVolumeAsync(1).catch(() => {});
-      await s.playAsync().catch(() => {});
+      try {
+        p.volume = 1;
+      } catch {}
+      p.play();
       if (!mountedRef.current) return;
       setIsBuffering(false);
       setIsPlaying(true);
@@ -325,15 +337,12 @@ function CoachAudioPlayer({
     (ms: number) => {
       return lock(async () => {
         await loadIfNeeded();
-        const s = soundRef.current;
-        if (!s) return;
+        const p = playerRef.current;
+        if (!p || !p.isLoaded) return;
 
-        const st = (await s.getStatusAsync().catch(() => null)) as AVPlaybackStatusSuccess | null;
-        if (!st || !st.isLoaded) return;
-
-        const d = Math.max(1, Number(st.durationMillis ?? durMs ?? 1));
+        const d = Math.max(1, Math.floor((p.duration || durMs || 1) * 1000));
         const clamped = Math.max(0, Math.min(ms, d));
-        await s.setPositionAsync(clamped).catch(() => {});
+        await p.seekTo(clamped / 1000).catch(() => {});
       });
     },
     [durMs, loadIfNeeded]
@@ -344,7 +353,6 @@ function CoachAudioPlayer({
     return () => {
       mountedRef.current = false;
 
-      // ✅ on unmount: fade-out + unload
       lock(async () => {
         try {
           setIsBuffering(true);
@@ -360,7 +368,6 @@ function CoachAudioPlayer({
 
   return (
     <View style={styles.bigPlayerWrap}>
-      {/* soft calming glow */}
       <View pointerEvents="none" style={styles.calmGlowA} />
       <View pointerEvents="none" style={styles.calmGlowB} />
 
@@ -414,7 +421,6 @@ export function RelaxationPlayer({
   model: RelaxationModel;
   onDone?: () => void;
 }) {
-  // ✅ اگر به هر دلیل key خالی شد، fallback
   const audioKey = (model as any)?.coachAudioKey || DEFAULT_COACH_KEY;
 
   return (
@@ -422,10 +428,7 @@ export function RelaxationPlayer({
       <Text style={styles.h1}>{model.title}</Text>
       <View style={{ height: 10 }} />
 
-      <CoachAudioPlayer
-        audioKey={audioKey}
-        onFinished={() => onDone?.()}
-      />
+      <CoachAudioPlayer audioKey={audioKey} onFinished={() => onDone?.()} />
     </View>
   );
 }
@@ -441,7 +444,6 @@ const styles = StyleSheet.create({
   },
   h1: { color: palette.text, fontWeight: "900", fontSize: 16, textAlign: "center" },
 
-  // ✅ Big relaxing player (like "گوش بده")
   bigPlayerWrap: {
     width: "100%",
     borderWidth: 1,
@@ -454,7 +456,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
 
-  // subtle green glows
   calmGlowA: {
     position: "absolute",
     top: -40,
@@ -480,7 +481,7 @@ const styles = StyleSheet.create({
     width: 140,
     height: 140,
     borderRadius: 70,
-    backgroundColor: "rgba(34,197,94,.92)", // ✅ calm green
+    backgroundColor: "rgba(34,197,94,.92)",
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
@@ -506,7 +507,7 @@ const styles = StyleSheet.create({
   bigFill: {
     height: 8,
     borderRadius: 999,
-    backgroundColor: "rgba(52,211,153,.95)", // ✅ softer mint
+    backgroundColor: "rgba(52,211,153,.95)",
   },
 
   bigTime: {

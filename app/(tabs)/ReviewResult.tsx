@@ -3,7 +3,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { getFriendlyErrorMessage } from "@/lib/errors/getFriendlyErrorMessage";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
-import { Audio } from "expo-av";
+import {
+  createAudioPlayer,
+  setAudioModeAsync,
+  type AudioPlayer,
+  type AudioStatus,
+} from "expo-audio";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -206,7 +211,7 @@ function InlineAudioPlayer({
     glass2: string;
   };
 }) {
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const playerRef = useRef<AudioPlayer | null>(null);
 
   const opLockRef = useRef(false);
   const mountedRef = useRef(true);
@@ -234,13 +239,18 @@ function InlineAudioPlayer({
   };
 
   const unload = useCallback(async () => {
-    const s = soundRef.current;
-    soundRef.current = null;
+    const p = playerRef.current;
+    playerRef.current = null;
 
     try {
-      if (s) {
-        await s.stopAsync().catch(() => {});
-        await s.unloadAsync().catch(() => {});
+      if (p) {
+        try {
+          p.pause();
+        } catch {}
+
+        try {
+          p.remove();
+        } catch {}
       }
     } finally {
       if (!mountedRef.current) return;
@@ -252,73 +262,78 @@ function InlineAudioPlayer({
     }
   }, []);
 
+  const attachStatusListener = useCallback((player: AudioPlayer) => {
+    player.addListener("playbackStatusUpdate", (st: AudioStatus) => {
+      if (!st?.isLoaded) return;
+      if (!mountedRef.current) return;
+
+      setPlaying(!!st.playing);
+      setPosMs(Math.max(0, Math.floor((st.currentTime || 0) * 1000)));
+      setDurMs(Math.max(0, Math.floor((st.duration || 0) * 1000)));
+
+      if (st.didJustFinish) {
+        setPlaying(false);
+      }
+    });
+  }, []);
+
   const ensureLoaded = useCallback(async () => {
-    if (soundRef.current) return;
+    if (playerRef.current) return;
 
     setLoadingAudio(true);
 
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: false,
+      interruptionMode: "duckOthers",
+      shouldRouteThroughEarpiece: false,
     }).catch(() => {});
 
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: url },
-      { shouldPlay: false, isLooping: false },
-      (st) => {
-        if (!st?.isLoaded) return;
-        if (!mountedRef.current) return;
+    const player = createAudioPlayer({ uri: url }, { updateInterval: 250 });
+    player.loop = false;
+    player.volume = 1;
 
-        setPlaying(!!st.isPlaying);
-        setPosMs(Number(st.positionMillis || 0));
-        setDurMs(Number(st.durationMillis || 0));
-
-        if (st.didJustFinish) {
-          setPlaying(false);
-        }
-      }
-    );
-
-    soundRef.current = sound;
+    attachStatusListener(player);
+    playerRef.current = player;
 
     if (!mountedRef.current) return;
     setReady(true);
+    setDurMs(Math.max(0, Math.floor((player.duration || 0) * 1000)));
+    setPlaying(!!player.playing);
     setLoadingAudio(false);
-  }, [url]);
+  }, [url, attachStatusListener]);
 
   const togglePlayPause = useCallback(() => {
     return lock(async () => {
-      if (!soundRef.current) {
+      if (!playerRef.current) {
         await ensureLoaded();
       }
 
-      const s = soundRef.current;
-      if (!s) return;
-
-      setLoadingAudio(true);
-
-      const st = await s.getStatusAsync().catch(() => null);
-      if (!st || !st.isLoaded) {
+      const p = playerRef.current;
+      if (!p || !p.isLoaded) {
         if (mountedRef.current) setLoadingAudio(false);
         return;
       }
 
-      if (st.isPlaying) {
-        await s.pauseAsync().catch(() => {});
+      setLoadingAudio(true);
+
+      if (p.playing) {
+        p.pause();
         if (!mountedRef.current) return;
         setPlaying(false);
         setLoadingAudio(false);
         return;
       }
 
-      if (Number(st.positionMillis || 0) >= Number(st.durationMillis || 0) - 250) {
-        await s.setPositionAsync(0).catch(() => {});
+      const currentMs = Math.max(0, Math.floor((p.currentTime || 0) * 1000));
+      const durationMs = Math.max(0, Math.floor((p.duration || 0) * 1000));
+
+      if (durationMs > 0 && currentMs >= durationMs - 250) {
+        await p.seekTo(0).catch(() => {});
       }
 
-      await s.playAsync().catch(() => {});
+      p.play();
+
       if (!mountedRef.current) return;
       setPlaying(true);
       setLoadingAudio(false);
@@ -328,17 +343,16 @@ function InlineAudioPlayer({
   const seekTo = useCallback(
     (ratio: number) => {
       return lock(async () => {
-        const s = soundRef.current;
-        if (!s) return;
+        const p = playerRef.current;
+        if (!p || !p.isLoaded) return;
 
-        const st = await s.getStatusAsync().catch(() => null);
-        if (!st || !st.isLoaded) return;
-
-        const d = Number(st.durationMillis || durMs || 0);
+        const d = Math.max(0, Math.floor((p.duration || durMs / 1000) * 1000));
         if (d <= 0) return;
 
         const target = Math.max(0, Math.min(d, Math.floor(d * ratio)));
-        await s.setPositionAsync(target).catch(() => {});
+        await p.seekTo(target / 1000).catch(() => {});
+
+        if (mountedRef.current) setPosMs(target);
       });
     },
     [durMs]
@@ -348,7 +362,7 @@ function InlineAudioPlayer({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      unload();
+      void unload();
     };
   }, [unload]);
 
@@ -382,6 +396,7 @@ function InlineAudioPlayer({
     </View>
   );
 }
+
 
 function SeekBar({
   progress,

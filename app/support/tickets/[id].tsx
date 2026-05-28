@@ -2,7 +2,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
-import { Audio } from "expo-av";
+import {
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  useAudioPlayer,
+  useAudioRecorder,
+  useAudioRecorderState,
+} from "expo-audio";
 import * as ImagePicker from "expo-image-picker";
 import {
   Stack,
@@ -174,7 +181,7 @@ function ImageLightbox({
 }
 
 /* ================= Voice Player ================= */
-let currentSound: Audio.Sound | null = null;
+let currentPlayer: any = null;
 
 function Waveform({
   progress = 0,
@@ -231,7 +238,19 @@ function VoicePlayer({
   dark?: boolean;
   authHeaders?: Record<string, string>;
 }) {
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const absoluteUri = useMemo(
+    () => (uri.startsWith("http") ? uri : `${BACKEND_URL}${uri}`),
+    [uri]
+  );
+
+  const player = useAudioPlayer({
+  uri: absoluteUri,
+  headers: {
+    ...(authHeaders || {}),
+    Connection: "keep-alive",
+  },
+});
+
   const [playing, setPlaying] = useState(false);
   const [buffering, setBuffering] = useState(false);
   const [playError, setPlayError] = useState(false);
@@ -247,242 +266,174 @@ function VoicePlayer({
   const replayGraceUntilRef = useRef(0);
 
   useEffect(() => {
-    Audio.setAudioModeAsync({
-  allowsRecordingIOS: false,
-  playsInSilentModeIOS: true,
-  staysActiveInBackground: false,
-  shouldDuckAndroid: true,
-  playThroughEarpieceAndroid: false,
-}).catch((e) => {
-  });
+    setAudioModeAsync({
+      allowsRecording: false,
+      playsInSilentMode: true,
+      shouldPlayInBackground: false,
+      shouldRouteThroughEarpiece: false,
+    }).catch(() => {});
+
     return () => {
-      if (sound) sound.unloadAsync().catch(() => {});
-      if (currentSound === sound) currentSound = null;
+      try {
+        if (currentPlayer === player) currentPlayer = null;
+        player.pause();
+        player.seekTo(0);
+      } catch {}
     };
-  }, [sound]);
+  }, [player]);
 
-  const applyRate = async (s: Audio.Sound, r: 1 | 1.5 | 2) => {
-    try {
-      await s.setRateAsync(r, true);
-    } catch {}
-  };
-
-const ensureLoaded = useCallback(async () => {
-  if (sound) {
-    try {
-      const existingStatus = await sound.getStatusAsync();
-
-      if (existingStatus.isLoaded) {
-        return sound;
+  useEffect(() => {
+    const sub = player.addListener("playbackStatusUpdate", (st: any) => {
+      if (!st) {
+        setBuffering(false);
+        setPlaying(false);
+        return;
       }
-      try {
-        await sound.unloadAsync();
-      } catch {}
 
-      setSound(null);
-
-      if (currentSound === sound) {
-        currentSound = null;
+      if (typeof st.duration === "number" && st.duration > 0) {
+        setDur(st.duration);
       }
-    } catch {
-      try {
-        await sound.unloadAsync();
-      } catch {}
 
-      setSound(null);
+      if (!isDragging.current && typeof st.currentTime === "number") {
+        setPos(st.currentTime);
 
-      if (currentSound === sound) {
-        currentSound = null;
+        const total = typeof st.duration === "number" ? st.duration : 0;
+        if (total > 0) {
+          setProgress(st.currentTime / total);
+        }
       }
-    }
-  }
 
-  setBuffering(true);
-  setPlaying(false);
-
-  const absoluteUri = uri.startsWith("http") ? uri : `${BACKEND_URL}${uri}`;
-
-  const { sound: s } = await Audio.Sound.createAsync(
-    {
-      uri: absoluteUri,
-      headers: {
-        ...(authHeaders || {}),
-        Connection: "keep-alive",
-      },
-    },
-    {
-      shouldPlay: false,
-      progressUpdateIntervalMillis: 250,
-    }
-  );
-
-  setSound(s);
-
-  s.setOnPlaybackStatusUpdate((st: any) => {
-    if (!st?.isLoaded) {
-      if (st?.error) {
+      if (st.didJustFinish) {
+        setBuffering(false);
+        setPlaying(false);
+        setFinished(true);
+        setProgress(1);
+        setPos(typeof st.duration === "number" ? st.duration : 0);
+        return;
       }
-      setBuffering(false);
-      setPlaying(false);
-      return;
-    }
 
-    if (typeof st.durationMillis === "number") {
-      setDur(st.durationMillis);
-    }
-
-    if (!isDragging.current && typeof st.positionMillis === "number") {
-      setPos(st.positionMillis);
-
-      if (st.durationMillis) {
-        setProgress(st.positionMillis / st.durationMillis);
+      if (st.playing) {
+        setBuffering(false);
+        setPlaying(true);
+        setPlayError(false);
+        return;
       }
-    }
 
-    if (st.didJustFinish) {
-      setBuffering(false);
-      setPlaying(false);
-      setFinished(true);
-      setProgress(1);
-      setPos(st.durationMillis || 0);
-      return;
-    }
-
-        if (st.isPlaying) {
-      setBuffering(false);
-      setPlaying(true);
-      setPlayError(false);
-      return;
-    }
-
-    if (st.isBuffering && st.shouldPlay) {
+      if (st.buffering) {
         if (Date.now() < replayGraceUntilRef.current) {
           setBuffering(false);
           setPlaying(true);
           return;
         }
-          setBuffering(true);
-          setPlaying(false);
-          return;
-        }
 
-    setPlaying(false);
-
-    if (!st.shouldPlay) {
-      setBuffering(false);
-    }
-  });
-
-  await applyRate(s, rate);
-
-  return s;
-}, [sound, uri, rate, authHeaders]);
-
-  const onToggle = useCallback(async () => {
-  if (!uri) return;
-
-  if (toggleLockRef.current) {
-        return;
-  }
-
-  toggleLockRef.current = true;
-
-  try {
-        setPlayError(false);
-
-    if (currentSound && currentSound !== sound) {
-  try {
-    await currentSound.stopAsync();
-    await currentSound.unloadAsync();
-  } catch {}
-  currentSound = null;
-}
-
-    const s = await ensureLoaded();
-    currentSound = s;
-
-    const st = await s.getStatusAsync();
-
-    if (!st.isLoaded) {
-      setBuffering(false);
-      setPlaying(false);
-      return;
-    }
-
-    if (st.isPlaying) {
-      await s.pauseAsync();
-      setBuffering(false);
-      setPlaying(false);
-      return;
-    }
-
-      if (finished || st.didJustFinish || (dur && pos >= dur - 300)) {
-
-      setBuffering(true);
-      setPlaying(false);
-
-      setFinished(false);
-      setPos(0);
-      setProgress(0);
-
-      replayGraceUntilRef.current = Date.now() + 1200;
-      setBuffering(false);
-      setPlaying(true);
-
-      await applyRate(s, rate);
-
-      await s.setVolumeAsync(1);
-
-      await s.playFromPositionAsync(0);
-
-      const replayStatus = await s.getStatusAsync();
-
-      if (replayStatus.isLoaded && replayStatus.isPlaying) {
-        setBuffering(false);
-        setPlaying(true);
-      } else if (replayStatus.isLoaded && replayStatus.isBuffering) {
         setBuffering(true);
         setPlaying(false);
-      } else {
-        setBuffering(false);
-        setPlaying(false);
+        return;
       }
 
+      setPlaying(false);
+      setBuffering(false);
+    });
+
+    return () => sub.remove();
+  }, [player]);
+
+  const applyRate = useCallback(async (r: 1 | 1.5 | 2) => {
+    try {
+      player.setPlaybackRate(r);
+    } catch {}
+  }, [player]);
+
+  const ensureLoaded = useCallback(async () => {
+    setBuffering(false);
+    setPlaying(false);
+    await applyRate(rate);
+    return player;
+  }, [player, rate, applyRate]);
+
+  const onToggle = useCallback(async () => {
+    if (!uri) return;
+
+    if (toggleLockRef.current) {
       return;
     }
 
-    setBuffering(true);
-    setPlaying(false);
+    toggleLockRef.current = true;
 
-    await applyRate(s, rate);
-    await s.setVolumeAsync(1);
-    await s.playAsync();
+    try {
+      setPlayError(false);
 
-    const afterPlay = await s.getStatusAsync();
+      if (currentPlayer && currentPlayer !== player) {
+        try {
+          currentPlayer.pause();
+          currentPlayer.seekTo(0);
+        } catch {}
+        currentPlayer = null;
+      }
 
-    if (afterPlay.isLoaded && afterPlay.isPlaying) {
-      setBuffering(false);
-      setPlaying(true);
-    } else if (afterPlay.isLoaded && afterPlay.isBuffering) {
+      const p = await ensureLoaded();
+      currentPlayer = p;
+
+      const isCurrentlyPlaying = p.playing;
+      const currentTime = p.currentTime ?? 0;
+      const totalDuration = p.duration ?? dur;
+
+      if (isCurrentlyPlaying) {
+        p.pause();
+        setBuffering(false);
+        setPlaying(false);
+        return;
+      }
+
+      if (
+        finished ||
+        (totalDuration && currentTime >= totalDuration - 300)
+      ) {
+        setBuffering(true);
+        setPlaying(false);
+
+        setFinished(false);
+        setPos(0);
+        setProgress(0);
+
+        replayGraceUntilRef.current = Date.now() + 1200;
+        setBuffering(false);
+        setPlaying(true);
+
+        await applyRate(rate);
+        p.seekTo(0);
+        p.play();
+
+        return;
+      }
+
       setBuffering(true);
       setPlaying(false);
+
+      await applyRate(rate);
+      p.play();
+    } catch {
+      setBuffering(false);
+      setPlaying(false);
+      setPlayError(true);
+    } finally {
+      toggleLockRef.current = false;
     }
-      } catch {
-    setBuffering(false);
-    setPlaying(false);
-    setPlayError(true);
-  } finally {
-    toggleLockRef.current = false;
-  }
-}, [
-  uri,
-  sound,
-  finished,
-  pos,
-  dur,
-  ensureLoaded,
-  rate,
-]);
+  }, [uri, player, finished, dur, ensureLoaded, rate, applyRate]);
+
+  const seekToRatio = async (ratio: number) => {
+    const clamped = Math.min(1, Math.max(0, ratio));
+    const total = dur || (durationSec ?? 0) * 1000;
+    const newPos = total * clamped;
+
+    try {
+      player.seekTo(newPos / 1000);
+    } catch {}
+
+    setPos(newPos);
+    if (dur) setProgress(newPos / dur);
+    setFinished(false);
+  };
 
   const pan = useRef(
     PanResponder.create({
@@ -509,23 +460,10 @@ const ensureLoaded = useCallback(async () => {
     })
   ).current;
 
-  const seekToRatio = async (ratio: number) => {
-    const clamped = Math.min(1, Math.max(0, ratio));
-    const newPos = (dur || (durationSec ?? 0) * 1000) * clamped;
-    if (sound) {
-      try {
-        await sound.setPositionAsync(newPos);
-      } catch {}
-    }
-    setPos(newPos);
-    if (dur) setProgress(newPos / dur);
-    setFinished(false);
-  };
-
   const cycleRate = async () => {
     const next: 1 | 1.5 | 2 = rate === 1 ? 1.5 : rate === 1.5 ? 2 : 1;
     setRate(next);
-    if (sound) await applyRate(sound, next);
+    await applyRate(next);
   };
 
   const tint = dark ? "#000" : "#fff";
@@ -548,31 +486,31 @@ const ensureLoaded = useCallback(async () => {
         }}
       >
         <TouchableOpacity
-  onPress={onToggle}
-  style={{
-    backgroundColor: dark ? "#fff" : "rgba(255,255,255,0.10)",
-    borderWidth: 1,
-    borderColor: dark ? "rgba(0,0,0,0.10)" : "rgba(255,255,255,0.18)",
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    minWidth: 38,
-    alignItems: "center",
-    justifyContent: "center",
-  }}
-  activeOpacity={0.85}
-  disabled={buffering}
->
-  {buffering ? (
-    <ActivityIndicator size="small" color={dark ? "#000" : "#fff"} />
-  ) : (
-    <Ionicons
-      name={playing ? "pause" : "play"}
-      size={16}
-      color={dark ? "#000" : "#fff"}
-    />
-  )}
-</TouchableOpacity>
+          onPress={onToggle}
+          style={{
+            backgroundColor: dark ? "#fff" : "rgba(255,255,255,0.10)",
+            borderWidth: 1,
+            borderColor: dark ? "rgba(0,0,0,0.10)" : "rgba(255,255,255,0.18)",
+            paddingVertical: 8,
+            paddingHorizontal: 10,
+            borderRadius: 10,
+            minWidth: 38,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          activeOpacity={0.85}
+          disabled={buffering}
+        >
+          {buffering ? (
+            <ActivityIndicator size="small" color={dark ? "#000" : "#fff"} />
+          ) : (
+            <Ionicons
+              name={playing ? "pause" : "play"}
+              size={16}
+              color={dark ? "#000" : "#fff"}
+            />
+          )}
+        </TouchableOpacity>
 
         {dur ? (
           <Text style={{ color: subTint, fontSize: 11, fontWeight: "800" }}>
@@ -592,7 +530,8 @@ const ensureLoaded = useCallback(async () => {
           </Text>
         </TouchableOpacity>
       </View>
-            {(buffering || playError) ? (
+
+      {buffering || playError ? (
         <View style={{ alignItems: "flex-end", marginTop: 2 }}>
           <Text
             style={{
@@ -608,6 +547,7 @@ const ensureLoaded = useCallback(async () => {
     </View>
   );
 }
+
 
 /* ================= Banner ================= */
 function Banner({ text, onClose }: { text: string; onClose: () => void }) {
@@ -660,7 +600,6 @@ function Composer({
   const { token, isAuthenticated } = useAuth();
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [recMs, setRecMs] = useState(0);
   const [recURI, setRecURI] = useState<string | null>(null);
   const [image, setImage] = useState<{
@@ -674,6 +613,15 @@ function Composer({
 
   const makeClientMessageId = (prefix: "msg" | "upload") =>
     `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
+  const recorder = useAudioRecorder({
+    ...RecordingPresets.HIGH_QUALITY,
+    isMeteringEnabled: true,
+  });
+
+  const recorderState = useAudioRecorderState(recorder);
+
+  const isRecording = recorderState.isRecording;
 
   const hasText = text.trim().length > 0;
   const hasAttachment = !!image || !!recURI;
@@ -717,78 +665,85 @@ function Composer({
     }
   };
 
-  const stopRecording = useCallback(
+    const stopRecording = useCallback(
     async (auto = false) => {
-      if (!recording) return;
+      if (!recorderState.isRecording) return;
+
       try {
-        await recording.stopAndUnloadAsync();
-        const uri = recording.getURI();
+        await recorder.stop();
+        const uri = recorder.uri;
         setRecURI(uri || null);
       } catch {}
-      setRecording(null);
 
-      // اگر به سقف رسید، به کاربر واضح بگو
       if (auto) {
-        onError("ضبط به سقف مجاز رسید: محدودیت ویس در هر بار ضبط، ۵ دقیقه‌ست؛ روی ارسال ضمیمه بزن تا ویسی که ضبط کردی ارسال بشه");
+        onError(
+          "ضبط به سقف مجاز رسید: محدودیت ویس در هر بار ضبط، ۵ دقیقه‌ست؛ روی ارسال ضمیمه بزن تا ویسی که ضبط کردی ارسال بشه"
+        );
       }
 
       try {
-        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+        await setAudioModeAsync({
+          allowsRecording: false,
+          playsInSilentMode: true,
+        });
       } catch {}
     },
-    [recording, onError]
+    [recorder, recorderState.isRecording, onError]
   );
 
-  const startRecording = async () => {
+
+      const startRecording = async () => {
     if (planGuard()) return;
+
     setUploadClientMessageId(null);
     Keyboard.dismiss();
+
     try {
-      const { granted } = await Audio.requestPermissionsAsync();
-      if (!granted) {
+      const permission = await requestRecordingPermissionsAsync();
+
+      if (!permission.granted) {
         onError("دسترسی میکروفون داده نشد.");
         return;
       }
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-      const rec = new Audio.Recording();
-      await rec.prepareToRecordAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
 
-            rec.setOnRecordingStatusUpdate(async (st) => {
-        if (!st.canRecord) return;
-        const ms = st.durationMillis ?? 0;
-        setRecMs(ms);
-
-        if (ms >= MAX_VOICE_MS) {
-          try {
-            await rec.stopAndUnloadAsync();
-            const uri = rec.getURI();
-            setRecURI(uri || null);
-          } catch {}
-
-          setRecording(null);
-          setRecMs(MAX_VOICE_MS);
-
-          onError("ضبط به سقف مجاز رسید: محدودیت ویس در هر بار ضبط، ۵ دقیقه‌ست.");
-
-          try {
-            await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-          } catch {}
-        }
-      });
-
-      await rec.startAsync();
-      setRecording(rec);
       setRecURI(null);
       setRecMs(0);
+
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+      });
+
+      await recorder.prepareToRecordAsync();
+      recorder.record();
     } catch {
       onError("شروع ضبط ناموفق بود.");
     }
   };
+
+    useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    if (isRecording) {
+      interval = setInterval(() => {
+        setRecMs((prev) => {
+          const next = prev + 250;
+
+          if (next >= MAX_VOICE_MS) {
+            clearInterval(interval!);
+            stopRecording(true);
+            return MAX_VOICE_MS;
+          }
+
+          return next;
+        });
+      }, 250);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRecording, stopRecording]);
 
   const resetAttachments = () => {
   setUploadClientMessageId(null);
@@ -906,7 +861,6 @@ const buildForm = async () => {
 
   return fd;
 };
-
 
   const sendUpload = async () => {
   if (!hasAttachment && !hasText) return;
@@ -1051,7 +1005,7 @@ if (!uploadClientMessageId) {
 
         <View style={{ flex: 1 }} />
 
-        {recording ? (
+        {isRecording ? (
           <View
             style={{
               flexDirection: "row-reverse",
