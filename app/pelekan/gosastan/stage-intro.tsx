@@ -1,8 +1,13 @@
-// app/pelekan/gosastan/stage-intro.tsx
+//app\pelekan\bastan\stage-intro.tsx
 import { AUDIO_KEYS, mediaUrl } from "@/constants/media";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Audio } from "expo-av";
+import {
+  createAudioPlayer,
+  setAudioModeAsync,
+  type AudioPlayer,
+  type AudioStatus,
+} from "expo-audio";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -15,7 +20,6 @@ function fmt(ms: number) {
   return `${mm}:${ss}`;
 }
 
-// ✅ لوکال: تیک معرفی گسستن
 const KEY_GOSASTAN_STAGE_AUDIO_V1 = "pelekan:stage_intro:gosastan:heard:v1";
 
 export default function GosastanStageIntroScreen() {
@@ -23,100 +27,126 @@ export default function GosastanStageIntroScreen() {
   const router = useRouter();
 
   const AUDIO_URL = useMemo(() => {
-  return mediaUrl(AUDIO_KEYS.gosastanIntro);
-}, []);
+    return mediaUrl(AUDIO_KEYS.gosastanIntro);
+  }, []);
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  // player
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const playerRef = useRef<AudioPlayer | null>(null);
+  const mountedRef = useRef(true);
+  const opLockRef = useRef(false);
+
   const [, setIsLoaded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-
   const [posMs, setPosMs] = useState(0);
   const [durMs, setDurMs] = useState(1);
-
   const [trackW, setTrackW] = useState(0);
-
-  // ✅ NEW: buffering state (UX)
   const [isBuffering, setIsBuffering] = useState(false);
 
-  // ✅ برای اینکه فقط موقع بازگشت ثبت کنیم
   const maxPosRef = useRef(0);
   const SAVED_MIN_MS = 5000;
 
+  const lock = async <T,>(fn: () => Promise<T>) => {
+    if (opLockRef.current) return null as T;
+    opLockRef.current = true;
+    try {
+      return await fn();
+    } finally {
+      opLockRef.current = false;
+    }
+  };
+
   const unload = useCallback(async () => {
     try {
-      const s = soundRef.current;
-      if (s) {
-        await s.stopAsync().catch(() => {});
-        await s.unloadAsync().catch(() => {});
+      const p = playerRef.current;
+      if (p) {
+        try {
+          p.pause();
+        } catch {}
+        try {
+          p.seekTo(0);
+        } catch {}
+        try {
+          p.remove();
+        } catch {}
       }
     } catch {}
-    soundRef.current = null;
+
+    playerRef.current = null;
+
+    if (!mountedRef.current) return;
     setIsLoaded(false);
     setIsPlaying(false);
     setIsBuffering(false);
+    setPosMs(0);
+    setDurMs(1);
+  }, []);
+
+  const attachStatusListener = useCallback((player: AudioPlayer) => {
+    player.addListener("playbackStatusUpdate", (st: AudioStatus) => {
+      if (!mountedRef.current) return;
+      if (!st.isLoaded) return;
+
+      setIsLoaded(true);
+      setIsPlaying(!!st.playing);
+      setPosMs(Math.max(0, Math.floor((st.currentTime || 0) * 1000)));
+      setDurMs(Math.max(1, Math.floor((st.duration || 0) * 1000)));
+      setIsBuffering(!!st.isBuffering);
+
+      const p = Math.max(0, Math.floor((st.currentTime || 0) * 1000));
+      if (p > maxPosRef.current) maxPosRef.current = p;
+    });
   }, []);
 
   const loadIfNeeded = useCallback(async () => {
-    if (soundRef.current) return;
+    if (playerRef.current) return;
 
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: false,
+      interruptionMode: "duckOthers",
+      shouldRouteThroughEarpiece: false,
     });
 
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: AUDIO_URL },
-      { shouldPlay: false },
-      async (st) => {
-        if (!st.isLoaded) return;
+    const player = createAudioPlayer({ uri: AUDIO_URL }, { updateInterval: 250 });
+    player.loop = false;
+    player.volume = 1;
 
-        setIsLoaded(true);
-        setIsPlaying(st.isPlaying);
-        setPosMs(st.positionMillis ?? 0);
-        setDurMs(st.durationMillis ?? 1);
+    attachStatusListener(player);
+    playerRef.current = player;
 
-        // ✅ وقتی واقعاً لود شد/استاتوس رسید، بافرینگ خاموش
-        setIsBuffering(false);
-
-        const p = Number(st.positionMillis ?? 0);
-        if (p > maxPosRef.current) maxPosRef.current = p;
-      }
-    );
-
-    soundRef.current = sound;
-  }, [AUDIO_URL]);
+    if (mountedRef.current) {
+      setIsLoaded(!!player.isLoaded);
+      setIsPlaying(!!player.playing);
+      setPosMs(Math.max(0, Math.floor((player.currentTime || 0) * 1000)));
+      setDurMs(Math.max(1, Math.floor((player.duration || 0) * 1000)));
+    }
+  }, [AUDIO_URL, attachStatusListener]);
 
   const togglePlay = useCallback(async () => {
     if (isBuffering) return;
 
     try {
-      // ✅ اگر هنوز لود نشده، همون لحظه بافرینگ روشن شود
-      if (!soundRef.current) setIsBuffering(true);
+      if (!playerRef.current) setIsBuffering(true);
 
-      await loadIfNeeded();
-      const s = soundRef.current;
-      if (!s) {
-        setIsBuffering(false);
-        return;
-      }
+      await lock(async () => {
+        await loadIfNeeded();
+        const p = playerRef.current;
+        if (!p || !p.isLoaded) {
+          if (mountedRef.current) setIsBuffering(false);
+          return;
+        }
 
-      const st: any = await s.getStatusAsync();
-      if (!st.isLoaded) {
-        setIsBuffering(false);
-        return;
-      }
+        if (p.playing) {
+          p.pause();
+          if (mountedRef.current) setIsBuffering(false);
+          return;
+        }
 
-      setIsBuffering(false);
-
-      if (st.isPlaying) await s.pauseAsync();
-      else await s.playAsync();
+        p.play();
+        if (mountedRef.current) setIsBuffering(false);
+      });
     } catch {
       setIsBuffering(false);
       setErr("پخش مقدمه مرحله گسستن با مشکل مواجه شد، لطفاً دوباره تلاش کن");
@@ -126,17 +156,16 @@ export default function GosastanStageIntroScreen() {
   const seekTo = useCallback(
     async (ms: number) => {
       try {
-        await loadIfNeeded();
-        const s = soundRef.current;
-        if (!s) return;
+        await lock(async () => {
+          await loadIfNeeded();
+          const p = playerRef.current;
+          if (!p || !p.isLoaded) return;
 
-        const st: any = await s.getStatusAsync();
-        if (!st.isLoaded) return;
-
-        const d = Number(st.durationMillis ?? durMs);
-        const clamped = Math.max(0, Math.min(ms, Math.max(1, d)));
-        await s.setPositionAsync(clamped);
-        if (clamped > maxPosRef.current) maxPosRef.current = clamped;
+          const d = Math.max(1, Math.floor((p.duration || durMs) * 1000));
+          const clamped = Math.max(0, Math.min(ms, d));
+          await p.seekTo(clamped / 1000).catch(() => {});
+          if (clamped > maxPosRef.current) maxPosRef.current = clamped;
+        });
       } catch {
         setErr("پخش مقدمه مرحله گسستن با مشکل مواجه شد، لطفاً دوباره تلاش کن");
       }
@@ -146,24 +175,28 @@ export default function GosastanStageIntroScreen() {
 
   const onBack = useCallback(async () => {
     try {
-      // ✅ فقط وقتی برگشت می‌زند، اگر >= ۵ ثانیه گوش کرده بود تیک بزن
-      const listenedMs = Math.max(maxPosRef.current, posMs);
+      const livePos = playerRef.current?.isLoaded
+        ? Math.max(0, Math.floor((playerRef.current.currentTime || 0) * 1000))
+        : 0;
+
+      const listenedMs = Math.max(maxPosRef.current, posMs, livePos);
       if (listenedMs >= SAVED_MIN_MS) {
         await AsyncStorage.setItem(KEY_GOSASTAN_STAGE_AUDIO_V1, "1");
       }
     } catch {}
+
     await unload();
     router.back();
   }, [posMs, unload, router]);
 
   useEffect(() => {
     let alive = true;
+    mountedRef.current = true;
+
     (async () => {
       try {
         setErr(null);
         setLoading(true);
-        // ✅ فقط تست دسترسی فایل (تا 404 را سریع بفهمیم)
-        // اگر خواستی حذفش می‌کنیم، ولی برای لانچ بهتره همین باشه.
         await loadIfNeeded();
       } catch {
         if (!alive) return;
@@ -176,6 +209,7 @@ export default function GosastanStageIntroScreen() {
 
     return () => {
       alive = false;
+      mountedRef.current = false;
       unload();
     };
   }, [loadIfNeeded, unload]);

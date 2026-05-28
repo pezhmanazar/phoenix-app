@@ -1,32 +1,30 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-  "strict": true,
-  "forceConsistentCasingInFileNames": true,
-  "baseUrl": ".",
-  "skipLibCheck": true,
-  "module": "ESNext",
-  "ignoreDeprecations": "6.0",
-  "paths": {
-    "@/*": ["./*"],
-    "react-native-track-player": ["./lib/trackPlayerShim"]
-  }
-},
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "paths": {
+      "@/*": ["./*"],
+      "react-native-track-player": ["./lib/trackPlayerShim"]
+    }
+  },
   "include": [
-  "app/**/*.ts",
-  "app/**/*.tsx",
-  "components/**/*.ts",
-  "components/**/*.tsx",
-  "hooks/**/*.ts",
-  "hooks/**/*.tsx",
-  "lib/**/*.ts",
-  "lib/**/*.tsx",
-  "constants/**/*.ts",
-  "constants/**/*.tsx",
-  ".expo/types/**/*.ts",
-  "expo-env.d.ts",
-  "types/**/*.d.ts"
-],
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "hooks/**/*.ts",
+    "hooks/**/*.tsx",
+    "lib/**/*.ts",
+    "lib/**/*.tsx",
+    "constants/**/*.ts",
+    "constants/**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "types/**/*.d.ts"
+  ],
   "exclude": [
     "node_modules",
     "**/node_modules/*",

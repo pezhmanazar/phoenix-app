@@ -1,7 +1,13 @@
 // /hooks/useAudio.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Asset } from "expo-asset";
-import { Audio, AVPlaybackStatusSuccess } from "expo-av";
+import {
+  createAudioPlayer,
+  setAudioModeAsync,
+  type AudioPlayer,
+  type AudioStatus,
+  type AudioSource,
+} from "expo-audio";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type UseAudioArgs = { id: string; uri: string | number; enabled?: boolean };
@@ -18,7 +24,6 @@ type UseAudioReturn = {
   clearProgress: () => Promise<void>;
   unload: () => Promise<void>;
   stopAndUnload: () => Promise<void>;
-  // کنترل مستقیم
   play: () => Promise<void>;
   pause: () => Promise<void>;
   seekTo: (ms: number) => Promise<void>;
@@ -28,7 +33,7 @@ type UseAudioReturn = {
 const keyFor = (id: string) => `Mashaal.progress.${id}`;
 
 export function useAudio({ id, uri, enabled = true }: UseAudioArgs): UseAudioReturn {
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const playerRef = useRef<AudioPlayer | null>(null);
   const loadTokenRef = useRef(0);
   const initialPosRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
@@ -41,7 +46,6 @@ export function useAudio({ id, uri, enabled = true }: UseAudioArgs): UseAudioRet
   const [resumeFrom, setResumeFrom] = useState<number | null>(null);
   const [rate, setRate] = useState(1);
 
-  // read last progress (once per id)
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -62,75 +66,71 @@ export function useAudio({ id, uri, enabled = true }: UseAudioArgs): UseAudioRet
         }
       } catch {}
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
-  const persist = useCallback(async (pos: number, dur: number) => {
-    if (!dur) return;
-    try {
-      await AsyncStorage.setItem(
-        keyFor(id),
-        JSON.stringify({ positionMillis: pos, durationMillis: dur, updatedAt: Date.now() })
-      );
-    } catch {}
-  }, [id]);
+  const persist = useCallback(
+    async (pos: number, dur: number) => {
+      if (!dur) return;
+      try {
+        await AsyncStorage.setItem(
+          keyFor(id),
+          JSON.stringify({
+            positionMillis: pos,
+            durationMillis: dur,
+            updatedAt: Date.now(),
+          })
+        );
+      } catch {}
+    },
+    [id]
+  );
 
-  // setup / load
   useEffect(() => {
     mountedRef.current = true;
     const myToken = ++loadTokenRef.current;
 
+    const cleanupPlayer = () => {
+      if (playerRef.current) {
+        try {
+          playerRef.current.pause();
+        } catch {}
+        try {
+          playerRef.current.remove();
+        } catch {}
+        playerRef.current = null;
+      }
+    };
+
     const setup = async () => {
-      if (!enabled) { setLoading(false); return; }
+      if (!enabled) {
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
 
       try {
-        await Audio.setAudioModeAsync({
-          staysActiveInBackground: true,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: true,
-          playThroughEarpieceAndroid: false,
+        await setAudioModeAsync({
+          shouldPlayInBackground: true,
+          playsInSilentMode: true,
+          interruptionMode: "duckOthers",
+          shouldRouteThroughEarpiece: false,
         });
-      } catch (e) {
-      }
+      } catch {}
 
-      if (soundRef.current) {
-        try { await soundRef.current.unloadAsync(); } catch {}
-        soundRef.current = null;
-      }
-
-      const sound = new Audio.Sound();
-      soundRef.current = sound;
+      cleanupPlayer();
       endedRef.current = false;
 
-      sound.setOnPlaybackStatusUpdate((st) => {
-        if (loadTokenRef.current !== myToken) return;
-        const s = st as AVPlaybackStatusSuccess;
-        if (!s || !s.isLoaded || !mountedRef.current) return;
-
-        setDuration(s.durationMillis || 0);
-        setPosition(s.positionMillis || 0);
-        setIsPlaying(!!s.isPlaying);
-        setLoading(false);
-
-        if (s.didJustFinish) {
-          endedRef.current = true;
-          setIsPlaying(false);
-          setPosition(s.durationMillis || 0);
-        }
-        if (s.positionMillis != null && s.durationMillis != null) {
-          persist(s.positionMillis, s.durationMillis);
-        }
-      });
-
-      // source (local/remote)
-      let source: { uri: string } | number;
+      let source: AudioSource;
       if (typeof uri === "number") {
         try {
           const asset = await Asset.fromModule(uri).downloadAsync();
           const local = asset.localUri ?? asset.uri;
           source = { uri: local };
-        } catch (e) {
+        } catch {
           setLoading(false);
           return;
         }
@@ -138,24 +138,72 @@ export function useAudio({ id, uri, enabled = true }: UseAudioArgs): UseAudioRet
         source = { uri };
       }
 
+      if (loadTokenRef.current !== myToken) {
+        setLoading(false);
+        return;
+      }
+
       try {
-        await sound.loadAsync(source as any, {
-          shouldPlay: false, // ⬅️ خودکار پخش نکن
-          positionMillis: initialPosRef.current || 0,
-          progressUpdateIntervalMillis: 500,
+        const player = createAudioPlayer(source, {
+          updateInterval: 500,
         });
+
+        playerRef.current = player;
+        player.loop = false;
+
+        player.addListener("playbackStatusUpdate", (status: AudioStatus) => {
+          if (loadTokenRef.current !== myToken) return;
+          if (!mountedRef.current) return;
+
+          const posMs = Math.floor((status.currentTime || 0) * 1000);
+          const durMs = Math.floor((status.duration || 0) * 1000);
+
+          setDuration(durMs);
+          setPosition(posMs);
+          setIsPlaying(!!status.playing);
+          setLoading(!status.isLoaded);
+
+          if (status.didJustFinish) {
+            endedRef.current = true;
+            setIsPlaying(false);
+            setPosition(durMs);
+          }
+
+          if (posMs >= 0 && durMs > 0) {
+            persist(posMs, durMs);
+          }
+        });
+
+        try {
+          player.setPlaybackRate(rate, "high");
+        } catch {}
+
+        if (initialPosRef.current && initialPosRef.current > 0) {
+          try {
+            await player.seekTo(initialPosRef.current / 1000);
+          } catch {}
+        }
+
+        initialPosRef.current = null;
+
         if (loadTokenRef.current !== myToken) {
-          try { await sound.unloadAsync(); } catch {}
+          try {
+            player.pause();
+          } catch {}
+          try {
+            player.remove();
+          } catch {}
           return;
         }
-        initialPosRef.current = null;
+
         setLoading(false);
-        try { await sound.setRateAsync(rate, true); } catch {}
-      } catch (e) {
+        setDuration(Math.floor((player.duration || 0) * 1000));
+        setPosition(Math.floor((player.currentTime || 0) * 1000));
+        setIsPlaying(!!player.playing);
+      } catch {
         if (loadTokenRef.current !== myToken) return;
         setLoading(false);
-        try { await sound.unloadAsync(); } catch {}
-        soundRef.current = null;
+        cleanupPlayer();
       }
     };
 
@@ -164,25 +212,27 @@ export function useAudio({ id, uri, enabled = true }: UseAudioArgs): UseAudioRet
     return () => {
       mountedRef.current = false;
       loadTokenRef.current++;
-      if (soundRef.current) {
-        soundRef.current.unloadAsync().catch(() => {});
-        soundRef.current = null;
-      }
+      cleanupPlayer();
     };
-  }, [id, uri, enabled, persist]); // عمداً rate اینجا نیست
+  }, [id, uri, enabled, persist]);
 
-  // apply rate without reloading
   useEffect(() => {
-    if (soundRef.current) {
-      soundRef.current.setRateAsync(rate, true).catch(() => {});
+    if (playerRef.current) {
+      try {
+        playerRef.current.setPlaybackRate(rate, "high");
+      } catch {}
     }
   }, [rate]);
 
-  // disable handling
   useEffect(() => {
-    if (!enabled && soundRef.current) {
-      soundRef.current.unloadAsync().catch(() => {});
-      soundRef.current = null;
+    if (!enabled && playerRef.current) {
+      try {
+        playerRef.current.pause();
+      } catch {}
+      try {
+        playerRef.current.remove();
+      } catch {}
+      playerRef.current = null;
       setIsPlaying(false);
       setLoading(false);
     }
@@ -190,43 +240,50 @@ export function useAudio({ id, uri, enabled = true }: UseAudioArgs): UseAudioRet
 
   const applyRate = useCallback(async (r: number) => {
     setRate(r);
-    if (soundRef.current) {
-      try { await soundRef.current.setRateAsync(r, true); } catch {}
+    if (playerRef.current) {
+      try {
+        playerRef.current.setPlaybackRate(r, "high");
+      } catch {}
     }
   }, []);
+
   const cycleRate = useCallback(async () => {
     const next = rate === 1 ? 1.5 : rate === 1.5 ? 2 : 1;
     await applyRate(next);
   }, [rate, applyRate]);
 
   const togglePlay = useCallback(async () => {
-    if (!soundRef.current) return;
-    const st = await soundRef.current.getStatusAsync().catch(() => null);
-    const s = st as AVPlaybackStatusSuccess | null;
-    if (!s || !s.isLoaded) return;
+    const player = playerRef.current;
+    if (!player || !player.isLoaded) return;
+
+    const posMs = Math.floor((player.currentTime || 0) * 1000);
+    const durMs = Math.floor((player.duration || 0) * 1000);
 
     const atEnd =
-      endedRef.current ||
-      ((s.durationMillis ?? 0) > 0 && (s.positionMillis ?? 0) >= (s.durationMillis! - 250));
+      endedRef.current || (durMs > 0 && posMs >= durMs - 250);
 
     if (atEnd) {
-      try { await soundRef.current.setPositionAsync(0); } catch {}
+      try {
+        await player.seekTo(0);
+      } catch {}
       endedRef.current = false;
-      await soundRef.current.playAsync();
+      player.play();
       return;
     }
-    if (s.isPlaying) await soundRef.current.pauseAsync();
-    else await soundRef.current.playAsync();
+
+    if (player.playing) player.pause();
+    else player.play();
   }, []);
 
   const restart = useCallback(async () => {
-    if (!soundRef.current) return;
-    const st = await soundRef.current.getStatusAsync().catch(() => null);
-    const s = st as AVPlaybackStatusSuccess | null;
-    if (!s || !s.isLoaded) return;
-    await soundRef.current.setPositionAsync(0);
+    const player = playerRef.current;
+    if (!player || !player.isLoaded) return;
+
+    try {
+      await player.seekTo(0);
+    } catch {}
     endedRef.current = false;
-    await soundRef.current.playAsync();
+    player.play();
   }, []);
 
   const clearProgress = useCallback(async () => {
@@ -236,70 +293,78 @@ export function useAudio({ id, uri, enabled = true }: UseAudioArgs): UseAudioRet
   }, [id]);
 
   const unload = useCallback(async () => {
-    if (soundRef.current) {
-      try { await soundRef.current.unloadAsync(); } catch {}
-      soundRef.current = null;
+    if (playerRef.current) {
+      try {
+        playerRef.current.pause();
+      } catch {}
+      try {
+        playerRef.current.remove();
+      } catch {}
+      playerRef.current = null;
       setIsPlaying(false);
     }
   }, []);
 
   const stopAndUnload = useCallback(async () => {
-    if (soundRef.current) {
+    if (playerRef.current) {
       try {
-        const st = await soundRef.current.getStatusAsync().catch(() => null);
-        const s = st as AVPlaybackStatusSuccess | null;
-        if (s && s.isLoaded && s.isPlaying) {
-          await soundRef.current.stopAsync();
-        }
+        playerRef.current.pause();
       } catch {}
-      try { await soundRef.current.unloadAsync(); } catch {}
-      soundRef.current = null;
+      try {
+        await playerRef.current.seekTo(0);
+      } catch {}
+      try {
+        playerRef.current.remove();
+      } catch {}
+      playerRef.current = null;
       setIsPlaying(false);
       endedRef.current = false;
     }
   }, []);
 
-  // Direct controls
   const play = useCallback(async () => {
-    if (!soundRef.current) return;
-    const st = await soundRef.current.getStatusAsync().catch(() => null);
-    const s = st as AVPlaybackStatusSuccess | null;
-    if (!s || !s.isLoaded) return;
-    if ((s.durationMillis ?? 0) > 0 && (s.positionMillis ?? 0) >= (s.durationMillis! - 250)) {
-      try { await soundRef.current.setPositionAsync(0); } catch {}
+    const player = playerRef.current;
+    if (!player || !player.isLoaded) return;
+
+    const posMs = Math.floor((player.currentTime || 0) * 1000);
+    const durMs = Math.floor((player.duration || 0) * 1000);
+
+    if (durMs > 0 && posMs >= durMs - 250) {
+      try {
+        await player.seekTo(0);
+      } catch {}
     }
+
     endedRef.current = false;
-    await soundRef.current.playAsync();
+    player.play();
   }, []);
 
   const pause = useCallback(async () => {
-    if (!soundRef.current) return;
-    const st = await soundRef.current.getStatusAsync().catch(() => null);
-    const s = st as AVPlaybackStatusSuccess | null;
-    if (!s || !s.isLoaded) return;
-    if (s.isPlaying) await soundRef.current.pauseAsync();
+    const player = playerRef.current;
+    if (!player || !player.isLoaded) return;
+    if (player.playing) player.pause();
   }, []);
 
   const seekTo = useCallback(async (ms: number) => {
-    if (!soundRef.current) return;
-    const st = await soundRef.current.getStatusAsync().catch(() => null);
-    const s = st as AVPlaybackStatusSuccess | null;
-    if (!s || !s.isLoaded) return;
-    const dur = s.durationMillis ?? 0;
+    const player = playerRef.current;
+    if (!player || !player.isLoaded) return;
+
+    const dur = Math.floor((player.duration || 0) * 1000);
     const clamped = Math.max(0, Math.min(ms, dur));
-    await soundRef.current.setPositionAsync(clamped);
+
+    await player.seekTo(clamped / 1000);
     if (clamped < dur) endedRef.current = false;
   }, []);
 
   const seekBy = useCallback(async (deltaMs: number) => {
-    if (!soundRef.current) return;
-    const st = await soundRef.current.getStatusAsync().catch(() => null);
-    const s = st as AVPlaybackStatusSuccess | null;
-    if (!s || !s.isLoaded) return;
-    const pos = s.positionMillis ?? 0;
-    const dur = s.durationMillis ?? 0;
+    const player = playerRef.current;
+    if (!player || !player.isLoaded) return;
+
+    const pos = Math.floor((player.currentTime || 0) * 1000);
+    const dur = Math.floor((player.duration || 0) * 1000);
     const target = Math.max(0, Math.min(pos + deltaMs, dur));
-    await soundRef.current.setPositionAsync(target);
+
+    await player.seekTo(target / 1000);
     if (target < dur) endedRef.current = false;
   }, []);
 

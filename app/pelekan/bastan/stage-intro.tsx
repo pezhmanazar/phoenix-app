@@ -1,8 +1,13 @@
-// app/pelekan/bastan/stage-intro.tsx
+//phoenix-app-git-sourse\app\pelekan\bastan\stage-intro.tsx
 import { AUDIO_KEYS, mediaUrl } from "@/constants/media";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Audio } from "expo-av";
+import {
+  createAudioPlayer,
+  setAudioModeAsync,
+  type AudioPlayer,
+  type AudioStatus,
+} from "expo-audio";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -22,39 +27,49 @@ export default function BastanStageIntroScreen() {
   const { me } = useUser();
   const phone = String(me?.phone || "").trim();
 
-  // ✅ فایل اینترو
   const AUDIO_URL = useMemo(() => {
-  return mediaUrl(AUDIO_KEYS.bastanIntro);
-}, []);
+    return mediaUrl(AUDIO_KEYS.bastanIntro);
+  }, []);
 
-  // ✅ معیار: فقط وقتی کاربر «بازگشت» زد
   const HEARD_MIN_MS = 5000;
 
-  // ✅ لوکال keys
-  const STORAGE_DONE_KEY = useMemo(() => `pelekan:bastan:stage_intro_done:v1:${phone || "no_phone"}`, [phone]);
-  const STORAGE_POS_KEY = useMemo(() => `pelekan:bastan:stage_intro_pos_ms:v1:${phone || "no_phone"}`, [phone]);
-  // ✅ برای سبز شدن دایره‌ی «بستن» در نقشه
+  const STORAGE_DONE_KEY = useMemo(
+    () => `pelekan:bastan:stage_intro_done:v1:${phone || "no_phone"}`,
+    [phone]
+  );
+  const STORAGE_POS_KEY = useMemo(
+    () => `pelekan:bastan:stage_intro_pos_ms:v1:${phone || "no_phone"}`,
+    [phone]
+  );
   const MAP_HEARD_KEY = "pelekan:stage_intro:bastan:heard:v1";
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  // player
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const playerRef = useRef<AudioPlayer | null>(null);
+  const mountedRef = useRef(true);
+  const opLockRef = useRef(false);
+
   const [isPlaying, setIsPlaying] = useState(false);
+  const [, setIsLoaded] = useState(false);
   const [posMs, setPosMs] = useState(0);
   const [durMs, setDurMs] = useState(1);
-
-  // ✅ NEW: buffering state (UX)
   const [isBuffering, setIsBuffering] = useState(false);
 
   const [trackW, setTrackW] = useState(0);
 
-  // restore position
   const restorePosRef = useRef<number | null>(null);
-
-  // prevent double unload/mark
   const leavingRef = useRef(false);
+
+  const lock = async <T,>(fn: () => Promise<T>) => {
+    if (opLockRef.current) return null as T;
+    opLockRef.current = true;
+    try {
+      return await fn();
+    } finally {
+      opLockRef.current = false;
+    }
+  };
 
   const readLocal = useCallback(async () => {
     try {
@@ -66,53 +81,36 @@ export default function BastanStageIntroScreen() {
         return;
       }
 
-      // فقط restore position (done بودن اینجا تاثیری روی UI نداره)
       try {
         const posRaw = await AsyncStorage.getItem(STORAGE_POS_KEY);
         const n = posRaw ? Number(posRaw) : 0;
         if (Number.isFinite(n) && n > 0) restorePosRef.current = n;
+        else restorePosRef.current = null;
       } catch {
         restorePosRef.current = null;
       }
     } catch {
       setErr("پخش مقدمه با مشکل مواجه شد، لطفاً دوباره تلاش کن");
     } finally {
-            setLoading(false);
+      setLoading(false);
     }
   }, [phone, STORAGE_POS_KEY]);
 
-  const ensureAudioMode = useCallback(async () => {
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
-    });
-  }, []);
-
-  const loadIfNeeded = useCallback(async () => {
-    if (soundRef.current) return;
-
-    await ensureAudioMode();
-
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: AUDIO_URL },
-      { shouldPlay: false },
-      async (st) => {
+  const attachStatusListener = useCallback(
+    (player: AudioPlayer) => {
+      player.addListener("playbackStatusUpdate", async (st: AudioStatus) => {
+        if (!mountedRef.current) return;
         if (!st.isLoaded) return;
 
-        setIsPlaying(!!st.isPlaying);
-        setPosMs(Number(st.positionMillis ?? 0));
-        setDurMs(Number(st.durationMillis ?? 1));
+        setIsLoaded(true);
+        setIsPlaying(!!st.playing);
+        setPosMs(Math.max(0, Math.floor((st.currentTime || 0) * 1000)));
+        setDurMs(Math.max(1, Math.floor((st.duration || 0) * 1000)));
+        setIsBuffering(!!st.isBuffering);
 
-        // ✅ وقتی واقعاً لود شد، از حالت بافرینگ خارج شو
-        setIsBuffering(false);
+        const position = Math.max(0, Math.floor((st.currentTime || 0) * 1000));
+        const duration = Math.max(0, Math.floor((st.duration || 0) * 1000));
 
-        // ✅ هیچ “auto-complete” اینجا نداریم.
-        // فقط پوزیشن سبک ذخیره می‌کنیم (برای تجربه بهتر)
-        const position = Number(st.positionMillis ?? 0);
-        const duration = Number(st.durationMillis ?? 0);
         if (duration > 0 && position > 0) {
           try {
             if (position % 3000 < 250) {
@@ -120,71 +118,96 @@ export default function BastanStageIntroScreen() {
             }
           } catch {}
         }
-      }
-    );
+      });
+    },
+    [STORAGE_POS_KEY]
+  );
 
-    soundRef.current = sound;
+  const ensureAudioMode = useCallback(async () => {
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: false,
+      interruptionMode: "duckOthers",
+      shouldRouteThroughEarpiece: false,
+    });
+  }, []);
 
-    // restore pos
+  const loadIfNeeded = useCallback(async () => {
+    if (playerRef.current) return;
+
+    await ensureAudioMode();
+
+    const player = createAudioPlayer({ uri: AUDIO_URL }, { updateInterval: 250 });
+    player.loop = false;
+    player.volume = 1;
+
+    attachStatusListener(player);
+
+    playerRef.current = player;
+
+    if (mountedRef.current) {
+      setIsLoaded(!!player.isLoaded);
+      setIsPlaying(!!player.playing);
+      setPosMs(Math.max(0, Math.floor((player.currentTime || 0) * 1000)));
+      setDurMs(Math.max(1, Math.floor((player.duration || 0) * 1000)));
+    }
+
     try {
       const restore = restorePosRef.current;
       if (restore && restore > 0) {
-        const st: any = await sound.getStatusAsync();
-        const duration = Number(st?.durationMillis ?? 0);
-        const safeRestore = duration > 0 ? Math.min(restore, Math.max(0, duration - 1200)) : restore;
-        await sound.setPositionAsync(safeRestore);
+        const duration = Math.max(0, Math.floor((player.duration || 0) * 1000));
+        const safeRestore =
+          duration > 0 ? Math.min(restore, Math.max(0, duration - 1200)) : restore;
+        await player.seekTo(safeRestore / 1000).catch(() => {});
       }
     } catch {}
-  }, [AUDIO_URL, ensureAudioMode, STORAGE_POS_KEY]);
+  }, [AUDIO_URL, attachStatusListener, ensureAudioMode]);
 
   const togglePlay = useCallback(async () => {
-    // ✅ اگر در حال بافرینگ هستیم، دوباره کلیک نکن
     if (isBuffering) return;
 
     try {
       setErr(null);
 
-      // ✅ اگر هنوز لود نشده، بافرینگ را روشن کن تا آیکن تغییر کند
-      if (!soundRef.current) setIsBuffering(true);
+      if (!playerRef.current) setIsBuffering(true);
 
-      await loadIfNeeded();
-      const s = soundRef.current;
-      if (!s) {
-        setIsBuffering(false);
-        return;
-      }
+      await lock(async () => {
+        await loadIfNeeded();
+        const p = playerRef.current;
+        if (!p || !p.isLoaded) {
+          if (mountedRef.current) setIsBuffering(false);
+          return;
+        }
 
-      const st: any = await s.getStatusAsync();
-      if (!st.isLoaded) {
-        setIsBuffering(false);
-        return;
-      }
+        if (p.playing) {
+          p.pause();
+          if (mountedRef.current) setIsBuffering(false);
+          return;
+        }
 
-      // ✅ آماده‌ایم
-      setIsBuffering(false);
-
-      if (st.isPlaying) await s.pauseAsync();
-      else await s.playAsync();
+        p.play();
+        if (mountedRef.current) setIsBuffering(false);
+      });
     } catch {
       setIsBuffering(false);
       setErr("پخش مقدمه با مشکل مواجه شد، لطفاً دوباره تلاش کن");
     }
-  }, [loadIfNeeded, isBuffering]);
+  }, [isBuffering, loadIfNeeded]);
 
   const seekTo = useCallback(
     async (ms: number) => {
       try {
         setErr(null);
-        await loadIfNeeded();
-        const s = soundRef.current;
-        if (!s) return;
 
-        const st: any = await s.getStatusAsync();
-        if (!st.isLoaded) return;
+        await lock(async () => {
+          await loadIfNeeded();
+          const p = playerRef.current;
+          if (!p || !p.isLoaded) return;
 
-        const d = Number(st.durationMillis ?? durMs);
-        const clamped = Math.max(0, Math.min(ms, Math.max(1, d)));
-        await s.setPositionAsync(clamped);
+          const d = Math.max(1, Math.floor((p.duration || durMs) * 1000));
+          const clamped = Math.max(0, Math.min(ms, d));
+          await p.seekTo(clamped / 1000).catch(() => {});
+        });
       } catch {
         setErr("پخش مقدمه با مشکل مواجه شد، لطفاً دوباره تلاش کن");
       }
@@ -194,28 +217,36 @@ export default function BastanStageIntroScreen() {
 
   const stopAndUnload = useCallback(async () => {
     try {
-      const s = soundRef.current;
-      if (!s) return;
+      const p = playerRef.current;
+      if (!p) return;
 
-      // ذخیره‌ی پوزیشن قبل از خروج (فقط اگر بالاتر از 0)
       try {
-        const st: any = await s.getStatusAsync();
-        if (st?.isLoaded) {
-          const p = Number(st.positionMillis ?? 0);
-          if (p > 0) {
-            await AsyncStorage.setItem(STORAGE_POS_KEY, String(p));
+        if (p.isLoaded) {
+          const currentMs = Math.max(0, Math.floor((p.currentTime || 0) * 1000));
+          if (currentMs > 0) {
+            await AsyncStorage.setItem(STORAGE_POS_KEY, String(currentMs));
           }
         }
       } catch {}
 
-      await s.pauseAsync().catch(() => {});
-      await s.stopAsync().catch(() => {});
-      await s.unloadAsync().catch(() => {});
+      try {
+        p.pause();
+      } catch {}
+      try {
+        p.seekTo(0);
+      } catch {}
+      try {
+        p.remove();
+      } catch {}
     } catch {}
 
-    soundRef.current = null;
+    playerRef.current = null;
+
+    if (!mountedRef.current) return;
     setIsPlaying(false);
     setIsBuffering(false);
+    setPosMs(0);
+    setDurMs(1);
   }, [STORAGE_POS_KEY]);
 
   const onBackPress = useCallback(async () => {
@@ -223,30 +254,25 @@ export default function BastanStageIntroScreen() {
     leavingRef.current = true;
 
     try {
-      // ✅ 1) پوزیشن واقعی لحظه خروج را بگیریم
       let listenedMs = posMs;
 
       try {
-        const s = soundRef.current;
-        if (s) {
-          const st: any = await s.getStatusAsync();
-          if (st?.isLoaded) listenedMs = Number(st.positionMillis ?? listenedMs);
+        const p = playerRef.current;
+        if (p?.isLoaded) {
+          listenedMs = Math.max(0, Math.floor((p.currentTime || 0) * 1000));
         }
       } catch {}
 
-      // ✅ 2) فقط اگر >= 5 ثانیه بود، DONE ثبت شود
       if (phone && listenedMs >= HEARD_MIN_MS) {
-  try {
-    await AsyncStorage.setItem(STORAGE_DONE_KEY, "1");
-  } catch {}
+        try {
+          await AsyncStorage.setItem(STORAGE_DONE_KEY, "1");
+        } catch {}
 
-  // ✅ این یکی برای نقشه پلکان
-  try {
-    await AsyncStorage.setItem(MAP_HEARD_KEY, "1");
-  } catch {}
-}
+        try {
+          await AsyncStorage.setItem(MAP_HEARD_KEY, "1");
+        } catch {}
+      }
 
-      // ✅ 3) بعدش player را unload کنیم
       await stopAndUnload();
     } finally {
       router.back();
@@ -254,9 +280,11 @@ export default function BastanStageIntroScreen() {
   }, [HEARD_MIN_MS, phone, posMs, router, STORAGE_DONE_KEY, stopAndUnload]);
 
   useEffect(() => {
+    mountedRef.current = true;
     readLocal();
+
     return () => {
-      // خروج ناگهانی/فورس: فقط unload
+      mountedRef.current = false;
       stopAndUnload();
     };
   }, [readLocal, stopAndUnload]);
