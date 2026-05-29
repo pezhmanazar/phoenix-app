@@ -83,6 +83,19 @@ function BigAudioPlayer({ url }: { url: string }) {
     }
   };
 
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+const waitUntilLoaded = useCallback(async () => {
+  for (let i = 0; i < 25; i++) {
+    const p = playerRef.current;
+    if (p?.isLoaded) return p;
+    await sleep(100);
+  }
+
+  return playerRef.current;
+}, []);
+
+
   const resetUi = useCallback(() => {
     if (!mountedRef.current) return;
     setIsLoaded(false);
@@ -160,54 +173,60 @@ function BigAudioPlayer({ url }: { url: string }) {
   }, [url, unload, attachStatusListener]);
 
   const togglePlay = useCallback(() => {
-    return lock(async () => {
-      if (isBuffering) return;
+  return lock(async () => {
+    if (isBuffering) return;
 
-      if (!playerRef.current) setIsBuffering(true);
-      await loadIfNeeded();
+    if (!playerRef.current) setIsBuffering(true);
 
-      const p = playerRef.current;
-      if (!p || !p.isLoaded) {
-        if (mountedRef.current) setIsBuffering(false);
-        return;
-      }
+    await loadIfNeeded();
 
-      if (p.playing) {
-        p.pause();
-        if (!mountedRef.current) return;
-        setIsBuffering(false);
-        setIsPlaying(false);
-        return;
-      }
+    const p = await waitUntilLoaded();
 
-      const pos = Math.floor((p.currentTime || 0) * 1000);
-      const dur = Math.floor((p.duration || 0) * 1000);
+    if (!p || !p.isLoaded) {
+      if (mountedRef.current) setIsBuffering(false);
+      return;
+    }
 
-      if (pos >= dur - 250) {
-        await p.seekTo(0).catch(() => {});
-      }
+    if (p.playing) {
+      p.pause();
 
-      p.play();
       if (!mountedRef.current) return;
       setIsBuffering(false);
-      setIsPlaying(true);
-    });
-  }, [isBuffering, loadIfNeeded]);
+      setIsPlaying(false);
+      return;
+    }
+
+    const pos = Math.floor((p.currentTime || 0) * 1000);
+    const dur = Math.floor((p.duration || 0) * 1000);
+
+    if (dur > 0 && pos >= dur - 250) {
+      await p.seekTo(0).catch(() => {});
+    }
+
+    p.play();
+
+    if (!mountedRef.current) return;
+    setIsBuffering(false);
+    setIsPlaying(true);
+  });
+  }, [isBuffering, loadIfNeeded, waitUntilLoaded]);
+
 
   const seekTo = useCallback(
-    (ms: number) => {
-      return lock(async () => {
-        await loadIfNeeded();
-        const p = playerRef.current;
-        if (!p || !p.isLoaded) return;
+  (ms: number) => {
+    return lock(async () => {
+      await loadIfNeeded();
 
-        const d = Math.max(1, Math.floor((p.duration || durMs || 1) * 1000));
-        const clamped = Math.max(0, Math.min(ms, d));
-        await p.seekTo(clamped / 1000).catch(() => {});
-      });
-    },
-    [durMs, loadIfNeeded]
-  );
+      const p = await waitUntilLoaded();
+
+      if (!p || !p.isLoaded) return;
+
+      const d = Math.max(1, Math.floor((p.duration || durMs || 1) * 1000));
+      const clamped = Math.max(0, Math.min(ms, d));
+
+      await p.seekTo(clamped / 1000).catch(() => {});
+    });
+  }, [durMs, loadIfNeeded, waitUntilLoaded]);
 
   useEffect(() => {
     mountedRef.current = true;

@@ -292,7 +292,7 @@ function CoachAudioPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
 
-  const togglePlay = useCallback(() => {
+    const togglePlay = useCallback(() => {
     return lock(async () => {
       if (isBuffering) return;
       if (fadingRef.current) return;
@@ -301,7 +301,16 @@ function CoachAudioPlayer({
       await loadIfNeeded();
 
       const p = playerRef.current;
-      if (!p || !p.isLoaded) {
+      if (!p) {
+        if (mountedRef.current) setIsBuffering(false);
+        return;
+      }
+
+      for (let i = 0; i < 25 && !p.isLoaded; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      if (!p.isLoaded) {
         if (mountedRef.current) setIsBuffering(false);
         return;
       }
@@ -318,7 +327,7 @@ function CoachAudioPlayer({
       const pos = Math.floor((p.currentTime || 0) * 1000);
       const dur = Math.floor((p.duration || 0) * 1000);
 
-      if (pos >= dur - 250) {
+      if (dur > 0 && pos >= dur - 250) {
         await p.seekTo(0).catch(() => {});
       }
 
@@ -326,7 +335,9 @@ function CoachAudioPlayer({
       try {
         p.volume = 1;
       } catch {}
+
       p.play();
+
       if (!mountedRef.current) return;
       setIsBuffering(false);
       setIsPlaying(true);

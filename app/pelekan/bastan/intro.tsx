@@ -312,35 +312,44 @@ export default function BastanIntroScreen() {
   }, [AUDIO_URL, introDone, token, STORAGE_POS_KEY, attachStatusListener]);
 
   const togglePlay = useCallback(async () => {
-    if (isBuffering) return;
+  if (isBuffering) return;
 
-    try {
-      if (!playerRef.current) {
-        setIsBuffering(true);
+  try {
+    if (!playerRef.current) {
+      setIsBuffering(true);
+    }
+
+    await lock(async () => {
+      await loadIfNeeded();
+
+      const p = playerRef.current;
+      if (!p) {
+        setIsBuffering(false);
+        return;
       }
 
-      await lock(async () => {
-        await loadIfNeeded();
+      for (let i = 0; i < 25 && !p.isLoaded; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
 
-        const p = playerRef.current;
-        if (!p || !p.isLoaded) {
-          setIsBuffering(false);
-          return;
-        }
-
+      if (!p.isLoaded) {
         setIsBuffering(false);
+        return;
+      }
 
-        if (p.playing) {
-          p.pause();
-        } else {
-          p.play();
-        }
-      });
-    } catch {
       setIsBuffering(false);
-      setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
-    }
-  }, [loadIfNeeded, isBuffering]);
+
+      if (p.playing) {
+        p.pause();
+      } else {
+        p.play();
+      }
+    });
+  } catch {
+    setIsBuffering(false);
+    setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
+  }
+}, [loadIfNeeded, isBuffering]);
 
   const seekTo = useCallback(
     async (ms: number) => {

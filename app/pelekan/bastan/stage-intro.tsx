@@ -164,35 +164,45 @@ export default function BastanStageIntroScreen() {
   }, [AUDIO_URL, attachStatusListener, ensureAudioMode]);
 
   const togglePlay = useCallback(async () => {
-    if (isBuffering) return;
+  if (isBuffering) return;
 
-    try {
-      setErr(null);
+  try {
+    setErr(null);
 
-      if (!playerRef.current) setIsBuffering(true);
+    if (!playerRef.current) setIsBuffering(true);
 
-      await lock(async () => {
-        await loadIfNeeded();
-        const p = playerRef.current;
-        if (!p || !p.isLoaded) {
-          if (mountedRef.current) setIsBuffering(false);
-          return;
-        }
+    await lock(async () => {
+      await loadIfNeeded();
 
-        if (p.playing) {
-          p.pause();
-          if (mountedRef.current) setIsBuffering(false);
-          return;
-        }
-
-        p.play();
+      const p = playerRef.current;
+      if (!p) {
         if (mountedRef.current) setIsBuffering(false);
-      });
-    } catch {
-      setIsBuffering(false);
-      setErr("پخش مقدمه با مشکل مواجه شد، لطفاً دوباره تلاش کن");
-    }
-  }, [isBuffering, loadIfNeeded]);
+        return;
+      }
+
+      for (let i = 0; i < 25 && !p.isLoaded; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      if (!p.isLoaded) {
+        if (mountedRef.current) setIsBuffering(false);
+        return;
+      }
+
+      if (p.playing) {
+        p.pause();
+        if (mountedRef.current) setIsBuffering(false);
+        return;
+      }
+
+      p.play();
+      if (mountedRef.current) setIsBuffering(false);
+    });
+  } catch {
+    setIsBuffering(false);
+    setErr("پخش مقدمه با مشکل مواجه شد، لطفاً دوباره تلاش کن");
+  }
+}, [isBuffering, loadIfNeeded]);
 
   const seekTo = useCallback(
     async (ms: number) => {

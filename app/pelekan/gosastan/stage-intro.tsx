@@ -1,4 +1,4 @@
-//app\pelekan\bastan\stage-intro.tsx
+//app/pelekan/gosastan/stage-intro.tsx
 import { AUDIO_KEYS, mediaUrl } from "@/constants/media";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -125,33 +125,43 @@ export default function GosastanStageIntroScreen() {
   }, [AUDIO_URL, attachStatusListener]);
 
   const togglePlay = useCallback(async () => {
-    if (isBuffering) return;
+  if (isBuffering) return;
 
-    try {
-      if (!playerRef.current) setIsBuffering(true);
+  try {
+    if (!playerRef.current) setIsBuffering(true);
 
-      await lock(async () => {
-        await loadIfNeeded();
-        const p = playerRef.current;
-        if (!p || !p.isLoaded) {
-          if (mountedRef.current) setIsBuffering(false);
-          return;
-        }
+    await lock(async () => {
+      await loadIfNeeded();
 
-        if (p.playing) {
-          p.pause();
-          if (mountedRef.current) setIsBuffering(false);
-          return;
-        }
-
-        p.play();
+      const p = playerRef.current;
+      if (!p) {
         if (mountedRef.current) setIsBuffering(false);
-      });
-    } catch {
-      setIsBuffering(false);
-      setErr("پخش مقدمه مرحله گسستن با مشکل مواجه شد، لطفاً دوباره تلاش کن");
-    }
-  }, [loadIfNeeded, isBuffering]);
+        return;
+      }
+
+      for (let i = 0; i < 25 && !p.isLoaded; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      if (!p.isLoaded) {
+        if (mountedRef.current) setIsBuffering(false);
+        return;
+      }
+
+      if (p.playing) {
+        p.pause();
+        if (mountedRef.current) setIsBuffering(false);
+        return;
+      }
+
+      p.play();
+      if (mountedRef.current) setIsBuffering(false);
+    });
+  } catch {
+    setIsBuffering(false);
+    setErr("پخش مقدمه مرحله گسستن با مشکل مواجه شد، لطفاً دوباره تلاش کن");
+  }
+}, [loadIfNeeded, isBuffering]);
 
   const seekTo = useCallback(
     async (ms: number) => {

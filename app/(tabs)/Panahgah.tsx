@@ -160,19 +160,28 @@ function InlineAudioPlayer({
     setLoadingAudio(false);
   }, [url, attachStatusListener]);
 
-  const togglePlayPause = useCallback(() => {
+    const togglePlayPause = useCallback(() => {
     return lock(async () => {
       if (!playerRef.current) {
         await ensureLoaded();
       }
 
       const p = playerRef.current;
-      if (!p || !p.isLoaded) {
+      if (!p) {
         if (mountedRef.current) setLoadingAudio(false);
         return;
       }
 
       setLoadingAudio(true);
+
+      for (let i = 0; i < 25 && !p.isLoaded; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      if (!p.isLoaded) {
+        if (mountedRef.current) setLoadingAudio(false);
+        return;
+      }
 
       if (p.playing) {
         p.pause();

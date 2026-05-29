@@ -31,6 +31,7 @@ import {
   Animated,
   BackHandler,
   Easing,
+  FlatList,
   Image,
   Keyboard,
   KeyboardAvoidingView,
@@ -40,7 +41,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  FlatList,
   StyleSheet,
   Text,
   TextInput,
@@ -62,8 +62,8 @@ import {
   extractErrorMessage,
 } from "../../../utils/tickets/helpers";
 // ✅ مسیر را اگر متفاوت است فقط همین خط را اصلاح کن
-import PlanStatusBadge from "../../../components/PlanStatusBadge";
 import AppBannerModal from "@/components/ui/AppBannerModal";
+import PlanStatusBadge from "../../../components/PlanStatusBadge";
 
 /* ===== انواع ===== */
 type MessageType = "text" | "voice" | "image" | "file";
@@ -290,27 +290,38 @@ function VoicePlayer({
         return;
       }
 
-      if (typeof st.duration === "number" && st.duration > 0) {
-        setDur(st.duration);
-      }
+  const durationMs =
+  typeof st.duration === "number" && st.duration > 0
+    ? Math.floor(st.duration * 1000)
+    : 0;
 
-      if (!isDragging.current && typeof st.currentTime === "number") {
-        setPos(st.currentTime);
+const currentMs =
+  typeof st.currentTime === "number" && st.currentTime >= 0
+    ? Math.floor(st.currentTime * 1000)
+    : 0;
 
-        const total = typeof st.duration === "number" ? st.duration : 0;
-        if (total > 0) {
-          setProgress(st.currentTime / total);
-        }
-      }
+if (durationMs > 0) {
+  setDur(durationMs);
+}
 
-      if (st.didJustFinish) {
-        setBuffering(false);
-        setPlaying(false);
-        setFinished(true);
-        setProgress(1);
-        setPos(typeof st.duration === "number" ? st.duration : 0);
-        return;
-      }
+if (!isDragging.current && currentMs >= 0) {
+  setPos(currentMs);
+
+  if (durationMs > 0) {
+    setProgress(currentMs / durationMs);
+  }
+}
+
+   if (st.didJustFinish) {
+  const endMs = durationMs > 0 ? durationMs : currentMs;
+
+  setBuffering(false);
+  setPlaying(false);
+  setFinished(true);
+  setProgress(1);
+  setPos(endMs);
+  return;
+}
 
       if (st.playing) {
         setBuffering(false);

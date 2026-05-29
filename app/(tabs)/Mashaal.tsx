@@ -12,6 +12,8 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,10 +24,9 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import PlanStatusBadge from "../../components/PlanStatusBadge";
+import { AUDIO_KEYS, mediaUrl } from "../../constants/media";
 import { useUser } from "../../hooks/useUser";
 import { getPlanStatus, PRO_FLAG_KEY } from "../../lib/plan";
-
-import { AUDIO_KEYS, mediaUrl } from "../../constants/media";
 
 type PlanView = "free" | "pro" | "expired";
 
@@ -42,7 +43,7 @@ const palette = {
   orange: "#E98A15",
 };
 
-/* --------------------------- Inline Audio Player (مثل پناهگاه + ذخیره پیشرفت) --------------------------- */
+/* --------------------------- Inline Audio Player --------------------------- */
 
 function formatMs(ms: number) {
   const safe = Number.isFinite(ms) ? ms : 0;
@@ -64,6 +65,9 @@ function InlineAudioPlayer({
   url,
   storageKey,
   palette,
+  expanded = false,
+  onExpand,
+  onPlaybackFinish,
 }: {
   url: string;
   storageKey: string;
@@ -74,6 +78,9 @@ function InlineAudioPlayer({
     gold: string;
     glass2: string;
   };
+  expanded?: boolean;
+  onExpand?: () => void;
+  onPlaybackFinish?: () => void;
 }) {
   const playerRef = useRef<AudioPlayer | null>(null);
 
@@ -82,12 +89,16 @@ function InlineAudioPlayer({
 
   const resumeFromRef = useRef<number>(0);
   const lastSaveRef = useRef<number>(0);
+  const finishedRef = useRef(false);
 
   const [playing, setPlaying] = useState(false);
   const [loadingAudio, setLoadingAudio] = useState(false);
 
   const [posMs, setPosMs] = useState(0);
   const [durMs, setDurMs] = useState(0);
+
+  const drawerAnim = useRef(new Animated.Value(expanded ? 1 : 0)).current;
+  const [drawerContentHeight, setDrawerContentHeight] = useState(0);
 
   const progress = useMemo(() => {
     const d = durMs > 0 ? durMs : 0;
@@ -176,7 +187,8 @@ function InlineAudioPlayer({
           p.remove();
         } catch {}
       }
-    } finally {
+        } finally {
+      finishedRef.current = false;
       if (!mountedRef.current) return;
       setPlaying(false);
       setLoadingAudio(false);
@@ -196,18 +208,27 @@ function InlineAudioPlayer({
         setPosMs(p);
         setDurMs(d);
 
-        void maybeSaveProgress(p, d, !!st.didJustFinish);
+        finishedRef.current = !!st.didJustFinish;
+
+        void maybeSaveProgress(
+          st.didJustFinish ? 0 : p,
+          d,
+          !!st.didJustFinish
+        );
 
         if (st.didJustFinish) {
           setPlaying(false);
+          setPosMs(0);
+          resumeFromRef.current = 0;
+          onPlaybackFinish?.();
         }
       });
     },
-    [maybeSaveProgress]
+    [maybeSaveProgress, onPlaybackFinish]
   );
 
   const ensureLoaded = useCallback(async () => {
-    if (playerRef.current) return;
+    if (playerRef.current) return playerRef.current;
 
     setLoadingAudio(true);
 
@@ -238,21 +259,40 @@ function InlineAudioPlayer({
       setPlaying(!!player.playing);
       setLoadingAudio(false);
     }
+
+    return player;
   }, [url, hydrateFromStorage, attachStatusListener]);
 
-  const togglePlayPause = useCallback(() => {
+  const waitUntilLoaded = useCallback(async () => {
+    const p = playerRef.current;
+    if (!p) return null;
+
+    for (let i = 0; i < 25 && !p.isLoaded; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    return p.isLoaded ? p : null;
+  }, []);
+
+    const togglePlayPause = useCallback(() => {
     return lock(async () => {
+      setLoadingAudio(true);
+
+      if (finishedRef.current && playerRef.current) {
+        await unload();
+        resumeFromRef.current = 0;
+        finishedRef.current = false;
+      }
+
       if (!playerRef.current) {
         await ensureLoaded();
       }
 
-      const p = playerRef.current;
-      if (!p || !p.isLoaded) {
+      const p = await waitUntilLoaded();
+      if (!p) {
         if (mountedRef.current) setLoadingAudio(false);
         return;
       }
-
-      setLoadingAudio(true);
 
       if (p.playing) {
         p.pause();
@@ -269,18 +309,30 @@ function InlineAudioPlayer({
         await p.seekTo(0).catch(() => {});
       }
 
+      finishedRef.current = false;
       p.play();
+
       if (!mountedRef.current) return;
       setPlaying(true);
       setLoadingAudio(false);
     });
-  }, [ensureLoaded]);
+  }, [ensureLoaded, waitUntilLoaded, unload]);
 
-  const seekTo = useCallback(
+    const seekTo = useCallback(
     (ratio: number) => {
       return lock(async () => {
-        const p = playerRef.current;
-        if (!p || !p.isLoaded) return;
+        if (finishedRef.current && playerRef.current) {
+          await unload();
+          resumeFromRef.current = 0;
+          finishedRef.current = false;
+        }
+
+        if (!playerRef.current) {
+          await ensureLoaded();
+        }
+
+        const p = await waitUntilLoaded();
+        if (!p) return;
 
         const d = Math.max(0, Math.floor((p.duration || durMs / 1000) * 1000));
         if (d <= 0) return;
@@ -292,35 +344,147 @@ function InlineAudioPlayer({
         if (mountedRef.current) setPosMs(target);
       });
     },
-    [durMs, maybeSaveProgress]
+    [durMs, maybeSaveProgress, ensureLoaded, waitUntilLoaded, unload]
   );
+
+    const seekBy = useCallback(
+    (deltaMs: number) => {
+      return lock(async () => {
+        if (finishedRef.current && playerRef.current) {
+          await unload();
+          resumeFromRef.current = 0;
+          finishedRef.current = false;
+        }
+
+        if (!playerRef.current) {
+          await ensureLoaded();
+        }
+
+        const p = await waitUntilLoaded();
+        if (!p) return;
+
+        const current = Math.max(0, Math.floor((p.currentTime || 0) * 1000));
+        const duration = Math.max(
+          0,
+          Math.floor(((p.duration || 0) > 0 ? p.duration : durMs / 1000) * 1000)
+        );
+
+        const max = duration > 0 ? duration : Number.MAX_SAFE_INTEGER;
+        const target = Math.max(0, Math.min(max, current + deltaMs));
+
+        await p.seekTo(target / 1000).catch(() => {});
+
+        if (duration > 0) {
+          await maybeSaveProgress(target, duration, true);
+        }
+
+        if (mountedRef.current) {
+          setPosMs(target);
+        }
+      });
+    },
+    [ensureLoaded, waitUntilLoaded, durMs, maybeSaveProgress, unload]
+  );
+
+    const restartAudio = useCallback(() => {
+    return lock(async () => {
+      if (finishedRef.current && playerRef.current) {
+        await unload();
+        resumeFromRef.current = 0;
+        finishedRef.current = false;
+      }
+
+      if (!playerRef.current) {
+        await ensureLoaded();
+      }
+
+      const p = await waitUntilLoaded();
+      if (!p) return;
+
+      const duration = Math.max(0, Math.floor((p.duration || durMs / 1000) * 1000));
+
+      await p.seekTo(0).catch(() => {});
+      await maybeSaveProgress(0, duration, true);
+
+      if (mountedRef.current) {
+        setPosMs(0);
+        setPlaying(!!p.playing);
+      }
+    });
+  }, [ensureLoaded, waitUntilLoaded, durMs, maybeSaveProgress, unload]);
+
+  useEffect(() => {
+    Animated.timing(drawerAnim, {
+      toValue: expanded ? 1 : 0,
+      duration: expanded ? 180 : 140,
+      easing: expanded ? Easing.out(Easing.cubic) : Easing.inOut(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [expanded, drawerAnim]);
 
   useEffect(() => {
     mountedRef.current = true;
     hydrateFromStorage();
+
     return () => {
       mountedRef.current = false;
       void unload();
     };
   }, [hydrateFromStorage, unload]);
 
+  const animatedDrawerStyle = {
+    height: drawerAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, drawerContentHeight || 1],
+    }),
+    opacity: drawerAnim,
+    marginTop: drawerAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, 12],
+    }),
+  };
+
   return (
-    <View style={[styles.audioRow, { borderColor: palette.border2, backgroundColor: palette.glass2 }]}>
-      <View style={styles.audioInnerRow}>
+    <View
+      style={[
+        styles.audioRow,
+        {
+          borderColor: palette.border2,
+          backgroundColor: palette.glass2,
+        },
+      ]}
+    >
+      <Pressable
+        onPress={onExpand}
+        style={({ pressed }) => [
+          styles.audioInnerRow,
+          { opacity: pressed ? 0.92 : 1 },
+        ]}
+      >
         <Text style={[styles.audioTimeInline, { color: palette.sub2 }]}>
           {formatMs(posMs)} / {formatMs(durMs)}
         </Text>
 
         <View style={styles.audioBarCol}>
-          <SeekBar progress={progress} palette={{ border2: palette.border2, gold: palette.gold }} onSeek={seekTo} />
+          <SeekBar
+            progress={progress}
+            palette={{ border2: palette.border2, gold: palette.gold }}
+            onSeek={seekTo}
+          />
         </View>
 
         <Pressable
           style={({ pressed }) => [
             styles.audioPlayBtn,
-            { opacity: pressed ? 0.85 : 1, borderColor: "rgba(255,255,255,.10)" },
+            {
+              opacity: pressed ? 0.85 : 1,
+              borderColor: "rgba(255,255,255,.10)",
+            },
           ]}
-          onPress={togglePlayPause}
+          onPress={() => {
+            onExpand?.();
+            void togglePlayPause();
+          }}
           hitSlop={10}
           disabled={loadingAudio && !playing}
         >
@@ -330,11 +494,56 @@ function InlineAudioPlayer({
             <Ionicons name={playing ? "pause" : "play"} size={18} color={palette.text} />
           )}
         </Pressable>
-      </View>
+      </Pressable>
+
+      <Animated.View style={[styles.audioDrawerAnimated, animatedDrawerStyle]}>
+        <View
+          style={[styles.audioDrawer, { borderTopColor: palette.border2 }]}
+          onLayout={(e) => {
+            const h = Math.ceil(e.nativeEvent.layout.height);
+            if (h > 0 && h !== drawerContentHeight) {
+              setDrawerContentHeight(h);
+            }
+          }}
+          pointerEvents={expanded ? "auto" : "none"}
+        >
+          <Pressable
+            onPress={() => void seekBy(10_000)}
+            style={({ pressed }) => [
+              styles.audioToolBtn,
+              { opacity: pressed ? 0.82 : 1 },
+            ]}
+          >
+            <Ionicons name="play-forward" size={16} color={palette.text} />
+            <Text style={[styles.audioToolText, { color: palette.text }]}>۱۰+</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => void restartAudio()}
+            style={({ pressed }) => [
+              styles.audioToolBtn,
+              { opacity: pressed ? 0.82 : 1 },
+            ]}
+          >
+            <Ionicons name="refresh-circle-outline" size={18} color={palette.text} />
+            <Text style={[styles.audioToolText, { color: palette.text }]}>از اول</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => void seekBy(-10_000)}
+            style={({ pressed }) => [
+              styles.audioToolBtn,
+              { opacity: pressed ? 0.82 : 1 },
+            ]}
+          >
+            <Ionicons name="play-back" size={16} color={palette.text} />
+            <Text style={[styles.audioToolText, { color: palette.text }]}>۱۰-</Text>
+          </Pressable>
+        </View>
+      </Animated.View>
     </View>
   );
 }
-
 
 function SeekBar({
   progress,
@@ -360,7 +569,15 @@ function SeekBar({
         }}
       >
         <View style={[styles.audioBarWrap, { borderColor: palette.border2 }]}>
-          <View style={[styles.audioBarFill, { width: `${Math.round(progress * 100)}%`, backgroundColor: palette.gold }]} />
+          <View
+            style={[
+              styles.audioBarFill,
+              {
+                width: `${Math.round(progress * 100)}%`,
+                backgroundColor: palette.gold,
+              },
+            ]}
+          />
         </View>
       </Pressable>
     </View>
@@ -376,11 +593,20 @@ export default function Mashaal() {
 
   const [planView, setPlanView] = useState<PlanView>("free");
   const [loadingPlan, setLoadingPlan] = useState(true);
+  const [expandedAudioKey, setExpandedAudioKey] = useState<string | null>(null);
 
   const isProPlan = planView === "pro";
 
   const MASHAAAL_INTRO_URL = useMemo(() => mediaUrl(AUDIO_KEYS.mashaalIntroLocked), []);
   const MASHAAAL_01_URL = useMemo(() => mediaUrl(AUDIO_KEYS.mashaal01), []);
+
+  const toggleExpandedAudio = useCallback((key: string) => {
+    setExpandedAudioKey((prev) => (prev === key ? null : key));
+  }, []);
+
+  const collapseExpandedAudio = useCallback((key: string) => {
+    setExpandedAudioKey((prev) => (prev === key ? null : prev));
+  }, []);
 
   const syncPlan = useCallback(async () => {
     try {
@@ -441,7 +667,6 @@ export default function Mashaal() {
       <View pointerEvents="none" style={styles.bgGlowTop} />
       <View pointerEvents="none" style={styles.bgGlowBottom} />
 
-      {/* Header: بج سمت چپ + عنوان راست‌چین */}
       <View style={[styles.headerBar, { paddingTop: 10 }]}>
         <View style={styles.headerLeft}>
           <PlanStatusBadge me={me} showExpiringText />
@@ -468,7 +693,6 @@ export default function Mashaal() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* اگر پلن پرو نیست → صفحه قفل‌شده (متن/آیکن‌ها دست‌نخورده) */}
         {!isProPlan ? (
           <View style={styles.lockCard}>
             {planView === "expired" ? (
@@ -482,13 +706,15 @@ export default function Mashaal() {
                   برای این‌که دوباره به همهٔ درس‌ها و مسیرهای آموزشی دسترسی داشته باشی، پلن ققنوس رو تمدید کن و ادامه بده.
                 </Text>
 
-                {/* ✅ NEW: ویس معرفی + دکمه اشتراک */}
                 <View style={{ height: 14 }} />
                 <Text style={styles.lockHintText}>معرفی کوتاه مشعل (صوتی):</Text>
                 <View style={{ height: 10 }} />
                 <InlineAudioPlayer
                   url={MASHAAAL_INTRO_URL}
                   storageKey={"mashaal:introLocked:v1"}
+                  expanded={expandedAudioKey === "mashaal:introLocked:v1"}
+                  onExpand={() => toggleExpandedAudio("mashaal:introLocked:v1")}
+                  onPlaybackFinish={() => collapseExpandedAudio("mashaal:introLocked:v1")}
                   palette={{
                     border2: palette.border2,
                     text: palette.text,
@@ -541,13 +767,15 @@ export default function Mashaal() {
                   </Text>
                 </View>
 
-                {/* ✅ NEW: ویس معرفی + دکمه اشتراک */}
                 <View style={{ height: 14 }} />
                 <Text style={styles.lockHintText}>قبل از تصمیم، این معرفی کوتاه رو گوش کن:</Text>
                 <View style={{ height: 10 }} />
                 <InlineAudioPlayer
                   url={MASHAAAL_INTRO_URL}
                   storageKey={"mashaal:introLocked:v1"}
+                  expanded={expandedAudioKey === "mashaal:introLocked:v1"}
+                  onExpand={() => toggleExpandedAudio("mashaal:introLocked:v1")}
+                  onPlaybackFinish={() => collapseExpandedAudio("mashaal:introLocked:v1")}
                   palette={{
                     border2: palette.border2,
                     text: palette.text,
@@ -568,7 +796,6 @@ export default function Mashaal() {
             )}
           </View>
         ) : (
-          /* ✅ PRO: فعلاً فقط یک «ویس شروع» + ادامه از همانجا (با حفظ حس completion) */
           <View style={[styles.lockCard, { marginTop: 6 }]}>
             <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
               <Ionicons name="play-circle" size={22} color={palette.gold} />
@@ -579,6 +806,9 @@ export default function Mashaal() {
             <InlineAudioPlayer
               url={MASHAAAL_01_URL}
               storageKey={"mashaal:01:v1"}
+              expanded={expandedAudioKey === "mashaal:01:v1"}
+              onExpand={() => toggleExpandedAudio("mashaal:01:v1")}
+              onPlaybackFinish={() => collapseExpandedAudio("mashaal:01:v1")}
               palette={{
                 border2: palette.border2,
                 text: palette.text,
@@ -619,7 +849,12 @@ const styles = StyleSheet.create({
   },
 
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  centerText: { marginTop: 8, color: "rgba(231,238,247,.72)", fontSize: 12, fontWeight: "800" },
+  centerText: {
+    marginTop: 8,
+    color: "rgba(231,238,247,.72)",
+    fontSize: 12,
+    fontWeight: "800",
+  },
 
   headerBar: {
     borderBottomWidth: 1,
@@ -647,6 +882,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     paddingRight: 0,
   },
+
   headerTitleBox: {
     maxWidth: "92%",
     paddingHorizontal: 10,
@@ -655,6 +891,7 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
     alignSelf: "flex-end",
   },
+
   headerTitle: {
     color: "#F9FAFB",
     fontSize: 15,
@@ -680,6 +917,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 6,
   },
+
   lockTitle: {
     color: "#F9FAFB",
     fontSize: 15,
@@ -688,6 +926,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     flex: 1,
   },
+
   lockBody: {
     color: "rgba(231,238,247,.80)",
     marginTop: 10,
@@ -696,6 +935,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: "700",
   },
+
   lockHintBox: {
     marginTop: 16,
     padding: 10,
@@ -704,6 +944,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,.08)",
   },
+
   lockHintText: {
     color: "rgba(231,238,247,.82)",
     fontSize: 12,
@@ -712,7 +953,12 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  bulletRow: { flexDirection: "row-reverse", alignItems: "center", gap: 6 },
+  bulletRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+  },
+
   bulletText: {
     fontSize: 13,
     textAlign: "right",
@@ -731,6 +977,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(212,175,55,.35)",
     marginTop: 10,
   },
+
   proBtnText: {
     color: "#0b0f14",
     fontWeight: "900",
@@ -752,12 +999,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 16,
     padding: 12,
+    overflow: "hidden",
   },
+
   audioInnerRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
     gap: 10,
   },
+
   audioPlayBtn: {
     width: 36,
     height: 36,
@@ -767,16 +1017,19 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,.06)",
     borderWidth: 1,
   },
+
   audioBarCol: {
     flex: 1,
     justifyContent: "center",
   },
+
   audioTimeInline: {
     width: 86,
     textAlign: "center",
     fontWeight: "900",
     fontSize: 11,
   },
+
   audioBarWrap: {
     height: 10,
     borderRadius: 999,
@@ -784,8 +1037,42 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,.04)",
     overflow: "hidden",
   },
+
   audioBarFill: {
     height: "100%",
     borderRadius: 999,
+  },
+
+  audioDrawerAnimated: {
+    overflow: "hidden",
+  },
+
+  audioDrawer: {
+    paddingTop: 12,
+    borderTopWidth: 1,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+
+  audioToolBtn: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.09)",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row-reverse",
+    gap: 6,
+    paddingHorizontal: 8,
+  },
+
+  audioToolText: {
+    fontSize: 12,
+    fontWeight: "900",
+    textAlign: "center",
   },
 });
