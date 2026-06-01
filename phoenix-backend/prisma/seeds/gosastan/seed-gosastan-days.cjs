@@ -7,16 +7,12 @@ async function seedGosastanDays() {
     where: { code: 'gosastan' },
     update: {
       titleFa: 'گسستن',
-      description:
-        'مرحله گسستن در پلکان برای فاصله گرفتن آگاهانه از الگوهای فرساینده و تمرین‌های روزانه بازتنظیم ذهن و رفتار.',
       sortOrder: 2,
       isActive: true,
     },
     create: {
       code: 'gosastan',
       titleFa: 'گسستن',
-      description:
-        'مرحله گسستن در پلکان برای فاصله گرفتن آگاهانه از الگوهای فرساینده و تمرین‌های روزانه بازتنظیم ذهن و رفتار.',
       sortOrder: 2,
       isActive: true,
     },
