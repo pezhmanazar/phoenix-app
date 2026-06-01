@@ -1,6 +1,12 @@
 // routes/pelekan.js
 import express from "express";
 import authUser from "../middleware/authUser.js";
+import {
+  completeDayBasedTask,
+  getDayBasedStageState,
+  isDayBasedStageCode,
+  resetCurrentDay,
+} from "../services/pelekan/dayBasedStages.js";
 import engineModule from "../services/pelekan/engine.cjs";
 import prisma from "../utils/prisma.js";
 
@@ -2248,6 +2254,128 @@ if (!phone) {
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
+
+// -------------------- DayBasedStages Endpoints --------------------
+
+router.get("/stage/:stageCode/state", authUser, async (req, res) => {
+  try {
+    noStore(res);
+
+    const phone = req.user?.phone;
+    if (!phone) {
+      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+    }
+
+    const stageCode = String(req.params?.stageCode || "").trim();
+
+    if (!isDayBasedStageCode(stageCode)) {
+      return res.json({ ok: false, error: "INVALID_STAGE_CODE" });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true },
+    });
+
+    if (!user) {
+      return res.json({ ok: false, error: "USER_NOT_FOUND" });
+    }
+
+    const result = await getDayBasedStageState({
+      prisma,
+      userId: user.id,
+      stageCode,
+    });
+
+    return res.json(result);
+  } catch (e) {
+    console.error("[pelekan.stage.state] error:", e?.message || "unknown_error");
+    return res.json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
+router.post("/stage/:stageCode/task/complete", authUser, async (req, res) => {
+  try {
+    noStore(res);
+
+    const phone = req.user?.phone;
+    if (!phone) {
+      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+    }
+
+    const stageCode = String(req.params?.stageCode || "").trim();
+    const taskId = String(req.body?.taskId || "").trim();
+    const done = req.body?.done !== false;
+
+    if (!isDayBasedStageCode(stageCode)) {
+      return res.json({ ok: false, error: "INVALID_STAGE_CODE" });
+    }
+
+    if (!taskId) {
+      return res.json({ ok: false, error: "TASK_ID_REQUIRED" });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true },
+    });
+
+    if (!user) {
+      return res.json({ ok: false, error: "USER_NOT_FOUND" });
+    }
+
+    const result = await completeDayBasedTask({
+      prisma,
+      userId: user.id,
+      stageCode,
+      taskId,
+      done,
+    });
+
+    return res.json(result);
+  } catch (e) {
+    console.error("[pelekan.stage.task.complete] error:", e?.message || "unknown_error");
+    return res.json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
+router.post("/stage/:stageCode/day/reset", authUser, async (req, res) => {
+  try {
+    noStore(res);
+
+    const phone = req.user?.phone;
+    if (!phone) {
+      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+    }
+
+    const stageCode = String(req.params?.stageCode || "").trim();
+
+    if (!isDayBasedStageCode(stageCode)) {
+      return res.json({ ok: false, error: "INVALID_STAGE_CODE" });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true },
+    });
+
+    if (!user) {
+      return res.json({ ok: false, error: "USER_NOT_FOUND" });
+    }
+
+    const result = await resetCurrentDay({
+      prisma,
+      userId: user.id,
+      stageCode,
+    });
+
+    return res.json(result);
+  } catch (e) {
+    console.error("[pelekan.stage.day.reset] error:", e?.message || "unknown_error");
+    return res.json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
 
 // -------------------- Debug Endpoints --------------------
 
