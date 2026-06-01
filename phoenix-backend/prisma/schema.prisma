@@ -425,14 +425,14 @@ model PelekanTask {
   dayId String
   day   PelekanDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
 
+  code        String? @unique
   titleFa     String
   description String?
-  sortOrder   Int     @default(0)
+  sortOrder   Int    @default(0)
 
   weightPercent Int @default(10)
-
-  xpReward   Int     @default(0)
-  isRequired Boolean @default(false)
+  xpReward      Int @default(0)
+  isRequired    Boolean @default(false)
 
   userProgress PelekanTaskProgress[]
 
