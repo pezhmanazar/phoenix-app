@@ -470,20 +470,10 @@ function InlineAudioPlayer({
   useEffect(() => {
   isActiveRef.current = isActive;
 
-  const p = playerRef.current;
-  if (!p) return;
-
-  if (!isActive && p.playing) {
-    try {
-      p.pause();
-    } catch {}
-
-    if (mountedRef.current) {
-      setPlaying(false);
-      setLoadingAudio(false);
-    }
+  if (!isActive && playerRef.current) {
+    void unload();
   }
-}, [isActive]);
+}, [isActive, unload]);
 
   useEffect(() => {
     Animated.timing(drawerAnim, {
@@ -746,10 +736,15 @@ const deactivateAudio = useCallback((key: string) => {
   }, [syncPlan]);
 
   useFocusEffect(
-    useCallback(() => {
-      syncPlan();
-    }, [syncPlan])
-  );
+  useCallback(() => {
+    syncPlan();
+
+    return () => {
+      setActiveAudioKey(null);
+      setExpandedAudioKey(null);
+    };
+  }, [syncPlan])
+);
 
   const goToSubscription = () => {
     router.push("/Subscription");

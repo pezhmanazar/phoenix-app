@@ -70,9 +70,6 @@ async function fetchJsonAuthed(url: string, token: string) {
     json = null;
   }
 
-  console.log("REVIEW_RESULT_FETCH_STATUS:", res.status, url);
-  console.log("REVIEW_RESULT_FETCH_JSON:", json);
-
   if (!res.ok || !json?.ok) {
     const msg =
       json?.error ||
@@ -106,9 +103,6 @@ async function postJsonAuthed(url: string, body: any, token: string) {
   } catch {
     json = null;
   }
-
-  console.log("REVIEW_RESULT_POST_STATUS:", res.status, url);
-  console.log("REVIEW_RESULT_POST_JSON:", json);
 
   if (!res.ok || !json?.ok) {
     const msg =
@@ -545,18 +539,11 @@ const { token, loading: authLoading } = useAuth() as any;
 }, [router]);
 
   const fetchAll = useCallback(async () => {
-  console.log("REVIEW_RESULT_FETCHALL_START", {
-  authLoading,
-  hasToken: !!token,
-});
-
 if (authLoading) {
-  console.log("REVIEW_RESULT_FETCHALL_SKIP_AUTH_LOADING");
-  return;
+    return;
 }
 
 if (!token) {
-  console.log("REVIEW_RESULT_FETCHALL_NO_TOKEN");
   setBaselineSession(null);
   setReviewSession(null);
   setResult(null);
@@ -577,12 +564,6 @@ if (!token) {
       const b = stJson?.data?.baseline?.session ?? null;
       const r = stJson?.data?.review?.session ?? null;
 
-console.log("STATE_BASELINE_SESSION:", b);
-console.log("STATE_REVIEW_SESSION:", r);
-console.log("STATE_REVIEW_STATUS:", r?.status);
-console.log("STATE_REVIEW_CHOSEN_PATH:", r?.chosenPath);
-
-
       if (mountedRef.current) {
         setBaselineSession(b);
         setReviewSession(r);
@@ -602,8 +583,6 @@ console.log("STATE_REVIEW_CHOSEN_PATH:", r?.chosenPath);
 
 try {
   const rrJson: ResultResponse = await fetchJsonAuthed(`${API_REVIEW}/result`, token);
-  console.log("REVIEW_RESULT_DATA_STATUS:", rrJson?.data?.status);
-  console.log("REVIEW_RESULT_DATA_RESULT:", rrJson?.data?.result);
 
   if (mountedRef.current) {
     setReviewResultStatus(rrJson?.data?.status ?? null);
@@ -611,8 +590,6 @@ try {
     setErr(null);
   }
 } catch (e: any) {
-  console.log("REVIEW_RESULT_RESULT_FETCH_ERROR:", e?.message || e);
-
   if (mountedRef.current) {
     setReviewResultStatus((rStatus as any) || null);
     setResult(null);
@@ -628,16 +605,9 @@ try {
   }, [token, authLoading]);
 
   useEffect(() => {
-  console.log("[ReviewResult/useEffect]", {
-    authLoading,
-    hasToken: !!token,
-    tokenPreview: token ? `${token.slice(0, 12)}...` : null,
-  });
-
   if (authLoading) return;
   fetchAll();
-}, [authLoading, token, fetchAll]);
-
+}, [authLoading, fetchAll]);
 
   useFocusEffect(
   useCallback(() => {
@@ -1038,21 +1008,10 @@ if (!token) {
           )}
 
 {!!err && !loading && !authLoading && (
-  <View>
-    <Text style={[styles.rtl, { color: palette.red }]}>
-      {getFriendlyErrorMessage(err)}
-    </Text>
-    <Text style={[styles.rtl, { color: palette.sub2, marginTop: 6, fontSize: 12 }]}>
-      DEBUG: {String(err)}
-    </Text>
-    <Text style={[styles.rtl, { color: palette.sub2, marginTop: 4, fontSize: 12 }]}>
-      token={token ? "YES" : "NO"} | authLoading={String(authLoading)}
-    </Text>
-  </View>
+  <Text style={[styles.rtl, { color: palette.red }]}>
+    {getFriendlyErrorMessage(err)}
+  </Text>
 )}
-          {/* {!!err && !loading && !authLoading && (
-            <Text style={[styles.rtl, { color: palette.red }]}>{getFriendlyErrorMessage(err)}</Text>
-          )} */}
 
           {!loading && !authLoading && !err && (
             <>
