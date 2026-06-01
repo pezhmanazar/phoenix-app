@@ -19,10 +19,14 @@ async function ensureActivePelekanDay(prisma, userId, desiredDayId) {
       });
     }
 
-    const existing = await tx.pelekanDayProgress.findUnique({
-      where: { userId_dayId: { userId, dayId: desiredDayId } },
-      select: { startedAt: true },
-    });
+  const existing = await tx.pelekanDayProgress.findUnique({
+  where: { userId_dayId: { userId, dayId: desiredDayId } },
+  select: { startedAt: true, status: true },
+});
+
+if (existing?.status === "completed") {
+  return;
+}
 
     if (!existing) {
       await tx.pelekanDayProgress.create({
