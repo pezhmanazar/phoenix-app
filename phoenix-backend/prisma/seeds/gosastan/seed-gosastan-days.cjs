@@ -8,13 +8,11 @@ async function seedGosastanDays() {
     update: {
       titleFa: 'گسستن',
       sortOrder: 2,
-      isActive: true,
     },
     create: {
       code: 'gosastan',
       titleFa: 'گسستن',
       sortOrder: 2,
-      isActive: true,
     },
   });
 
