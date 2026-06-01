@@ -597,8 +597,9 @@ export default function Mashaal() {
 
   const isProPlan = planView === "pro";
 
-  const MASHAAAL_INTRO_URL = useMemo(() => mediaUrl(AUDIO_KEYS.mashaalIntroLocked), []);
-  const MASHAAAL_01_URL = useMemo(() => mediaUrl(AUDIO_KEYS.mashaal01), []);
+  const MASHAAL_INTRO_URL = useMemo(() => mediaUrl(AUDIO_KEYS.mashaal.intro), []);
+  const MASHAAL_01_URL = useMemo(() => mediaUrl(AUDIO_KEYS.mashaal.lesson01), []);
+
 
   const toggleExpandedAudio = useCallback((key: string) => {
     setExpandedAudioKey((prev) => (prev === key ? null : key));
@@ -710,7 +711,7 @@ export default function Mashaal() {
                 <Text style={styles.lockHintText}>معرفی کوتاه مشعل (صوتی):</Text>
                 <View style={{ height: 10 }} />
                 <InlineAudioPlayer
-                  url={MASHAAAL_INTRO_URL}
+                  url={MASHAAL_INTRO_URL}
                   storageKey={"mashaal:introLocked:v1"}
                   expanded={expandedAudioKey === "mashaal:introLocked:v1"}
                   onExpand={() => toggleExpandedAudio("mashaal:introLocked:v1")}
@@ -771,7 +772,7 @@ export default function Mashaal() {
                 <Text style={styles.lockHintText}>قبل از تصمیم، این معرفی کوتاه رو گوش کن:</Text>
                 <View style={{ height: 10 }} />
                 <InlineAudioPlayer
-                  url={MASHAAAL_INTRO_URL}
+                  url={MASHAAL_INTRO_URL}
                   storageKey={"mashaal:introLocked:v1"}
                   expanded={expandedAudioKey === "mashaal:introLocked:v1"}
                   onExpand={() => toggleExpandedAudio("mashaal:introLocked:v1")}
@@ -804,7 +805,7 @@ export default function Mashaal() {
 
             <View style={{ height: 12 }} />
             <InlineAudioPlayer
-              url={MASHAAAL_01_URL}
+              url={MASHAAL_01_URL}
               storageKey={"mashaal:01:v1"}
               expanded={expandedAudioKey === "mashaal:01:v1"}
               onExpand={() => toggleExpandedAudio("mashaal:01:v1")}

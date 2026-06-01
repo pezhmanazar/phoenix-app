@@ -74,8 +74,43 @@ export const AUDIO_KEYS = {
     whatIsExDoing01: "media/audio/panahgah/techniques/what-is-ex-doing-01.mp3",
   },
 
-  mashaalIntroLocked: "media/audio/mashaal/intro-mashaal.mp3",
-  mashaal01: "media/audio/mashaal/mashaal-01.mp3",
+  
+  //mashaal01: "media/audio/mashaal/mashaal-01.mp3",
+
+    mashaalIntroLocked: "media/audio/mashaal/intro-mashaal.mp3",
+  // 🔥 مشعل
+  mashaal01: "media/audio/mashaal/01-what-is-heartbreak.mp3",
+
+  mashaal: {
+    intro: "media/audio/mashaal/intro-mashaal.mp3",
+
+    lesson01: "media/audio/mashaal/01-what-is-heartbreak.mp3",
+    lesson02: "media/audio/mashaal/02-brain-role-in-heartbreak-pain.mp3",
+    lesson03: "media/audio/mashaal/03-what-have-i-lost.mp3",
+    lesson04: "media/audio/mashaal/04-loving-brain-and-deprived-brain.mp3",
+    lesson05: "media/audio/mashaal/05-emotional-grief.mp3",
+    lesson06: "media/audio/mashaal/06-relationship-addiction.mp3",
+    lesson07: "media/audio/mashaal/07-why-cant-i-let-go.mp3",
+    lesson08: "media/audio/mashaal/08-types-of-attachment-dependency.mp3",
+    lesson09: "media/audio/mashaal/09-attachment-styles-introduction.mp3",
+    lesson10: "media/audio/mashaal/10-schemas-role-in-heartbreak.mp3",
+    lesson11: "media/audio/mashaal/11-other-schemas-introduction.mp3",
+    lesson12: "media/audio/mashaal/12-why-this-relationship-mattered-so-much.mp3",
+    lesson13: "media/audio/mashaal/13-cognitive-distortions.mp3",
+    lesson14: "media/audio/mashaal/14-rumination.mp3",
+    lesson15: "media/audio/mashaal/15-questions-after-breakup.mp3",
+    lesson16: "media/audio/mashaal/16-common-false-beliefs.mp3",
+    lesson17: "media/audio/mashaal/17-psychology-of-betrayal.mp3",
+    lesson18: "media/audio/mashaal/18-rejection-wound.mp3",
+    lesson19: "media/audio/mashaal/19-shame-comparison-self-blame.mp3",
+    lesson20: "media/audio/mashaal/20-self-esteem-after-breakup.mp3",
+    lesson21: "media/audio/mashaal/21-why-did-this-relationship-end.mp3",
+    lesson22: "media/audio/mashaal/22-is-getting-back-together-possible.mp3",
+    lesson23: "media/audio/mashaal/23-healthy-love-or-dependency.mp3",
+    lesson24: "media/audio/mashaal/24-healthy-relationship-boundaries.mp3",
+    lesson25: "media/audio/mashaal/25-deciding-the-path-forward.mp3",
+  },
+
 
   review: {
     danger: "media/audio/review/review-danger.mp3",
