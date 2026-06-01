@@ -584,6 +584,7 @@ function Banner({ text, onClose }: { text: string; onClose: () => void }) {
 
 /* ================= Composer ================= */
 const MAX_VOICE_MS = 5 * 60 * 1000;
+const TECH_SUPPORT_WARNING_SEEN_KEY = "tech_support_warning_seen_v1";
 const parseTicketType = (idLike?: string): "tech" | "therapy" | null =>
   idLike === "tech" || idLike === "therapy" ? idLike : null;
 
@@ -1224,6 +1225,7 @@ export default function TicketDetail() {
 
   const [banner, setBanner] = useState<string>("");
   const [exitModalVisible, setExitModalVisible] = useState(false);
+  const [techWarningVisible, setTechWarningVisible] = useState(false);
   const exitActionRef = useRef<(() => void) | null>(null);
 
   const scrollRef = useRef<FlatList<Message> | null>(null);
@@ -1352,6 +1354,24 @@ export default function TicketDetail() {
   useEffect(() => {
     syncPlanView();
   }, [syncPlanView]);
+
+  useEffect(() => {
+  const checkTechWarning = async () => {
+    try {
+      const currentType = (ticket?.type || typeFromParam) as "tech" | "therapy" | null;
+
+      if (currentType !== "tech") return;
+
+      const seen = await AsyncStorage.getItem(TECH_SUPPORT_WARNING_SEEN_KEY);
+
+      if (seen !== "1") {
+        setTechWarningVisible(true);
+      }
+    } catch {}
+  };
+
+  checkTechWarning();
+}, [ticket?.type, typeFromParam]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1547,6 +1567,14 @@ export default function TicketDetail() {
       ? "درمانگر ققنوس"
       : "پشتیبانی فنی ققنوس";
 
+  const confirmTechWarning = useCallback(async () => {
+  try {
+    await AsyncStorage.setItem(TECH_SUPPORT_WARNING_SEEN_KEY, "1");
+  } catch {}
+
+  setTechWarningVisible(false);
+}, []);
+
   const doClearLocal = useCallback(async () => {
     if (!id) return;
 
@@ -1602,8 +1630,12 @@ export default function TicketDetail() {
       >
         <View style={styles.msgTopRow}>
           <Text style={[styles.msgWho, { color: textColor }]}>
-            {isAdmin ? "پاسخ پشتیبانی" : "شما"}
-          </Text>
+  {isAdmin
+    ? chatType === "therapy"
+      ? "درمانگر ققنوس"
+      : "پشتیبان فنی"
+    : "شما"}
+</Text>
 
           <TouchableOpacity
             onPress={() => togglePin(m.id)}
@@ -1694,7 +1726,7 @@ export default function TicketDetail() {
         ) : null}
       </View>
     );
-  }, [pins, localImagePreviews, authHeaders, pushError, togglePin]);
+  }, [pins, localImagePreviews, authHeaders, pushError, togglePin, chatType]);
 
   const renderItem = useCallback(
   ({ item }: { item: Message }) => renderMessage(item),
@@ -2207,6 +2239,19 @@ useEffect(() => {
           closeText="می‌مونم"
           onClose={() => setExitModalVisible(false)}
         />
+
+        <AppBannerModal
+  visible={techWarningVisible}
+  kind="warning"
+  title="نکته مهم"
+  message={`اینجا فقط برای رسیدگی به مشکلات فنی اپلیکیشن، پرداخت و اشتراک، ورود به حساب، خطاهای برنامه، پخش فایل‌ها، پیشنهادها و انتقادهاست.
+
+اگه پیامت درباره حال روحی، رابطه، مسیر درمان، تمرین‌ها یا موضوعات احساسیه، لطفاً از بخش «پناه» برای ارتباط با درمانگر ققنوس استفاده کن.
+
+برای اینکه درخواست‌های فنی سریع‌تر و دقیق‌تر بررسی بشن، پیام‌های درمانی و آموزشی در این بخش پاسخ داده نمی‌شن.`}
+  closeText="متوجه شدم"
+  onClose={confirmTechWarning}
+/>
       </SafeAreaView>
     </KeyboardAvoidingView>
   );

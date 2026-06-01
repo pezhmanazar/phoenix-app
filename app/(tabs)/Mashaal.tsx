@@ -66,7 +66,9 @@ function InlineAudioPlayer({
   storageKey,
   palette,
   expanded = false,
-  onExpand,
+  isActive = false,
+  onPlayRequest,
+  onPauseRequest,
   onPlaybackFinish,
 }: {
   url: string;
@@ -79,10 +81,13 @@ function InlineAudioPlayer({
     glass2: string;
   };
   expanded?: boolean;
-  onExpand?: () => void;
+  isActive?: boolean;
+  onPlayRequest?: () => void;
+  onPauseRequest?: () => void;
   onPlaybackFinish?: () => void;
 }) {
   const playerRef = useRef<AudioPlayer | null>(null);
+  const isActiveRef = useRef(isActive);
 
   const opLockRef = useRef(false);
   const mountedRef = useRef(true);
@@ -166,34 +171,34 @@ function InlineAudioPlayer({
   }, [storageKey]);
 
   const unload = useCallback(async () => {
-    const p = playerRef.current;
-    playerRef.current = null;
+  const p = playerRef.current;
+  playerRef.current = null;
 
-    try {
-      if (p) {
-        try {
-          if (p.isLoaded) {
-            const currentMs = Math.max(0, Math.floor((p.currentTime || 0) * 1000));
-            const durationMs = Math.max(0, Math.floor((p.duration || 0) * 1000));
-            await maybeSaveProgress(currentMs, durationMs, true);
-          }
-        } catch {}
+  try {
+    if (p) {
+      try {
+        if (p.isLoaded) {
+          const currentMs = Math.max(0, Math.floor((p.currentTime || 0) * 1000));
+          const durationMs = Math.max(0, Math.floor((p.duration || 0) * 1000));
+          await maybeSaveProgress(currentMs, durationMs, true);
+        }
+      } catch {}
 
-        try {
-          p.pause();
-        } catch {}
+      try {
+        p.pause();
+      } catch {}
 
-        try {
-          p.remove();
-        } catch {}
-      }
-        } finally {
-      finishedRef.current = false;
-      if (!mountedRef.current) return;
-      setPlaying(false);
-      setLoadingAudio(false);
+      try {
+        p.remove();
+      } catch {}
     }
-  }, [maybeSaveProgress]);
+  } finally {
+    finishedRef.current = false;
+    if (!mountedRef.current) return;
+    setPlaying(false);
+    setLoadingAudio(false);
+  }
+}, [maybeSaveProgress]);
 
   const attachStatusListener = useCallback(
     (player: AudioPlayer) => {
@@ -216,18 +221,21 @@ function InlineAudioPlayer({
           !!st.didJustFinish
         );
 
-        if (st.didJustFinish) {
-          setPlaying(false);
-          setPosMs(0);
-          resumeFromRef.current = 0;
-          onPlaybackFinish?.();
-        }
+  if (st.didJustFinish) {
+  setPlaying(false);
+  setLoadingAudio(false);
+  setPosMs(0);
+  resumeFromRef.current = 0;
+  isActiveRef.current = false;
+  onPlaybackFinish?.();
+}
       });
     },
     [maybeSaveProgress, onPlaybackFinish]
   );
 
-  const ensureLoaded = useCallback(async () => {
+  const ensureLoaded = useCallback(
+  async (keepLoading = false) => {
     if (playerRef.current) return playerRef.current;
 
     setLoadingAudio(true);
@@ -257,11 +265,17 @@ function InlineAudioPlayer({
     if (mountedRef.current) {
       setDurMs(Math.max(0, Math.floor((player.duration || 0) * 1000)));
       setPlaying(!!player.playing);
-      setLoadingAudio(false);
+
+      if (!keepLoading) {
+        setLoadingAudio(false);
+      }
     }
 
     return player;
-  }, [url, hydrateFromStorage, attachStatusListener]);
+  },
+  [url, hydrateFromStorage, attachStatusListener]
+);
+
 
   const waitUntilLoaded = useCallback(async () => {
     const p = playerRef.current;
@@ -275,48 +289,88 @@ function InlineAudioPlayer({
   }, []);
 
     const togglePlayPause = useCallback(() => {
-    return lock(async () => {
-      setLoadingAudio(true);
+  return lock(async () => {
+    const existing = playerRef.current;
 
-      if (finishedRef.current && playerRef.current) {
-        await unload();
-        resumeFromRef.current = 0;
-        finishedRef.current = false;
-      }
+    if (existing?.playing) {
+      try {
+        existing.pause();
+      } catch {}
 
-      if (!playerRef.current) {
-        await ensureLoaded();
-      }
+      isActiveRef.current = false;
 
-      const p = await waitUntilLoaded();
-      if (!p) {
-        if (mountedRef.current) setLoadingAudio(false);
-        return;
-      }
-
-      if (p.playing) {
-        p.pause();
-        if (!mountedRef.current) return;
+      if (mountedRef.current) {
         setPlaying(false);
         setLoadingAudio(false);
-        return;
       }
 
-      const currentMs = Math.max(0, Math.floor((p.currentTime || 0) * 1000));
-      const durationMs = Math.max(0, Math.floor((p.duration || 0) * 1000));
+      onPauseRequest?.();
+      return;
+    }
 
-      if (durationMs > 0 && currentMs >= durationMs - 250) {
-        await p.seekTo(0).catch(() => {});
-      }
+    isActiveRef.current = true;
+    onPlayRequest?.();
 
+    if (mountedRef.current) {
+      setLoadingAudio(true);
+    }
+
+    if (finishedRef.current && playerRef.current) {
+      await unload();
+      resumeFromRef.current = 0;
       finishedRef.current = false;
-      p.play();
+    }
 
-      if (!mountedRef.current) return;
-      setPlaying(true);
-      setLoadingAudio(false);
-    });
-  }, [ensureLoaded, waitUntilLoaded, unload]);
+    if (!playerRef.current) {
+      await ensureLoaded(true);
+    }
+
+    const p = await waitUntilLoaded();
+
+    if (!p) {
+      if (mountedRef.current) setLoadingAudio(false);
+      return;
+    }
+
+    if (!isActiveRef.current) {
+      try {
+        p.pause();
+      } catch {}
+
+      if (mountedRef.current) {
+        setPlaying(false);
+        setLoadingAudio(false);
+      }
+
+      return;
+    }
+
+    const currentMs = Math.max(0, Math.floor((p.currentTime || 0) * 1000));
+    const durationMs = Math.max(0, Math.floor((p.duration || 0) * 1000));
+
+    if (durationMs > 0 && currentMs >= durationMs - 250) {
+      await p.seekTo(0).catch(() => {});
+    }
+
+    finishedRef.current = false;
+
+    try {
+      p.play();
+    } catch {
+      if (mountedRef.current) {
+        setPlaying(false);
+        setLoadingAudio(false);
+      }
+      return;
+    }
+
+    if (!mountedRef.current) return;
+
+    setPlaying(true);
+    setLoadingAudio(false);
+  });
+}, [ensureLoaded, waitUntilLoaded, unload, onPlayRequest, onPauseRequest]);
+
 
     const seekTo = useCallback(
     (ratio: number) => {
@@ -414,6 +468,24 @@ function InlineAudioPlayer({
   }, [ensureLoaded, waitUntilLoaded, durMs, maybeSaveProgress, unload]);
 
   useEffect(() => {
+  isActiveRef.current = isActive;
+
+  const p = playerRef.current;
+  if (!p) return;
+
+  if (!isActive && p.playing) {
+    try {
+      p.pause();
+    } catch {}
+
+    if (mountedRef.current) {
+      setPlaying(false);
+      setLoadingAudio(false);
+    }
+  }
+}, [isActive]);
+
+  useEffect(() => {
     Animated.timing(drawerAnim, {
       toValue: expanded ? 1 : 0,
       duration: expanded ? 180 : 140,
@@ -455,12 +527,11 @@ function InlineAudioPlayer({
       ]}
     >
       <Pressable
-        onPress={onExpand}
-        style={({ pressed }) => [
-          styles.audioInnerRow,
-          { opacity: pressed ? 0.92 : 1 },
-        ]}
-      >
+  style={({ pressed }) => [
+    styles.audioInnerRow,
+    { opacity: pressed ? 0.92 : 1 },
+  ]}
+>
         <Text style={[styles.audioTimeInline, { color: palette.sub2 }]}>
           {formatMs(posMs)} / {formatMs(durMs)}
         </Text>
@@ -482,9 +553,8 @@ function InlineAudioPlayer({
             },
           ]}
           onPress={() => {
-            onExpand?.();
-            void togglePlayPause();
-          }}
+  void togglePlayPause();
+}}
           hitSlop={10}
           disabled={loadingAudio && !playing}
         >
@@ -594,20 +664,56 @@ export default function Mashaal() {
   const [planView, setPlanView] = useState<PlanView>("free");
   const [loadingPlan, setLoadingPlan] = useState(true);
   const [expandedAudioKey, setExpandedAudioKey] = useState<string | null>(null);
+  const [activeAudioKey, setActiveAudioKey] = useState<string | null>(null);
 
   const isProPlan = planView === "pro";
 
   const MASHAAL_INTRO_URL = useMemo(() => mediaUrl(AUDIO_KEYS.mashaal.intro), []);
-  const MASHAAL_01_URL = useMemo(() => mediaUrl(AUDIO_KEYS.mashaal.lesson01), []);
 
+const mashaalLessons = useMemo(
+  () => [
+    { id: "21", key: AUDIO_KEYS.mashaal.lesson21, title: "این رابطه چرا تموم شد؟" },
+    { id: "22", key: AUDIO_KEYS.mashaal.lesson22, title: "امکان بازگشت؟" },
+    { id: "23", key: AUDIO_KEYS.mashaal.lesson23, title: "عشق سالم یا وابستگی؟" },
+    { id: "24", key: AUDIO_KEYS.mashaal.lesson24, title: "مرزهای رابطه سالم" },
+    { id: "25", key: AUDIO_KEYS.mashaal.lesson25, title: "تصمیم‌گیری برای مسیر پیش رو" },
 
-  const toggleExpandedAudio = useCallback((key: string) => {
-    setExpandedAudioKey((prev) => (prev === key ? null : key));
-  }, []);
+    { id: "01", key: AUDIO_KEYS.mashaal.lesson01, title: "شکست عشقی چیست؟" },
+    { id: "02", key: AUDIO_KEYS.mashaal.lesson02, title: "نقش مغز در درد شکست عشقی" },
+    { id: "03", key: AUDIO_KEYS.mashaal.lesson03, title: "چه چیزی رو از دست دادم؟" },
+    { id: "04", key: AUDIO_KEYS.mashaal.lesson04, title: "مغز عاشق و مغز محروم" },
+    { id: "05", key: AUDIO_KEYS.mashaal.lesson05, title: "سوگ عاطفی" },
+    { id: "06", key: AUDIO_KEYS.mashaal.lesson06, title: "اعتیاد به رابطه" },
+    { id: "07", key: AUDIO_KEYS.mashaal.lesson07, title: "چرا نمی‌تونم رهایش کنم؟" },
+    { id: "08", key: AUDIO_KEYS.mashaal.lesson08, title: "انواع وابستگی" },
+    { id: "09", key: AUDIO_KEYS.mashaal.lesson09, title: "معرفی سبک‌های دلبستگی" },
+    { id: "10", key: AUDIO_KEYS.mashaal.lesson10, title: "نقش طرحواره‌ها در شکست عشقی" },
+    { id: "11", key: AUDIO_KEYS.mashaal.lesson11, title: "معرفی سایر طرحواره‌ها" },
+    { id: "12", key: AUDIO_KEYS.mashaal.lesson12, title: "چرا این رابطه برای من این‌قدر مهم بود؟" },
+    { id: "13", key: AUDIO_KEYS.mashaal.lesson13, title: "خطاهای شناختی" },
+    { id: "14", key: AUDIO_KEYS.mashaal.lesson14, title: "نشخوار فکری" },
+    { id: "15", key: AUDIO_KEYS.mashaal.lesson15, title: "چراهای بعد از شکست" },
+    { id: "16", key: AUDIO_KEYS.mashaal.lesson16, title: "باورهای اشتباه رایج" },
+    { id: "17", key: AUDIO_KEYS.mashaal.lesson17, title: "خیانت از نگاه روان‌شناختی" },
+    { id: "18", key: AUDIO_KEYS.mashaal.lesson18, title: "زخم طرد" },
+    { id: "19", key: AUDIO_KEYS.mashaal.lesson19, title: "شرم، مقایسه، خودسرزنشی" },
+    { id: "20", key: AUDIO_KEYS.mashaal.lesson20, title: "عزت‌نفس بعد از شکست" },
+  ].map((item) => ({
+    ...item,
+    url: mediaUrl(item.key),
+  })),
+  []
+);
 
-  const collapseExpandedAudio = useCallback((key: string) => {
-    setExpandedAudioKey((prev) => (prev === key ? null : prev));
-  }, []);
+  const activateAudio = useCallback((key: string) => {
+  setActiveAudioKey(key);
+  setExpandedAudioKey(key);
+}, []);
+
+const deactivateAudio = useCallback((key: string) => {
+  setActiveAudioKey((prev) => (prev === key ? null : prev));
+  setExpandedAudioKey((prev) => (prev === key ? null : prev));
+}, []);
 
   const syncPlan = useCallback(async () => {
     try {
@@ -711,19 +817,21 @@ export default function Mashaal() {
                 <Text style={styles.lockHintText}>معرفی کوتاه مشعل (صوتی):</Text>
                 <View style={{ height: 10 }} />
                 <InlineAudioPlayer
-                  url={MASHAAL_INTRO_URL}
-                  storageKey={"mashaal:introLocked:v1"}
-                  expanded={expandedAudioKey === "mashaal:introLocked:v1"}
-                  onExpand={() => toggleExpandedAudio("mashaal:introLocked:v1")}
-                  onPlaybackFinish={() => collapseExpandedAudio("mashaal:introLocked:v1")}
-                  palette={{
-                    border2: palette.border2,
-                    text: palette.text,
-                    sub2: palette.sub2,
-                    gold: palette.gold,
-                    glass2: palette.glass2,
-                  }}
-                />
+  url={MASHAAL_INTRO_URL}
+  storageKey={"mashaal:introLocked:v1"}
+  expanded={expandedAudioKey === "mashaal:introLocked:v1"}
+  isActive={activeAudioKey === "mashaal:introLocked:v1"}
+  onPlayRequest={() => activateAudio("mashaal:introLocked:v1")}
+  onPauseRequest={() => deactivateAudio("mashaal:introLocked:v1")}
+  onPlaybackFinish={() => deactivateAudio("mashaal:introLocked:v1")}
+  palette={{
+    border2: palette.border2,
+    text: palette.text,
+    sub2: palette.sub2,
+    gold: palette.gold,
+    glass2: palette.glass2,
+  }}
+/>
                 <View style={{ height: 14 }} />
 
                 <TouchableOpacity activeOpacity={0.9} onPress={goToSubscription} style={styles.proBtn}>
@@ -772,19 +880,21 @@ export default function Mashaal() {
                 <Text style={styles.lockHintText}>قبل از تصمیم، این معرفی کوتاه رو گوش کن:</Text>
                 <View style={{ height: 10 }} />
                 <InlineAudioPlayer
-                  url={MASHAAL_INTRO_URL}
-                  storageKey={"mashaal:introLocked:v1"}
-                  expanded={expandedAudioKey === "mashaal:introLocked:v1"}
-                  onExpand={() => toggleExpandedAudio("mashaal:introLocked:v1")}
-                  onPlaybackFinish={() => collapseExpandedAudio("mashaal:introLocked:v1")}
-                  palette={{
-                    border2: palette.border2,
-                    text: palette.text,
-                    sub2: palette.sub2,
-                    gold: palette.gold,
-                    glass2: palette.glass2,
-                  }}
-                />
+  url={MASHAAL_INTRO_URL}
+  storageKey={"mashaal:introLocked:v1"}
+  expanded={expandedAudioKey === "mashaal:introLocked:v1"}
+  isActive={activeAudioKey === "mashaal:introLocked:v1"}
+  onPlayRequest={() => activateAudio("mashaal:introLocked:v1")}
+  onPauseRequest={() => deactivateAudio("mashaal:introLocked:v1")}
+  onPlaybackFinish={() => deactivateAudio("mashaal:introLocked:v1")}
+  palette={{
+    border2: palette.border2,
+    text: palette.text,
+    sub2: palette.sub2,
+    gold: palette.gold,
+    glass2: palette.glass2,
+  }}
+/>
                 <View style={{ height: 14 }} />
 
                 <TouchableOpacity activeOpacity={0.9} onPress={goToSubscription} style={styles.proBtn}>
@@ -798,27 +908,52 @@ export default function Mashaal() {
           </View>
         ) : (
           <View style={[styles.lockCard, { marginTop: 6 }]}>
-            <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
-              <Ionicons name="play-circle" size={22} color={palette.gold} />
-              <Text style={styles.lockTitle}>شروع مشعل</Text>
-            </View>
+  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
+    <Ionicons name="play-circle" size={22} color={palette.gold} />
+    <Text style={styles.lockTitle}>درس‌های مشعل</Text>
+  </View>
 
-            <View style={{ height: 12 }} />
-            <InlineAudioPlayer
-              url={MASHAAL_01_URL}
-              storageKey={"mashaal:01:v1"}
-              expanded={expandedAudioKey === "mashaal:01:v1"}
-              onExpand={() => toggleExpandedAudio("mashaal:01:v1")}
-              onPlaybackFinish={() => collapseExpandedAudio("mashaal:01:v1")}
-              palette={{
-                border2: palette.border2,
-                text: palette.text,
-                sub2: palette.sub2,
-                gold: palette.gold,
-                glass2: palette.glass2,
-              }}
-            />
-          </View>
+  <View style={{ height: 12 }} />
+
+  <View style={{ gap: 12 }}>
+    {mashaalLessons.map((lesson) => {
+      const audioKey = `mashaal:${lesson.id}:v1`;
+
+      return (
+        <View key={lesson.id}>
+          <Text
+            style={{
+              color: palette.text,
+              fontSize: 13,
+              fontWeight: "800",
+              textAlign: "right",
+              marginBottom: 8,
+            }}
+          >
+            {lesson.title}
+          </Text>
+
+          <InlineAudioPlayer
+  url={lesson.url}
+  storageKey={audioKey}
+  expanded={expandedAudioKey === audioKey}
+  isActive={activeAudioKey === audioKey}
+  onPlayRequest={() => activateAudio(audioKey)}
+  onPauseRequest={() => deactivateAudio(audioKey)}
+  onPlaybackFinish={() => deactivateAudio(audioKey)}
+  palette={{
+    border2: palette.border2,
+    text: palette.text,
+    sub2: palette.sub2,
+    gold: palette.gold,
+    glass2: palette.glass2,
+  }}
+/>
+        </View>
+      );
+    })}
+  </View>
+</View>
         )}
       </ScrollView>
     </SafeAreaView>
