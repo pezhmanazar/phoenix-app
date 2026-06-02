@@ -236,20 +236,21 @@ export async function getDayBasedStageState({ prisma, userId, stageCode }) {
       canGoNextDay: !isTimeLocked && currentDayProgress?.status === "completed",
     },
     tasks: (currentDay.tasks || []).map((task) => {
-      const p = taskProgressMap.get(task.id);
-      return {
-        id: task.id,
-        code: task.code,
-        titleFa: task.titleFa,
-        description: task.description,
-        sortOrder: task.sortOrder,
-        isRequired: task.isRequired,
-        weightPercent: task.weightPercent,
-        xpReward: task.xpReward,
-        isDone: !!p?.isDone,
-        doneAt: p?.doneAt || null,
-      };
-    }),
+  const p = taskProgressMap.get(task.id);
+  return {
+    id: task.id,
+    code: task.code,
+    titleFa: task.titleFa,
+    description: task.description,
+    suggestedTimeFa: task.suggestedTimeFa,
+    sortOrder: task.sortOrder,
+    isRequired: task.isRequired,
+    weightPercent: task.weightPercent,
+    xpReward: task.xpReward,
+    isDone: !!p?.isDone,
+    doneAt: p?.doneAt || null,
+  };
+}),
     summary,
     stageCompleted: !!stageCompleted,
   };
