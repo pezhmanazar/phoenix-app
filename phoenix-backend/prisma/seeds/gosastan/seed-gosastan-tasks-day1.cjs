@@ -15,6 +15,7 @@ async function seedGosastanTasksDay1() {
     {
       code: 'gosastan_day1_feelings_log',
       titleFa: 'ثبت حال و هیجانات روز',
+      suggestedTimeFa: 'صبح',
       sortOrder: 1,
       weightPercent: 15,
       xpReward: 10,
@@ -23,6 +24,7 @@ async function seedGosastanTasksDay1() {
     {
       code: 'gosastan_day1_morning_routine',
       titleFa: 'روتین صبحگاهی',
+      suggestedTimeFa: 'صبح',
       sortOrder: 2,
       weightPercent: 15,
       xpReward: 10,
@@ -31,6 +33,7 @@ async function seedGosastanTasksDay1() {
     {
       code: 'gosastan_day1_daily_commitment',
       titleFa: 'تعهد روزانه',
+      suggestedTimeFa: 'صبح',
       sortOrder: 3,
       weightPercent: 14,
       xpReward: 10,
@@ -39,6 +42,7 @@ async function seedGosastanTasksDay1() {
     {
       code: 'gosastan_day1_safe_place',
       titleFa: 'پناهگاه',
+      suggestedTimeFa: 'در لحظه بحران',
       sortOrder: 4,
       weightPercent: 0,
       xpReward: 5,
@@ -47,6 +51,7 @@ async function seedGosastanTasksDay1() {
     {
       code: 'gosastan_day1_daily_meditation',
       titleFa: 'مراقبه اختصاصی روز',
+      suggestedTimeFa: 'ظهر یا عصر',
       sortOrder: 5,
       weightPercent: 14,
       xpReward: 10,
@@ -55,6 +60,7 @@ async function seedGosastanTasksDay1() {
     {
       code: 'gosastan_day1_feel_good_task',
       titleFa: 'کار حال خوب کن',
+      suggestedTimeFa: 'عصر',
       sortOrder: 6,
       weightPercent: 0,
       xpReward: 5,
@@ -63,6 +69,7 @@ async function seedGosastanTasksDay1() {
     {
       code: 'gosastan_day1_torch',
       titleFa: 'مشعل',
+      suggestedTimeFa: 'عصر',
       sortOrder: 7,
       weightPercent: 14,
       xpReward: 10,
@@ -71,6 +78,7 @@ async function seedGosastanTasksDay1() {
     {
       code: 'gosastan_day1_technique_1',
       titleFa: 'تکنیک اختصاصی اول',
+      suggestedTimeFa: 'عصر یا غروب',
       sortOrder: 8,
       weightPercent: 14,
       xpReward: 10,
@@ -79,6 +87,7 @@ async function seedGosastanTasksDay1() {
     {
       code: 'gosastan_day1_technique_2',
       titleFa: 'تکنیک اختصاصی دوم',
+      suggestedTimeFa: 'اختیاری در طول روز',
       sortOrder: 9,
       weightPercent: 0,
       xpReward: 5,
@@ -87,6 +96,7 @@ async function seedGosastanTasksDay1() {
     {
       code: 'gosastan_day1_night_routine',
       titleFa: 'روتین شبانگاهی',
+      suggestedTimeFa: 'شب قبل از خواب',
       sortOrder: 10,
       weightPercent: 14,
       xpReward: 10,
@@ -100,6 +110,7 @@ async function seedGosastanTasksDay1() {
       update: {
         dayId: day.id,
         titleFa: task.titleFa,
+        suggestedTimeFa: task.suggestedTimeFa,
         sortOrder: task.sortOrder,
         weightPercent: task.weightPercent,
         xpReward: task.xpReward,
@@ -109,6 +120,7 @@ async function seedGosastanTasksDay1() {
         dayId: day.id,
         code: task.code,
         titleFa: task.titleFa,
+        suggestedTimeFa: task.suggestedTimeFa,
         sortOrder: task.sortOrder,
         weightPercent: task.weightPercent,
         xpReward: task.xpReward,

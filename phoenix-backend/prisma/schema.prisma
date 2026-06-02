@@ -430,9 +430,10 @@ model PelekanTask {
   description String?
   sortOrder   Int    @default(0)
 
-  weightPercent Int @default(10)
-  xpReward      Int @default(0)
-  isRequired    Boolean @default(false)
+  weightPercent   Int     @default(10)
+  xpReward        Int     @default(0)
+  isRequired      Boolean @default(false)
+  suggestedTimeFa String?
 
   userProgress PelekanTaskProgress[]
 
