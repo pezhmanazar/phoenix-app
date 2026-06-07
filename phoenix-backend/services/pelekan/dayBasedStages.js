@@ -18,18 +18,20 @@ function buildError(error, extra = {}) {
 }
 
 function toDateKey(date = new Date()) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tehran",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
 function isSafeNoContactEventType(eventType) {
   return eventType === "none" || eventType === "role_based";
 }
 
-function isNightRoutineTaskCode(taskCode) {
-  return typeof taskCode === "string" && taskCode.includes("night_routine");
+function isNoContactTaskCode(taskCode) {
+  return typeof taskCode === "string" && taskCode.endsWith("no_contact_check");
 }
 
 function summarizeTasks(tasks, progressMap) {
@@ -388,16 +390,19 @@ async function handleNoContactTask({
   const nextBestDays = Math.max(Number(streak.bestDays) || 0, nextCurrentDays);
 
   const safeUpdateData = {
-    currentDays: nextCurrentDays,
-    bestDays: nextBestDays,
-    lastCompletedAt: now,
-  };
+  currentDays: nextCurrentDays,
+  bestDays: nextBestDays,
+  lastCompletedAt: now,
+  noContactWarningState: "none",
+  noContactViolationCount: 0,
+  lastNoContactViolationAt: null,
+};
 
-  if (eventType === "none") {
-    safeUpdateData.noContactWarningState = "none";
-    safeUpdateData.noContactViolationCount = 0;
-    safeUpdateData.lastNoContactViolationAt = null;
-  }
+if (isSafeNoContactEventType(eventType)) {
+  safeUpdateData.noContactWarningState = "none";
+  safeUpdateData.noContactViolationCount = 0;
+  safeUpdateData.lastNoContactViolationAt = null;
+}
 
   const updated = await prisma.pelekanStreak.update({
     where: { userId },
@@ -420,6 +425,91 @@ async function handleNoContactTask({
     },
   };
 }
+
+async function rebuildNoContactStreakFromLogs({ prisma, userId }) {
+  const logs = await prisma.noContactLog.findMany({
+    where: { userId },
+    orderBy: [{ dateKey: "asc" }, { eventAt: "asc" }],
+  });
+
+  let currentDays = 0;
+  let bestDays = 0;
+  let lastCompletedAt = null;
+  let yellowCardAt = null;
+  let noContactWarningState = "none";
+  let noContactViolationCount = 0;
+  let noContactResetCount = 0;
+  let lastNoContactViolationAt = null;
+  let lastNoContactResetAt = null;
+
+  for (const log of logs) {
+    const eventType =
+      log.eventType || (log.hadContact ? "emotional" : "none");
+    const eventAt = log.eventAt || new Date();
+
+    if (isSafeNoContactEventType(eventType)) {
+      currentDays += 1;
+      bestDays = Math.max(bestDays, currentDays);
+      lastCompletedAt = eventAt;
+      noContactWarningState = "none";
+      noContactViolationCount = 0;
+      lastNoContactViolationAt = null;
+      continue;
+    }
+
+    if (eventType === "emotional") {
+      const isBeforeFirstReset = noContactResetCount === 0;
+      const nextViolationCount = noContactViolationCount + 1;
+      const resetThreshold = isBeforeFirstReset ? 3 : 2;
+
+      if (nextViolationCount >= resetThreshold) {
+        currentDays = 0;
+        yellowCardAt = eventAt;
+        noContactWarningState = "none";
+        noContactViolationCount = 0;
+        noContactResetCount += 1;
+        lastNoContactViolationAt = eventAt;
+        lastNoContactResetAt = eventAt;
+      } else {
+        yellowCardAt = eventAt;
+        noContactWarningState =
+          isBeforeFirstReset && nextViolationCount === 1
+            ? "promise_required"
+            : "serious_warning";
+        noContactViolationCount = nextViolationCount;
+        lastNoContactViolationAt = eventAt;
+      }
+    }
+  }
+
+  return prisma.pelekanStreak.upsert({
+    where: { userId },
+    create: {
+      userId,
+      currentDays,
+      bestDays,
+      lastCompletedAt,
+      yellowCardAt,
+      noContactWarningState,
+      noContactViolationCount,
+      noContactResetCount,
+      lastNoContactViolationAt,
+      lastNoContactResetAt,
+    },
+    update: {
+      currentDays,
+      bestDays,
+      lastCompletedAt,
+      yellowCardAt,
+      noContactWarningState,
+      noContactViolationCount,
+      noContactResetCount,
+      lastNoContactViolationAt,
+      lastNoContactResetAt,
+    },
+  });
+}
+
 
 export async function getDayBasedStageState({ prisma, userId, stageCode }) {
   if (!isDayBasedStageCode(stageCode)) {
@@ -484,118 +574,193 @@ export async function completeDayBasedTask({ prisma, userId, stageCode, taskId, 
   }
 
   const now = new Date();
-  const resolved = await resolveCurrentDay({ prisma, userId, stageCode, now });
-  if (!resolved.ok) return resolved;
 
-  const { currentDay, currentDayProgress, isTimeLocked } = resolved;
+  return prisma.$transaction(async (tx) => {
+    const resolved = await resolveCurrentDay({ prisma: tx, userId, stageCode, now });
+    if (!resolved.ok) return resolved;
 
-  if (!currentDay?.id) return buildError("CURRENT_DAY_NOT_FOUND");
-  if (currentDayProgress?.status === "completed" || isTimeLocked) {
-    return buildError("DAY_ALREADY_COMPLETED");
-  }
+    const { currentDay, currentDayProgress, isTimeLocked } = resolved;
 
-  const task = (currentDay.tasks || []).find((t) => t.id === taskId);
-  if (!task) return buildError("INVALID_TASK_FOR_CURRENT_DAY");
+    if (!currentDay?.id) return buildError("CURRENT_DAY_NOT_FOUND");
+    if (currentDayProgress?.status === "completed" || isTimeLocked) {
+      return buildError("DAY_ALREADY_COMPLETED");
+    }
 
-  let noContactMeta = null;
+    const task = (currentDay.tasks || []).find((t) => t.id === taskId);
+    if (!task) return buildError("INVALID_TASK_FOR_CURRENT_DAY");
 
-  const hasNoContactPayload =
-    result &&
-    typeof result === "object" &&
-    typeof result.noContactEventType === "string";
+    let noContactMeta = null;
 
-  const isNightRoutineTask = isNightRoutineTaskCode(task.code);
+    const hasNoContactPayload =
+      result &&
+      typeof result === "object" &&
+      typeof result.noContactEventType === "string";
 
-  if (done && isNightRoutineTask && !hasNoContactPayload) {
-    return buildError("NO_CONTACT_RESULT_REQUIRED");
-  }
+    const isNoContactTask = isNoContactTaskCode(task.code);
 
-  if (done && isNightRoutineTask && hasNoContactPayload) {
-    const noContactResult = await handleNoContactTask({
-      prisma,
-      userId,
-      result,
-      now,
-    });
+    if (done && isNoContactTask && !hasNoContactPayload) {
+      return buildError("NO_CONTACT_RESULT_REQUIRED");
+    }
 
-    if (!noContactResult.ok) return noContactResult;
-
-    noContactMeta = noContactResult.noContact;
-  }
-
-  const existing = await prisma.pelekanTaskProgress.findFirst({
-    where: { userId, taskId, dayId: currentDay.id },
-  });
-
-  let taskProgress;
-  if (existing) {
-    taskProgress = await prisma.pelekanTaskProgress.update({
-      where: { id: existing.id },
-      data: {
-        isDone: !!done,
-        doneAt: done ? now : null,
-      },
-    });
-  } else {
-    taskProgress = await prisma.pelekanTaskProgress.create({
-      data: {
+    if (done && isNoContactTask && hasNoContactPayload) {
+      const noContactResult = await handleNoContactTask({
+        prisma: tx,
         userId,
-        taskId,
-        dayId: currentDay.id,
-        isDone: !!done,
-        doneAt: done ? now : null,
-      },
+        result,
+        now,
+      });
+
+      if (!noContactResult.ok) return noContactResult;
+
+      noContactMeta = noContactResult.noContact;
+    }
+
+    const existing = await tx.pelekanTaskProgress.findFirst({
+      where: { userId, taskId, dayId: currentDay.id },
     });
-  }
 
-  const taskProgressRows = await prisma.pelekanTaskProgress.findMany({
-    where: { userId, dayId: currentDay.id },
+    const wasDoneBefore = !!existing?.isDone;
+    const willBeDone = !!done;
+
+    let taskProgress;
+    if (existing) {
+      taskProgress = await tx.pelekanTaskProgress.update({
+        where: { id: existing.id },
+        data: {
+          isDone: willBeDone,
+          doneAt: willBeDone ? now : null,
+        },
+      });
+    } else {
+      taskProgress = await tx.pelekanTaskProgress.create({
+        data: {
+          userId,
+          taskId,
+          dayId: currentDay.id,
+          isDone: willBeDone,
+          doneAt: willBeDone ? now : null,
+        },
+      });
+    }
+
+    const taskXpReward = Number(task.xpReward) || 0;
+
+    const blockedByEmotionalNoContact =
+      isNoContactTask &&
+      noContactMeta?.eventType === "emotional";
+
+    const shouldAwardXp =
+      willBeDone &&
+      !wasDoneBefore &&
+      taskXpReward > 0 &&
+      !blockedByEmotionalNoContact;
+
+        let awardedXp = 0;
+    let revokedXp = 0;
+
+    if (shouldAwardXp) {
+      awardedXp = taskXpReward;
+
+      await tx.xpLedger.create({
+        data: {
+          userId,
+          amount: awardedXp,
+          reason: "pelekan_day_task_completed",
+          refType: "pelekan_task_progress",
+          refId: taskProgress.id,
+        },
+      });
+    }
+
+    const shouldRevokeXp =
+      !willBeDone &&
+      wasDoneBefore &&
+      taskXpReward > 0;
+
+    if (shouldRevokeXp) {
+      revokedXp = taskXpReward;
+
+      await tx.xpLedger.create({
+        data: {
+          userId,
+          amount: -revokedXp,
+          reason: "pelekan_day_task_uncompleted",
+          refType: "pelekan_task_progress",
+          refId: taskProgress.id,
+        },
+      });
+    }
+
+    const taskProgressRows = await tx.pelekanTaskProgress.findMany({
+      where: { userId, dayId: currentDay.id },
+    });
+
+    const progressMap = new Map(taskProgressRows.map((r) => [r.taskId, r]));
+    const summary = summarizeTasks(currentDay.tasks || [], progressMap);
+
+    const dayUpdateData = {
+      completionPercent: summary.completionPercent,
+      lastActivityAt: now,
+    };
+
+        if (shouldAwardXp && shouldRevokeXp) {
+      dayUpdateData.xpEarned = {
+        increment: awardedXp - revokedXp,
+      };
+    } else if (shouldAwardXp) {
+      dayUpdateData.xpEarned = {
+        increment: awardedXp,
+      };
+    } else if (shouldRevokeXp) {
+      dayUpdateData.xpEarned = {
+        decrement: revokedXp,
+      };
+    }
+
+
+    if (summary.allRequiredDone) {
+      dayUpdateData.status = "completed";
+      dayUpdateData.completedAt = now;
+      dayUpdateData.unlockedNextAt = getNextIranCalendarDayStart(now);
+    } else {
+      dayUpdateData.status = "active";
+      dayUpdateData.completedAt = null;
+      dayUpdateData.unlockedNextAt = null;
+    }
+
+    const updatedDay = await tx.pelekanDayProgress.update({
+      where: { userId_dayId: { userId, dayId: currentDay.id } },
+      data: dayUpdateData,
+    });
+
+    return {
+      ok: true,
+      task: {
+        id: task.id,
+        isDone: !!taskProgress.isDone,
+        doneAt: taskProgress.doneAt,
+      },
+      day: {
+        id: currentDay.id,
+        status: updatedDay.status,
+        completionPercent: updatedDay.completionPercent,
+        allRequiredDone: summary.allRequiredDone,
+        completedAt: updatedDay.completedAt,
+        unlockedNextAt: updatedDay.unlockedNextAt,
+        isTimeLocked: updatedDay.status === "completed",
+        xpEarned: updatedDay.xpEarned,
+      },
+      meta: {
+        noContact: noContactMeta,
+        xp: {
+          awarded: awardedXp,
+          blockedReason: blockedByEmotionalNoContact ? "NO_CONTACT_EMOTIONAL" : null,
+        },
+      },
+    };
   });
-
-  const progressMap = new Map(taskProgressRows.map((r) => [r.taskId, r]));
-  const summary = summarizeTasks(currentDay.tasks || [], progressMap);
-
-  const dayUpdateData = {
-    completionPercent: summary.completionPercent,
-    lastActivityAt: now,
-  };
-
-  if (summary.allRequiredDone) {
-    dayUpdateData.status = "completed";
-    dayUpdateData.completedAt = now;
-    dayUpdateData.unlockedNextAt = getNextIranCalendarDayStart(now);
-  } else {
-    dayUpdateData.status = "active";
-    dayUpdateData.completedAt = null;
-    dayUpdateData.unlockedNextAt = null;
-  }
-
-  const updatedDay = await prisma.pelekanDayProgress.update({
-    where: { userId_dayId: { userId, dayId: currentDay.id } },
-    data: dayUpdateData,
-  });
-
-  return {
-    ok: true,
-    task: {
-      id: task.id,
-      isDone: !!taskProgress.isDone,
-      doneAt: taskProgress.doneAt,
-    },
-    day: {
-      id: currentDay.id,
-      status: updatedDay.status,
-      completionPercent: updatedDay.completionPercent,
-      allRequiredDone: summary.allRequiredDone,
-      completedAt: updatedDay.completedAt,
-      unlockedNextAt: updatedDay.unlockedNextAt,
-      isTimeLocked: updatedDay.status === "completed",
-    },
-    meta: {
-      noContact: noContactMeta,
-    },
-  };
 }
+
 
 export async function resetCurrentDay({ prisma, userId, stageCode }) {
   if (!isDayBasedStageCode(stageCode)) {
@@ -603,57 +768,111 @@ export async function resetCurrentDay({ prisma, userId, stageCode }) {
   }
 
   const now = new Date();
-  const resolved = await resolveCurrentDay({ prisma, userId, stageCode, now });
-  if (!resolved.ok) return resolved;
 
-  const { currentDay } = resolved;
-  if (!currentDay?.id) return buildError("CURRENT_DAY_NOT_FOUND");
+  return prisma.$transaction(async (tx) => {
+    const resolved = await resolveCurrentDay({ prisma: tx, userId, stageCode, now });
+    if (!resolved.ok) return resolved;
 
-  await prisma.pelekanTaskProgress.updateMany({
-    where: { userId, dayId: currentDay.id },
-    data: {
-      isDone: false,
-      doneAt: null,
-    },
+    const { currentDay, currentDayProgress } = resolved;
+    if (!currentDay?.id) return buildError("CURRENT_DAY_NOT_FOUND");
+
+    const existingTaskProgresses = await tx.pelekanTaskProgress.findMany({
+      where: { userId, dayId: currentDay.id },
+      select: { id: true, taskId: true, isDone: true, doneAt: true },
+    });
+
+    const completedProgressIds = existingTaskProgresses
+      .filter((row) => row.isDone)
+      .map((row) => row.id);
+
+    if (completedProgressIds.length > 0) {
+      await tx.xpLedger.deleteMany({
+        where: {
+          userId,
+          reason: {
+            in: [
+              "pelekan_day_task_completed",
+              "pelekan_day_task_uncompleted",
+            ],
+          },
+          refType: "pelekan_task_progress",
+          refId: { in: completedProgressIds },
+        },
+      });
+    }
+
+    const hadNoContactTask = (currentDay.tasks || []).some((task) =>
+      isNoContactTaskCode(task.code)
+    );
+
+        if (hadNoContactTask) {
+      const noContactTaskIds = (currentDay.tasks || [])
+        .filter((task) => isNoContactTaskCode(task.code))
+        .map((task) => task.id);
+
+      const noContactProgress = existingTaskProgresses.find((row) =>
+        noContactTaskIds.includes(row.taskId)
+      );
+
+      const noContactDate = noContactProgress?.doneAt || currentDayProgress?.startedAt || now;
+      const dateKey = toDateKey(new Date(noContactDate));
+
+      await tx.noContactLog.deleteMany({
+        where: { userId, dateKey },
+      });
+
+      await rebuildNoContactStreakFromLogs({ prisma: tx, userId });
+    }
+
+
+    await tx.pelekanTaskProgress.updateMany({
+      where: { userId, dayId: currentDay.id },
+      data: {
+        isDone: false,
+        doneAt: null,
+      },
+    });
+
+    const day = await tx.pelekanDayProgress.update({
+      where: { userId_dayId: { userId, dayId: currentDay.id } },
+      data: {
+        status: "active",
+        completionPercent: 0,
+        completedAt: null,
+        unlockedNextAt: null,
+        startedAt: now,
+        lastActivityAt: now,
+        xpEarned: 0,
+        resetCount: { increment: 1 },
+        lastResetAt: now,
+      },
+    });
+
+    const refreshedTasks = await tx.pelekanTaskProgress.findMany({
+      where: { userId, dayId: currentDay.id },
+      select: { taskId: true, isDone: true, doneAt: true },
+    });
+
+    const byTaskId = new Map(refreshedTasks.map((t) => [t.taskId, t]));
+
+    return {
+      ok: true,
+      day: {
+        id: currentDay.id,
+        status: day.status,
+        completionPercent: day.completionPercent,
+        startedAt: day.startedAt,
+        completedAt: day.completedAt,
+        unlockedNextAt: day.unlockedNextAt,
+        resetCount: day.resetCount,
+        lastResetAt: day.lastResetAt,
+        xpEarned: day.xpEarned,
+      },
+      tasks: (currentDay.tasks || []).map((task) => ({
+        id: task.id,
+        isDone: !!byTaskId.get(task.id)?.isDone,
+        doneAt: byTaskId.get(task.id)?.doneAt || null,
+      })),
+    };
   });
-
-  const day = await prisma.pelekanDayProgress.update({
-    where: { userId_dayId: { userId, dayId: currentDay.id } },
-    data: {
-      status: "active",
-      completionPercent: 0,
-      completedAt: null,
-      unlockedNextAt: null,
-      startedAt: now,
-      lastActivityAt: now,
-      resetCount: { increment: 1 },
-      lastResetAt: now,
-    },
-  });
-
-  const refreshedTasks = await prisma.pelekanTaskProgress.findMany({
-    where: { userId, dayId: currentDay.id },
-    select: { taskId: true, isDone: true, doneAt: true },
-  });
-
-  const byTaskId = new Map(refreshedTasks.map((t) => [t.taskId, t]));
-
-  return {
-    ok: true,
-    day: {
-      id: currentDay.id,
-      status: day.status,
-      completionPercent: day.completionPercent,
-      startedAt: day.startedAt,
-      completedAt: day.completedAt,
-      unlockedNextAt: day.unlockedNextAt,
-      resetCount: day.resetCount,
-      lastResetAt: day.lastResetAt,
-    },
-    tasks: (currentDay.tasks || []).map((task) => ({
-      id: task.id,
-      isDone: !!byTaskId.get(task.id)?.isDone,
-      doneAt: byTaskId.get(task.id)?.doneAt || null,
-    })),
-  };
 }
