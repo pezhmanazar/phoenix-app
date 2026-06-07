@@ -28,6 +28,10 @@ function isSafeNoContactEventType(eventType) {
   return eventType === "none" || eventType === "role_based";
 }
 
+function isNightRoutineTaskCode(taskCode) {
+  return typeof taskCode === "string" && taskCode.includes("night_routine");
+}
+
 function summarizeTasks(tasks, progressMap) {
   let requiredTotal = 0;
   let requiredDone = 0;
@@ -417,12 +421,23 @@ export async function completeDayBasedTask({ prisma, userId, stageCode, taskId, 
     return buildError("DAY_ALREADY_COMPLETED");
   }
 
-    const task = (currentDay.tasks || []).find((t) => t.id === taskId);
+  const task = (currentDay.tasks || []).find((t) => t.id === taskId);
   if (!task) return buildError("INVALID_TASK_FOR_CURRENT_DAY");
 
   let noContactMeta = null;
 
-  if (task.code === "no_contact_check" && done) {
+  const hasNoContactPayload =
+    result &&
+    typeof result === "object" &&
+    typeof result.noContactEventType === "string";
+
+  const isNightRoutineTask = isNightRoutineTaskCode(task.code);
+
+  if (done && isNightRoutineTask && !hasNoContactPayload) {
+    return buildError("NO_CONTACT_RESULT_REQUIRED");
+  }
+
+  if (done && isNightRoutineTask && hasNoContactPayload) {
     const noContactResult = await handleNoContactTask({
       prisma,
       userId,
@@ -487,7 +502,7 @@ export async function completeDayBasedTask({ prisma, userId, stageCode, taskId, 
     data: dayUpdateData,
   });
 
-    return {
+  return {
     ok: true,
     task: {
       id: task.id,
