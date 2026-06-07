@@ -577,6 +577,12 @@ model PelekanStreak {
   lastCompletedAt DateTime?
   yellowCardAt    DateTime?
 
+  noContactWarningState    String   @default("none")
+  noContactViolationCount  Int      @default(0)
+  noContactResetCount      Int      @default(0)
+  lastNoContactViolationAt DateTime?
+  lastNoContactResetAt     DateTime?
+
   updatedAt DateTime @updatedAt
 }
 
