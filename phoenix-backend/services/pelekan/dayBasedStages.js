@@ -268,6 +268,11 @@ async function handleNoContactTask({
       bestDays: 0,
       lastCompletedAt: null,
       yellowCardAt: null,
+      noContactWarningState: "none",
+      noContactViolationCount: 0,
+      noContactResetCount: 0,
+      lastNoContactViolationAt: null,
+      lastNoContactResetAt: null,
     },
     update: {},
   });
@@ -282,6 +287,10 @@ async function handleNoContactTask({
         streakBestDays: streak.bestDays,
         reset: false,
         recountSkipped: true,
+        streakAction: "unchanged",
+        warningState: streak.noContactWarningState || "none",
+        violationCount: streak.noContactViolationCount || 0,
+        resetCount: streak.noContactResetCount || 0,
       },
     };
   }
@@ -294,18 +303,67 @@ async function handleNoContactTask({
         note: note || null,
         streakCurrentDays: streak.currentDays,
         streakBestDays: streak.bestDays,
-        reset: true,
+        reset: false,
         recountSkipped: true,
+        streakAction: "unchanged",
+        warningState: streak.noContactWarningState || "none",
+        violationCount: streak.noContactViolationCount || 0,
+        resetCount: streak.noContactResetCount || 0,
       },
     };
   }
 
   if (eventType === "emotional") {
+    const currentResetCount = Number(streak.noContactResetCount) || 0;
+    const nextViolationCount = (Number(streak.noContactViolationCount) || 0) + 1;
+
+    const isBeforeFirstReset = currentResetCount === 0;
+    const resetThreshold = isBeforeFirstReset ? 3 : 2;
+
+    if (nextViolationCount >= resetThreshold) {
+      const updated = await prisma.pelekanStreak.update({
+        where: { userId },
+        data: {
+          currentDays: 0,
+          yellowCardAt: now,
+          noContactWarningState: "none",
+          noContactViolationCount: 0,
+          noContactResetCount: {
+            increment: 1,
+          },
+          lastNoContactViolationAt: now,
+          lastNoContactResetAt: now,
+        },
+      });
+
+      return {
+        ok: true,
+        noContact: {
+          eventType,
+          note: note || null,
+          streakCurrentDays: updated.currentDays,
+          streakBestDays: updated.bestDays,
+          reset: true,
+          recountSkipped: false,
+          streakAction: "reset",
+          warningState: updated.noContactWarningState || "none",
+          violationCount: updated.noContactViolationCount || 0,
+          resetCount: updated.noContactResetCount || 0,
+        },
+      };
+    }
+
+    const warningState = isBeforeFirstReset && nextViolationCount === 1
+      ? "promise_required"
+      : "serious_warning";
+
     const updated = await prisma.pelekanStreak.update({
       where: { userId },
       data: {
-        currentDays: 0,
         yellowCardAt: now,
+        noContactWarningState: warningState,
+        noContactViolationCount: nextViolationCount,
+        lastNoContactViolationAt: now,
       },
     });
 
@@ -316,8 +374,12 @@ async function handleNoContactTask({
         note: note || null,
         streakCurrentDays: updated.currentDays,
         streakBestDays: updated.bestDays,
-        reset: true,
+        reset: false,
         recountSkipped: false,
+        streakAction: warningState,
+        warningState: updated.noContactWarningState || "none",
+        violationCount: updated.noContactViolationCount || 0,
+        resetCount: updated.noContactResetCount || 0,
       },
     };
   }
@@ -325,13 +387,21 @@ async function handleNoContactTask({
   const nextCurrentDays = (Number(streak.currentDays) || 0) + 1;
   const nextBestDays = Math.max(Number(streak.bestDays) || 0, nextCurrentDays);
 
+  const safeUpdateData = {
+    currentDays: nextCurrentDays,
+    bestDays: nextBestDays,
+    lastCompletedAt: now,
+  };
+
+  if (eventType === "none") {
+    safeUpdateData.noContactWarningState = "none";
+    safeUpdateData.noContactViolationCount = 0;
+    safeUpdateData.lastNoContactViolationAt = null;
+  }
+
   const updated = await prisma.pelekanStreak.update({
     where: { userId },
-    data: {
-      currentDays: nextCurrentDays,
-      bestDays: nextBestDays,
-      lastCompletedAt: now,
-    },
+    data: safeUpdateData,
   });
 
   return {
@@ -343,10 +413,13 @@ async function handleNoContactTask({
       streakBestDays: updated.bestDays,
       reset: false,
       recountSkipped: false,
+      streakAction: "continued",
+      warningState: updated.noContactWarningState || "none",
+      violationCount: updated.noContactViolationCount || 0,
+      resetCount: updated.noContactResetCount || 0,
     },
   };
 }
-
 
 export async function getDayBasedStageState({ prisma, userId, stageCode }) {
   if (!isDayBasedStageCode(stageCode)) {
