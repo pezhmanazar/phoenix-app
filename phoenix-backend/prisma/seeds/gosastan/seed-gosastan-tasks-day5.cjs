@@ -14,7 +14,7 @@ async function seedGosastanTasksDay5() {
   const tasks = [
     {
       code: 'gosastan_day5_feelings_log',
-      titleFa: 'ثبت حال و هیجانات روز',
+      titleFa: 'ثبت حال و هیجانات ابتدای روز',
       suggestedTimeFa: 'صبح',
       sortOrder: 1,
       weightPercent: 15,
@@ -94,11 +94,20 @@ async function seedGosastanTasksDay5() {
       isRequired: false,
     },
     {
+      code: 'gosastan_day5_no_contact_check',
+      titleFa: 'بررسی قاعده قطع تماس',
+      suggestedTimeFa: 'قبل از روتین شبانگاهی',
+      sortOrder: 10,
+      weightPercent: 5,
+      xpReward: 5,
+      isRequired: true,
+    },
+    {
       code: 'gosastan_day5_night_routine',
       titleFa: 'روتین شبانگاهی',
       suggestedTimeFa: 'شب قبل از خواب',
-      sortOrder: 10,
-      weightPercent: 14,
+      sortOrder: 11,
+      weightPercent: 9,
       xpReward: 10,
       isRequired: true,
     },
