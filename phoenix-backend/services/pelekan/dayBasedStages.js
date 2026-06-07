@@ -17,6 +17,17 @@ function buildError(error, extra = {}) {
   return { ok: false, error, ...extra };
 }
 
+function toDateKey(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function isSafeNoContactEventType(eventType) {
+  return eventType === "none" || eventType === "role_based";
+}
+
 function summarizeTasks(tasks, progressMap) {
   let requiredTotal = 0;
   let requiredDone = 0;
@@ -199,6 +210,140 @@ async function resolveCurrentDay({ prisma, userId, stageCode, now = new Date() }
   };
 }
 
+async function handleNoContactTask({
+  prisma,
+  userId,
+  result,
+  now,
+}) {
+  const rawEventType = result?.noContactEventType;
+  const note =
+    typeof result?.noContactNote === "string" ? result.noContactNote.trim() : null;
+
+  if (!rawEventType || !["none", "role_based", "emotional"].includes(String(rawEventType))) {
+    return buildError("NO_CONTACT_RESULT_REQUIRED");
+  }
+
+  const eventType = String(rawEventType);
+  const dateKey = toDateKey(now);
+
+  const existingLog = await prisma.noContactLog.findUnique({
+    where: { userId_dateKey: { userId, dateKey } },
+    select: { eventType: true, hadContact: true },
+  });
+
+  await prisma.noContactLog.upsert({
+    where: { userId_dateKey: { userId, dateKey } },
+    create: {
+      userId,
+      dateKey,
+      hadContact: eventType === "emotional",
+      note: note || null,
+      eventType,
+      eventAt: now,
+    },
+    update: {
+      hadContact: eventType === "emotional",
+      note: note || null,
+      eventType,
+      eventAt: now,
+    },
+  });
+
+  const previousEventType =
+    existingLog?.eventType || (existingLog?.hadContact ? "emotional" : null);
+
+  const previousSafe = isSafeNoContactEventType(previousEventType);
+  const nextSafe = isSafeNoContactEventType(eventType);
+
+  const streak = await prisma.pelekanStreak.upsert({
+    where: { userId },
+    create: {
+      userId,
+      currentDays: 0,
+      bestDays: 0,
+      lastCompletedAt: null,
+      yellowCardAt: null,
+    },
+    update: {},
+  });
+
+  if (previousSafe && nextSafe) {
+    return {
+      ok: true,
+      noContact: {
+        eventType,
+        note: note || null,
+        streakCurrentDays: streak.currentDays,
+        streakBestDays: streak.bestDays,
+        reset: false,
+        recountSkipped: true,
+      },
+    };
+  }
+
+  if (previousEventType === "emotional" && eventType === "emotional") {
+    return {
+      ok: true,
+      noContact: {
+        eventType,
+        note: note || null,
+        streakCurrentDays: streak.currentDays,
+        streakBestDays: streak.bestDays,
+        reset: true,
+        recountSkipped: true,
+      },
+    };
+  }
+
+  if (eventType === "emotional") {
+    const updated = await prisma.pelekanStreak.update({
+      where: { userId },
+      data: {
+        currentDays: 0,
+        yellowCardAt: now,
+      },
+    });
+
+    return {
+      ok: true,
+      noContact: {
+        eventType,
+        note: note || null,
+        streakCurrentDays: updated.currentDays,
+        streakBestDays: updated.bestDays,
+        reset: true,
+        recountSkipped: false,
+      },
+    };
+  }
+
+  const nextCurrentDays = (Number(streak.currentDays) || 0) + 1;
+  const nextBestDays = Math.max(Number(streak.bestDays) || 0, nextCurrentDays);
+
+  const updated = await prisma.pelekanStreak.update({
+    where: { userId },
+    data: {
+      currentDays: nextCurrentDays,
+      bestDays: nextBestDays,
+      lastCompletedAt: now,
+    },
+  });
+
+  return {
+    ok: true,
+    noContact: {
+      eventType,
+      note: note || null,
+      streakCurrentDays: updated.currentDays,
+      streakBestDays: updated.bestDays,
+      reset: false,
+      recountSkipped: false,
+    },
+  };
+}
+
+
 export async function getDayBasedStageState({ prisma, userId, stageCode }) {
   if (!isDayBasedStageCode(stageCode)) {
     return buildError("INVALID_STAGE_CODE");
@@ -256,7 +401,7 @@ export async function getDayBasedStageState({ prisma, userId, stageCode }) {
   };
 }
 
-export async function completeDayBasedTask({ prisma, userId, stageCode, taskId, done }) {
+export async function completeDayBasedTask({ prisma, userId, stageCode, taskId, done, result = null }) {
   if (!isDayBasedStageCode(stageCode)) {
     return buildError("INVALID_STAGE_CODE");
   }
@@ -272,8 +417,23 @@ export async function completeDayBasedTask({ prisma, userId, stageCode, taskId, 
     return buildError("DAY_ALREADY_COMPLETED");
   }
 
-  const task = (currentDay.tasks || []).find((t) => t.id === taskId);
+    const task = (currentDay.tasks || []).find((t) => t.id === taskId);
   if (!task) return buildError("INVALID_TASK_FOR_CURRENT_DAY");
+
+  let noContactMeta = null;
+
+  if (task.code === "no_contact_check" && done) {
+    const noContactResult = await handleNoContactTask({
+      prisma,
+      userId,
+      result,
+      now,
+    });
+
+    if (!noContactResult.ok) return noContactResult;
+
+    noContactMeta = noContactResult.noContact;
+  }
 
   const existing = await prisma.pelekanTaskProgress.findFirst({
     where: { userId, taskId, dayId: currentDay.id },
@@ -327,7 +487,7 @@ export async function completeDayBasedTask({ prisma, userId, stageCode, taskId, 
     data: dayUpdateData,
   });
 
-  return {
+    return {
     ok: true,
     task: {
       id: task.id,
@@ -342,6 +502,9 @@ export async function completeDayBasedTask({ prisma, userId, stageCode, taskId, 
       completedAt: updatedDay.completedAt,
       unlockedNextAt: updatedDay.unlockedNextAt,
       isTimeLocked: updatedDay.status === "completed",
+    },
+    meta: {
+      noContact: noContactMeta,
     },
   };
 }

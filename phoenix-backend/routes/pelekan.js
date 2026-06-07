@@ -2306,6 +2306,7 @@ router.post("/stage/:stageCode/task/complete", authUser, async (req, res) => {
     const stageCode = String(req.params?.stageCode || "").trim();
     const taskId = String(req.body?.taskId || "").trim();
     const done = req.body?.done !== false;
+    const resultPayload = req.body?.result ?? null;
 
     if (!isDayBasedStageCode(stageCode)) {
       return res.json({ ok: false, error: "INVALID_STAGE_CODE" });
@@ -2330,6 +2331,7 @@ router.post("/stage/:stageCode/task/complete", authUser, async (req, res) => {
       stageCode,
       taskId,
       done,
+      result: resultPayload,
     });
 
     return res.json(result);
