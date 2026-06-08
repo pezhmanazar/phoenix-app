@@ -393,16 +393,11 @@ async function handleNoContactTask({
   currentDays: nextCurrentDays,
   bestDays: nextBestDays,
   lastCompletedAt: now,
+
+  // فقط هشدار نمایشی پاک می‌شود
   noContactWarningState: "none",
-  noContactViolationCount: 0,
-  lastNoContactViolationAt: null,
 };
 
-if (isSafeNoContactEventType(eventType)) {
-  safeUpdateData.noContactWarningState = "none";
-  safeUpdateData.noContactViolationCount = 0;
-  safeUpdateData.lastNoContactViolationAt = null;
-}
 
   const updated = await prisma.pelekanStreak.update({
     where: { userId },
@@ -448,14 +443,14 @@ async function rebuildNoContactStreakFromLogs({ prisma, userId }) {
     const eventAt = log.eventAt || new Date();
 
     if (isSafeNoContactEventType(eventType)) {
-      currentDays += 1;
-      bestDays = Math.max(bestDays, currentDays);
-      lastCompletedAt = eventAt;
-      noContactWarningState = "none";
-      noContactViolationCount = 0;
-      lastNoContactViolationAt = null;
-      continue;
-    }
+  currentDays += 1;
+  bestDays = Math.max(bestDays, currentDays);
+  lastCompletedAt = eventAt;
+
+  // فقط هشدار نمایشی پاک می‌شود؛ سابقه لغزش حفظ می‌شود
+  noContactWarningState = "none";
+  continue;
+}
 
     if (eventType === "emotional") {
       const isBeforeFirstReset = noContactResetCount === 0;
