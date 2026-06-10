@@ -3,6 +3,7 @@ import express from "express";
 import authUser from "../middleware/authUser.js";
 import {
   completeDayBasedTask,
+  getDayBasedStageDayState,
   getDayBasedStageState,
   isDayBasedStageCode,
   resetCurrentDay,
@@ -2293,6 +2294,46 @@ router.get("/stage/:stageCode/state", authUser, async (req, res) => {
     return res.json({ ok: false, error: "SERVER_ERROR" });
   }
 });
+
+router.get("/stage/:stageCode/day/:dayNumber/state", authUser, async (req, res) => {
+  try {
+    noStore(res);
+
+    const phone = req.user?.phone;
+    if (!phone) {
+      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+    }
+
+    const stageCode = String(req.params?.stageCode || "").trim();
+    const dayNumber = Number(req.params?.dayNumber);
+
+    if (!isDayBasedStageCode(stageCode)) {
+      return res.json({ ok: false, error: "INVALID_STAGE_CODE" });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true },
+    });
+
+    if (!user) {
+      return res.json({ ok: false, error: "USER_NOT_FOUND" });
+    }
+
+    const result = await getDayBasedStageDayState({
+      prisma,
+      userId: user.id,
+      stageCode,
+      dayNumber,
+    });
+
+    return res.json(result);
+  } catch (e) {
+    console.error("[pelekan.stage.day.state] error:", e?.message || "unknown_error");
+    return res.json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
 
 router.post("/stage/:stageCode/task/complete", authUser, async (req, res) => {
   try {

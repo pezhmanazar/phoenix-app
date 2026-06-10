@@ -748,6 +748,74 @@ export async function completeDayBasedTask({ prisma, userId, stageCode, taskId, 
   });
 }
 
+export async function getDayBasedStageDayState({ prisma, userId, stageCode, dayNumber }) {
+  if (!isDayBasedStageCode(stageCode)) {
+    return buildError("INVALID_STAGE_CODE");
+  }
+
+  const requestedDayNumber = Number(dayNumber);
+  if (!Number.isInteger(requestedDayNumber) || requestedDayNumber < 1) {
+    return buildError("INVALID_DAY_NUMBER");
+  }
+
+  const stage = await getStageWithDays(prisma, stageCode);
+  if (!stage) return buildError("INVALID_STAGE_CODE");
+  if (!stage.days?.length) return buildError("STAGE_HAS_NO_DAYS");
+
+  const day = stage.days.find((d) => Number(d.dayNumberInStage) === requestedDayNumber);
+  if (!day) return buildError("DAY_NOT_FOUND");
+
+  const dayProgressMap = await getDayProgressMap(prisma, userId, [day.id]);
+  const taskProgressMap = await getTaskProgressMap(prisma, userId, [day.id]);
+
+  const dayProgress = dayProgressMap.get(day.id) || null;
+  const summary = summarizeTasks(day.tasks || [], taskProgressMap);
+
+  return {
+    ok: true,
+    stage: {
+      id: stage.id,
+      code: stage.code,
+      titleFa: stage.titleFa,
+      description: null,
+    },
+    currentDay: {
+      id: day.id,
+      dayNumberInStage: day.dayNumberInStage,
+      globalDayNumber: day.globalDayNumber,
+      titleFa: day.title,
+      description: day.description,
+      status: dayProgress?.status || "locked",
+      completionPercent: dayProgress?.completionPercent || 0,
+      startedAt: dayProgress?.startedAt || null,
+      completedAt: dayProgress?.completedAt || null,
+      unlockedNextAt: dayProgress?.unlockedNextAt || null,
+      isTimeLocked: false,
+      canReset: dayProgress?.status === "active",
+      canGoNextDay: false,
+    },
+    tasks: (day.tasks || []).map((task) => {
+      const p = taskProgressMap.get(task.id);
+      return {
+        id: task.id,
+        code: task.code,
+        titleFa: task.titleFa,
+        description: task.description,
+        suggestedTimeFa: task.suggestedTimeFa,
+        sortOrder: task.sortOrder,
+        isRequired: task.isRequired,
+        weightPercent: task.weightPercent,
+        xpReward: task.xpReward,
+        isDone: !!p?.isDone,
+        doneAt: p?.doneAt || null,
+      };
+    }),
+    summary,
+    stageCompleted: false,
+  };
+}
+
+
 
 export async function resetCurrentDay({ prisma, userId, stageCode }) {
   if (!isDayBasedStageCode(stageCode)) {
