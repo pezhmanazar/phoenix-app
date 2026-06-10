@@ -1,5 +1,4 @@
-import { getNextIranCalendarDayStart } from "./iranTime.js";
-
+//phoenix-app\phoenix-backend\services\pelekan\dayBasedStages.js
 const DAY_BASED_STAGE_CODES = [
   "gosastan",
   "sookhtan",
@@ -162,45 +161,38 @@ async function resolveCurrentDay({ prisma, userId, stageCode, now = new Date() }
     }
 
     if (progress.status === "completed") {
-      const hasNextDay = i + 1 < days.length;
-      const unlockedNextAt = progress.unlockedNextAt ? new Date(progress.unlockedNextAt) : null;
+  const hasNextDay = i + 1 < days.length;
 
-      if (hasNextDay && unlockedNextAt && now >= unlockedNextAt) {
-        const nextDay = days[i + 1];
-        const nextProgress = dayProgressMap.get(nextDay.id);
+  if (hasNextDay) {
+    const nextDay = days[i + 1];
+    const nextProgress = dayProgressMap.get(nextDay.id);
 
-        if (!nextProgress) {
-          const created = await ensureDayProgress(prisma, userId, nextDay.id, now);
-          return {
-            ok: true,
-            stage,
-            currentDay: nextDay,
-            currentDayProgress: created,
-            isTimeLocked: false,
-          };
-        }
-
-        if (nextProgress.status === "active") {
-          return {
-            ok: true,
-            stage,
-            currentDay: nextDay,
-            currentDayProgress: nextProgress,
-            isTimeLocked: false,
-          };
-        }
-
-        continue;
-      }
-
+    if (!nextProgress) {
+      const created = await ensureDayProgress(prisma, userId, nextDay.id, now);
       return {
         ok: true,
         stage,
-        currentDay: day,
-        currentDayProgress: progress,
-        isTimeLocked: true,
+        currentDay: nextDay,
+        currentDayProgress: created,
+        isTimeLocked: false,
       };
     }
+
+    if (nextProgress.status === "active") {
+      return {
+        ok: true,
+        stage,
+        currentDay: nextDay,
+        currentDayProgress: nextProgress,
+        isTimeLocked: false,
+      };
+    }
+
+    continue;
+  }
+
+  continue;
+}
   }
 
   const lastDay = days[days.length - 1];
@@ -539,7 +531,7 @@ export async function getDayBasedStageState({ prisma, userId, stageCode }) {
       completedAt: currentDayProgress?.completedAt || null,
       unlockedNextAt: currentDayProgress?.unlockedNextAt || null,
       isTimeLocked,
-      canReset: true,
+      canReset: currentDayProgress?.status === "active",
       canGoNextDay: !isTimeLocked && currentDayProgress?.status === "completed",
     },
     tasks: (currentDay.tasks || []).map((task) => {
@@ -714,10 +706,10 @@ export async function completeDayBasedTask({ prisma, userId, stageCode, taskId, 
 
 
     if (summary.allRequiredDone) {
-      dayUpdateData.status = "completed";
-      dayUpdateData.completedAt = now;
-      dayUpdateData.unlockedNextAt = getNextIranCalendarDayStart(now);
-    } else {
+  dayUpdateData.status = "completed";
+  dayUpdateData.completedAt = now;
+  dayUpdateData.unlockedNextAt = now;
+} else {
       dayUpdateData.status = "active";
       dayUpdateData.completedAt = null;
       dayUpdateData.unlockedNextAt = null;
@@ -742,7 +734,7 @@ export async function completeDayBasedTask({ prisma, userId, stageCode, taskId, 
         allRequiredDone: summary.allRequiredDone,
         completedAt: updatedDay.completedAt,
         unlockedNextAt: updatedDay.unlockedNextAt,
-        isTimeLocked: updatedDay.status === "completed",
+        isTimeLocked: false,
         xpEarned: updatedDay.xpEarned,
       },
       meta: {
