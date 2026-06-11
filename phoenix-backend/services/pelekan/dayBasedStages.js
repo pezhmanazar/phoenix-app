@@ -509,6 +509,16 @@ export async function getDayBasedStageState({ prisma, userId, stageCode }) {
   const { stage, currentDay, currentDayProgress, isTimeLocked, stageCompleted } = resolved;
 
   const taskProgressMap = await getTaskProgressMap(prisma, userId, [currentDay.id]);
+    const noContactStreak = await prisma.pelekanStreak.findUnique({
+    where: { userId },
+    select: {
+      currentDays: true,
+      bestDays: true,
+      noContactWarningState: true,
+      noContactViolationCount: true,
+      noContactResetCount: true,
+    },
+  });
   const summary = summarizeTasks(currentDay.tasks || [], taskProgressMap);
 
   return {
@@ -534,22 +544,33 @@ export async function getDayBasedStageState({ prisma, userId, stageCode }) {
       canReset: currentDayProgress?.status === "active",
       canGoNextDay: !isTimeLocked && currentDayProgress?.status === "completed",
     },
-    tasks: (currentDay.tasks || []).map((task) => {
-  const p = taskProgressMap.get(task.id);
-  return {
-    id: task.id,
-    code: task.code,
-    titleFa: task.titleFa,
-    description: task.description,
-    suggestedTimeFa: task.suggestedTimeFa,
-    sortOrder: task.sortOrder,
-    isRequired: task.isRequired,
-    weightPercent: task.weightPercent,
-    xpReward: task.xpReward,
-    isDone: !!p?.isDone,
-    doneAt: p?.doneAt || null,
-  };
-}),
+        tasks: (currentDay.tasks || []).map((task) => {
+      const p = taskProgressMap.get(task.id);
+      const isNoContactTask = isNoContactTaskCode(task.code);
+
+      return {
+        id: task.id,
+        code: task.code,
+        titleFa: task.titleFa,
+        description: task.description,
+        suggestedTimeFa: task.suggestedTimeFa,
+        sortOrder: task.sortOrder,
+        isRequired: task.isRequired,
+        weightPercent: task.weightPercent,
+        xpReward: task.xpReward,
+        isDone: !!p?.isDone,
+        doneAt: p?.doneAt || null,
+        noContactStreak: isNoContactTask
+          ? {
+              currentDays: noContactStreak?.currentDays || 0,
+              bestDays: noContactStreak?.bestDays || 0,
+              warningState: noContactStreak?.noContactWarningState || "none",
+              violationCount: noContactStreak?.noContactViolationCount || 0,
+              resetCount: noContactStreak?.noContactResetCount || 0,
+            }
+          : null,
+      };
+    }),
     summary,
     stageCompleted: !!stageCompleted,
   };
