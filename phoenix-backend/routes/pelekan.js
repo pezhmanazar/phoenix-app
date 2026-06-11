@@ -96,46 +96,50 @@ function isDebugAllowed(req) {
   return !isProd;
 }
 
-async function updateStreakOnDayComplete(tx, userId, completedAt) {
-  const now = new Date();
-  const today = new Date(completedAt);
-  today.setHours(0, 0, 0, 0);
+// async function updateStreakOnDayComplete(tx, userId, completedAt) {
+//   const now = new Date();
+//   const today = new Date(completedAt);
+//   today.setHours(0, 0, 0, 0);
 
-  const streak = await tx.pelekanStreak.findUnique({ where: { userId } });
+//   const streak = await tx.pelekanStreak.findUnique({ where: { userId } });
 
-  if (!streak) {
-    await tx.pelekanStreak.create({
-      data: {
-        userId,
-        currentDays: 1,
-        bestDays: 1,
-        lastCompletedAt: completedAt,
-        yellowCardAt: null,
-        updatedAt: now, // ✅ مهم
-      },
-    });
-    return;
-  }
+//   if (!streak) {
+//     await tx.pelekanStreak.create({
+//       data: {
+//         userId,
+//         currentDays: 1,
+//         bestDays: 1,
+//         lastCompletedAt: completedAt,
+//         yellowCardAt: null,
+//         updatedAt: now, // ✅ مهم
+//       },
+//     });
+//     return;
+//   }
 
-  const last = streak.lastCompletedAt ? new Date(streak.lastCompletedAt) : null;
-  if (last) last.setHours(0, 0, 0, 0);
+//   const last = streak.lastCompletedAt ? new Date(streak.lastCompletedAt) : null;
+//   if (last) last.setHours(0, 0, 0, 0);
 
-  const diffDays = last ? Math.round((today - last) / 86400000) : null;
+//   const diffDays = last ? Math.round((today - last) / 86400000) : null;
 
-  let currentDays = streak.currentDays;
-  if (diffDays === 1) currentDays += 1;
-  else if (diffDays > 1) currentDays = 1; // diffDays === 0 → همون روز، تغییر نده
+//   let currentDays = streak.currentDays;
+//   if (diffDays === 1) currentDays += 1;
+//   else if (diffDays > 1) currentDays = 1; // diffDays === 0 → همون روز، تغییر نده
 
-  await tx.pelekanStreak.update({
-    where: { userId },
-    data: {
-      currentDays,
-      bestDays: Math.max(streak.bestDays, currentDays),
-      lastCompletedAt: completedAt,
-      updatedAt: now, // ✅ مهم
-    },
-  });
-}
+//   await tx.pelekanStreak.update({
+//     where: { userId },
+//     data: {
+//       currentDays,
+//       bestDays: Math.max(streak.bestDays, currentDays),
+//       lastCompletedAt: completedAt,
+//       updatedAt: now, // ✅ مهم
+//     },
+//   });
+// }
+
+
+
+
 
 // -------------------- Baseline Assessment (hb_baseline) --------------------
 
@@ -403,106 +407,106 @@ function canUnlockGosastanGate({
  * - این sync فقط برای روزهای bastan است.
  * - اگر همه actionها done باشند، این تابع هیچ کاری نمی‌کند (گذار به گسستن باید توسط gate/engine انجام شود).
  */
-async function syncBastanActionsToPelekanDays(prismaClient, userId) {
-  const now = new Date();
+// async function syncBastanActionsToPelekanDays(prismaClient, userId) {
+//   const now = new Date();
 
-  // 1) bastan days
-  const bastanDays = await prismaClient.pelekanDay.findMany({
-    where: { stage: { code: "bastan" } },
-    orderBy: { dayNumberInStage: "asc" },
-    select: { id: true, dayNumberInStage: true },
-  });
-  if (!bastanDays.length) return;
+//   // 1) bastan days
+//   const bastanDays = await prismaClient.pelekanDay.findMany({
+//     where: { stage: { code: "bastan" } },
+//     orderBy: { dayNumberInStage: "asc" },
+//     select: { id: true, dayNumberInStage: true },
+//   });
+//   if (!bastanDays.length) return;
 
-  // 2) actions + done counts
-  const actions = await prismaClient.bastanActionDefinition.findMany({
-    orderBy: { sortOrder: "asc" },
-    select: { id: true, sortOrder: true, minRequiredSubtasks: true },
-  });
-  if (!actions.length) return;
+//   // 2) actions + done counts
+//   const actions = await prismaClient.bastanActionDefinition.findMany({
+//     orderBy: { sortOrder: "asc" },
+//     select: { id: true, sortOrder: true, minRequiredSubtasks: true },
+//   });
+//   if (!actions.length) return;
 
-  const doneAgg = await prismaClient.bastanSubtaskProgress.groupBy({
-    by: ["actionId"],
-    where: { userId, isDone: true },
-    _count: { _all: true },
-  });
+//   const doneAgg = await prismaClient.bastanSubtaskProgress.groupBy({
+//     by: ["actionId"],
+//     where: { userId, isDone: true },
+//     _count: { _all: true },
+//   });
 
-  const doneByActionId = {};
-  for (const r of doneAgg) doneByActionId[r.actionId] = r._count._all || 0;
+//   const doneByActionId = {};
+//   for (const r of doneAgg) doneByActionId[r.actionId] = r._count._all || 0;
 
-  // ✅ اگر همه actionها done هستند => اینجا دخالت نکن (گذار به gosastan با gate/engine)
-  const allDone = actions.every((a) => (doneByActionId[a.id] || 0) >= (a.minRequiredSubtasks || 0));
-  if (allDone) return;
+//   // ✅ اگر همه actionها done هستند => اینجا دخالت نکن (گذار به gosastan با gate/engine)
+//   const allDone = actions.every((a) => (doneByActionId[a.id] || 0) >= (a.minRequiredSubtasks || 0));
+//   if (allDone) return;
 
-  // 3) تعیین index اقدام فعال (اولین اقدامِ ناقص)
-  let activeIndex = 0; // 0-based
-  for (let i = 0; i < actions.length; i++) {
-    const a = actions[i];
-    const done = doneByActionId[a.id] || 0;
-    const minReq = a.minRequiredSubtasks || 0;
-    if (done < minReq) {
-      activeIndex = i;
-      break;
-    }
-  }
+//   // 3) تعیین index اقدام فعال (اولین اقدامِ ناقص)
+//   let activeIndex = 0; // 0-based
+//   for (let i = 0; i < actions.length; i++) {
+//     const a = actions[i];
+//     const done = doneByActionId[a.id] || 0;
+//     const minReq = a.minRequiredSubtasks || 0;
+//     if (done < minReq) {
+//       activeIndex = i;
+//       break;
+//     }
+//   }
 
-  // clamp نسبت به تعداد dayها (اگر mismatch شد)
-  if (activeIndex < 0) activeIndex = 0;
-  if (activeIndex >= bastanDays.length) activeIndex = bastanDays.length - 1;
+//   // clamp نسبت به تعداد dayها (اگر mismatch شد)
+//   if (activeIndex < 0) activeIndex = 0;
+//   if (activeIndex >= bastanDays.length) activeIndex = bastanDays.length - 1;
 
-  // 4) فقط در bastan:
-  //    dayهای قبل completed، روز active -> active
-  for (let i = 0; i < bastanDays.length; i++) {
-    const dayId = bastanDays[i].id;
+//   // 4) فقط در bastan:
+//   //    dayهای قبل completed، روز active -> active
+//   for (let i = 0; i < bastanDays.length; i++) {
+//     const dayId = bastanDays[i].id;
 
-    if (i < activeIndex) {
-      await prismaClient.pelekanDayProgress.upsert({
-        where: { userId_dayId: { userId, dayId } },
-        create: {
-          userId,
-          dayId,
-          status: "completed",
-          completionPercent: 100,
-          startedAt: now,
-          lastActivityAt: now,
-          completedAt: now,
-          xpEarned: 0,
-        },
-        update: {
-          status: "completed",
-          completionPercent: 100,
-          lastActivityAt: now,
-          completedAt: now,
-        },
-      });
-      continue;
-    }
+//     if (i < activeIndex) {
+//       await prismaClient.pelekanDayProgress.upsert({
+//         where: { userId_dayId: { userId, dayId } },
+//         create: {
+//           userId,
+//           dayId,
+//           status: "completed",
+//           completionPercent: 100,
+//           startedAt: now,
+//           lastActivityAt: now,
+//           completedAt: now,
+//           xpEarned: 0,
+//         },
+//         update: {
+//           status: "completed",
+//           completionPercent: 100,
+//           lastActivityAt: now,
+//           completedAt: now,
+//         },
+//       });
+//       continue;
+//     }
 
-    if (i === activeIndex) {
-      await prismaClient.pelekanDayProgress.upsert({
-        where: { userId_dayId: { userId, dayId } },
-        create: {
-          userId,
-          dayId,
-          status: "active",
-          completionPercent: 0,
-          startedAt: now,
-          lastActivityAt: now,
-          xpEarned: 0,
-        },
-        update: {
-          status: "active",
-          lastActivityAt: now,
-          completedAt: null,
-        },
-      });
-      continue;
-    }
+//     if (i === activeIndex) {
+//       await prismaClient.pelekanDayProgress.upsert({
+//         where: { userId_dayId: { userId, dayId } },
+//         create: {
+//           userId,
+//           dayId,
+//           status: "active",
+//           completionPercent: 0,
+//           startedAt: now,
+//           lastActivityAt: now,
+//           xpEarned: 0,
+//         },
+//         update: {
+//           status: "active",
+//           lastActivityAt: now,
+//           completedAt: null,
+//         },
+//       });
+//       continue;
+//     }
 
-    // ✅ روزهای بعد از active را دست نمی‌زنیم.
-    // چون enum "idle" نداریم و نمی‌خواهیم رکوردهای آینده را خراب کنیم.
-  }
-}
+//     // ✅ روزهای بعد از active را دست نمی‌زنیم.
+//     // چون enum "idle" نداریم و نمی‌خواهیم رکوردهای آینده را خراب کنیم.
+//   }
+// }
 
 /* ===========================
    ✅ ADDED: Bastan action->day sync

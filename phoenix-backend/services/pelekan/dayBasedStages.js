@@ -790,7 +790,20 @@ export async function getDayBasedStageDayState({ prisma, userId, stageCode, dayN
   const taskProgressMap = await getTaskProgressMap(prisma, userId, [day.id]);
 
   const dayProgress = dayProgressMap.get(day.id) || null;
-  const summary = summarizeTasks(day.tasks || [], taskProgressMap);
+
+ const noContactStreak = await prisma.pelekanStreak.findUnique({
+  where: { userId },
+  select: {
+    currentDays: true,
+    bestDays: true,
+    noContactWarningState: true,
+    noContactViolationCount: true,
+    noContactResetCount: true,
+  },
+});
+
+const summary = summarizeTasks(day.tasks || [], taskProgressMap);
+
 
   return {
     ok: true,
@@ -816,21 +829,32 @@ export async function getDayBasedStageDayState({ prisma, userId, stageCode, dayN
       canGoNextDay: false,
     },
     tasks: (day.tasks || []).map((task) => {
-      const p = taskProgressMap.get(task.id);
-      return {
-        id: task.id,
-        code: task.code,
-        titleFa: task.titleFa,
-        description: task.description,
-        suggestedTimeFa: task.suggestedTimeFa,
-        sortOrder: task.sortOrder,
-        isRequired: task.isRequired,
-        weightPercent: task.weightPercent,
-        xpReward: task.xpReward,
-        isDone: !!p?.isDone,
-        doneAt: p?.doneAt || null,
-      };
-    }),
+  const p = taskProgressMap.get(task.id);
+  const isNoContactTask = isNoContactTaskCode(task.code);
+
+  return {
+    id: task.id,
+    code: task.code,
+    titleFa: task.titleFa,
+    description: task.description,
+    suggestedTimeFa: task.suggestedTimeFa,
+    sortOrder: task.sortOrder,
+    isRequired: task.isRequired,
+    weightPercent: task.weightPercent,
+    xpReward: task.xpReward,
+    isDone: !!p?.isDone,
+    doneAt: p?.doneAt || null,
+    noContactStreak: isNoContactTask
+      ? {
+          currentDays: noContactStreak?.currentDays || 0,
+          bestDays: noContactStreak?.bestDays || 0,
+          warningState: noContactStreak?.noContactWarningState || "none",
+          violationCount: noContactStreak?.noContactViolationCount || 0,
+          resetCount: noContactStreak?.noContactResetCount || 0,
+        }
+      : null,
+  };
+}),
     summary,
     stageCompleted: false,
   };
