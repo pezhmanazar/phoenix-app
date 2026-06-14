@@ -44,12 +44,54 @@ function getPlanStatus(plan, planExpiresAt) {
 
 /** pick active day */
 function computeActiveDayId({ stages, dayProgress }) {
-  const active = (dayProgress || [])
-    .filter((d) => d.status === "active")
-    .sort((a, b) => new Date(b.lastActivityAt || 0).getTime() - new Date(a.lastActivityAt || 0).getTime())[0];
+  const orderedDays = (stages || [])
+    .flatMap((stage) => stage.days || [])
+    .filter(Boolean);
 
-  const firstDay = stages?.[0]?.days?.[0];
-  return active?.dayId || firstDay?.id || null;
+  const dayOrder = new Map();
+  orderedDays.forEach((day, index) => {
+    if (day?.id) dayOrder.set(day.id, index);
+  });
+
+  const rows = Array.isArray(dayProgress) ? dayProgress : [];
+
+  const activeRows = rows
+    .filter((row) => {
+      const status = String(row?.status || "").toLowerCase();
+      const percent = Number(row?.completionPercent || 0);
+
+      return (
+        status === "active" &&
+        percent < 100 &&
+        !row?.completedAt &&
+        dayOrder.has(row.dayId)
+      );
+    })
+    .sort((a, b) => {
+      return (dayOrder.get(a.dayId) ?? 999999) - (dayOrder.get(b.dayId) ?? 999999);
+    });
+
+  if (activeRows[0]?.dayId) {
+    return activeRows[0].dayId;
+  }
+
+  const incompleteRows = rows
+    .filter((row) => {
+      const status = String(row?.status || "").toLowerCase();
+      const percent = Number(row?.completionPercent || 0);
+
+      return (
+        status !== "completed" &&
+        percent < 100 &&
+        !row?.completedAt &&
+        dayOrder.has(row.dayId)
+      );
+    })
+    .sort((a, b) => {
+      return (dayOrder.get(a.dayId) ?? 999999) - (dayOrder.get(b.dayId) ?? 999999);
+    });
+
+  return incompleteRows[0]?.dayId || null;
 }
 
 /** access model for fairness */
@@ -686,6 +728,52 @@ async function syncBastanActionsToDays(prisma, userId, stages, now = new Date())
   }
 }
 
+async function normalizePelekanDayProgress(prisma, userId, stages, now = new Date()) {
+  const validDayIds = new Set(
+    (stages || [])
+      .flatMap((stage) => stage.days || [])
+      .map((day) => day.id)
+      .filter(Boolean)
+  );
+
+  if (!validDayIds.size) return;
+
+  const rows = await prisma.pelekanDayProgress.findMany({
+    where: { userId },
+    select: {
+      dayId: true,
+      status: true,
+      completionPercent: true,
+      completedAt: true,
+    },
+  });
+
+  const brokenCompletedRows = rows.filter((row) => {
+    const percent = Number(row.completionPercent || 0);
+    const status = String(row.status || "").toLowerCase();
+
+    return (
+      validDayIds.has(row.dayId) &&
+      percent >= 100 &&
+      (status !== "completed" || !row.completedAt)
+    );
+  });
+
+  for (const row of brokenCompletedRows) {
+    await prisma.pelekanDayProgress.updateMany({
+      where: {
+        userId,
+        dayId: row.dayId,
+      },
+      data: {
+        status: "completed",
+        completedAt: row.completedAt || now,
+        lastActivityAt: now,
+      },
+    });
+  }
+}
+
 /* ---------- GET /api/pelekan/state ---------- */
 
 router.get("/state", authUser, async (req, res) => {
@@ -935,8 +1023,11 @@ if (!phone) {
       progressRow?.bastanUnlockedAt || pelekanProg?.bastanUnlockedAt || null;
 
     if (introDone && unlockedAt) {
-      await syncBastanActionsToDays(prisma, user.id, stages, new Date());
-    }
+  const now = new Date();
+
+  await syncBastanActionsToDays(prisma, user.id, stages, now);
+  await normalizePelekanDayProgress(prisma, user.id, stages, now);
+}
 
     // progress
     const dayProgress = await prisma.pelekanDayProgress.findMany({
