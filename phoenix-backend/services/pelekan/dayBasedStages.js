@@ -2,7 +2,7 @@
 const DAY_BASED_STAGE_CODES = [
   "gosastan",
   "sookhtan",
-  "sarashtan",
+  "sereshtan",
   "ziestan",
   "sakhtan",
   "rastan",

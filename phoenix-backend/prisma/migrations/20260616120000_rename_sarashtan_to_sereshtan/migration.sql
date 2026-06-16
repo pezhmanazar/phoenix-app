@@ -1,0 +1,1 @@
+ALTER TYPE "public"."PelekanStageCode" RENAME VALUE 'sarashtan' TO 'sereshtan';
