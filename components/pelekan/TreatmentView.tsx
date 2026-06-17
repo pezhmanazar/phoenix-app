@@ -127,6 +127,7 @@ const NODE_X_RIGHT = PATH_W - 70;
 const NODE_R = 28;
 const CELL_H = 120;
 
+
 const palette = {
   bg: "#0b0f14",
   text: "#F9FAFB",
@@ -153,6 +154,7 @@ const palette = {
 // ✅ لوکال: ویس‌های استیج
 const KEY_BASTAN_STAGE_AUDIO_V1 = "pelekan:stage_intro:bastan:heard:v1";
 const KEY_GOSASTAN_STAGE_AUDIO_V1 = "pelekan:stage_intro:gosastan:heard:v1";
+const KEY_SOOKHTAN_STAGE_AUDIO_V1 = "pelekan:stage_intro:sookhtan:heard:v1";
 
 function stageIconName(code: string): keyof typeof Ionicons.glyphMap {
   if (code === "bastan") return "folder";
@@ -166,7 +168,15 @@ function stageIconName(code: string): keyof typeof Ionicons.glyphMap {
 }
 
 /* ----------------------------- Pulsing ----------------------------- */
-function Pulsing({ children, playing }: { children: React.ReactNode; playing: boolean }) {
+function Pulsing({
+  children,
+  playing,
+  style,
+}: {
+  children: React.ReactNode;
+  playing: boolean;
+  style?: any;
+}) {
   const scale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -177,8 +187,18 @@ function Pulsing({ children, playing }: { children: React.ReactNode; playing: bo
 
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(scale, { toValue: 1.08, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(scale, { toValue: 1.0, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(scale, {
+          toValue: 1.1,
+          duration: 700,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scale, {
+          toValue: 1,
+          duration: 700,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
       ])
     );
 
@@ -186,7 +206,7 @@ function Pulsing({ children, playing }: { children: React.ReactNode; playing: bo
     return () => loop.stop();
   }, [playing, scale]);
 
-  return <Animated.View style={{ transform: [{ scale }] }}>{children}</Animated.View>;
+  return <Animated.View style={[style, { transform: [{ scale }] }]}>{children}</Animated.View>;
 }
 
 function isDoneRow(dp: DayProgressRow | undefined) {
@@ -212,15 +232,19 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
   // ✅ stage-intro ها (لوکال)
   const [bastanHeard, setBastanHeard] = useState(false);
   const [gosastanHeard, setGosastanHeard] = useState(false);
+  const [sookhtanHeard, setSookhtanHeard] = useState(false);
 
   const refreshLocalHeards = useCallback(async () => {
     try {
-      const [b, g] = await Promise.all([
-        AsyncStorage.getItem(KEY_BASTAN_STAGE_AUDIO_V1),
-        AsyncStorage.getItem(KEY_GOSASTAN_STAGE_AUDIO_V1),
-      ]);
-      setBastanHeard(b === "1");
-      setGosastanHeard(g === "1");
+      const [b, g, s] = await Promise.all([
+  AsyncStorage.getItem(KEY_BASTAN_STAGE_AUDIO_V1),
+  AsyncStorage.getItem(KEY_GOSASTAN_STAGE_AUDIO_V1),
+  AsyncStorage.getItem(KEY_SOOKHTAN_STAGE_AUDIO_V1),
+]);
+setBastanHeard(b === "1");
+setGosastanHeard(g === "1");
+setSookhtanHeard(s === "1");
+
     } catch {}
   }, []);
 
@@ -269,7 +293,7 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
     </Modal>
   );
 
-  if (item.kind === "spacer") return <View style={{ height: 10 }} />;
+  if (item.kind === "spacer") return <View style={{ height: 0 }} />;
 
   // ✅ results (دایره سنجش) — خط صاف عمودی
   if (item.kind === "results") {
@@ -350,12 +374,23 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
 
     const stageCode = String(stage?.code || "");
     const isBastanStage = stageCode === "bastan";
-    const isGosastanStage = stageCode === "gosastan";
+const isGosastanStage = stageCode === "gosastan";
+const isSookhtanStage = stageCode === "sookhtan";
 
-    const heard = isBastanStage ? bastanHeard : isGosastanStage ? gosastanHeard : false;
+const heard = isBastanStage
+  ? bastanHeard
+  : isGosastanStage
+    ? gosastanHeard
+    : isSookhtanStage
+      ? sookhtanHeard
+      : false;
 
     const done = !!item.done;
     const active = !!item.active;
+
+    const canOpenStageIntro = isBastanStage || isGosastanStage || isSookhtanStage;
+const shouldPulseStageNode = canOpenStageIntro && active && !done && !heard;
+
 
     const bg = done || heard ? palette.node.doneBg : active ? palette.node.availableBg : palette.node.lockedBg;
     const border = done || heard ? palette.node.doneBorder : active ? palette.node.availableBorder : palette.node.lockedBorder;
@@ -373,9 +408,9 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
       C ${nodeX} ${CELL_H * 0.35}, ${MID_X} ${topY + 30}, ${MID_X} ${topY}
     `;
 
-    const NodeWrap: any = isBastanStage || isGosastanStage ? TouchableOpacity : View;
+    const NodeWrap: any = canOpenStageIntro ? TouchableOpacity : View;
 
-    const wrapProps =
+       const wrapProps =
       isBastanStage
         ? {
             activeOpacity: 0.9,
@@ -389,8 +424,30 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
             },
           }
         : isGosastanStage
-          ? { activeOpacity: 0.9, onPress: () => router.push("/pelekan/gosastan/stage-intro" as any) }
-          : {};
+          ? {
+              activeOpacity: 0.9,
+              onPress: () => router.push("/pelekan/gosastan/stage-intro" as any),
+            }
+          : isSookhtanStage
+            ? {
+                activeOpacity: 0.9,
+                onPress: () => router.push("/pelekan/sookhtan/stage-intro" as any),
+              }
+            : {};
+
+       const nodePositionStyle = {
+      left: nodeX - NODE_R,
+      top: CELL_H / 2 - NODE_R,
+      backgroundColor: bg,
+      borderColor: border,
+    };
+
+    const stageNodeContent = (
+      <NodeWrap {...wrapProps} style={styles.nodeInner}>
+        <Ionicons name={stageIconName(stageCode) as any} size={22} color={iconCol} />
+        <Text style={[styles.nodeText, { color: labelCol }]}>{stage.titleFa}</Text>
+      </NodeWrap>
+    );
 
     return (
       <View style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}>
@@ -400,21 +457,13 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
           <Path d={pathD} stroke={strokeCol} strokeWidth={6} fill="none" strokeLinecap="round" />
         </Svg>
 
-        <NodeWrap
-          {...wrapProps}
-          style={[
-            styles.node,
-            {
-              left: nodeX - NODE_R,
-              top: CELL_H / 2 - NODE_R,
-              backgroundColor: bg,
-              borderColor: border,
-            },
-          ]}
-        >
-          <Ionicons name={stageIconName(stageCode) as any} size={22} color={iconCol} />
-          <Text style={[styles.nodeText, { color: labelCol }]}>{stage.titleFa}</Text>
-        </NodeWrap>
+        {shouldPulseStageNode ? (
+          <Pulsing playing style={[styles.node, nodePositionStyle]}>
+            {stageNodeContent}
+          </Pulsing>
+        ) : (
+          <View style={[styles.node, nodePositionStyle]}>{stageNodeContent}</View>
+        )}
       </View>
     );
   }
@@ -453,23 +502,22 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
   const isBastan = String(stage?.code || "") === "bastan";
   const label = isBastan ? "اقدام" : "روز";
 
-  const node = (
+   const nodePositionStyle = {
+    left: nodeX - NODE_R,
+    top: CELL_H / 2 - NODE_R,
+    backgroundColor: bg,
+    borderColor: border,
+    opacity: available && !canEnter ? 0.55 : 1,
+  };
+
+  const dayNodeContent = (
     <TouchableOpacity
       activeOpacity={0.9}
       onPress={() => {
         if (!canEnter) return;
         onTapActiveDay?.(day, { mode: available ? "active" : "preview" });
       }}
-      style={[
-        styles.node,
-        {
-          left: nodeX - NODE_R,
-          top: CELL_H / 2 - NODE_R,
-          backgroundColor: bg,
-          borderColor: border,
-          opacity: available && !canEnter ? 0.55 : 1,
-        },
-      ]}
+      style={styles.nodeInner}
     >
       <Ionicons name={iconName as any} size={22} color={iconCol} />
       <Text style={[styles.nodeText, { color: labelCol }]}>
@@ -486,7 +534,13 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
         <Path d={pathD} stroke={done ? palette.pathDone : palette.pathIdle} strokeWidth={6} fill="none" strokeLinecap="round" />
       </Svg>
 
-      {available ? <Pulsing playing>{node}</Pulsing> : node}
+      {available ? (
+        <Pulsing playing style={[styles.node, nodePositionStyle]}>
+          {dayNodeContent}
+        </Pulsing>
+      ) : (
+        <View style={[styles.node, nodePositionStyle]}>{dayNodeContent}</View>
+      )}
     </View>
   );
 }
@@ -506,6 +560,13 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
     elevation: 3,
+  },
+  nodeInner: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
   },
   nodeText: {
     position: "absolute",

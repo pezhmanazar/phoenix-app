@@ -303,7 +303,6 @@ export default function GosastanStageIntroScreen() {
         </TouchableOpacity>
 
         <Text style={styles.title}>معرفی مرحله گسستن</Text>
-        <Text style={styles.desc}>کافیه چند ثانیه گوش بدی و برگردی.</Text>
 
         <View style={styles.progressTrack} onLayout={(e) => setTrackW(e?.nativeEvent?.layout?.width ?? 0)}>
           <TouchableOpacity

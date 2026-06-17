@@ -210,34 +210,6 @@ export default function PelekanTab() {
         }
 
         const data = json.data || {};
-   if (__DEV__) {
-  console.log(
-    "PELEKAN STATE RAW:",
-    JSON.stringify(
-      {
-        tabState: data?.tabState,
-        treatment: data?.treatment,
-        progress: data?.progress,
-        stages: data?.stages?.map((s: any) => ({
-          id: s.id,
-          code: s.code,
-          status: s.status,
-          sortOrder: s.sortOrder,
-          daysCount: s.days?.length,
-          days: s.days?.map((d: any) => ({
-            id: d.id,
-            code: d.code,
-            title: d.title,
-            dayNumberInStage: d.dayNumberInStage,
-            status: d.status,
-          })),
-        })),
-      },
-      null,
-      2,
-    ),
-  );
-}
         const stagesWithDays = Array.isArray(data?.stages) ? data.stages : [];
         const tStages = Array.isArray(data?.treatment?.stages)
           ? data.treatment.stages
@@ -459,15 +431,6 @@ const activeStageIndex = progressActiveDayId
     )
   : -1;
 
-if (__DEV__) {
-  console.log("PELEKAN ACTIVE DEBUG:", {
-    progressActiveDayId,
-    activeStageIndex,
-    activeStageCodeFromIndex:
-      activeStageIndex >= 0 ? stages[activeStageIndex]?.code : null,
-  });
-}
-
 for (let stageIndex = 0; stageIndex < stages.length; stageIndex++) {
   const st = stages[stageIndex];
   const code = String(st?.code || "").trim();
@@ -596,6 +559,8 @@ for (let stageIndex = 0; stageIndex < stages.length; stageIndex++) {
   const onTapStart = useCallback(() => {
     router.push("/pelekan/bastan" as any);
   }, [router]);
+
+  
 
   const onTapActiveDay = useCallback(
     (day: PelekanDay, opts?: { mode: "active" | "preview" }) => {

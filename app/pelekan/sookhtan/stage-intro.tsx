@@ -303,7 +303,6 @@ export default function SookhtanStageIntroScreen() {
         </TouchableOpacity>
 
         <Text style={styles.title}>معرفی مرحله سوختن</Text>
-        <Text style={styles.desc}>کافیه چند ثانیه گوش بدی و برگردی.</Text>
 
         <View style={styles.progressTrack} onLayout={(e) => setTrackW(e?.nativeEvent?.layout?.width ?? 0)}>
           <TouchableOpacity
