@@ -123,6 +123,7 @@ function CoachAudioPlayer({
   const url = useMemo(() => mediaUrl(audioKey), [audioKey]);
 
   const playerRef = useRef<AudioPlayer | null>(null);
+  const statusSubscriptionRef = useRef<{ remove: () => void } | null>(null);
   const currentUrlRef = useRef<string>("");
 
   const mountedRef = useRef(true);
@@ -132,6 +133,7 @@ function CoachAudioPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
+  const [loadStatus, setLoadStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [posMs, setPosMs] = useState(0);
   const [durMs, setDurMs] = useState(1);
   const [trackW, setTrackW] = useState(0);
@@ -151,6 +153,7 @@ function CoachAudioPlayer({
     setIsLoaded(false);
     setIsPlaying(false);
     setIsBuffering(false);
+    setLoadStatus("idle");
     setPosMs(0);
     setDurMs(1);
   }, []);
@@ -196,48 +199,63 @@ function CoachAudioPlayer({
   }, []);
 
   const unload = useCallback(async () => {
-    const p = playerRef.current;
-    playerRef.current = null;
-    currentUrlRef.current = "";
+  const p = playerRef.current;
+  playerRef.current = null;
+  currentUrlRef.current = "";
 
-    try {
-      if (p) {
-        try {
-          p.pause();
-        } catch {}
-        try {
-          p.remove();
-        } catch {}
-      }
-    } catch {}
+  try {
+    statusSubscriptionRef.current?.remove?.();
+    statusSubscriptionRef.current = null;
+  } catch {}
 
-    resetUi();
-  }, [resetUi]);
+  try {
+    if (p) {
+      try {
+        p.pause();
+      } catch {}
+      try {
+        p.remove();
+      } catch {}
+    }
+  } catch {}
+
+  resetUi();
+}, [resetUi]);
 
   const attachStatusListener = useCallback(
-    (player: AudioPlayer) => {
-      player.addListener("playbackStatusUpdate", (st: AudioStatus) => {
-        if (!mountedRef.current) return;
+  (player: AudioPlayer) => {
+    try {
+      statusSubscriptionRef.current?.remove?.();
+      statusSubscriptionRef.current = null;
+    } catch {}
 
-        const nextLoaded = !!st.isLoaded;
-        const nextPlaying = !!st.playing;
-        const nextPosMs = Math.max(0, Math.floor((st.currentTime || 0) * 1000));
-        const nextDurMs = Math.max(1, Math.floor((st.duration || 0) * 1000));
+    statusSubscriptionRef.current = player.addListener("playbackStatusUpdate", (st: AudioStatus) => {
+      if (!mountedRef.current) return;
 
-        setIsLoaded(nextLoaded);
-        setIsPlaying(nextPlaying);
-        setPosMs(nextPosMs);
-        setDurMs(nextDurMs);
-        setIsBuffering(!!st.isBuffering);
+      const nextLoaded = !!st.isLoaded;
+      const nextPlaying = !!st.playing;
+      const nextPosMs = Math.max(0, Math.floor((st.currentTime || 0) * 1000));
+      const nextDurMs = Math.max(1, Math.floor((st.duration || 0) * 1000));
 
-        if (st.didJustFinish) {
-          setIsPlaying(false);
-          onFinished?.();
-        }
-      });
-    },
-    [onFinished]
-  );
+      setIsLoaded(nextLoaded);
+      setIsPlaying(nextPlaying);
+      setPosMs(nextPosMs);
+      setDurMs(nextDurMs);
+      setIsBuffering(!!st.isBuffering);
+      if (nextLoaded && loadStatus === "loading") {
+      setLoadStatus("ready");
+      }
+
+      if (st.didJustFinish) {
+        setIsPlaying(false);
+        setLoadStatus("idle");
+        onFinished?.();
+      }
+    });
+  },
+  [onFinished, loadStatus]
+);
+
 
   const loadIfNeeded = useCallback(async () => {
     if (playerRef.current && currentUrlRef.current && currentUrlRef.current !== url) {
@@ -248,6 +266,7 @@ function CoachAudioPlayer({
     if (playerRef.current && currentUrlRef.current === url) return;
 
     setIsBuffering(true);
+    setLoadStatus("loading");
 
     await setAudioModeAsync({
       playsInSilentMode: true,
@@ -272,7 +291,24 @@ function CoachAudioPlayer({
     setPosMs(Math.max(0, Math.floor((player.currentTime || 0) * 1000)));
     setDurMs(Math.max(1, Math.floor((player.duration || 0) * 1000)));
     setIsBuffering(false);
+    if (player.isLoaded) setLoadStatus("ready");
   }, [url, fadeOutAndStop, unload, attachStatusListener]);
+
+    const waitUntilLoaded = useCallback(async () => {
+    const p = playerRef.current;
+    if (!p) return null;
+
+    for (let i = 0; i < 60; i += 1) {
+      if (p.isLoaded) {
+        return p;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    return p.isLoaded ? p : null;
+  }, []);
+
 
   useEffect(() => {
     if (!playerRef.current) {
@@ -292,57 +328,62 @@ function CoachAudioPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
 
-    const togglePlay = useCallback(() => {
+  const togglePlay = useCallback(() => {
     return lock(async () => {
-      if (isBuffering) return;
-      if (fadingRef.current) return;
+      if (isBuffering || fadingRef.current) return;
 
-      if (!playerRef.current) setIsBuffering(true);
-      await loadIfNeeded();
+      // ۱. اگر پلیر نداریم، اول لودش کن
+      if (!playerRef.current) {
+        setLoadStatus("loading");
+        await loadIfNeeded();
+      }
 
-      const p = playerRef.current;
+      const p = await waitUntilLoaded();
+
       if (!p) {
-        if (mountedRef.current) setIsBuffering(false);
+        setIsBuffering(false);
+        setLoadStatus("error");
         return;
       }
 
-      for (let i = 0; i < 25 && !p.isLoaded; i += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-
-      if (!p.isLoaded) {
-        if (mountedRef.current) setIsBuffering(false);
-        return;
-      }
-
+      // ۳. منطق توقف (Pause) بدون برگشت به اول
       if (p.playing) {
         setIsBuffering(true);
-        await fadeOutAndStop(180).catch(() => {});
+
+        try {
+          p.pause();
+        } catch {}
+
         if (!mountedRef.current) return;
+
         setIsBuffering(false);
         setIsPlaying(false);
+        setLoadStatus("idle");
         return;
       }
 
+      // ۴. منطق شروع پخش (Play)
       const pos = Math.floor((p.currentTime || 0) * 1000);
       const dur = Math.floor((p.duration || 0) * 1000);
-
       if (dur > 0 && pos >= dur - 250) {
         await p.seekTo(0).catch(() => {});
       }
 
       setIsBuffering(true);
-      try {
-        p.volume = 1;
-      } catch {}
-
       p.play();
+
+      let started = !!p.playing;
+      for (let i = 0; i < 15 && !started; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        started = !!p.playing;
+      }
 
       if (!mountedRef.current) return;
       setIsBuffering(false);
-      setIsPlaying(true);
+      setIsPlaying(started);
+      setLoadStatus(started ? "idle" : "ready");
     });
-  }, [isBuffering, loadIfNeeded, fadeOutAndStop]);
+   }, [isBuffering, loadIfNeeded, waitUntilLoaded]);
 
   const seekTo = useCallback(
     (ms: number) => {
@@ -362,9 +403,9 @@ function CoachAudioPlayer({
   useEffect(() => {
     mountedRef.current = true;
     return () => {
-      mountedRef.current = false;
+  mountedRef.current = false;
 
-      lock(async () => {
+  void lock(async () => {
         try {
           setIsBuffering(true);
           await fadeOutAndStop(280).catch(() => {});
@@ -417,6 +458,15 @@ function CoachAudioPlayer({
         {fmtMs(posMs)} / {fmtMs(durMs)}
       </Text>
 
+      {loadStatus !== "idle" && (
+  <View style={{ marginTop: 4, alignItems: 'center' }}>
+    <Text style={{ color: palette.gold, fontSize: 11, fontWeight: 'bold' }}>
+      {loadStatus === "loading" && "در حال آماده‌سازی فایل... صبور باش"}
+      {loadStatus === "ready" && "فایل آماده شنیدنه؛ دوباره دکمه شروع رو بزن"}
+      {loadStatus === "error" && "خطا در دریافت فایل؛ اینترنت رو چک کن و دوباره بزن"}
+    </Text>
+  </View>
+)}
       {!isLoaded && !isBuffering ? (
         <Text style={styles.bigHint}>برای شروع، روی دکمهٔ پلی بزن.</Text>
       ) : null}

@@ -47,6 +47,7 @@ export default function BastanStageIntroScreen() {
   const [err, setErr] = useState<string | null>(null);
 
   const playerRef = useRef<AudioPlayer | null>(null);
+  const statusSubscriptionRef = useRef<{ remove: () => void } | null>(null);
   const mountedRef = useRef(true);
   const opLockRef = useRef(false);
 
@@ -55,6 +56,7 @@ export default function BastanStageIntroScreen() {
   const [posMs, setPosMs] = useState(0);
   const [durMs, setDurMs] = useState(1);
   const [isBuffering, setIsBuffering] = useState(false);
+  const [loadStatus, setLoadStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
 
   const [trackW, setTrackW] = useState(0);
 
@@ -97,31 +99,45 @@ export default function BastanStageIntroScreen() {
   }, [phone, STORAGE_POS_KEY]);
 
   const attachStatusListener = useCallback(
-    (player: AudioPlayer) => {
-      player.addListener("playbackStatusUpdate", async (st: AudioStatus) => {
-        if (!mountedRef.current) return;
-        if (!st.isLoaded) return;
+  (player: AudioPlayer) => {
+    try {
+      statusSubscriptionRef.current?.remove?.();
+      statusSubscriptionRef.current = null;
+    } catch {}
 
-        setIsLoaded(true);
-        setIsPlaying(!!st.playing);
-        setPosMs(Math.max(0, Math.floor((st.currentTime || 0) * 1000)));
-        setDurMs(Math.max(1, Math.floor((st.duration || 0) * 1000)));
-        setIsBuffering(!!st.isBuffering);
+    statusSubscriptionRef.current = player.addListener("playbackStatusUpdate", async (st: AudioStatus) => {
+      if (!mountedRef.current) return;
+      if (!st.isLoaded) return;
 
-        const position = Math.max(0, Math.floor((st.currentTime || 0) * 1000));
-        const duration = Math.max(0, Math.floor((st.duration || 0) * 1000));
+      setIsLoaded(true);
+      setIsPlaying(!!st.playing);
+      setPosMs(Math.max(0, Math.floor((st.currentTime || 0) * 1000)));
+      setDurMs(Math.max(1, Math.floor((st.duration || 0) * 1000)));
+      setIsBuffering(!!st.isBuffering);
 
-        if (duration > 0 && position > 0) {
-          try {
-            if (position % 3000 < 250) {
-              await AsyncStorage.setItem(STORAGE_POS_KEY, String(position));
-            }
-          } catch {}
-        }
-      });
-    },
-    [STORAGE_POS_KEY]
-  );
+      if (st.isLoaded) {
+        setLoadStatus((prev) => (prev === "loading" ? "ready" : prev));
+      }
+
+      if (st.didJustFinish) {
+        setLoadStatus("idle");
+      }
+
+      const position = Math.max(0, Math.floor((st.currentTime || 0) * 1000));
+      const duration = Math.max(0, Math.floor((st.duration || 0) * 1000));
+
+      if (duration > 0 && position > 0) {
+        try {
+          if (position % 3000 < 250) {
+            await AsyncStorage.setItem(STORAGE_POS_KEY, String(position));
+          }
+        } catch {}
+      }
+    });
+  },
+  [STORAGE_POS_KEY]
+);
+
 
   const ensureAudioMode = useCallback(async () => {
     await setAudioModeAsync({
@@ -135,6 +151,7 @@ export default function BastanStageIntroScreen() {
   const loadIfNeeded = useCallback(async () => {
     if (playerRef.current) return;
 
+    setLoadStatus("loading");
     await ensureAudioMode();
 
     const player = createAudioPlayer({ uri: AUDIO_URL }, { updateInterval: 250 });
@@ -163,46 +180,67 @@ export default function BastanStageIntroScreen() {
     } catch {}
   }, [AUDIO_URL, attachStatusListener, ensureAudioMode]);
 
-  const togglePlay = useCallback(async () => {
-  if (isBuffering) return;
+    const togglePlay = useCallback(async () => {
+    if (isBuffering) return;
 
-  try {
-    setErr(null);
-
-    if (!playerRef.current) setIsBuffering(true);
-
-    await lock(async () => {
-      await loadIfNeeded();
-
-      const p = playerRef.current;
-      if (!p) {
-        if (mountedRef.current) setIsBuffering(false);
-        return;
+    try {
+      if (!playerRef.current) {
+        setIsBuffering(true);
+        setLoadStatus("loading");
       }
 
-      for (let i = 0; i < 25 && !p.isLoaded; i += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
+      await lock(async () => {
+        await loadIfNeeded();
 
-      if (!p.isLoaded) {
-        if (mountedRef.current) setIsBuffering(false);
-        return;
-      }
+        const p = playerRef.current;
+        if (!p) {
+          setIsBuffering(false);
+          setIsPlaying(false);
+          setLoadStatus("error");
+          return;
+        }
 
-      if (p.playing) {
-        p.pause();
-        if (mountedRef.current) setIsBuffering(false);
-        return;
-      }
+        // انتظار کوتاه برای لود شدن
+        for (let i = 0; i < 25 && !p.isLoaded; i += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
 
-      p.play();
-      if (mountedRef.current) setIsBuffering(false);
-    });
-  } catch {
-    setIsBuffering(false);
-    setErr("پخش مقدمه با مشکل مواجه شد، لطفاً دوباره تلاش کن");
-  }
-}, [isBuffering, loadIfNeeded]);
+        if (!p.isLoaded) {
+          setIsBuffering(false);
+          setIsPlaying(false);
+          setLoadStatus("loading"); // به جای ارور، وضعیت لودینگ می‌ماند
+          return;
+        }
+
+        if (p.playing) {
+          p.pause();
+          setIsPlaying(false);
+          setIsBuffering(false);
+          setLoadStatus("idle");
+          return;
+        }
+
+        p.play();
+
+        let started = !!p.playing;
+        for (let i = 0; i < 15 && !started; i += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          started = !!p.playing;
+        }
+
+        if (!mountedRef.current) return;
+        setIsPlaying(started);
+        setIsBuffering(false);
+        setLoadStatus(started ? "idle" : "ready");
+      });
+    } catch {
+      setIsBuffering(false);
+      setIsPlaying(false);
+      setLoadStatus("error");
+      setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
+    }
+  }, [loadIfNeeded, isBuffering]);
+
 
   const seekTo = useCallback(
     async (ms: number) => {
@@ -226,38 +264,45 @@ export default function BastanStageIntroScreen() {
   );
 
   const stopAndUnload = useCallback(async () => {
-    try {
-      const p = playerRef.current;
-      if (!p) return;
-
-      try {
-        if (p.isLoaded) {
-          const currentMs = Math.max(0, Math.floor((p.currentTime || 0) * 1000));
-          if (currentMs > 0) {
-            await AsyncStorage.setItem(STORAGE_POS_KEY, String(currentMs));
-          }
-        }
-      } catch {}
-
-      try {
-        p.pause();
-      } catch {}
-      try {
-        p.seekTo(0);
-      } catch {}
-      try {
-        p.remove();
-      } catch {}
-    } catch {}
-
+  try {
+    const p = playerRef.current;
     playerRef.current = null;
 
-    if (!mountedRef.current) return;
-    setIsPlaying(false);
-    setIsBuffering(false);
-    setPosMs(0);
-    setDurMs(1);
-  }, [STORAGE_POS_KEY]);
+    try {
+      statusSubscriptionRef.current?.remove?.();
+      statusSubscriptionRef.current = null;
+    } catch {}
+
+    if (!p) return;
+
+    try {
+      if (p.isLoaded) {
+        const currentMs = Math.max(0, Math.floor((p.currentTime || 0) * 1000));
+        if (currentMs > 0) {
+          await AsyncStorage.setItem(STORAGE_POS_KEY, String(currentMs));
+        }
+      }
+    } catch {}
+
+    try {
+      p.pause();
+    } catch {}
+    try {
+      p.seekTo(0);
+    } catch {}
+    try {
+      p.remove();
+    } catch {}
+  } catch {}
+
+  if (!mountedRef.current) return;
+  setIsPlaying(false);
+  setIsBuffering(false);
+  setLoadStatus("idle");
+  setPosMs(0);
+  setDurMs(1);
+}, [STORAGE_POS_KEY]);
+
 
   const onBackPress = useCallback(async () => {
     if (leavingRef.current) return;
@@ -295,7 +340,7 @@ export default function BastanStageIntroScreen() {
 
     return () => {
       mountedRef.current = false;
-      stopAndUnload();
+      void stopAndUnload();
     };
   }, [readLocal, stopAndUnload]);
 
@@ -361,6 +406,19 @@ export default function BastanStageIntroScreen() {
         <Text style={styles.timeText}>
           {fmt(posMs)} / {fmt(durMs)}
         </Text>
+
+        {loadStatus !== "idle" && (
+          <Text
+            style={[
+              styles.audioLoadStatus,
+              { color: loadStatus === "error" ? "#FCA5A5" : "#D4AF37" },
+            ]}
+          >
+            {loadStatus === "loading" && "در حال آماده‌سازی فایل..."}
+            {loadStatus === "ready" && "فایل آماده پخشه؛ دوباره بزن"}
+            {loadStatus === "error" && "خطا در دریافت فایل؛ اینترنت رو چک کن"}
+          </Text>
+        )}
 
         <TouchableOpacity activeOpacity={0.9} style={styles.backBtn} onPress={onBackPress}>
           <Text style={styles.backText}>بازگشت</Text>
@@ -449,6 +507,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#E98A15",
   },
   timeText: { color: "rgba(231,238,247,.65)", fontSize: 12, marginBottom: 14 },
+
+  audioLoadStatus: {
+    marginTop: -6,
+    marginBottom: 10,
+    fontSize: 11,
+    fontWeight: "800",
+    textAlign: "center",
+  },
 
   backBtn: {
     width: "100%",

@@ -158,7 +158,7 @@ function stageIconName(code: string): keyof typeof Ionicons.glyphMap {
   if (code === "bastan") return "folder";
   if (code === "gosastan") return "link";
   if (code === "sookhtan") return "bonfire";
-  if (code === "sarashtan") return "person";
+  if (code === "sereshtan") return "person";
   if (code === "ziestan") return "leaf";
   if (code === "sakhtan") return "hammer";
   if (code === "rastan") return "sparkles";

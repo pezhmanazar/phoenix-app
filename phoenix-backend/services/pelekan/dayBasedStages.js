@@ -97,26 +97,7 @@ async function getTaskProgressMap(prisma, userId, dayIds) {
   return new Map(rows.map((row) => [row.taskId, row]));
 }
 
-async function ensureDayProgress(prisma, userId, dayId, now = new Date()) {
-  return prisma.pelekanDayProgress.upsert({
-    where: { userId_dayId: { userId, dayId } },
-    create: {
-      userId,
-      dayId,
-      status: "active",
-      completionPercent: 0,
-      startedAt: now,
-      lastActivityAt: now,
-      xpEarned: 0,
-    },
-    update: {
-      status: "active",
-      lastActivityAt: now,
-    },
-  });
-}
-
-async function resolveCurrentDay({ prisma, userId, stageCode, now = new Date() }) {
+async function resolveCurrentDay({ prisma, userId, stageCode }) {
   const stage = await getStageWithDays(prisma, stageCode);
   if (!stage) return buildError("INVALID_STAGE_CODE");
   if (!stage.days?.length) return buildError("STAGE_HAS_NO_DAYS");
@@ -126,86 +107,40 @@ async function resolveCurrentDay({ prisma, userId, stageCode, now = new Date() }
 
   const dayProgressMap = await getDayProgressMap(prisma, userId, dayIds);
 
-  for (let i = 0; i < days.length; i++) {
-    const day = days[i];
+  const activeDay = days.find((day) => {
     const progress = dayProgressMap.get(day.id);
+    return progress?.status === "active";
+  });
 
-    if (!progress) {
-      await ensureDayProgress(prisma, userId, day.id, now);
-      return {
-        ok: true,
-        stage,
-        currentDay: day,
-        currentDayProgress: {
-          userId,
-          dayId: day.id,
-          status: "active",
-          completionPercent: 0,
-          startedAt: now,
-          lastActivityAt: now,
-          completedAt: null,
-          unlockedNextAt: null,
-        },
-        isTimeLocked: false,
-      };
-    }
-
-    if (progress.status === "active") {
-      return {
-        ok: true,
-        stage,
-        currentDay: day,
-        currentDayProgress: progress,
-        isTimeLocked: false,
-      };
-    }
-
-    if (progress.status === "completed") {
-  const hasNextDay = i + 1 < days.length;
-
-  if (hasNextDay) {
-    const nextDay = days[i + 1];
-    const nextProgress = dayProgressMap.get(nextDay.id);
-
-    if (!nextProgress) {
-      const created = await ensureDayProgress(prisma, userId, nextDay.id, now);
-      return {
-        ok: true,
-        stage,
-        currentDay: nextDay,
-        currentDayProgress: created,
-        isTimeLocked: false,
-      };
-    }
-
-    if (nextProgress.status === "active") {
-      return {
-        ok: true,
-        stage,
-        currentDay: nextDay,
-        currentDayProgress: nextProgress,
-        isTimeLocked: false,
-      };
-    }
-
-    continue;
+  if (activeDay) {
+    return {
+      ok: true,
+      stage,
+      currentDay: activeDay,
+      currentDayProgress: dayProgressMap.get(activeDay.id),
+      isTimeLocked: false,
+      stageCompleted: false,
+    };
   }
 
-  continue;
-}
+  const allDaysCompleted =
+    days.length > 0 &&
+    days.every((day) => dayProgressMap.get(day.id)?.status === "completed");
+
+  if (allDaysCompleted) {
+    const lastDay = days[days.length - 1];
+
+    return {
+      ok: true,
+      stage,
+      currentDay: lastDay,
+      currentDayProgress: dayProgressMap.get(lastDay.id) || null,
+      isTimeLocked: false,
+      stageCompleted: true,
+    };
   }
 
-  const lastDay = days[days.length - 1];
-  const lastProgress = dayProgressMap.get(lastDay.id) || null;
-
-  return {
-    ok: true,
-    stage,
-    currentDay: lastDay,
-    currentDayProgress: lastProgress,
-    isTimeLocked: false,
-    stageCompleted: true,
-  };
+  return buildError("NO_ACTIVE_DAY", { stageCode });
 }
 
 async function handleNoContactTask({

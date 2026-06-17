@@ -3,7 +3,7 @@ export const SUBSCRIPTION_PRICING = {
     p30: {
       price: "۴۹۹,۰۰۰ تومان",
       oldPrice: undefined,
-      amount: 399000,
+      amount: 499000,
       months: 1,
       days: 30,
       plan: "pro",
@@ -11,7 +11,7 @@ export const SUBSCRIPTION_PRICING = {
     p90: {
       price: "۱,۰۹۹,۰۰۰ تومان",
       oldPrice: "۱,۴۹۷,۰۰۰ تومان",
-      amount: 899000,
+      amount: 1099000,
       months: 3,
       days: 90,
       plan: "pro",
@@ -19,7 +19,7 @@ export const SUBSCRIPTION_PRICING = {
     p180: {
       price: "۱,۸۹۹,۰۰۰ تومان",
       oldPrice: "۲,۹۹۹,۰۰۰ تومان",
-      amount: 1499000,
+      amount: 1899000,
       months: 6,
       days: 180,
       plan: "pro",
@@ -33,7 +33,6 @@ export const SUBSCRIPTION_PRICING = {
       amount: 399000,
       months: 1,
       days: 30,
-      plan: "pro",
       plan: "pro",
     },
     p90: {

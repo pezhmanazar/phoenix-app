@@ -206,6 +206,7 @@ function InlineAudioPlayer({
   };
 }) {
   const playerRef = useRef<AudioPlayer | null>(null);
+  const statusSubscriptionRef = useRef<{ remove: () => void } | null>(null);
 
   const opLockRef = useRef(false);
   const mountedRef = useRef(true);
@@ -213,6 +214,7 @@ function InlineAudioPlayer({
   const [, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [loadingAudio, setLoadingAudio] = useState(false);
+  const [loadStatus, setLoadStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [posMs, setPosMs] = useState(0);
   const [durMs, setDurMs] = useState(0);
 
@@ -233,48 +235,67 @@ function InlineAudioPlayer({
   };
 
   const unload = useCallback(async () => {
-    const p = playerRef.current;
-    playerRef.current = null;
+  const p = playerRef.current;
+  playerRef.current = null;
 
-    try {
-      if (p) {
-        try {
-          p.pause();
-        } catch {}
+  try {
+    statusSubscriptionRef.current?.remove?.();
+    statusSubscriptionRef.current = null;
+  } catch {}
 
-        try {
-          p.remove();
-        } catch {}
-      }
-    } finally {
-      if (!mountedRef.current) return;
-      setReady(false);
-      setPlaying(false);
-      setLoadingAudio(false);
-      setPosMs(0);
-      setDurMs(0);
+  try {
+    if (p) {
+      try {
+        p.pause();
+      } catch {}
+
+      try {
+        p.remove();
+      } catch {}
     }
-  }, []);
+  } finally {
+    if (!mountedRef.current) return;
+    setReady(false);
+    setPlaying(false);
+    setLoadingAudio(false);
+    setLoadStatus("idle");
+    setPosMs(0);
+    setDurMs(0);
+  }
+}, []);
+
 
   const attachStatusListener = useCallback((player: AudioPlayer) => {
-    player.addListener("playbackStatusUpdate", (st: AudioStatus) => {
-      if (!st?.isLoaded) return;
-      if (!mountedRef.current) return;
+  try {
+    statusSubscriptionRef.current?.remove?.();
+    statusSubscriptionRef.current = null;
+  } catch {}
 
-      setPlaying(!!st.playing);
-      setPosMs(Math.max(0, Math.floor((st.currentTime || 0) * 1000)));
-      setDurMs(Math.max(0, Math.floor((st.duration || 0) * 1000)));
+  statusSubscriptionRef.current = player.addListener("playbackStatusUpdate", (st: AudioStatus) => {
+    if (!st?.isLoaded) return;
+    if (!mountedRef.current) return;
 
-      if (st.didJustFinish) {
-        setPlaying(false);
-      }
-    });
-  }, []);
+    setPlaying(!!st.playing);
+    setPosMs(Math.max(0, Math.floor((st.currentTime || 0) * 1000)));
+    setDurMs(Math.max(0, Math.floor((st.duration || 0) * 1000)));
+
+    if (st.isLoaded) {
+      setLoadStatus((prev) => (prev === "loading" ? "ready" : prev));
+    }
+
+    if (st.didJustFinish) {
+      setPlaying(false);
+      setLoadStatus("idle");
+    }
+  });
+}, []);
+
 
   const ensureLoaded = useCallback(async () => {
     if (playerRef.current) return;
 
     setLoadingAudio(true);
+    setLoadStatus("loading");
 
     await setAudioModeAsync({
       playsInSilentMode: true,
@@ -295,17 +316,21 @@ function InlineAudioPlayer({
     setDurMs(Math.max(0, Math.floor((player.duration || 0) * 1000)));
     setPlaying(!!player.playing);
     setLoadingAudio(false);
+    if (player.isLoaded) setLoadStatus("ready");
   }, [url, attachStatusListener]);
 
-    const togglePlayPause = useCallback(() => {
+  const togglePlayPause = useCallback(() => {
     return lock(async () => {
       if (!playerRef.current) {
+        setLoadingAudio(true);
+        setLoadStatus("loading");
         await ensureLoaded();
       }
 
       const p = playerRef.current;
       if (!p) {
         if (mountedRef.current) setLoadingAudio(false);
+        setLoadStatus("error");
         return;
       }
 
@@ -317,6 +342,7 @@ function InlineAudioPlayer({
 
       if (!p.isLoaded) {
         if (mountedRef.current) setLoadingAudio(false);
+        setLoadStatus("error");
         return;
       }
 
@@ -325,6 +351,7 @@ function InlineAudioPlayer({
         if (!mountedRef.current) return;
         setPlaying(false);
         setLoadingAudio(false);
+        setLoadStatus("idle");
         return;
       }
 
@@ -337,9 +364,17 @@ function InlineAudioPlayer({
 
       p.play();
 
+      let started = !!p.playing;
+
+      for (let i = 0; i < 15 && !started; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        started = !!p.playing;
+      }
+
       if (!mountedRef.current) return;
-      setPlaying(true);
+      setPlaying(started);
       setLoadingAudio(false);
+      setLoadStatus(started ? "idle" : "ready");
     });
   }, [ensureLoaded]);
 
@@ -396,8 +431,22 @@ function InlineAudioPlayer({
           {formatMs(posMs)} / {formatMs(durMs)}
         </Text>
       </View>
-    </View>
-  );
+      {loadStatus !== "idle" && (
+      <Text
+        style={[
+          styles.audioLoadStatus,
+          {
+            color: loadStatus === "error" ? "#FCA5A5" : palette.gold,
+          },
+        ]}
+      >
+        {loadStatus === "loading" && "در حال آماده‌سازی فایل... صبور باش"}
+        {loadStatus === "ready" && "فایل آماده شنیدنه؛ دوباره دکمه شروع رو بزن"}
+        {loadStatus === "error" && "خطا در دریافت فایل؛ اینترنت رو چک کن و دوباره بزن"}
+      </Text>
+    )}
+  </View>
+);
 }
 
 
@@ -1385,13 +1434,18 @@ const styles = StyleSheet.create({
   audioBarFill: {
     height: "100%",
   },
-
-  audioTimeInline: {
-    width: 84,
-    textAlign: "right",
-    fontSize: 12,
-    fontWeight: "900",
-    flexShrink: 0,
-    writingDirection: "ltr" as any,
+    audioLoadStatus: {
+    marginTop: 4,
+    fontSize: 10,
+    fontWeight: "800",
+    textAlign: "center",
+    writingDirection: "rtl",
+  },
+    audioTimeInline: {
+    marginTop: 6,
+    fontSize: 11,
+    fontWeight: "700",
+    textAlign: "center",
+    writingDirection: "ltr",
   },
 });

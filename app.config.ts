@@ -19,9 +19,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     version: config.version ?? "1.0.0",
 
     plugins: [
-      ...(config.plugins || []),
-      "expo-audio",
-    ],
+  ...(config.plugins || []),
+  "expo-audio",
+  "expo-asset",
+],
 
     extra: {
       ...(config.extra || {}),

@@ -12,10 +12,13 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { usePhoenix } from "../../hooks/PhoenixContext";
 
 import {
@@ -64,7 +67,7 @@ const jalaaliMonthLength = (jy: number, jm: number) => {
   const da = new Date(a.gy, a.gm - 1, a.gd);
   const db = new Date(b.gy, b.gm - 1, b.gd);
   const diffDays = Math.round(
-    (db.getTime() - da.getTime()) / (24 * 60 * 60 * 1000)
+    (db.getTime() - da.getTime()) / (24 * 60 * 60 * 1000),
   );
   return diffDays; // 29 or 30
 };
@@ -130,13 +133,27 @@ function ThemedAlert({
   const insets = useSafeAreaInsets();
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <View style={styles.modalOverlay}>
-        <View style={[styles.alertCard, { paddingBottom: (insets.bottom || 0) + 12 }]}>
+        <View
+          style={[
+            styles.alertCard,
+            { paddingBottom: (insets.bottom || 0) + 12 },
+          ]}
+        >
           <Text style={styles.alertTitle}>{title}</Text>
           {message ? <Text style={styles.alertMsg}>{message}</Text> : null}
 
-          <TouchableOpacity onPress={onClose} activeOpacity={0.85} style={[styles.btn, styles.btnPrimary]}>
+          <TouchableOpacity
+            onPress={onClose}
+            activeOpacity={0.85}
+            style={[styles.btn, styles.btnPrimary]}
+          >
             <Text style={styles.btnPrimaryText}>{okText}</Text>
           </TouchableOpacity>
         </View>
@@ -233,7 +250,10 @@ function Segmented({
       <TouchableOpacity
         onPress={() => setTab("rem")}
         activeOpacity={0.85}
-        style={[styles.segmentBtn, tab === "rem" ? styles.segmentBtnActive : null]}
+        style={[
+          styles.segmentBtn,
+          tab === "rem" ? styles.segmentBtnActive : null,
+        ]}
       >
         <Text
           style={[
@@ -260,7 +280,9 @@ function ProgressCard({ value }: { value: number }) {
         }}
       >
         <Text style={{ color: UI.TEXT, fontWeight: "900" }}>پیشرفت امروز</Text>
-        <Text style={{ color: UI.MUTED, fontWeight: "900" }}>{toFa(value)}٪</Text>
+        <Text style={{ color: UI.MUTED, fontWeight: "900" }}>
+          {toFa(value)}٪
+        </Text>
       </View>
       <ProgressBar value={value} color={UI.PRIMARY} track={UI.BORDER} />
     </View>
@@ -293,7 +315,9 @@ function TodayBlock({
 }) {
   const toggle = (id: string) =>
     setItems((list) =>
-      sortToday(list.map((it) => (it.id === id ? { ...it, done: !it.done } : it)))
+      sortToday(
+        list.map((it) => (it.id === id ? { ...it, done: !it.done } : it)),
+      ),
     );
 
   const remove = (id: string) =>
@@ -332,7 +356,11 @@ function TodayBlock({
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={onAdd} activeOpacity={0.85} style={styles.addBtn}>
+          <TouchableOpacity
+            onPress={onAdd}
+            activeOpacity={0.85}
+            style={styles.addBtn}
+          >
             {editingId ? (
               <Text style={{ color: "#111827", fontWeight: "900" }}>ذخیره</Text>
             ) : (
@@ -351,9 +379,14 @@ function TodayBlock({
               <TouchableOpacity
                 onPress={() => toggle(item.id)}
                 activeOpacity={0.85}
-                style={[styles.checkBox, item.done ? styles.checkBoxDone : null]}
+                style={[
+                  styles.checkBox,
+                  item.done ? styles.checkBoxDone : null,
+                ]}
               >
-                {item.done && <Ionicons name="checkmark" size={14} color="#111827" />}
+                {item.done && (
+                  <Ionicons name="checkmark" size={14} color="#111827" />
+                )}
               </TouchableOpacity>
 
               <View style={{ flex: 1 }}>
@@ -402,7 +435,6 @@ function TodayBlock({
     </View>
   );
 }
-
 
 /* ---------- ReminderBlock ---------- */
 function ReminderBlock({
@@ -472,7 +504,9 @@ function ReminderBlock({
           />
         </View>
 
-        <View style={{ flexDirection: "row-reverse", gap: 8, flexWrap: "wrap" }}>
+        <View
+          style={{ flexDirection: "row-reverse", gap: 8, flexWrap: "wrap" }}
+        >
           <TouchableOpacity
             onPress={onOpenDate}
             activeOpacity={0.85}
@@ -566,7 +600,11 @@ function ReminderBlock({
                         activeOpacity={0.85}
                         style={styles.snoozeBtn}
                       >
-                        <Ionicons name="time-outline" size={16} color={UI.TEXT} />
+                        <Ionicons
+                          name="time-outline"
+                          size={16}
+                          color={UI.TEXT}
+                        />
                         <Text
                           style={{
                             color: UI.TEXT,
@@ -602,8 +640,6 @@ function ReminderBlock({
     </View>
   );
 }
-
-
 
 /* ---------- DateModal ---------- */
 function DateModal({
@@ -661,24 +697,47 @@ function DateModal({
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <View style={styles.modalOverlay}>
-        <View style={[styles.modalCard, { paddingBottom: (insets.bottom || 0) + 12 }]}>
+        <View
+          style={[
+            styles.modalCard,
+            { paddingBottom: (insets.bottom || 0) + 12 },
+          ]}
+        >
           <Text style={styles.modalTitle}>انتخاب تاریخ</Text>
 
           <View style={styles.yearRow}>
-            <TouchableOpacity onPress={() => changeYear(-1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity
+              onPress={() => changeYear(-1)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
               <Ionicons name="remove" size={20} color={UI.TEXT} />
             </TouchableOpacity>
             <Text style={{ color: UI.TEXT, fontWeight: "900" }}>
               {String(jy).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[+d])}
             </Text>
-            <TouchableOpacity onPress={() => changeYear(1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity
+              onPress={() => changeYear(1)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
               <Ionicons name="add" size={20} color={UI.TEXT} />
             </TouchableOpacity>
           </View>
 
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "space-between" }}>
+          <View
+            style={{
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: 8,
+              justifyContent: "space-between",
+            }}
+          >
             {monthsFa.map((mTitle, idx) => {
               const m = idx + 1;
               const selected = jm === m;
@@ -687,15 +746,27 @@ function DateModal({
                   key={m}
                   onPress={() => selectMonth(m)}
                   activeOpacity={0.85}
-                  style={[styles.monthBtn, selected ? styles.monthBtnActive : null]}
+                  style={[
+                    styles.monthBtn,
+                    selected ? styles.monthBtnActive : null,
+                  ]}
                 >
-                  <Text style={{ color: selected ? "#111827" : UI.TEXT, fontWeight: "900" }}>{mTitle}</Text>
+                  <Text
+                    style={{
+                      color: selected ? "#111827" : UI.TEXT,
+                      fontWeight: "900",
+                    }}
+                  >
+                    {mTitle}
+                  </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
 
-          <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 6 }}>
+          <View
+            style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 6 }}
+          >
             {days.map((d) => {
               const selected = d === jd;
               return (
@@ -705,7 +776,12 @@ function DateModal({
                   activeOpacity={0.85}
                   style={[styles.dayBtn, selected ? styles.dayBtnActive : null]}
                 >
-                  <Text style={{ color: selected ? "#111827" : UI.TEXT, fontWeight: "900" }}>
+                  <Text
+                    style={{
+                      color: selected ? "#111827" : UI.TEXT,
+                      fontWeight: "900",
+                    }}
+                  >
                     {String(d).replace(/\d/g, (x) => "۰۱۲۳۴۵۶۷۸۹"[+x])}
                   </Text>
                 </TouchableOpacity>
@@ -714,10 +790,18 @@ function DateModal({
           </View>
 
           <View style={{ flexDirection: "row-reverse", gap: 8, marginTop: 10 }}>
-            <TouchableOpacity onPress={onClose} activeOpacity={0.85} style={[styles.btn, styles.btnPrimary, { flex: 1 }]}>
+            <TouchableOpacity
+              onPress={onClose}
+              activeOpacity={0.85}
+              style={[styles.btn, styles.btnPrimary, { flex: 1 }]}
+            >
               <Text style={styles.btnPrimaryText}>تأیید</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={onClose} activeOpacity={0.85} style={[styles.btn, styles.btnOutline, { flex: 1 }]}>
+            <TouchableOpacity
+              onPress={onClose}
+              activeOpacity={0.85}
+              style={[styles.btn, styles.btnOutline, { flex: 1 }]}
+            >
               <Text style={styles.btnOutlineText}>بستن</Text>
             </TouchableOpacity>
           </View>
@@ -730,10 +814,10 @@ function DateModal({
 /* ========================================================= */
 export default function Rooznegar() {
   const insets = useSafeAreaInsets();
+
   const { setDayProgress } = usePhoenix();
 
   const [tab, setTab] = useState<"today" | "rem">("today");
-
 
   const [tAlertOpen, setTAlertOpen] = useState(false);
   const [tAlertTitle, setTAlertTitle] = useState("");
@@ -781,7 +865,8 @@ export default function Rooznegar() {
             contentType: Notifications.AndroidAudioContentType.SONIFICATION,
           },
           vibrationPattern: [0, 250, 250, 250],
-          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+          lockscreenVisibility:
+            Notifications.AndroidNotificationVisibility.PUBLIC,
         });
       }
 
@@ -825,13 +910,16 @@ export default function Rooznegar() {
     setNotifAllowed(granted);
     if (!granted) {
       // ✅ تم‌دار
-      showTAlert("اجازه نوتیفیکیشن", "برای اعلام یادآورها به تو، اجازه دسترسی به نوتیفیکیشن‌ها لازمه.");
+      showTAlert(
+        "اجازه نوتیفیکیشن",
+        "برای اعلام یادآورها به تو، اجازه دسترسی به نوتیفیکیشن‌ها لازمه.",
+      );
     }
     return granted;
   };
 
   const scheduleForReminder = async (
-    it: ReminderItem
+    it: ReminderItem,
   ): Promise<string | undefined> => {
     if (!(await ensureNotifPermission())) return undefined;
 
@@ -846,7 +934,8 @@ export default function Rooznegar() {
       title: "یادآور",
       body: it.title,
       sound: "default",
-      categoryIdentifier: Platform.OS === "ios" ? "reminder_actions" : undefined,
+      categoryIdentifier:
+        Platform.OS === "ios" ? "reminder_actions" : undefined,
       data: { rid: it.id },
     };
 
@@ -882,7 +971,7 @@ export default function Rooznegar() {
     setDayProgress(todayProgress);
   }, [todayProgress, setDayProgress]);
 
-    useEffect(() => {
+  useEffect(() => {
     (async () => {
       try {
         const [tList, rList] = await Promise.all([
@@ -917,7 +1006,10 @@ export default function Rooznegar() {
     const t = todayTitle.trim();
     if (!t) return;
     if (!todayTime) {
-      showTAlert("انتخاب ساعت", "برای ثبت کارِ امروز، حتماً ساعت انجامش رو انتخاب کن.");
+      showTAlert(
+        "انتخاب ساعت",
+        "برای ثبت کارِ امروز، حتماً ساعت انجامش رو انتخاب کن.",
+      );
       return;
     }
 
@@ -927,9 +1019,9 @@ export default function Rooznegar() {
           list.map((it) =>
             it.id === todayEditingId
               ? { ...it, title: t, time: timeLabel(todayTime) }
-              : it
-          )
-        )
+              : it,
+          ),
+        ),
       );
       setTodayEditingId(null);
     } else {
@@ -952,7 +1044,10 @@ export default function Rooznegar() {
     const t = remTitle.trim();
     if (!t) return;
     if (!remTime) {
-      showTAlert("انتخاب ساعت", "برای ثبت یادآور، حتماً ساعت انجامش رو انتخاب کن.");
+      showTAlert(
+        "انتخاب ساعت",
+        "برای ثبت یادآور، حتماً ساعت انجامش رو انتخاب کن.",
+      );
       return;
     }
 
@@ -964,7 +1059,7 @@ export default function Rooznegar() {
       remTime.getHours(),
       remTime.getMinutes(),
       0,
-      0
+      0,
     );
 
     if (remEditingId) {
@@ -999,8 +1094,8 @@ export default function Rooznegar() {
         list.map((it) =>
           it.id === remEditingId
             ? { ...it, notificationId: updatedNotificationId }
-            : it
-        )
+            : it,
+        ),
       );
 
       setRemEditingId(null);
@@ -1039,16 +1134,21 @@ export default function Rooznegar() {
       setRemItems((list) =>
         sortReminders(
           list.map((r) =>
-            r.id === id ? { ...r, done: true, notificationId: undefined } : r
-          )
-        )
+            r.id === id ? { ...r, done: true, notificationId: undefined } : r,
+          ),
+        ),
       );
     } else {
-      const notificationId = await scheduleForReminder({ ...target, done: false });
+      const notificationId = await scheduleForReminder({
+        ...target,
+        done: false,
+      });
       setRemItems((list) =>
         sortReminders(
-          list.map((r) => (r.id === id ? { ...r, done: false, notificationId } : r))
-        )
+          list.map((r) =>
+            r.id === id ? { ...r, done: false, notificationId } : r,
+          ),
+        ),
       );
     }
   };
@@ -1065,43 +1165,51 @@ export default function Rooznegar() {
     const newNotif = await scheduleForReminder(next);
 
     setRemItems((list) =>
-      sortReminders(list.map((r) => (r.id === id ? { ...next, notificationId: newNotif } : r)))
+      sortReminders(
+        list.map((r) =>
+          r.id === id ? { ...next, notificationId: newNotif } : r,
+        ),
+      ),
     );
   };
 
   useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener((resp) => {
-      const rid = (resp?.notification?.request?.content?.data as any)?.rid as string | undefined;
-      const act = resp?.actionIdentifier;
-      if (!rid) return;
+    const sub = Notifications.addNotificationResponseReceivedListener(
+      (resp) => {
+        const rid = (resp?.notification?.request?.content?.data as any)?.rid as
+          | string
+          | undefined;
+        const act = resp?.actionIdentifier;
+        if (!rid) return;
 
-      if (Platform.OS === "ios") {
-        if (act === "DONE") {
-          handleToggleReminder(rid);
+        if (Platform.OS === "ios") {
+          if (act === "DONE") {
+            handleToggleReminder(rid);
+            return;
+          }
+          if (act === "SNOOZE_10") {
+            handleSnoozeReminder(rid);
+            return;
+          }
           return;
         }
-        if (act === "SNOOZE_10") {
-          handleSnoozeReminder(rid);
-          return;
-        }
-        return;
-      }
 
-      if (act === Notifications.DEFAULT_ACTION_IDENTIFIER) {
-        const item = remItems.find((r) => r.id === rid);
-        // این یکی عمداً خام موند چون دکمه چندگزینه‌ایه؛ اگر خواستی تم‌دارش کنیم باید یک Modal اکشن‌دار بسازیم
-        Alert.alert(
-          item?.title || "یادآور",
-          "چه کاری انجام بدم؟",
-          [
-            { text: "انجام شد", onPress: () => handleToggleReminder(rid) },
-            { text: "+۱۰ دقیقه", onPress: () => handleSnoozeReminder(rid) },
-            { text: "بستن", style: "cancel" },
-          ],
-          { cancelable: true }
-        );
-      }
-    });
+        if (act === Notifications.DEFAULT_ACTION_IDENTIFIER) {
+          const item = remItems.find((r) => r.id === rid);
+          // این یکی عمداً خام موند چون دکمه چندگزینه‌ایه؛ اگر خواستی تم‌دارش کنیم باید یک Modal اکشن‌دار بسازیم
+          Alert.alert(
+            item?.title || "یادآور",
+            "چه کاری انجام بدم؟",
+            [
+              { text: "انجام شد", onPress: () => handleToggleReminder(rid) },
+              { text: "+۱۰ دقیقه", onPress: () => handleSnoozeReminder(rid) },
+              { text: "بستن", style: "cancel" },
+            ],
+            { cancelable: true },
+          );
+        }
+      },
+    );
 
     return () => {
       try {
@@ -1117,28 +1225,31 @@ export default function Rooznegar() {
       <View pointerEvents="none" style={styles.bgGlowTop} />
       <View pointerEvents="none" style={styles.bgGlowBottom} />
 
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={{ flex: 1 }}
+      >
         <ScrollView
           contentContainerStyle={{
-  paddingBottom: Math.max(24, insets.bottom + 24),
-  paddingHorizontal: 0,
-  rowGap: 14,
-  direction: "ltr",
-}}
-
+            paddingBottom: Math.max(24, insets.bottom + 24),
+            paddingHorizontal: 0,
+            rowGap: 14,
+            direction: "ltr",
+          }}
           keyboardShouldPersistTaps="handled"
           removeClippedSubviews={false}
           showsVerticalScrollIndicator={false}
         >
           <View style={{ paddingHorizontal: 16, gap: 12 }}>
             <RoozHeader />
+
             <ProgressCard value={todayProgress} />
             <Segmented tab={tab} setTab={setTab} />
           </View>
 
           <View style={{ paddingHorizontal: 16 }}>
             {tab === "today" ? (
-                            <TodayBlock
+              <TodayBlock
                 rtl={false}
                 items={todayItems}
                 setItems={setTodayItems}
@@ -1151,14 +1262,16 @@ export default function Rooznegar() {
                 onEditItem={(it) => {
                   setTodayEditingId(it.id);
                   setTodayTitle(it.title);
-                  const [hh, mm] = it.time.split(":").map((x) => parseInt(x, 10));
+                  const [hh, mm] = it.time
+                    .split(":")
+                    .map((x) => parseInt(x, 10));
                   const d = new Date();
                   d.setHours(hh || 0, mm || 0, 0, 0);
                   setTodayTime(d);
                 }}
               />
             ) : (
-                            <ReminderBlock
+              <ReminderBlock
                 rtl={false}
                 jy={jy}
                 jm={jm}
@@ -1191,7 +1304,6 @@ export default function Rooznegar() {
                 onRemoveReminder={handleRemoveReminder}
                 onSnoozeReminder={handleSnoozeReminder}
               />
-
             )}
           </View>
         </ScrollView>

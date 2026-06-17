@@ -34,6 +34,7 @@ export default function GosastanStageIntroScreen() {
   const [err, setErr] = useState<string | null>(null);
 
   const playerRef = useRef<AudioPlayer | null>(null);
+  const statusSubscriptionRef = useRef<{ remove: () => void } | null>(null);
   const mountedRef = useRef(true);
   const opLockRef = useRef(false);
 
@@ -43,6 +44,7 @@ export default function GosastanStageIntroScreen() {
   const [durMs, setDurMs] = useState(1);
   const [trackW, setTrackW] = useState(0);
   const [isBuffering, setIsBuffering] = useState(false);
+  const [loadStatus, setLoadStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
 
   const maxPosRef = useRef(0);
   const SAVED_MIN_MS = 5000;
@@ -58,50 +60,70 @@ export default function GosastanStageIntroScreen() {
   };
 
   const unload = useCallback(async () => {
-    try {
-      const p = playerRef.current;
-      if (p) {
-        try {
-          p.pause();
-        } catch {}
-        try {
-          p.seekTo(0);
-        } catch {}
-        try {
-          p.remove();
-        } catch {}
-      }
-    } catch {}
-
+  try {
+    const p = playerRef.current;
     playerRef.current = null;
 
-    if (!mountedRef.current) return;
-    setIsLoaded(false);
-    setIsPlaying(false);
-    setIsBuffering(false);
-    setPosMs(0);
-    setDurMs(1);
-  }, []);
+    try {
+      statusSubscriptionRef.current?.remove?.();
+      statusSubscriptionRef.current = null;
+    } catch {}
+
+    if (p) {
+      try {
+        p.pause();
+      } catch {}
+      try {
+        p.seekTo(0);
+      } catch {}
+      try {
+        p.remove();
+      } catch {}
+    }
+  } catch {}
+
+  if (!mountedRef.current) return;
+  setIsLoaded(false);
+  setIsPlaying(false);
+  setIsBuffering(false);
+  setLoadStatus("idle");
+  setPosMs(0);
+  setDurMs(1);
+}, []);
 
   const attachStatusListener = useCallback((player: AudioPlayer) => {
-    player.addListener("playbackStatusUpdate", (st: AudioStatus) => {
-      if (!mountedRef.current) return;
-      if (!st.isLoaded) return;
+  try {
+    statusSubscriptionRef.current?.remove?.();
+    statusSubscriptionRef.current = null;
+  } catch {}
 
-      setIsLoaded(true);
-      setIsPlaying(!!st.playing);
-      setPosMs(Math.max(0, Math.floor((st.currentTime || 0) * 1000)));
-      setDurMs(Math.max(1, Math.floor((st.duration || 0) * 1000)));
-      setIsBuffering(!!st.isBuffering);
+  statusSubscriptionRef.current = player.addListener("playbackStatusUpdate", (st: AudioStatus) => {
+    if (!mountedRef.current) return;
+    if (!st.isLoaded) return;
 
-      const p = Math.max(0, Math.floor((st.currentTime || 0) * 1000));
-      if (p > maxPosRef.current) maxPosRef.current = p;
-    });
-  }, []);
+    setIsLoaded(true);
+    setIsPlaying(!!st.playing);
+    setPosMs(Math.max(0, Math.floor((st.currentTime || 0) * 1000)));
+    setDurMs(Math.max(1, Math.floor((st.duration || 0) * 1000)));
+    setIsBuffering(!!st.isBuffering);
+
+    if (st.isLoaded) {
+      setLoadStatus((prev) => (prev === "loading" ? "ready" : prev));
+    }
+
+    if (st.didJustFinish) {
+      setLoadStatus("idle");
+    }
+
+    const p = Math.max(0, Math.floor((st.currentTime || 0) * 1000));
+    if (p > maxPosRef.current) maxPosRef.current = p;
+  });
+}, []);
 
   const loadIfNeeded = useCallback(async () => {
     if (playerRef.current) return;
 
+    setLoadStatus("loading");
     await setAudioModeAsync({
       playsInSilentMode: true,
       shouldPlayInBackground: false,
@@ -124,44 +146,73 @@ export default function GosastanStageIntroScreen() {
     }
   }, [AUDIO_URL, attachStatusListener]);
 
-  const togglePlay = useCallback(async () => {
-  if (isBuffering) return;
+     const togglePlay = useCallback(async () => {
+    if (isBuffering) return;
 
-  try {
-    if (!playerRef.current) setIsBuffering(true);
-
-    await lock(async () => {
-      await loadIfNeeded();
-
-      const p = playerRef.current;
-      if (!p) {
-        if (mountedRef.current) setIsBuffering(false);
-        return;
+    try {
+      if (!playerRef.current) {
+        setIsBuffering(true);
+        setLoadStatus("loading");
       }
 
-      for (let i = 0; i < 25 && !p.isLoaded; i += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
+      await lock(async () => {
+        await loadIfNeeded();
 
-      if (!p.isLoaded) {
-        if (mountedRef.current) setIsBuffering(false);
-        return;
-      }
+        const p = playerRef.current;
+        if (!p) {
+          if (mountedRef.current) {
+            setIsBuffering(false);
+            setIsPlaying(false);
+            setLoadStatus("error");
+          }
+          return;
+        }
 
-      if (p.playing) {
-        p.pause();
-        if (mountedRef.current) setIsBuffering(false);
-        return;
-      }
+        for (let i = 0; i < 25 && !p.isLoaded; i += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
 
-      p.play();
-      if (mountedRef.current) setIsBuffering(false);
-    });
-  } catch {
-    setIsBuffering(false);
-    setErr("پخش مقدمه مرحله گسستن با مشکل مواجه شد، لطفاً دوباره تلاش کن");
-  }
-}, [loadIfNeeded, isBuffering]);
+        if (!p.isLoaded) {
+          if (mountedRef.current) {
+            setIsBuffering(false);
+            setIsPlaying(false);
+            setLoadStatus("loading");
+          }
+          return;
+        }
+
+        if (p.playing) {
+          p.pause();
+          if (mountedRef.current) {
+            setIsPlaying(false);
+            setIsBuffering(false);
+            setLoadStatus("idle");
+          }
+          return;
+        }
+
+        p.play();
+
+        let started = !!p.playing;
+        for (let i = 0; i < 15 && !started; i += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          started = !!p.playing;
+        }
+
+        if (!mountedRef.current) return;
+        setIsPlaying(started);
+        setIsBuffering(false);
+        setLoadStatus(started ? "idle" : "ready");
+      });
+    } catch {
+      setIsBuffering(false);
+      setIsPlaying(false);
+      setLoadStatus("error");
+      setErr("پخش مقدمه مرحله گسستن با مشکل مواجه شد، لطفاً دوباره تلاش کن");
+    }
+  }, [loadIfNeeded, isBuffering]);
+
+
 
   const seekTo = useCallback(
     async (ms: number) => {
@@ -199,30 +250,16 @@ export default function GosastanStageIntroScreen() {
     router.back();
   }, [posMs, unload, router]);
 
-  useEffect(() => {
-    let alive = true;
+    useEffect(() => {
     mountedRef.current = true;
-
-    (async () => {
-      try {
-        setErr(null);
-        setLoading(true);
-        await loadIfNeeded();
-      } catch {
-        if (!alive) return;
-        setErr("پخش مقدمه مرحله گسستن با مشکل مواجه شد، لطفاً دوباره تلاش کن");
-      } finally {
-        if (!alive) return;
-        setLoading(false);
-      }
-    })();
+    setErr(null);
+    setLoading(false);
 
     return () => {
-      alive = false;
       mountedRef.current = false;
-      unload();
+      void unload();
     };
-  }, [loadIfNeeded, unload]);
+  }, [unload]);
 
   const progressPct = Math.min(1, posMs / Math.max(1, durMs));
 
@@ -286,6 +323,19 @@ export default function GosastanStageIntroScreen() {
         <Text style={styles.timeText}>
           {fmt(posMs)} / {fmt(durMs)}
         </Text>
+
+        {loadStatus !== "idle" && (
+          <Text
+            style={[
+              styles.audioLoadStatus,
+              { color: loadStatus === "error" ? "#FCA5A5" : "#D4AF37" },
+            ]}
+          >
+            {loadStatus === "loading" && "در حال آماده‌سازی فایل..."}
+            {loadStatus === "ready" && "فایل آماده پخشه"}
+            {loadStatus === "error" && "خطا در دریافت فایل؛ اینترنت رو چک کن"}
+          </Text>
+        )}
 
         <TouchableOpacity activeOpacity={0.9} style={styles.backBtn} onPress={onBack}>
           <Text style={styles.backText}>بازگشت</Text>
@@ -374,6 +424,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#E98A15",
   },
   timeText: { color: "rgba(231,238,247,.65)", fontSize: 12, marginBottom: 14 },
+
+  audioLoadStatus: {
+    marginTop: -6,
+    marginBottom: 10,
+    fontSize: 11,
+    fontWeight: "800",
+    textAlign: "center",
+  },
 
   backBtn: {
     width: "100%",

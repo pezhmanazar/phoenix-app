@@ -17,7 +17,10 @@ const router = express.Router();
 router.use(express.json());
 
 function noStore(res) {
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0");
+  res.setHeader(
+    "Cache-Control",
+    "no-store, no-cache, must-revalidate, max-age=0, s-maxage=0",
+  );
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
   res.setHeader("Surrogate-Control", "no-store");
@@ -40,58 +43,6 @@ function getPlanStatus(plan, planExpiresAt) {
   }
 
   return { planStatus: "free", daysLeft: 0 };
-}
-
-/** pick active day */
-function computeActiveDayId({ stages, dayProgress }) {
-  const orderedDays = (stages || [])
-    .flatMap((stage) => stage.days || [])
-    .filter(Boolean);
-
-  const dayOrder = new Map();
-  orderedDays.forEach((day, index) => {
-    if (day?.id) dayOrder.set(day.id, index);
-  });
-
-  const rows = Array.isArray(dayProgress) ? dayProgress : [];
-
-  const activeRows = rows
-    .filter((row) => {
-      const status = String(row?.status || "").toLowerCase();
-      const percent = Number(row?.completionPercent || 0);
-
-      return (
-        status === "active" &&
-        percent < 100 &&
-        !row?.completedAt &&
-        dayOrder.has(row.dayId)
-      );
-    })
-    .sort((a, b) => {
-      return (dayOrder.get(a.dayId) ?? 999999) - (dayOrder.get(b.dayId) ?? 999999);
-    });
-
-  if (activeRows[0]?.dayId) {
-    return activeRows[0].dayId;
-  }
-
-  const incompleteRows = rows
-    .filter((row) => {
-      const status = String(row?.status || "").toLowerCase();
-      const percent = Number(row?.completionPercent || 0);
-
-      return (
-        status !== "completed" &&
-        percent < 100 &&
-        !row?.completedAt &&
-        dayOrder.has(row.dayId)
-      );
-    })
-    .sort((a, b) => {
-      return (dayOrder.get(a.dayId) ?? 999999) - (dayOrder.get(b.dayId) ?? 999999);
-    });
-
-  return incompleteRows[0]?.dayId || null;
 }
 
 /** access model for fairness */
@@ -117,7 +68,9 @@ function applyDebugPlan(req, planStatus, daysLeft) {
   let planStatusFinal = planStatus;
   let daysLeftFinal = daysLeft;
 
-  const debugPlan = String(req.query?.debugPlan || "").toLowerCase().trim();
+  const debugPlan = String(req.query?.debugPlan || "")
+    .toLowerCase()
+    .trim();
   if (debugPlan === "pro") planStatusFinal = "pro";
   if (debugPlan === "expired") planStatusFinal = "expired";
   if (debugPlan === "free") planStatusFinal = "free";
@@ -127,7 +80,9 @@ function applyDebugPlan(req, planStatus, daysLeft) {
 
 function applyDebugProgress(req, hasAnyProgress) {
   let hasAnyProgressFinal = hasAnyProgress;
-  const debugProgress = String(req.query?.debugProgress || "").toLowerCase().trim();
+  const debugProgress = String(req.query?.debugProgress || "")
+    .toLowerCase()
+    .trim();
   if (debugProgress === "has") hasAnyProgressFinal = true;
   if (debugProgress === "none") hasAnyProgressFinal = false;
   return hasAnyProgressFinal;
@@ -137,51 +92,6 @@ function isDebugAllowed(req) {
   const isProd = process.env.NODE_ENV === "production";
   return !isProd;
 }
-
-// async function updateStreakOnDayComplete(tx, userId, completedAt) {
-//   const now = new Date();
-//   const today = new Date(completedAt);
-//   today.setHours(0, 0, 0, 0);
-
-//   const streak = await tx.pelekanStreak.findUnique({ where: { userId } });
-
-//   if (!streak) {
-//     await tx.pelekanStreak.create({
-//       data: {
-//         userId,
-//         currentDays: 1,
-//         bestDays: 1,
-//         lastCompletedAt: completedAt,
-//         yellowCardAt: null,
-//         updatedAt: now, // ✅ مهم
-//       },
-//     });
-//     return;
-//   }
-
-//   const last = streak.lastCompletedAt ? new Date(streak.lastCompletedAt) : null;
-//   if (last) last.setHours(0, 0, 0, 0);
-
-//   const diffDays = last ? Math.round((today - last) / 86400000) : null;
-
-//   let currentDays = streak.currentDays;
-//   if (diffDays === 1) currentDays += 1;
-//   else if (diffDays > 1) currentDays = 1; // diffDays === 0 → همون روز، تغییر نده
-
-//   await tx.pelekanStreak.update({
-//     where: { userId },
-//     data: {
-//       currentDays,
-//       bestDays: Math.max(streak.bestDays, currentDays),
-//       lastCompletedAt: completedAt,
-//       updatedAt: now, // ✅ مهم
-//     },
-//   });
-// }
-
-
-
-
 
 // -------------------- Baseline Assessment (hb_baseline) --------------------
 
@@ -197,7 +107,11 @@ const HB_BASELINE = {
       "این سنجش کمک می‌کنه شدت فشار روانی و جسمی مرتبط با شکست عاطفی یا جدایی رو بهتر بشناسی. در ضمن یادت نره این یک ابزار خودآگاهیه و جایگزین ارزیابی تخصصی نیست.",
   },
   consentSteps: [
-    { id: "quiet_place", text: "این سنجش رو در یک جای آروم و بدون مزاحمت انجام بده.", optionText: "متوجه شدم" },
+    {
+      id: "quiet_place",
+      text: "این سنجش رو در یک جای آروم و بدون مزاحمت انجام بده.",
+      optionText: "متوجه شدم",
+    },
     {
       id: "read_calmly",
       text: "هر سؤال رو با دقت بخون و بعد از فهم دقیق، روی اولین پاسخی که به ذهنت میاد، کلیک کن.",
@@ -207,8 +121,7 @@ const HB_BASELINE = {
   questions: [
     {
       id: "q1_thoughts",
-      text:
-        "وقتی بیداری، چقدر به شکست عاطفی یا جدایی‌ای که تجربه کردی فکر می‌کنی؟\n(این فکر کردن شامل تصاویر، افکار، احساسات، خیال‌پردازی‌ها، یادآوری خاطرات و حسرت‌های مربوط می‌شود.)",
+      text: "وقتی بیداری، چقدر به شکست عاطفی یا جدایی‌ای که تجربه کردی فکر می‌کنی؟\n(این فکر کردن شامل تصاویر، افکار، احساسات، خیال‌پردازی‌ها، یادآوری خاطرات و حسرت‌های مربوط می‌شود.)",
       options: [
         { label: "اصلاً فکر نمی‌کنم", score: 0 },
         { label: "گاهی فکر می‌کنم (کمتر از ۲۵٪ زمان بیداری)", score: 1 },
@@ -218,13 +131,23 @@ const HB_BASELINE = {
     },
     {
       id: "q2_body_sick",
-      text:
-        "وقتی به شکست عاطفی یا جدایی فکر می‌کنی، تا چه اندازه از نظر جسمی احساس ناخوشی می‌کنی؟\nمثل خستگی، عصبانیت، بی‌حالی، حالت تهوع، سردرد و غیره",
+      text: "وقتی به شکست عاطفی یا جدایی فکر می‌کنی، تا چه اندازه از نظر جسمی احساس ناخوشی می‌کنی؟\nمثل خستگی، عصبانیت، بی‌حالی، حالت تهوع، سردرد و غیره",
       options: [
         { label: "اصلاً؛ هیچ احساس جسمی ناخوشایندی در من نیست", score: 0 },
-        { label: "کمی ناخوشم؛ گاهی آشفتگی جسمی یا تحریک‌پذیری گذرا دارم", score: 1 },
-        { label: "تا حدی ناخوشم؛ آشفتگی جسمی واضحی دارم که معمولاً در کمتر از ده دقیقه کم میشه", score: 2 },
-        { label: "خیلی ناخوشم؛ آشفتگی جسمی عمیق دارم که میتونه از چند دقیقه تا چند ساعت طول بکشه", score: 3 },
+        {
+          label: "کمی ناخوشم؛ گاهی آشفتگی جسمی یا تحریک‌پذیری گذرا دارم",
+          score: 1,
+        },
+        {
+          label:
+            "تا حدی ناخوشم؛ آشفتگی جسمی واضحی دارم که معمولاً در کمتر از ده دقیقه کم میشه",
+          score: 2,
+        },
+        {
+          label:
+            "خیلی ناخوشم؛ آشفتگی جسمی عمیق دارم که میتونه از چند دقیقه تا چند ساعت طول بکشه",
+          score: 3,
+        },
       ],
     },
     {
@@ -250,8 +173,7 @@ const HB_BASELINE = {
     },
     {
       id: "q5_dreams",
-      text:
-        "معمولاً چقدر خواب مرتبط با این شکست عاطفی یا جدایی رو می‌بینی؟\nاین خواب‌ها باید مرتبط با رابطه قبلی یا پارتنر سابقت باشه.",
+      text: "معمولاً چقدر خواب مرتبط با این شکست عاطفی یا جدایی رو می‌بینی؟\nاین خواب‌ها باید مرتبط با رابطه قبلی یا پارتنر سابقت باشه.",
       options: [
         { label: "حداقل هفته‌ای یک‌بار تا هر شب", score: 3 },
         { label: "حداقل دو هفته یک‌بار", score: 2 },
@@ -261,19 +183,26 @@ const HB_BASELINE = {
     },
     {
       id: "q6_resistance",
-      text:
-        "مقاومت و ایستادگیت در برابر افکار، احساسات و خاطرات مرتبط با رابطه قبلی چقدر برات آسونه؟\nمثلاً آیا می‌تونی با یک کار دیگه یا فکر کردن به یه چیز دیگه، حواس خودت رو پرت کنی؟",
+      text: "مقاومت و ایستادگیت در برابر افکار، احساسات و خاطرات مرتبط با رابطه قبلی چقدر برات آسونه؟\nمثلاً آیا می‌تونی با یک کار دیگه یا فکر کردن به یه چیز دیگه، حواس خودت رو پرت کنی؟",
       options: [
         { label: "معمولاً نمی‌تونم؛ و چند دقیقه تا چند ساعت درگیرم", score: 3 },
-        { label: "بیشتر اوقات نمی‌تونم؛ و حدود ۱۰ تا ۲۰ دقیقه درگیرم", score: 2 },
-        { label: "بیشتر اوقات می‌تونم؛ و فقط چند دقیقه کوتاه درگیرم", score: 1 },
-        { label: "همیشه می‌تونم؛ و معمولاً کمتر از یک دقیقه درگیر می‌مونم", score: 0 },
+        {
+          label: "بیشتر اوقات نمی‌تونم؛ و حدود ۱۰ تا ۲۰ دقیقه درگیرم",
+          score: 2,
+        },
+        {
+          label: "بیشتر اوقات می‌تونم؛ و فقط چند دقیقه کوتاه درگیرم",
+          score: 1,
+        },
+        {
+          label: "همیشه می‌تونم؛ و معمولاً کمتر از یک دقیقه درگیر می‌مونم",
+          score: 0,
+        },
       ],
     },
     {
       id: "q7_hope",
-      text:
-        "یعنی فکر می‌کنی یه روز بتونی از این فشار مرتبط با شکست عاطفی یا جدایی عبور کنی و سبک‌‌تر بشی؟\n(آیا امید به بهتر شدنِ پایدار داری؟)",
+      text: "یعنی فکر می‌کنی یه روز بتونی از این فشار مرتبط با شکست عاطفی یا جدایی عبور کنی و سبک‌‌تر بشی؟\n(آیا امید به بهتر شدنِ پایدار داری؟)",
       options: [
         { label: "فکر نمی‌کنم حالِ من واقعاً بهتر بشه", score: 3 },
         { label: "نسبت به بهتر شدن بدبینم", score: 2 },
@@ -283,8 +212,7 @@ const HB_BASELINE = {
     },
     {
       id: "q8_avoidance",
-      text:
-        "چقدر برای دوری از چیزهایی که شکست عاطفی یا جدایی رو یادآوری می‌کنن مسیرت رو تغییر می‌دی؟\nمثلاً دوری از مکان‌ها، دیدن یادگاری‌ها، یا محرک‌های مشابه.",
+      text: "چقدر برای دوری از چیزهایی که شکست عاطفی یا جدایی رو یادآوری می‌کنن مسیرت رو تغییر می‌دی؟\nمثلاً دوری از مکان‌ها، دیدن یادگاری‌ها، یا محرک‌های مشابه.",
       options: [
         { label: "تقریباً همیشه دوری می‌کنم", score: 3 },
         { label: "گاهی دوری می‌کنم", score: 2 },
@@ -294,8 +222,7 @@ const HB_BASELINE = {
     },
     {
       id: "q9_sleep",
-      text:
-        "آیا به خاطر این شکست عاطفی یا جدایی، در خوابیدن یا بیدار شدن مشکل پیدا کردی؟\nمثل دیر به خواب رفتن، بیدار شدن‌های مکرر، یا خستگی زیاد موقع بیدار شدن.",
+      text: "آیا به خاطر این شکست عاطفی یا جدایی، در خوابیدن یا بیدار شدن مشکل پیدا کردی؟\nمثل دیر به خواب رفتن، بیدار شدن‌های مکرر، یا خستگی زیاد موقع بیدار شدن.",
       options: [
         { label: "تقریباً هر شب مشکل دارم", score: 3 },
         { label: "گاهی مشکل دارم", score: 2 },
@@ -305,8 +232,7 @@ const HB_BASELINE = {
     },
     {
       id: "q10_emotions",
-      text:
-        "چند وقت یک‌بار احساساتی مثل زیر گریه زدن، عصبانی شدن یا بی‌قراری به خاطر شکست عاطفی یا جدایی سراغت میاد؟",
+      text: "چند وقت یک‌بار احساساتی مثل زیر گریه زدن، عصبانی شدن یا بی‌قراری به خاطر شکست عاطفی یا جدایی سراغت میاد؟",
       options: [
         { label: "حداقل روزی یک‌بار", score: 3 },
         { label: "حداقل هفته‌ای یک‌بار", score: 2 },
@@ -317,26 +243,23 @@ const HB_BASELINE = {
   ],
   interpretation: [
     {
-  min: 20,
-  max: 31,
-  level: "severe",
-  text:
-    "نمرت نشون می‌ده فشار ناشی از شکست عاطفی یا جدایی در سطح بالایی قرار داره. این شرایط اگه همین‌طور رها بشه می‌تونه روی خواب، تمرکز، انرژی، کارکرد روزانه و تصمیم‌گیریت اثر فرساینده بذاره و احتمال ایجاد اختلال افسردگی هم بالاست. بهترین کار الان اینه که همین حالا «مسیر درمان» داخل اپ رو شروع کنی و قدم‌به‌قدم جلو بری تا حالت سریع‌تر بهتر بشه و ذهنت به ثبات برگرده. مطمئن باش ققنوس برای تمام مشکلات تو راهکار ارائه داده و با ققنوس به زودی به رهایی و آرامش میرسی.",
-},
-{
-  min: 10,
-  max: 19,
-  level: "moderate",
-  text:
-    "نمرت نشون می‌ده فشارِ ناشی از شکست عاطفی یا جدایی در درون تو در سطح متوسطه ولی این وضعیت اگه رها بشه قطعا فشار روی تو تشدید و حالت بدتر میشه، اما با یک مسیر منظم و تمرین‌های درست، میتونی به طور کامل حال خودت رو خوب کنی. پس پیشنهاد می‌کنم از همین امروز «مسیر درمان» داخل اپ رو شروع کنی تا جلوی فرسایش تدریجی گرفته بشه و روند بهبودت سرعت بگیره مطمئن باش ققنوس برای تمام مشکلات تو راهکار ارائه داده و با ققنوس به زودی به رهایی و آرامش میرسی.",
-},
-{
-  min: 0,
-  max: 9,
-  level: "manageable",
-  text:
-    "نمرت نشون می‌ده فشارِ ناشی از شکست عاطفی یا جدایی در سطح قابل مدیریته. اما برای اینکه این موضوع به طور کامل جمع بشه و در آینده هم مشکلی ایجاد نکنه و به رابطه اشتباه برنگردی، حداقل دو مرحله‌ی ابتدایی درمان ققنوس، یعنی «بستن» و «گسستن» رو انجام بده. همین دو مرحله معمولاً بخش بزرگی از درگیری ذهنی و گیرِ احساسی رو حل می‌کنه و کمک می‌کنه مسئله کامل‌تر حل بشه. مطمئن باش ققنوس برای تمام مشکلات تو راهکار ارائه داده و با ققنوس به زودی به رهایی و آرامش میرسی.",
-},
+      min: 20,
+      max: 31,
+      level: "severe",
+      text: "نمرت نشون می‌ده فشار ناشی از شکست عاطفی یا جدایی در سطح بالایی قرار داره. این شرایط اگه همین‌طور رها بشه می‌تونه روی خواب، تمرکز، انرژی، کارکرد روزانه و تصمیم‌گیریت اثر فرساینده بذاره و احتمال ایجاد اختلال افسردگی هم بالاست. بهترین کار الان اینه که همین حالا «مسیر درمان» داخل اپ رو شروع کنی و قدم‌به‌قدم جلو بری تا حالت سریع‌تر بهتر بشه و ذهنت به ثبات برگرده. مطمئن باش ققنوس برای تمام مشکلات تو راهکار ارائه داده و با ققنوس به زودی به رهایی و آرامش میرسی.",
+    },
+    {
+      min: 10,
+      max: 19,
+      level: "moderate",
+      text: "نمرت نشون می‌ده فشارِ ناشی از شکست عاطفی یا جدایی در درون تو در سطح متوسطه ولی این وضعیت اگه رها بشه قطعا فشار روی تو تشدید و حالت بدتر میشه، اما با یک مسیر منظم و تمرین‌های درست، میتونی به طور کامل حال خودت رو خوب کنی. پس پیشنهاد می‌کنم از همین امروز «مسیر درمان» داخل اپ رو شروع کنی تا جلوی فرسایش تدریجی گرفته بشه و روند بهبودت سرعت بگیره مطمئن باش ققنوس برای تمام مشکلات تو راهکار ارائه داده و با ققنوس به زودی به رهایی و آرامش میرسی.",
+    },
+    {
+      min: 0,
+      max: 9,
+      level: "manageable",
+      text: "نمرت نشون می‌ده فشارِ ناشی از شکست عاطفی یا جدایی در سطح قابل مدیریته. اما برای اینکه این موضوع به طور کامل جمع بشه و در آینده هم مشکلی ایجاد نکنه و به رابطه اشتباه برنگردی، حداقل دو مرحله‌ی ابتدایی درمان ققنوس، یعنی «بستن» و «گسستن» رو انجام بده. همین دو مرحله معمولاً بخش بزرگی از درگیری ذهنی و گیرِ احساسی رو حل می‌کنه و کمک می‌کنه مسئله کامل‌تر حل بشه. مطمئن باش ققنوس برای تمام مشکلات تو راهکار ارائه داده و با ققنوس به زودی به رهایی و آرامش میرسی.",
+    },
   ],
 };
 
@@ -345,16 +268,22 @@ function computeHbBaselineScore(answersByQid) {
 
   for (const q of HB_BASELINE.questions) {
     const idx = answersByQid?.[q.id];
-    if (typeof idx !== "number") return { ok: false, error: "MISSING_ANSWER", missingQid: q.id };
+    if (typeof idx !== "number")
+      return { ok: false, error: "MISSING_ANSWER", missingQid: q.id };
     const opt = q.options[idx];
     if (!opt) return { ok: false, error: "INVALID_ANSWER", qid: q.id };
     total += opt.score;
   }
 
-  const band = HB_BASELINE.interpretation.find((b) => total >= b.min && total <= b.max) || null;
+  const band =
+    HB_BASELINE.interpretation.find((b) => total >= b.min && total <= b.max) ||
+    null;
 
   const maxScore = HB_BASELINE_MAX_SCORE;
-  const percent = Math.max(0, Math.min(100, Math.round((total / maxScore) * 100)));
+  const percent = Math.max(
+    0,
+    Math.min(100, Math.round((total / maxScore) * 100)),
+  );
 
   return {
     ok: true,
@@ -375,7 +304,11 @@ function toBaselineUiContent() {
       scoreHintFa: HB_BASELINE.meta.scoreHintFa,
       descriptionFa: HB_BASELINE.meta.descriptionFa,
     },
-    consentSteps: HB_BASELINE.consentSteps.map((s) => ({ id: s.id, text: s.text, optionText: s.optionText })),
+    consentSteps: HB_BASELINE.consentSteps.map((s) => ({
+      id: s.id,
+      text: s.text,
+      optionText: s.optionText,
+    })),
     questions: HB_BASELINE.questions.map((q) => ({
       id: q.id,
       text: q.text,
@@ -442,121 +375,18 @@ function canUnlockGosastanGate({
   return true;
 }
 
-/* ------------------ ✅ helper: Bastan actions -> PelekanDayProgress ------------------ */
-/**
- * مهم:
- * - وضعیت enum فقط: active | completed | failed
- * - این sync فقط برای روزهای bastan است.
- * - اگر همه actionها done باشند، این تابع هیچ کاری نمی‌کند (گذار به گسستن باید توسط gate/engine انجام شود).
- */
-// async function syncBastanActionsToPelekanDays(prismaClient, userId) {
-//   const now = new Date();
-
-//   // 1) bastan days
-//   const bastanDays = await prismaClient.pelekanDay.findMany({
-//     where: { stage: { code: "bastan" } },
-//     orderBy: { dayNumberInStage: "asc" },
-//     select: { id: true, dayNumberInStage: true },
-//   });
-//   if (!bastanDays.length) return;
-
-//   // 2) actions + done counts
-//   const actions = await prismaClient.bastanActionDefinition.findMany({
-//     orderBy: { sortOrder: "asc" },
-//     select: { id: true, sortOrder: true, minRequiredSubtasks: true },
-//   });
-//   if (!actions.length) return;
-
-//   const doneAgg = await prismaClient.bastanSubtaskProgress.groupBy({
-//     by: ["actionId"],
-//     where: { userId, isDone: true },
-//     _count: { _all: true },
-//   });
-
-//   const doneByActionId = {};
-//   for (const r of doneAgg) doneByActionId[r.actionId] = r._count._all || 0;
-
-//   // ✅ اگر همه actionها done هستند => اینجا دخالت نکن (گذار به gosastan با gate/engine)
-//   const allDone = actions.every((a) => (doneByActionId[a.id] || 0) >= (a.minRequiredSubtasks || 0));
-//   if (allDone) return;
-
-//   // 3) تعیین index اقدام فعال (اولین اقدامِ ناقص)
-//   let activeIndex = 0; // 0-based
-//   for (let i = 0; i < actions.length; i++) {
-//     const a = actions[i];
-//     const done = doneByActionId[a.id] || 0;
-//     const minReq = a.minRequiredSubtasks || 0;
-//     if (done < minReq) {
-//       activeIndex = i;
-//       break;
-//     }
-//   }
-
-//   // clamp نسبت به تعداد dayها (اگر mismatch شد)
-//   if (activeIndex < 0) activeIndex = 0;
-//   if (activeIndex >= bastanDays.length) activeIndex = bastanDays.length - 1;
-
-//   // 4) فقط در bastan:
-//   //    dayهای قبل completed، روز active -> active
-//   for (let i = 0; i < bastanDays.length; i++) {
-//     const dayId = bastanDays[i].id;
-
-//     if (i < activeIndex) {
-//       await prismaClient.pelekanDayProgress.upsert({
-//         where: { userId_dayId: { userId, dayId } },
-//         create: {
-//           userId,
-//           dayId,
-//           status: "completed",
-//           completionPercent: 100,
-//           startedAt: now,
-//           lastActivityAt: now,
-//           completedAt: now,
-//           xpEarned: 0,
-//         },
-//         update: {
-//           status: "completed",
-//           completionPercent: 100,
-//           lastActivityAt: now,
-//           completedAt: now,
-//         },
-//       });
-//       continue;
-//     }
-
-//     if (i === activeIndex) {
-//       await prismaClient.pelekanDayProgress.upsert({
-//         where: { userId_dayId: { userId, dayId } },
-//         create: {
-//           userId,
-//           dayId,
-//           status: "active",
-//           completionPercent: 0,
-//           startedAt: now,
-//           lastActivityAt: now,
-//           xpEarned: 0,
-//         },
-//         update: {
-//           status: "active",
-//           lastActivityAt: now,
-//           completedAt: null,
-//         },
-//       });
-//       continue;
-//     }
-
-//     // ✅ روزهای بعد از active را دست نمی‌زنیم.
-//     // چون enum "idle" نداریم و نمی‌خواهیم رکوردهای آینده را خراب کنیم.
-//   }
-// }
-
 /* ===========================
    ✅ ADDED: Bastan action->day sync
    - Each Bastan action (sortOrder 1..8) == one Bastan day (dayNumberInStage 1..8)
    - When action i is done => day i completed, day i+1 becomes active
    - Self-heal: also upserts BastanActionProgress from SubtaskProgress
    =========================== */
-async function syncBastanActionsToDays(prisma, userId, stages, now = new Date()) {
+async function syncBastanActionsToDays(
+  prisma,
+  userId,
+  stages,
+  now = new Date(),
+) {
   // find bastan stage + days
   const bastanStage = (stages || []).find((s) => s.code === "bastan");
   if (!bastanStage) return;
@@ -629,7 +459,12 @@ async function syncBastanActionsToDays(prisma, userId, stages, now = new Date())
       },
     });
 
-    actionStates.push({ index: i, minReq, doneCount, isDone: doneCount >= minReq });
+    actionStates.push({
+      index: i,
+      minReq,
+      doneCount,
+      isDone: doneCount >= minReq,
+    });
   }
 
   // find first incomplete action
@@ -646,13 +481,13 @@ async function syncBastanActionsToDays(prisma, userId, stages, now = new Date())
     const nextCompletionPercent =
       typeof data.completionPercent === "number"
         ? data.completionPercent
-        : existing?.completionPercent ?? 0;
+        : (existing?.completionPercent ?? 0);
 
     const nextStartedAt = existing?.startedAt || data.startedAt || now;
 
     const nextCompletedAt =
       nextStatus === "completed"
-        ? (existing?.completedAt || data.completedAt || now)
+        ? existing?.completedAt || data.completedAt || now
         : (data.completedAt ?? null);
 
     await prisma.pelekanDayProgress.upsert({
@@ -694,7 +529,9 @@ async function syncBastanActionsToDays(prisma, userId, stages, now = new Date())
     const day = bastanDays[activeIndex];
     const st = actionStates[activeIndex];
     const minReq = Math.max(1, Number(st.minReq || 1));
-    const pct = st.isDone ? 100 : Math.min(99, Math.round((st.doneCount / minReq) * 100));
+    const pct = st.isDone
+      ? 100
+      : Math.min(99, Math.round((st.doneCount / minReq) * 100));
 
     await upsertDay(day.id, {
       status: st.isDone ? "completed" : "active",
@@ -728,61 +565,15 @@ async function syncBastanActionsToDays(prisma, userId, stages, now = new Date())
   }
 }
 
-async function normalizePelekanDayProgress(prisma, userId, stages, now = new Date()) {
-  const validDayIds = new Set(
-    (stages || [])
-      .flatMap((stage) => stage.days || [])
-      .map((day) => day.id)
-      .filter(Boolean)
-  );
-
-  if (!validDayIds.size) return;
-
-  const rows = await prisma.pelekanDayProgress.findMany({
-    where: { userId },
-    select: {
-      dayId: true,
-      status: true,
-      completionPercent: true,
-      completedAt: true,
-    },
-  });
-
-  const brokenCompletedRows = rows.filter((row) => {
-    const percent = Number(row.completionPercent || 0);
-    const status = String(row.status || "").toLowerCase();
-
-    return (
-      validDayIds.has(row.dayId) &&
-      percent >= 100 &&
-      (status !== "completed" || !row.completedAt)
-    );
-  });
-
-  for (const row of brokenCompletedRows) {
-    await prisma.pelekanDayProgress.updateMany({
-      where: {
-        userId,
-        dayId: row.dayId,
-      },
-      data: {
-        status: "completed",
-        completedAt: row.completedAt || now,
-        lastActivityAt: now,
-      },
-    });
-  }
-}
-
 /* ---------- GET /api/pelekan/state ---------- */
 
 router.get("/state", authUser, async (req, res) => {
   try {
     noStore(res);
     const phone = req.user?.phone;
-if (!phone) {
-  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
-}
+    if (!phone) {
+      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+    }
 
     // ✅ NEW: explicit treatment entry from UI (e.g. ReviewResult "Go to Pelekan")
     const enterTreatment = String(req.query?.enterTreatment || "") === "1";
@@ -808,7 +599,14 @@ if (!phone) {
     });
 
     // ✅ engine signature: (prisma, userId)
-    await pelekanEngine.refresh(prisma, user.id);
+    let engineState = await pelekanEngine.refresh(prisma, user.id);
+    if (!engineState?.ok) {
+      return res.status(409).json({
+        ok: false,
+        error: "PROGRESSION_SYNC_FAILED",
+        detail: engineState?.error || null,
+      });
+    }
 
     // ✅ ADDED: bastan intro state (source of truth: PelekanProgress)
     const pelekanProg =
@@ -830,7 +628,8 @@ if (!phone) {
     }
 
     const introDone = !!(
-      pelekanProg?.bastanIntroAudioCompletedAt || bastanState?.introAudioCompletedAt
+      pelekanProg?.bastanIntroAudioCompletedAt ||
+      bastanState?.introAudioCompletedAt
     );
 
     // 2) reviewSession AFTER user
@@ -862,10 +661,11 @@ if (!phone) {
     const { planStatusFinal, daysLeftFinal } = applyDebugPlan(
       req,
       basePlan.planStatus,
-      basePlan.daysLeft
+      basePlan.daysLeft,
     );
 
-    const isProLike = planStatusFinal === "pro" || planStatusFinal === "expiring";
+    const isProLike =
+      planStatusFinal === "pro" || planStatusFinal === "expiring";
 
     // ✅ IMPORTANT: Unlock treatment only AFTER intro is done + paywall is effectively passed
     const canUnlockTreatmentNow = introDone && isProLike;
@@ -878,11 +678,19 @@ if (!phone) {
         data: { bastanUnlockedAt: new Date() },
       });
 
-      // refresh local copy
       progressRow = await prisma.pelekanProgress.findUnique({
         where: { userId: user.id },
         select: { bastanUnlockedAt: true, bastanIntroAudioCompletedAt: true },
       });
+
+      engineState = await pelekanEngine.refresh(prisma, user.id);
+      if (!engineState?.ok) {
+        return res.status(409).json({
+          ok: false,
+          error: "PROGRESSION_SYNC_FAILED",
+          detail: engineState?.error || null,
+        });
+      }
     }
 
     // baseline session (hb_baseline)
@@ -927,7 +735,12 @@ if (!phone) {
       where: { userId: user.id },
       select: {
         medal: {
-          select: { code: true, titleFa: true, description: true, iconKey: true },
+          select: {
+            code: true,
+            titleFa: true,
+            description: true,
+            iconKey: true,
+          },
         },
       },
     });
@@ -936,7 +749,12 @@ if (!phone) {
       where: { userId: user.id },
       select: {
         badge: {
-          select: { code: true, titleFa: true, description: true, iconKey: true },
+          select: {
+            code: true,
+            titleFa: true,
+            description: true,
+            iconKey: true,
+          },
         },
       },
     });
@@ -964,7 +782,10 @@ if (!phone) {
       if (isBaselineInProgress) tabState = "baseline_assessment";
 
       // ✅ IMPORTANT: treating باید از review_result بالاتر باشد
-      if (!isBaselineInProgress && (enterTreatment || chosenPath === "skip_review")) {
+      if (
+        !isBaselineInProgress &&
+        (enterTreatment || chosenPath === "skip_review")
+      ) {
         tabState = "treating";
       } else if (!isBaselineInProgress && reviewInProgress) {
         tabState = "review";
@@ -974,7 +795,10 @@ if (!phone) {
         tabState = "choose_path";
       }
 
-      const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasAnyProgressFinal);
+      const treatmentAccess = computeTreatmentAccess(
+        planStatusFinal,
+        hasAnyProgressFinal,
+      );
 
       const suppressPaywall = tabState !== "treating";
       const paywall = suppressPaywall
@@ -989,7 +813,11 @@ if (!phone) {
           treatmentAccess,
           ui: {
             paywall,
-            flags: { suppressPaywall, isBaselineInProgress, isBaselineCompleted },
+            flags: {
+              suppressPaywall,
+              isBaselineInProgress,
+              isBaselineCompleted,
+            },
           },
           baseline: baselineSession
             ? {
@@ -1018,16 +846,8 @@ if (!phone) {
       });
     }
 
-    // ✅ ADDED: if treatment is unlocked (introDone + paywall passed), sync Actions -> Days
     const unlockedAt =
       progressRow?.bastanUnlockedAt || pelekanProg?.bastanUnlockedAt || null;
-
-    if (introDone && unlockedAt) {
-  const now = new Date();
-
-  await syncBastanActionsToDays(prisma, user.id, stages, now);
-  await normalizePelekanDayProgress(prisma, user.id, stages, now);
-}
 
     // progress
     const dayProgress = await prisma.pelekanDayProgress.findMany({
@@ -1065,13 +885,12 @@ if (!phone) {
     });
     const xpTotal = xpAgg?._sum?.amount || 0;
 
-    const activeDayIdRaw = computeActiveDayId({ stages, dayProgress });
+    const activeDayIdRaw = engineState?.activeDayId || null;
 
     const hasAnyProgress = Array.isArray(dayProgress) && dayProgress.length > 0;
     const hasAnyProgressFinal = applyDebugProgress(req, hasAnyProgress);
 
-
-//----------------------------------------------------------------------------------
+    //----------------------------------------------------------------------------------
     // ✅ ورود به treating فقط اگر:
     // - کاربر skip_review کرده باشد
     // - یا واقعاً progress درمانی دارد
@@ -1089,22 +908,31 @@ if (!phone) {
 
     if (isBaselineInProgress) tabState = "baseline_assessment";
     else if (baselineNeedsResultScreen) tabState = "baseline_result";
-    else if (isBaselineCompleted && !reviewSession?.chosenPath) tabState = "choose_path";
+    else if (isBaselineCompleted && !reviewSession?.chosenPath)
+      tabState = "choose_path";
     else if (reviewInProgress) tabState = "review";
     else if (enterTreatment || isTreatmentEntry) tabState = "treating";
     else if (reviewFinished && !enterTreatment) tabState = "review_result";
     else tabState = "idle";
 
     // ✅ SELF-HEAL: اگر درمان عملاً شروع شده/ورود درمانی داریم، اجازه نده روی review_result بماند
-    if ((hasStartedTreatment || isTreatmentEntry) && tabState === "review_result") {
+    if (
+      (hasStartedTreatment || isTreatmentEntry) &&
+      tabState === "review_result"
+    ) {
       tabState = "treating";
     }
 
-    const treatmentAccess = computeTreatmentAccess(planStatusFinal, hasStartedTreatment);
+    const treatmentAccess = computeTreatmentAccess(
+      planStatusFinal,
+      hasStartedTreatment,
+    );
 
     // ✅ paywall فقط وقتی treating هستیم و introDone شده مطرح است
     const suppressPaywall =
-      tabState !== "treating" || !introDone || tabState === "baseline_assessment";
+      tabState !== "treating" ||
+      !introDone ||
+      tabState === "baseline_assessment";
 
     const paywall = suppressPaywall
       ? { needed: false, reason: null }
@@ -1114,11 +942,15 @@ if (!phone) {
     if (tabState === "treating") {
       const allDays = stages.flatMap((s) => s.days);
 
-      const activeDay = activeDayId ? allDays.find((d) => d.id === activeDayId) : null;
+      const activeDay = activeDayId
+        ? allDays.find((d) => d.id === activeDayId)
+        : null;
 
       const activeStage = activeDay
         ? stages.find((s) => s.id === activeDay.stageId)
-        : stages.find((s) => s.code === "bastan") || null;
+        : engineState?.activeStageCode
+          ? stages.find((s) => s.code === engineState.activeStageCode) || null
+          : null;
 
       treatment = {
         activeStage: activeStage?.code || null,
@@ -1134,8 +966,13 @@ if (!phone) {
               status: "active",
               minPercent: 70,
               percentDone:
-                dayProgress.find((dp) => dp.dayId === activeDayId)?.completionPercent ?? 0,
-              timing: { unlockedNextAt: null, minDoneAt: null, fullDoneAt: null },
+                dayProgress.find((dp) => dp.dayId === activeDayId)
+                  ?.completionPercent ?? 0,
+              timing: {
+                unlockedNextAt: null,
+                minDoneAt: null,
+                fullDoneAt: null,
+              },
             }
           : null,
 
@@ -1159,7 +996,9 @@ if (!phone) {
           paywall,
           flags: { suppressPaywall, isBaselineInProgress, isBaselineCompleted },
         },
-        baseline: baselineSession ? { session: baselineSession, content: toBaselineUiContent() } : null,
+        baseline: baselineSession
+          ? { session: baselineSession, content: toBaselineUiContent() }
+          : null,
         path: null,
         review,
         bastanIntro: {
@@ -1178,13 +1017,12 @@ if (!phone) {
           dayProgress,
           taskProgress,
           xpTotal,
-          streak:
-            streak || {
-              currentDays: 0,
-              bestDays: 0,
-              lastCompletedAt: null,
-              yellowCardAt: null,
-            },
+          streak: streak || {
+            currentDays: 0,
+            bestDays: 0,
+            lastCompletedAt: null,
+            yellowCardAt: null,
+          },
         },
         awards,
       },
@@ -1202,17 +1040,21 @@ router.post("/review/choose", authUser, async (req, res) => {
     noStore(res);
 
     const phone = req.user?.phone;
-if (!phone) {
-  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
-}
+    if (!phone) {
+      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+    }
     const choice = String(req.body?.choice || "").trim();
 
     if (choice !== "skip_review" && choice !== "review") {
       return res.status(400).json({ ok: false, error: "CHOICE_REQUIRED" });
     }
 
-    const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
-    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true },
+    });
+    if (!user)
+      return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
 
     const now = new Date();
 
@@ -1235,41 +1077,51 @@ if (!phone) {
         test2SkippedAt: null,
         updatedAt: now,
       },
-      select: { id: true, status: true, chosenPath: true, completedAt: true, test2SkippedAt: true, updatedAt: true },
+      select: {
+        id: true,
+        status: true,
+        chosenPath: true,
+        completedAt: true,
+        test2SkippedAt: true,
+        updatedAt: true,
+      },
     });
 
     // 2) اگر کاربر skip_review زد -> فقط وارد حالت درمان شود (treating entry)
-// ✅ اکشن‌ها هنوز قفل می‌مانند تا intro کامل شود و paywall رد شود.
-if (choice === "skip_review") {
-  // ✅ Persist "treating entry" marker (do NOT unlock actions here)
-  await prisma.pelekanProgress.upsert({
-    where: { userId: user.id },
-    create: {
-      userId: user.id,
-      lastActiveAt: now,
-      // bastanUnlockedAt را اینجا ست نمی‌کنیم
-    },
-    update: {
-      lastActiveAt: now,
-      // bastanUnlockedAt را اینجا ست نمی‌کنیم
-    },
-  });
+    // ✅ اکشن‌ها هنوز قفل می‌مانند تا intro کامل شود و paywall رد شود.
+    if (choice === "skip_review") {
+      // ✅ Persist "treating entry" marker (do NOT unlock actions here)
+      await prisma.pelekanProgress.upsert({
+        where: { userId: user.id },
+        create: {
+          userId: user.id,
+          lastActiveAt: now,
+          // bastanUnlockedAt را اینجا ست نمی‌کنیم
+        },
+        update: {
+          lastActiveAt: now,
+          // bastanUnlockedAt را اینجا ست نمی‌کنیم
+        },
+      });
 
-  // B) ریست دو آزمون آخر
-  const RESET_KINDS = ["relationship_rescan", "ex_returns"];
+      // B) ریست دو آزمون آخر
+      const RESET_KINDS = ["relationship_rescan", "ex_returns"];
 
-  await prisma.assessmentResult.deleteMany({
-    where: { userId: user.id, kind: { in: RESET_KINDS } },
-  });
+      await prisma.assessmentResult.deleteMany({
+        where: { userId: user.id, kind: { in: RESET_KINDS } },
+      });
 
-  await prisma.assessmentSession.deleteMany({
-    where: { userId: user.id, kind: { in: RESET_KINDS } },
-  });
-}
+      await prisma.assessmentSession.deleteMany({
+        where: { userId: user.id, kind: { in: RESET_KINDS } },
+      });
+    }
 
     return res.json({ ok: true, data: { session } });
   } catch (e) {
-    console.error("[pelekan.review.choose] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekan.review.choose] error:",
+      e?.message || "unknown_error",
+    );
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -1279,9 +1131,9 @@ router.get("/bastan/state", authUser, async (req, res) => {
   try {
     noStore(res);
     const phone = req.user?.phone;
-if (!phone) {
-  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
-}
+    if (!phone) {
+      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+    }
 
     const user = await prisma.user.findUnique({
       where: { phone },
@@ -1291,8 +1143,13 @@ if (!phone) {
     if (!user) return wcdnOkError(res, "USER_NOT_FOUND");
 
     const basePlan = getPlanStatus(user.plan, user.planExpiresAt);
-    const { planStatusFinal, daysLeftFinal } = applyDebugPlan(req, basePlan.planStatus, basePlan.daysLeft);
-    const isProLike = planStatusFinal === "pro" || planStatusFinal === "expiring";
+    const { planStatusFinal, daysLeftFinal } = applyDebugPlan(
+      req,
+      basePlan.planStatus,
+      basePlan.daysLeft,
+    );
+    const isProLike =
+      planStatusFinal === "pro" || planStatusFinal === "expiring";
 
     const [state, actions] = await Promise.all([
       prisma.bastanState.upsert({
@@ -1435,86 +1292,9 @@ if (!phone) {
       gosastanUnlockedAtFinal = updated.gosastanUnlockedAt;
     }
 
-    // ✅ Ensure transition to gosastan day1 happens even if unlockedAt was set earlier
-if (canUnlock && gosastanUnlockedAtFinal) {
-  const now = new Date();
-
-  const gosDay1 = await prisma.pelekanDay.findFirst({
-    where: { stage: { code: "gosastan" }, dayNumberInStage: 1 },
-    select: { id: true },
-  });
-
-  if (gosDay1?.id) {
-    await prisma.$transaction(async (tx) => {
-      // --- A) Backfill bastan days to completed (even if already in gosastan) ---
-      const bastanDays = await tx.pelekanDay.findMany({
-        where: { stage: { code: "bastan" } },
-        orderBy: { dayNumberInStage: "asc" },
-        select: { id: true },
-      });
-
-      const bastanDayIds = bastanDays.map((d) => d.id);
-
-      const bastanCompletedCount = await tx.pelekanDayProgress.count({
-        where: {
-          userId: user.id,
-          dayId: { in: bastanDayIds },
-          status: "completed",
-        },
-      });
-
-      // اگر همه ۸ روز completed نیستند، بک‌فیل کن
-      if (bastanCompletedCount !== bastanDayIds.length) {
-        for (const d of bastanDays) {
-          await tx.pelekanDayProgress.upsert({
-            where: { userId_dayId: { userId: user.id, dayId: d.id } },
-            create: {
-              userId: user.id,
-              dayId: d.id,
-              status: "completed",
-              completionPercent: 100,
-              startedAt: now,
-              lastActivityAt: now,
-              completedAt: now,
-              xpEarned: 0,
-            },
-            update: {
-              status: "completed",
-              completionPercent: 100,
-              lastActivityAt: now,
-              completedAt: now,
-            },
-          });
-        }
-      }
-
-      // --- B) Ensure gosastan day1 is active (only if not already active) ---
-      const gosActive = await tx.pelekanDayProgress.findFirst({
-        where: { userId: user.id, dayId: gosDay1.id, status: "active" },
-        select: { dayId: true },
-      });
-
-      if (!gosActive) {
-        await tx.pelekanDayProgress.upsert({
-          where: { userId_dayId: { userId: user.id, dayId: gosDay1.id } },
-          create: {
-            userId: user.id,
-            dayId: gosDay1.id,
-            status: "active",
-            completionPercent: 0,
-            startedAt: now,
-            lastActivityAt: now,
-          },
-          update: {
-            status: "active",
-            lastActivityAt: now,
-            completedAt: null,
-          },
-        });
-      }
-    });
-  }
-}
+    if (gosastanUnlockedAtFinal) {
+      await pelekanEngine.refresh(prisma, user.id);
+    }
 
     // Response
     return res.json({
@@ -1548,20 +1328,22 @@ if (canUnlock && gosastanUnlockedAtFinal) {
       },
     });
   } catch (e) {
-    console.error("[pelekan.bastan.state] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekan.bastan.state] error:",
+      e?.message || "unknown_error",
+    );
     return wcdnOkError(res, "SERVER_ERROR");
   }
 });
-
 
 /* ---------- POST /api/pelekan/bastan/subtask/complete ---------- */
 router.post("/bastan/subtask/complete", authUser, async (req, res) => {
   try {
     noStore(res);
     const phone = req.user?.phone;
-if (!phone) {
-  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
-}
+    if (!phone) {
+      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+    }
     const { subtaskKey, payload } = req.body || {};
 
     if (!subtaskKey || typeof subtaskKey !== "string") {
@@ -1575,8 +1357,13 @@ if (!phone) {
     if (!user) return wcdnOkError(res, "USER_NOT_FOUND");
 
     const basePlan = getPlanStatus(user.plan, user.planExpiresAt);
-    const { planStatusFinal } = applyDebugPlan(req, basePlan.planStatus, basePlan.daysLeft);
-    const isProLike = planStatusFinal === "pro" || planStatusFinal === "expiring";
+    const { planStatusFinal } = applyDebugPlan(
+      req,
+      basePlan.planStatus,
+      basePlan.daysLeft,
+    );
+    const isProLike =
+      planStatusFinal === "pro" || planStatusFinal === "expiring";
 
     // --- find subtask ---
     const subtask = await prisma.bastanSubtaskDefinition.findFirst({
@@ -1602,7 +1389,10 @@ if (!phone) {
     if (!subtask) return wcdnOkError(res, "SUBTASK_NOT_FOUND");
 
     // --- PRO gate ---
-    if ((subtask.action?.isProLocked || subtask.isFree === false) && !isProLike) {
+    if (
+      (subtask.action?.isProLocked || subtask.isFree === false) &&
+      !isProLike
+    ) {
       return wcdnOkError(res, "PRO_REQUIRED");
     }
 
@@ -1640,7 +1430,9 @@ if (!phone) {
       const done = doneByActionId[a.id] || 0;
       const minReqUser = minReqByActionId[a.id];
       const minReqFinal =
-        typeof minReqUser === "number" && minReqUser > 0 ? minReqUser : a.minRequiredSubtasks || 0;
+        typeof minReqUser === "number" && minReqUser > 0
+          ? minReqUser
+          : a.minRequiredSubtasks || 0;
 
       const complete = done >= minReqFinal;
 
@@ -1652,7 +1444,9 @@ if (!phone) {
     }
 
     if (locked) {
-      return wcdnOkError(res, "ACTION_LOCKED", { reason: "previous_action_incomplete" });
+      return wcdnOkError(res, "ACTION_LOCKED", {
+        reason: "previous_action_incomplete",
+      });
     }
 
     // --- already done? ---
@@ -1667,14 +1461,14 @@ if (!phone) {
 
     // --- gateChoice extractor ---
     const rawGate =
-    payload?.answer?.gateChoice ??
-    payload?.gateChoice ??
-    payload?.answer?.choice ??
-    payload?.choice ??
-    payload?.answer?.summary?.lastSafetyCheckResult ?? 
-    payload?.answer?.step2?.eventType ??                 
-    null;
-    
+      payload?.answer?.gateChoice ??
+      payload?.gateChoice ??
+      payload?.answer?.choice ??
+      payload?.choice ??
+      payload?.answer?.summary?.lastSafetyCheckResult ??
+      payload?.answer?.step2?.eventType ??
+      null;
+
     // ✅ اگر این زیر اقدام CC_3 است، قبل از هر کاری validate کن
     if (subtask.key === "CC_3_24h_safety_check") {
       if (!rawGate) return wcdnOkError(res, "SAFETY_RESULT_REQUIRED");
@@ -1710,7 +1504,9 @@ if (!phone) {
 
       // 2) ensure action progress exists (minRequiredSubtasks snapshot)
       await tx.bastanActionProgress.upsert({
-        where: { userId_actionId: { userId: user.id, actionId: subtask.actionId } },
+        where: {
+          userId_actionId: { userId: user.id, actionId: subtask.actionId },
+        },
         create: {
           userId: user.id,
           actionId: subtask.actionId,
@@ -1728,10 +1524,15 @@ if (!phone) {
         where: { userId: user.id, actionId: subtask.actionId, isDone: true },
       });
 
-      const minReqFinal = Math.max(0, Number(subtask.action?.minRequiredSubtasks || 0));
+      const minReqFinal = Math.max(
+        0,
+        Number(subtask.action?.minRequiredSubtasks || 0),
+      );
 
       await tx.bastanActionProgress.update({
-        where: { userId_actionId: { userId: user.id, actionId: subtask.actionId } },
+        where: {
+          userId_actionId: { userId: user.id, actionId: subtask.actionId },
+        },
         data: {
           doneSubtasksCount: doneCount,
           status: doneCount >= minReqFinal ? "done" : "active",
@@ -1820,8 +1621,12 @@ if (!phone) {
       });
 
       await syncBastanActionsToDays(prisma, user.id, stages, nowSync);
+      await pelekanEngine.refresh(prisma, user.id);
     } catch (e) {
-       console.warn("[pelekan.bastan.subtask.complete] sync failed:", e?.message || "unknown_error");
+      console.warn(
+        "[pelekan.bastan.subtask.complete] sync failed:",
+        e?.message || "unknown_error",
+      );
       // sync failure must NOT break completing the subtask
     }
 
@@ -1845,7 +1650,10 @@ if (!phone) {
       },
     });
   } catch (e) {
-    console.error("[pelekan.bastan.subtask.complete] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekan.bastan.subtask.complete] error:",
+      e?.message || "unknown_error",
+    );
     return wcdnOkError(res, "SERVER_ERROR");
   }
 });
@@ -1856,9 +1664,9 @@ router.post("/bastan/intro/complete", authUser, async (req, res) => {
     noStore(res);
 
     const phone = req.user?.phone;
-if (!phone) {
-  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
-}
+    if (!phone) {
+      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+    }
 
     const user = await prisma.user.findUnique({
       where: { phone },
@@ -1894,9 +1702,15 @@ if (!phone) {
       return s;
     });
 
-    return res.json({ ok: true, data: { completedAt: st.introAudioCompletedAt } });
+    return res.json({
+      ok: true,
+      data: { completedAt: st.introAudioCompletedAt },
+    });
   } catch (e) {
-    console.error("[pelekan.bastan.intro.complete] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekan.bastan.intro.complete] error:",
+      e?.message || "unknown_error",
+    );
     return wcdnOkError(res, "SERVER_ERROR");
   }
 });
@@ -1907,15 +1721,25 @@ if (!phone) {
 router.post("/baseline/start", authUser, async (req, res) => {
   try {
     const phone = req.user?.phone;
-if (!phone) {
-  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
-}
-    const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
+    if (!phone) {
+      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+    }
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true },
+    });
     if (!user) return baselineError(res, "USER_NOT_FOUND");
 
     const existing = await prisma.assessmentSession.findUnique({
       where: { userId_kind: { userId: user.id, kind: HB_BASELINE.kind } },
-      select: { id: true, status: true, currentIndex: true, totalItems: true, completedAt: true, startedAt: true },
+      select: {
+        id: true,
+        status: true,
+        currentIndex: true,
+        totalItems: true,
+        completedAt: true,
+        startedAt: true,
+      },
     });
 
     if (existing) {
@@ -1943,7 +1767,13 @@ if (!phone) {
         totalItems: steps.length,
         answersJson: { consent: {}, answers: {} },
       },
-      select: { id: true, status: true, currentIndex: true, totalItems: true, startedAt: true },
+      select: {
+        id: true,
+        status: true,
+        currentIndex: true,
+        totalItems: true,
+        startedAt: true,
+      },
     });
 
     return res.json({
@@ -1957,7 +1787,10 @@ if (!phone) {
       },
     });
   } catch (e) {
-    console.error("[pelekan.baseline.start] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekan.baseline.start] error:",
+      e?.message || "unknown_error",
+    );
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -1966,20 +1799,30 @@ if (!phone) {
 router.post("/baseline/answer", authUser, async (req, res) => {
   try {
     const phone = req.user?.phone;
-if (!phone) {
-  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
-}
+    if (!phone) {
+      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+    }
     const { stepType, stepId, optionIndex, acknowledged } = req.body || {};
 
-    const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true },
+    });
     if (!user) return baselineError(res, "USER_NOT_FOUND");
 
     const session = await prisma.assessmentSession.findUnique({
       where: { userId_kind: { userId: user.id, kind: HB_BASELINE.kind } },
-      select: { id: true, status: true, answersJson: true, currentIndex: true, totalItems: true },
+      select: {
+        id: true,
+        status: true,
+        answersJson: true,
+        currentIndex: true,
+        totalItems: true,
+      },
     });
     if (!session) return baselineError(res, "SESSION_NOT_FOUND");
-    if (session.status !== "in_progress") return baselineError(res, "SESSION_NOT_IN_PROGRESS");
+    if (session.status !== "in_progress")
+      return baselineError(res, "SESSION_NOT_IN_PROGRESS");
 
     const steps = buildBaselineStepsLinear();
     const total = steps.length;
@@ -1990,7 +1833,8 @@ if (!phone) {
       const missingAll = getMissingSteps(session.answersJson);
       if (missingAll.length > 0) {
         return baselineError(res, "NEEDS_RESET", {
-          message: "Session reached end but some answers are missing. Reset required.",
+          message:
+            "Session reached end but some answers are missing. Reset required.",
           missing: missingAll,
         });
       }
@@ -2008,7 +1852,11 @@ if (!phone) {
     }
 
     const aj = session.answersJson || { consent: {}, answers: {} };
-    const next = { ...aj, consent: { ...(aj.consent || {}) }, answers: { ...(aj.answers || {}) } };
+    const next = {
+      ...aj,
+      consent: { ...(aj.consent || {}) },
+      answers: { ...(aj.answers || {}) },
+    };
 
     if (stepType === "consent") {
       if (acknowledged !== true) return baselineError(res, "ACK_REQUIRED");
@@ -2016,7 +1864,8 @@ if (!phone) {
     } else if (stepType === "question") {
       const q = HB_BASELINE.questions.find((qq) => qq.id === stepId);
       if (!q) return baselineError(res, "INVALID_STEP");
-      if (typeof optionIndex !== "number") return baselineError(res, "OPTION_REQUIRED");
+      if (typeof optionIndex !== "number")
+        return baselineError(res, "OPTION_REQUIRED");
       if (!q.options[optionIndex]) return baselineError(res, "OPTION_INVALID");
       next.answers[stepId] = optionIndex;
     } else {
@@ -2033,7 +1882,10 @@ if (!phone) {
 
     return res.json({ ok: true, data: updated });
   } catch (e) {
-    console.error("[pelekan.baseline.answer] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekan.baseline.answer] error:",
+      e?.message || "unknown_error",
+    );
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -2042,10 +1894,13 @@ if (!phone) {
 router.post("/baseline/submit", authUser, async (req, res) => {
   try {
     const phone = req.user?.phone;
-if (!phone) {
-  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
-}
-    const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
+    if (!phone) {
+      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+    }
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true },
+    });
     if (!user) return baselineError(res, "USER_NOT_FOUND");
 
     const session = await prisma.assessmentSession.findUnique({
@@ -2053,7 +1908,8 @@ if (!phone) {
       select: { id: true, status: true, answersJson: true },
     });
     if (!session) return baselineError(res, "SESSION_NOT_FOUND");
-    if (session.status !== "in_progress") return baselineError(res, "SESSION_NOT_IN_PROGRESS");
+    if (session.status !== "in_progress")
+      return baselineError(res, "SESSION_NOT_IN_PROGRESS");
 
     const aj = session.answersJson || {};
     const consent = aj.consent || {};
@@ -2067,7 +1923,10 @@ if (!phone) {
 
     const calc = computeHbBaselineScore(answers);
     if (!calc.ok) {
-      return baselineError(res, calc.error, { missingQid: calc.missingQid, qid: calc.qid });
+      return baselineError(res, calc.error, {
+        missingQid: calc.missingQid,
+        qid: calc.qid,
+      });
     }
 
     const updated = await prisma.assessmentSession.update({
@@ -2082,11 +1941,19 @@ if (!phone) {
           maxScore: calc.maxScore,
         },
       },
-      select: { id: true, status: true, totalScore: true, scalesJson: true, completedAt: true },
+      select: {
+        id: true,
+        status: true,
+        totalScore: true,
+        scalesJson: true,
+        completedAt: true,
+      },
     });
 
     await prisma.assessmentResult.upsert({
-      where: { userId_kind_wave: { userId: user.id, kind: HB_BASELINE.kind, wave: 1 } },
+      where: {
+        userId_kind_wave: { userId: user.id, kind: HB_BASELINE.kind, wave: 1 },
+      },
       create: {
         userId: user.id,
         kind: HB_BASELINE.kind,
@@ -2124,7 +1991,10 @@ if (!phone) {
       },
     });
   } catch (e) {
-    console.error("[pelekan.baseline.submit] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekan.baseline.submit] error:",
+      e?.message || "unknown_error",
+    );
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -2135,9 +2005,9 @@ router.get("/baseline/state", authUser, async (req, res) => {
     noStore(res);
 
     const phone = req.user?.phone;
-if (!phone) {
-  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
-}
+    if (!phone) {
+      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+    }
     const user = await prisma.user.findUnique({
       where: { phone },
       select: { id: true },
@@ -2188,7 +2058,8 @@ if (!phone) {
           result: {
             totalScore: session.totalScore,
             level: session.scalesJson?.level || null,
-            interpretationText: session.scalesJson?.interpretationTextSafe || null,
+            interpretationText:
+              session.scalesJson?.interpretationTextSafe || null,
             completedAt: session.completedAt,
           },
         },
@@ -2210,10 +2081,17 @@ if (!phone) {
           sessionId: session.id,
           status: session.status,
           kind: HB_BASELINE.kind,
-          nav: { index: total, total, canPrev: false, canNext: false, canSubmit: false },
+          nav: {
+            index: total,
+            total,
+            canPrev: false,
+            canNext: false,
+            canSubmit: false,
+          },
           step: {
             type: "review_missing",
-            message: "چند پاسخ ثبت نشده. لطفاً آزمون را از ابتدا دوباره انجام بده.",
+            message:
+              "چند پاسخ ثبت نشده. لطفاً آزمون را از ابتدا دوباره انجام بده.",
             missing: missingAll,
           },
         },
@@ -2253,7 +2131,10 @@ if (!phone) {
           type: "question",
           id: step.id,
           text: step.text,
-          options: (step.options || []).map((o, i) => ({ index: i, label: o.label })),
+          options: (step.options || []).map((o, i) => ({
+            index: i,
+            label: o.label,
+          })),
           selectedIndex,
         };
       }
@@ -2271,7 +2152,10 @@ if (!phone) {
       },
     });
   } catch (e) {
-    console.error("[pelekan.baseline.state] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekan.baseline.state] error:",
+      e?.message || "unknown_error",
+    );
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -2280,12 +2164,15 @@ if (!phone) {
 router.post("/baseline/reset", authUser, async (req, res) => {
   try {
     const phone = req.user?.phone;
-if (!phone) {
-  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
-}
+    if (!phone) {
+      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+    }
     const force = req.body?.force === true;
 
-    const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true },
+    });
     if (!user) return baselineError(res, "USER_NOT_FOUND");
 
     const session = await prisma.assessmentSession.findUnique({
@@ -2311,7 +2198,10 @@ if (!phone) {
 
     return res.json({ ok: true, data: { reset: true, forced: force } });
   } catch (e) {
-    console.error("[pelekan.baseline.reset] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekan.baseline.reset] error:",
+      e?.message || "unknown_error",
+    );
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -2322,10 +2212,13 @@ router.post("/baseline/seen", authUser, async (req, res) => {
     noStore(res);
 
     const phone = req.user?.phone;
-if (!phone) {
-  return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
-}
-    const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
+    if (!phone) {
+      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+    }
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true },
+    });
     if (!user) return baselineError(res, "USER_NOT_FOUND");
 
     const session = await prisma.assessmentSession.findUnique({
@@ -2333,10 +2226,12 @@ if (!phone) {
       select: { id: true, status: true, scalesJson: true },
     });
     if (!session) return baselineError(res, "SESSION_NOT_FOUND");
-    if (session.status !== "completed") return baselineError(res, "SESSION_NOT_COMPLETED");
+    if (session.status !== "completed")
+      return baselineError(res, "SESSION_NOT_COMPLETED");
 
     const nextScales = { ...(session.scalesJson || {}) };
-    if (!nextScales.baselineResultSeenAt) nextScales.baselineResultSeenAt = new Date().toISOString();
+    if (!nextScales.baselineResultSeenAt)
+      nextScales.baselineResultSeenAt = new Date().toISOString();
 
     await prisma.assessmentSession.update({
       where: { id: session.id },
@@ -2344,9 +2239,15 @@ if (!phone) {
       select: { id: true },
     });
 
-    return res.json({ ok: true, data: { seenAt: nextScales.baselineResultSeenAt } });
+    return res.json({
+      ok: true,
+      data: { seenAt: nextScales.baselineResultSeenAt },
+    });
   } catch (e) {
-    console.error("[pelekan.baseline.seen] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekan.baseline.seen] error:",
+      e?.message || "unknown_error",
+    );
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -2385,50 +2286,59 @@ router.get("/stage/:stageCode/state", authUser, async (req, res) => {
 
     return res.json(result);
   } catch (e) {
-    console.error("[pelekan.stage.state] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekan.stage.state] error:",
+      e?.message || "unknown_error",
+    );
     return res.json({ ok: false, error: "SERVER_ERROR" });
   }
 });
 
-router.get("/stage/:stageCode/day/:dayNumber/state", authUser, async (req, res) => {
-  try {
-    noStore(res);
+router.get(
+  "/stage/:stageCode/day/:dayNumber/state",
+  authUser,
+  async (req, res) => {
+    try {
+      noStore(res);
 
-    const phone = req.user?.phone;
-    if (!phone) {
-      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+      const phone = req.user?.phone;
+      if (!phone) {
+        return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+      }
+
+      const stageCode = String(req.params?.stageCode || "").trim();
+      const dayNumber = Number(req.params?.dayNumber);
+
+      if (!isDayBasedStageCode(stageCode)) {
+        return res.json({ ok: false, error: "INVALID_STAGE_CODE" });
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { phone },
+        select: { id: true },
+      });
+
+      if (!user) {
+        return res.json({ ok: false, error: "USER_NOT_FOUND" });
+      }
+
+      const result = await getDayBasedStageDayState({
+        prisma,
+        userId: user.id,
+        stageCode,
+        dayNumber,
+      });
+
+      return res.json(result);
+    } catch (e) {
+      console.error(
+        "[pelekan.stage.day.state] error:",
+        e?.message || "unknown_error",
+      );
+      return res.json({ ok: false, error: "SERVER_ERROR" });
     }
-
-    const stageCode = String(req.params?.stageCode || "").trim();
-    const dayNumber = Number(req.params?.dayNumber);
-
-    if (!isDayBasedStageCode(stageCode)) {
-      return res.json({ ok: false, error: "INVALID_STAGE_CODE" });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { phone },
-      select: { id: true },
-    });
-
-    if (!user) {
-      return res.json({ ok: false, error: "USER_NOT_FOUND" });
-    }
-
-    const result = await getDayBasedStageDayState({
-      prisma,
-      userId: user.id,
-      stageCode,
-      dayNumber,
-    });
-
-    return res.json(result);
-  } catch (e) {
-    console.error("[pelekan.stage.day.state] error:", e?.message || "unknown_error");
-    return res.json({ ok: false, error: "SERVER_ERROR" });
-  }
-});
-
+  },
+);
 
 router.post("/stage/:stageCode/task/complete", authUser, async (req, res) => {
   try {
@@ -2470,9 +2380,24 @@ router.post("/stage/:stageCode/task/complete", authUser, async (req, res) => {
       result: resultPayload,
     });
 
+    if (result?.ok) {
+      const engineState = await pelekanEngine.refresh(prisma, user.id);
+
+      if (engineState?.ok === false) {
+        return res.json({
+          ok: false,
+          error: "PROGRESSION_SYNC_FAILED",
+          reason: engineState.reason || null,
+        });
+      }
+    }
+
     return res.json(result);
   } catch (e) {
-    console.error("[pelekan.stage.task.complete] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekan.stage.task.complete] error:",
+      e?.message || "unknown_error",
+    );
     return res.json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -2507,21 +2432,40 @@ router.post("/stage/:stageCode/day/reset", authUser, async (req, res) => {
       stageCode,
     });
 
+    if (result?.ok) {
+      const engineState = await pelekanEngine.refresh(prisma, user.id);
+
+      if (engineState?.ok === false) {
+        return res.json({
+          ok: false,
+          error: "PROGRESSION_SYNC_FAILED",
+          reason: engineState.reason || null,
+        });
+      }
+    }
+
     return res.json(result);
   } catch (e) {
-    console.error("[pelekan.stage.day.reset] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekan.stage.day.reset] error:",
+      e?.message || "unknown_error",
+    );
     return res.json({ ok: false, error: "SERVER_ERROR" });
   }
 });
-
 
 // -------------------- Debug Endpoints --------------------
 
 // GET /api/pelekan/_debug/400  => must return JSON (no HTML behind WCDN)
 // ✅ تغییر: به جای status(400)، 200 می‌دهیم و داخل body ok:false می‌گذاریم
 router.get("/_debug/400", (req, res) => {
-  if (!isDebugAllowed(req)) return res.status(404).json({ ok: false, error: "NOT_FOUND" });
-  return res.json({ ok: false, error: "DEBUG_400", ts: new Date().toISOString() });
+  if (!isDebugAllowed(req))
+    return res.status(404).json({ ok: false, error: "NOT_FOUND" });
+  return res.json({
+    ok: false,
+    error: "DEBUG_400",
+    ts: new Date().toISOString(),
+  });
 });
 
 /* ---------- POST /api/pelekan/_debug/force-active-day ---------- */
@@ -2534,7 +2478,8 @@ router.get("/_debug/400", (req, res) => {
   }
 */
 router.post("/_debug/force-active-day", async (req, res) => {
-  if (!isDebugAllowed(req)) return res.status(404).json({ ok: false, error: "NOT_FOUND" });
+  if (!isDebugAllowed(req))
+    return res.status(404).json({ ok: false, error: "NOT_FOUND" });
 
   try {
     noStore(res);
@@ -2553,13 +2498,18 @@ router.post("/_debug/force-active-day", async (req, res) => {
       where: { phone },
       select: { id: true },
     });
-    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+    if (!user)
+      return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
 
     const day = await prisma.pelekanDay.findFirst({
-      where: { dayNumberInStage: Number(dayNumber), stage: { code: stageCode } },
+      where: {
+        dayNumberInStage: Number(dayNumber),
+        stage: { code: stageCode },
+      },
       select: { id: true },
     });
-    if (!day) return res.status(404).json({ ok: false, error: "DAY_NOT_FOUND" });
+    if (!day)
+      return res.status(404).json({ ok: false, error: "DAY_NOT_FOUND" });
 
     // Fail any currently active day
     await prisma.pelekanDayProgress.updateMany({
@@ -2583,7 +2533,10 @@ router.post("/_debug/force-active-day", async (req, res) => {
 
     return res.json({ ok: true, data: { forced: true, stageCode, dayNumber } });
   } catch (e) {
-    console.error("[pelekan._debug.force-active-day] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekan._debug.force-active-day] error:",
+      e?.message || "unknown_error",
+    );
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });

@@ -5,28 +5,54 @@ async function ensureActivePelekanDay(prisma, userId, desiredDayId) {
   if (!userId) throw new Error("USER_ID_REQUIRED");
   if (!desiredDayId) return { ok: false, reason: "NO_DESIRED_DAY" };
 
-  await prisma.$transaction(async (tx) => {
-    const actives = await tx.pelekanDayProgress.findMany({
-      where: { userId, status: "active" },
-      select: { dayId: true },
+  const now = new Date();
+
+  const result = await prisma.$transaction(async (tx) => {
+    const existing = await tx.pelekanDayProgress.findUnique({
+      where: {
+        userId_dayId: {
+          userId,
+          dayId: desiredDayId,
+        },
+      },
+      select: {
+        startedAt: true,
+        status: true,
+      },
     });
 
-    const toFail = actives.filter((a) => a.dayId !== desiredDayId).map((a) => a.dayId);
-    if (toFail.length) {
-      await tx.pelekanDayProgress.updateMany({
-        where: { userId, dayId: { in: toFail }, status: "active" },
-        data: { status: "failed", lastActivityAt: new Date() },
-      });
+    // اگر روز مطلوب قبلاً کامل شده، هیچ active دیگری را خراب نکن
+    if (existing?.status === "completed") {
+      return { ok: false, reason: "DESIRED_DAY_ALREADY_COMPLETED" };
     }
 
-  const existing = await tx.pelekanDayProgress.findUnique({
-  where: { userId_dayId: { userId, dayId: desiredDayId } },
-  select: { startedAt: true, status: true },
-});
+    const actives = await tx.pelekanDayProgress.findMany({
+      where: {
+        userId,
+        status: "active",
+      },
+      select: {
+        dayId: true,
+      },
+    });
 
-if (existing?.status === "completed") {
-  return;
-}
+    const toFail = actives
+      .filter((active) => active.dayId !== desiredDayId)
+      .map((active) => active.dayId);
+
+    if (toFail.length) {
+      await tx.pelekanDayProgress.updateMany({
+        where: {
+          userId,
+          dayId: { in: toFail },
+          status: "active",
+        },
+        data: {
+          status: "failed",
+          lastActivityAt: now,
+        },
+      });
+    }
 
     if (!existing) {
       await tx.pelekanDayProgress.create({
@@ -35,24 +61,32 @@ if (existing?.status === "completed") {
           dayId: desiredDayId,
           status: "active",
           completionPercent: 0,
-          startedAt: new Date(),
-          lastActivityAt: new Date(),
+          startedAt: now,
+          lastActivityAt: now,
         },
       });
-    } else {
-      await tx.pelekanDayProgress.update({
-        where: { userId_dayId: { userId, dayId: desiredDayId } },
-        data: {
-          status: "active",
-          lastActivityAt: new Date(),
-          ...(existing.startedAt ? {} : { startedAt: new Date() }),
-        },
-      });
+
+      return { ok: true, created: true };
     }
+
+    await tx.pelekanDayProgress.update({
+      where: {
+        userId_dayId: {
+          userId,
+          dayId: desiredDayId,
+        },
+      },
+      data: {
+        status: "active",
+        lastActivityAt: now,
+        ...(existing.startedAt ? {} : { startedAt: now }),
+      },
+    });
+
+    return { ok: true, created: false };
   });
 
-  return { ok: true };
+  return result;
 }
 
-// ✅ خیلی مهم: engine با این شکل require می‌کند
 module.exports = { ensureActivePelekanDay };

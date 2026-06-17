@@ -2,14 +2,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Tabs } from "expo-router";
-import { Image } from "react-native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   AppState,
   AppStateStatus,
+  Image,
   Text,
   View,
 } from "react-native";
+
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BACKEND_URL } from "../../constants/backend";
 import { useUser } from "../../hooks/useUser";
@@ -487,6 +488,12 @@ export default function TabsLayout() {
           title: "نتیجه آزمون",
         }}
       />
+      <Tabs.Screen
+      name="mood-chart"
+      options={{
+      href: null,
+      }}
+     />
     </Tabs>
   );
 }

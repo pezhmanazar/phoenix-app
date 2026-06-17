@@ -60,7 +60,7 @@
           }
         }
       ],
-      "./app.plugin.js",
+      
       "expo-secure-store"
     ],
     "experiments": {

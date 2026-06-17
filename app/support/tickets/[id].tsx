@@ -47,7 +47,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import {
   createTicket,
   sendTicketReply,
@@ -170,10 +173,10 @@ function ImageLightbox({
         </Pressable>
         <Pressable style={styles.lbArea} onPress={onDoubleTap}>
           <Animated.Image
-  source={{ uri, headers: authHeaders }}
-  style={[styles.lbImage, { transform: [{ scale }] }]}
-  resizeMode="contain"
-/>
+            source={{ uri, headers: authHeaders }}
+            style={[styles.lbImage, { transform: [{ scale }] }]}
+            resizeMode="contain"
+          />
         </Pressable>
       </View>
     </Modal>
@@ -240,16 +243,16 @@ function VoicePlayer({
 }) {
   const absoluteUri = useMemo(
     () => (uri.startsWith("http") ? uri : `${BACKEND_URL}${uri}`),
-    [uri]
+    [uri],
   );
 
   const player = useAudioPlayer({
-  uri: absoluteUri,
-  headers: {
-    ...(authHeaders || {}),
-    Connection: "keep-alive",
-  },
-});
+    uri: absoluteUri,
+    headers: {
+      ...(authHeaders || {}),
+      Connection: "keep-alive",
+    },
+  });
 
   const [playing, setPlaying] = useState(false);
   const [buffering, setBuffering] = useState(false);
@@ -290,38 +293,38 @@ function VoicePlayer({
         return;
       }
 
-  const durationMs =
-  typeof st.duration === "number" && st.duration > 0
-    ? Math.floor(st.duration * 1000)
-    : 0;
+      const durationMs =
+        typeof st.duration === "number" && st.duration > 0
+          ? Math.floor(st.duration * 1000)
+          : 0;
 
-const currentMs =
-  typeof st.currentTime === "number" && st.currentTime >= 0
-    ? Math.floor(st.currentTime * 1000)
-    : 0;
+      const currentMs =
+        typeof st.currentTime === "number" && st.currentTime >= 0
+          ? Math.floor(st.currentTime * 1000)
+          : 0;
 
-if (durationMs > 0) {
-  setDur(durationMs);
-}
+      if (durationMs > 0) {
+        setDur(durationMs);
+      }
 
-if (!isDragging.current && currentMs >= 0) {
-  setPos(currentMs);
+      if (!isDragging.current && currentMs >= 0) {
+        setPos(currentMs);
 
-  if (durationMs > 0) {
-    setProgress(currentMs / durationMs);
-  }
-}
+        if (durationMs > 0) {
+          setProgress(currentMs / durationMs);
+        }
+      }
 
-   if (st.didJustFinish) {
-  const endMs = durationMs > 0 ? durationMs : currentMs;
+      if (st.didJustFinish) {
+        const endMs = durationMs > 0 ? durationMs : currentMs;
 
-  setBuffering(false);
-  setPlaying(false);
-  setFinished(true);
-  setProgress(1);
-  setPos(endMs);
-  return;
-}
+        setBuffering(false);
+        setPlaying(false);
+        setFinished(true);
+        setProgress(1);
+        setPos(endMs);
+        return;
+      }
 
       if (st.playing) {
         setBuffering(false);
@@ -349,11 +352,14 @@ if (!isDragging.current && currentMs >= 0) {
     return () => sub.remove();
   }, [player]);
 
-  const applyRate = useCallback(async (r: 1 | 1.5 | 2) => {
-    try {
-      player.setPlaybackRate(r);
-    } catch {}
-  }, [player]);
+  const applyRate = useCallback(
+    async (r: 1 | 1.5 | 2) => {
+      try {
+        player.setPlaybackRate(r);
+      } catch {}
+    },
+    [player],
+  );
 
   const ensureLoaded = useCallback(async () => {
     setBuffering(false);
@@ -396,10 +402,7 @@ if (!isDragging.current && currentMs >= 0) {
         return;
       }
 
-      if (
-        finished ||
-        (totalDuration && currentTime >= totalDuration - 300)
-      ) {
+      if (finished || (totalDuration && currentTime >= totalDuration - 300)) {
         setBuffering(true);
         setPlaying(false);
 
@@ -452,13 +455,11 @@ if (!isDragging.current && currentMs >= 0) {
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (evt) => {
         isDragging.current = true;
-        const ratio =
-          (evt.nativeEvent.locationX ?? 0) / (wfWidth.current || 1);
+        const ratio = (evt.nativeEvent.locationX ?? 0) / (wfWidth.current || 1);
         seekToRatio(ratio);
       },
       onPanResponderMove: (evt) => {
-        const ratio =
-          (evt.nativeEvent.locationX ?? 0) / (wfWidth.current || 1);
+        const ratio = (evt.nativeEvent.locationX ?? 0) / (wfWidth.current || 1);
         seekToRatio(ratio);
       },
       onPanResponderRelease: () => {
@@ -468,7 +469,7 @@ if (!isDragging.current && currentMs >= 0) {
       onPanResponderTerminate: () => {
         isDragging.current = false;
       },
-    })
+    }),
   ).current;
 
   const cycleRate = async () => {
@@ -559,7 +560,6 @@ if (!isDragging.current && currentMs >= 0) {
   );
 }
 
-
 /* ================= Banner ================= */
 function Banner({ text, onClose }: { text: string; onClose: () => void }) {
   if (!text) return null;
@@ -620,8 +620,12 @@ function Composer({
     name: string;
   } | null>(null);
 
-  const [textClientMessageId, setTextClientMessageId] = useState<string | null>(null);
-  const [uploadClientMessageId, setUploadClientMessageId] = useState<string | null>(null);
+  const [textClientMessageId, setTextClientMessageId] = useState<string | null>(
+    null,
+  );
+  const [uploadClientMessageId, setUploadClientMessageId] = useState<
+    string | null
+  >(null);
 
   const makeClientMessageId = (prefix: "msg" | "upload") =>
     `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -645,7 +649,7 @@ function Composer({
   const planGuard = () => {
     if (!lockedForPlan) return false;
     onError(
-      "ارسال پیام به درمانگر فقط برای اعضای PRO فعاله. برای فعال‌سازی از تب «پرداخت» اقدام کن یا فعلاً از پشتیبانی فنی/هوشمند استفاده کن."
+      "ارسال پیام به درمانگر فقط برای اعضای PRO فعاله. برای فعال‌سازی از تب «پرداخت» اقدام کن یا فعلاً از پشتیبانی فنی/هوشمند استفاده کن.",
     );
     return true;
   };
@@ -662,22 +666,22 @@ function Composer({
       return;
     }
     const res = await ImagePicker.launchImageLibraryAsync({
-  mediaTypes: ["images"],
-  allowsMultipleSelection: false,
-  quality: 0.85,
-});
+      mediaTypes: ["images"],
+      allowsMultipleSelection: false,
+      quality: 0.85,
+    });
     if (!res.canceled && res.assets?.[0]) {
       const a = res.assets[0];
       setUploadClientMessageId(null);
       setImage({
-      uri: a.uri,
-      type: a.mimeType || "image/jpeg",
-      name: a.fileName || `photo_${Date.now()}.jpg`,
-    });
+        uri: a.uri,
+        type: a.mimeType || "image/jpeg",
+        name: a.fileName || `photo_${Date.now()}.jpg`,
+      });
     }
   };
 
-    const stopRecording = useCallback(
+  const stopRecording = useCallback(
     async (auto = false) => {
       if (!recorderState.isRecording) return;
 
@@ -689,7 +693,7 @@ function Composer({
 
       if (auto) {
         onError(
-          "ضبط به سقف مجاز رسید: محدودیت ویس در هر بار ضبط، ۵ دقیقه‌ست؛ روی ارسال ضمیمه بزن تا ویسی که ضبط کردی ارسال بشه"
+          "ضبط به سقف مجاز رسید: محدودیت ویس در هر بار ضبط، ۵ دقیقه‌ست؛ روی ارسال ضمیمه بزن تا ویسی که ضبط کردی ارسال بشه",
         );
       }
 
@@ -700,11 +704,10 @@ function Composer({
         });
       } catch {}
     },
-    [recorder, recorderState.isRecording, onError]
+    [recorder, recorderState.isRecording, onError],
   );
 
-
-      const startRecording = async () => {
+  const startRecording = async () => {
     if (planGuard()) return;
 
     setUploadClientMessageId(null);
@@ -733,7 +736,7 @@ function Composer({
     }
   };
 
-    useEffect(() => {
+  useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
 
     if (isRecording) {
@@ -758,209 +761,203 @@ function Composer({
   }, [isRecording, stopRecording]);
 
   const resetAttachments = () => {
-  setUploadClientMessageId(null);
-  setImage(null);
-  setRecURI(null);
-  setRecMs(0);
-};
+    setUploadClientMessageId(null);
+    setImage(null);
+    setRecURI(null);
+    setRecMs(0);
+  };
 
- const createTicketIfNeeded = async (textFallback: string) => {
-  if (!ticketType) return ticketId;
+  const createTicketIfNeeded = async (textFallback: string) => {
+    if (!ticketType) return ticketId;
 
-  if (!isAuthenticated || !token) {
-    throw new Error("برای ارسال پیام باید دوباره وارد حساب کاربری بشی.");
-  }
+    if (!isAuthenticated || !token) {
+      throw new Error("برای ارسال پیام باید دوباره وارد حساب کاربری بشی.");
+    }
 
-  const result = await createTicket({
-    token,
-    ticketType,
-    text: textFallback,
-  });
+    const result = await createTicket({
+      token,
+      ticketType,
+      text: textFallback,
+    });
 
-  onTicketCreated?.(result.ticketId, result.ticket);
-  return result.ticketId;
-};
+    onTicketCreated?.(result.ticketId, result.ticket);
+    return result.ticketId;
+  };
 
   const sendText = async () => {
-  if (!hasText) return;
-  if (planGuard()) return;
+    if (!hasText) return;
+    if (planGuard()) return;
 
-  try {
-    setSending(true);
-    const textPayload = text.trim();
+    try {
+      setSending(true);
+      const textPayload = text.trim();
 
-    if (!isAuthenticated || !token) {
-      throw new Error("برای ارسال پیام باید دوباره وارد حساب کاربری بشی.");
-    }
+      if (!isAuthenticated || !token) {
+        throw new Error("برای ارسال پیام باید دوباره وارد حساب کاربری بشی.");
+      }
 
-    let targetId = ticketId;
-    if (ticketType) {
-      targetId = await createTicketIfNeeded(textPayload);
+      let targetId = ticketId;
+      if (ticketType) {
+        targetId = await createTicketIfNeeded(textPayload);
+        setText("");
+        onSent();
+        return;
+      }
+
+      const clientMessageId = textClientMessageId || makeClientMessageId("msg");
+      if (!textClientMessageId) {
+        setTextClientMessageId(clientMessageId);
+      }
+
+      const updatedTicket = await sendTicketReply({
+        token,
+        ticketId: targetId,
+        text: textPayload,
+        clientMessageId,
+      });
+
       setText("");
-      onSent();
-      return;
+      setTextClientMessageId(null);
+      onSent(updatedTicket);
+    } catch (e: any) {
+      const rawMsg = e?.message || e?.toString?.() || "";
+
+      const msg = String(rawMsg || "").trim();
+      const msgLower = msg.toLowerCase();
+
+      const isNetworkError =
+        msg === "NETWORK_UPLOAD_ERROR" ||
+        msgLower.includes("network request failed") ||
+        msgLower.includes("failed to fetch") ||
+        msgLower.includes("timeout") ||
+        msgLower.includes("504") ||
+        msgLower.includes("fetch") ||
+        msgLower.includes("aborterror");
+
+      if (isNetworkError) {
+        onError("خطا در شبکه. لطفاً چند دقیقه‌ی دیگه دوباره تلاش کن.");
+      } else {
+        onError(msg || "خطا در ارسال متن");
+      }
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const buildForm = async () => {
+    const fd = new FormData();
+
+    if (text?.trim()) {
+      fd.append("text", text.trim());
     }
 
-const clientMessageId = textClientMessageId || makeClientMessageId("msg");
-if (!textClientMessageId) {
-  setTextClientMessageId(clientMessageId);
-}
+    if (image) {
+      fd.append("attachment", {
+        uri: image.uri,
+        name: image.name,
+        type: image.type,
+      } as any);
+    } else if (recURI) {
+      const durationSec = Math.min(300, Math.round(recMs / 1000));
 
-const updatedTicket = await sendTicketReply({
-  token,
-  ticketId: targetId,
-  text: textPayload,
-  clientMessageId,
-});
+      fd.append("attachment", {
+        uri: recURI,
+        name: `voice_${Date.now()}.m4a`,
+        type: "audio/m4a",
+      } as any);
 
-setText("");
-setTextClientMessageId(null);
-onSent(updatedTicket);
+      fd.append("durationSec", String(durationSec));
+    }
 
-
-  } catch (e: any) {
-  const rawMsg =
-    e?.message ||
-    e?.toString?.() ||
-    "";
-
-  const msg = String(rawMsg || "").trim();
-  const msgLower = msg.toLowerCase();
-
-  const isNetworkError =
-    msg === "NETWORK_UPLOAD_ERROR" ||
-    msgLower.includes("network request failed") ||
-    msgLower.includes("failed to fetch") ||
-    msgLower.includes("timeout") ||
-    msgLower.includes("504") ||
-    msgLower.includes("fetch") ||
-    msgLower.includes("aborterror");
-
-  if (isNetworkError) {
-    onError("خطا در شبکه. لطفاً چند دقیقه‌ی دیگه دوباره تلاش کن.");
-  } else {
-    onError(msg || "خطا در ارسال متن");
-  }
-} finally {
-    setSending(false);
-  }
-};
-
-const buildForm = async () => {
-  const fd = new FormData();
-
-  if (text?.trim()) {
-    fd.append("text", text.trim());
-  }
-
-  if (image) {
-    fd.append("attachment", {
-      uri: image.uri,
-      name: image.name,
-      type: image.type,
-    } as any);
-  } else if (recURI) {
-    const durationSec = Math.min(300, Math.round(recMs / 1000));
-
-    fd.append("attachment", {
-      uri: recURI,
-      name: `voice_${Date.now()}.m4a`,
-      type: "audio/m4a",
-    } as any);
-
-    fd.append("durationSec", String(durationSec));
-  }
-
-  return fd;
-};
+    return fd;
+  };
 
   const sendUpload = async () => {
-  if (!hasAttachment && !hasText) return;
-  if (planGuard()) return;
+    if (!hasAttachment && !hasText) return;
+    if (planGuard()) return;
 
-  try {
-  setSending(true);
-  onUploadingChange?.(true);
+    try {
+      setSending(true);
+      onUploadingChange?.(true);
 
-
-    if (!isAuthenticated || !token) {
-      throw new Error("برای ارسال پیام باید دوباره وارد حساب کاربری بشی.");
-    }
-
-    const localImageUri = image?.uri || null;
-
-    let targetId = ticketId;
-    if (ticketType) {
-      const firstText = hasText ? text.trim() : "سلام";
-      targetId = await createTicketIfNeeded(firstText);
-    }
-
-    const fd = await buildForm();
-
-  const clientMessageId = uploadClientMessageId || makeClientMessageId("upload");
-if (!uploadClientMessageId) {
-  setUploadClientMessageId(clientMessageId);
-}
-  const updatedTicket = await uploadTicketReply({
-  token,
-  ticketId: targetId,
-  formData: fd,
-  clientMessageId,
-});
-
-
-    if (localImageUri && updatedTicket?.messages?.length) {
-      const lastImageMessage = [...updatedTicket.messages]
-        .reverse()
-        .find((m) => m.sender === "user" && (m.type || detectType(m.mime, m.fileUrl)) === "image");
-
-      if (lastImageMessage?.id) {
-        onLocalImageUploaded?.(lastImageMessage.id, localImageUri);
+      if (!isAuthenticated || !token) {
+        throw new Error("برای ارسال پیام باید دوباره وارد حساب کاربری بشی.");
       }
+
+      const localImageUri = image?.uri || null;
+
+      let targetId = ticketId;
+      if (ticketType) {
+        const firstText = hasText ? text.trim() : "سلام";
+        targetId = await createTicketIfNeeded(firstText);
+      }
+
+      const fd = await buildForm();
+
+      const clientMessageId =
+        uploadClientMessageId || makeClientMessageId("upload");
+      if (!uploadClientMessageId) {
+        setUploadClientMessageId(clientMessageId);
+      }
+      const updatedTicket = await uploadTicketReply({
+        token,
+        ticketId: targetId,
+        formData: fd,
+        clientMessageId,
+      });
+
+      if (localImageUri && updatedTicket?.messages?.length) {
+        const lastImageMessage = [...updatedTicket.messages]
+          .reverse()
+          .find(
+            (m) =>
+              m.sender === "user" &&
+              (m.type || detectType(m.mime, m.fileUrl)) === "image",
+          );
+
+        if (lastImageMessage?.id) {
+          onLocalImageUploaded?.(lastImageMessage.id, localImageUri);
+        }
+      }
+
+      setText("");
+      setUploadClientMessageId(null);
+      resetAttachments();
+      onSent(updatedTicket);
+    } catch (e: any) {
+      const rawMsg = e?.message || e?.toString?.() || "";
+
+      const msg = String(rawMsg || "").trim();
+      const msgLower = msg.toLowerCase();
+
+      const isNetworkError =
+        msg === "NETWORK_UPLOAD_ERROR" ||
+        msgLower.includes("network request failed") ||
+        msgLower.includes("failed to fetch") ||
+        msgLower.includes("timeout") ||
+        msgLower.includes("504") ||
+        msgLower.includes("fetch") ||
+        msgLower.includes("route") ||
+        msgLower.includes("aborterror");
+
+      if (isNetworkError) {
+        onError("خطا در شبکه. لطفاً چند دقیقه‌ی دیگه دوباره تلاش کن.");
+      } else {
+        onError(msg || "خطا در ارسال فایل یا ویس.");
+      }
+    } finally {
+      setSending(false);
+      onUploadingChange?.(false);
     }
-
-  setText("");
-  setUploadClientMessageId(null);
-  resetAttachments();
-  onSent(updatedTicket);
-
-  } catch (e: any) {
-  const rawMsg =
-    e?.message ||
-    e?.toString?.() ||
-    "";
-
-  const msg = String(rawMsg || "").trim();
-  const msgLower = msg.toLowerCase();
-
-  const isNetworkError =
-    msg === "NETWORK_UPLOAD_ERROR" ||
-    msgLower.includes("network request failed") ||
-    msgLower.includes("failed to fetch") ||
-    msgLower.includes("timeout") ||
-    msgLower.includes("504") ||
-    msgLower.includes("fetch") ||
-    msgLower.includes("route") ||
-    msgLower.includes("aborterror");
-
-  if (isNetworkError) {
-    onError("خطا در شبکه. لطفاً چند دقیقه‌ی دیگه دوباره تلاش کن.");
-  } else {
-    onError(msg || "خطا در ارسال فایل یا ویس.");
-  }
-} finally {
-    setSending(false);
-    onUploadingChange?.(false);
-  }
-};
+  };
 
   return (
     <View style={styles.composerWrap} onLayout={onLayout}>
       <TextInput
         value={text}
         onChangeText={(value) => {
-        setText(value);
-        setTextClientMessageId(null);
+          setText(value);
+          setTextClientMessageId(null);
         }}
         placeholder="پیام خودت رو بفرست؛ در اسرع وقت بهت جواب می‌دیم…"
         placeholderTextColor="rgba(231,238,247,.55)"
@@ -969,7 +966,6 @@ if (!uploadClientMessageId) {
         textAlignVertical="top"
         scrollEnabled
       />
-
 
       {image || recURI ? (
         <View style={styles.previewRow}>
@@ -988,30 +984,35 @@ if (!uploadClientMessageId) {
               }}
             >
               <Ionicons name="mic" size={16} color="#E5E7EB" />
-              <Text style={{ color: "#E5E7EB", fontWeight: "900", fontSize: 12 }}>
+              <Text
+                style={{ color: "#E5E7EB", fontWeight: "900", fontSize: 12 }}
+              >
                 {Math.min(300, Math.round(recMs / 1000))}s
               </Text>
             </View>
           ) : null}
           <View style={{ flex: 1 }} />
           <TouchableOpacity
-  onPress={resetAttachments}
-  style={[styles.trashBtn, { opacity: sending ? 0.5 : 1 }]}
-  activeOpacity={0.85}
-  disabled={sending}
->
-  <Ionicons name="trash" size={16} color="#fff" />
-</TouchableOpacity>
+            onPress={resetAttachments}
+            style={[styles.trashBtn, { opacity: sending ? 0.5 : 1 }]}
+            activeOpacity={0.85}
+            disabled={sending}
+          >
+            <Ionicons name="trash" size={16} color="#fff" />
+          </TouchableOpacity>
         </View>
       ) : null}
 
       <View style={styles.composerActions}>
         <TouchableOpacity
-  onPress={pickImage}
-  style={[styles.iconBtn, { opacity: lockedForPlan || sending ? 0.5 : 1 }]}
-  activeOpacity={0.8}
-  disabled={lockedForPlan || sending}
->
+          onPress={pickImage}
+          style={[
+            styles.iconBtn,
+            { opacity: lockedForPlan || sending ? 0.5 : 1 },
+          ]}
+          activeOpacity={0.8}
+          disabled={lockedForPlan || sending}
+        >
           <Ionicons name="attach" size={18} color="#E5E7EB" />
         </TouchableOpacity>
 
@@ -1041,44 +1042,44 @@ if (!uploadClientMessageId) {
             </TouchableOpacity>
           </View>
         ) : hasAttachment ? (
-  <View
-  style={{
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 8,
-  }}
->
-    {isUploadingAttachment ? (
-      <Text
-  style={{
-    color: "#FDE68A",
-    fontSize: 11,
-    fontWeight: "900",
-    position: "absolute",
-    left: -190,
-    width: 180,
-    textAlign: "right",
-  }}
-        numberOfLines={2}
-      >
-        صبور باش، پیامت در حال بارگذاریه…
-      </Text>
-    ) : null}
+          <View
+            style={{
+              flexDirection: "row-reverse",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            {isUploadingAttachment ? (
+              <Text
+                style={{
+                  color: "#FDE68A",
+                  fontSize: 11,
+                  fontWeight: "900",
+                  position: "absolute",
+                  left: -190,
+                  width: 180,
+                  textAlign: "right",
+                }}
+                numberOfLines={2}
+              >
+                صبور باش، پیامت در حال بارگذاریه…
+              </Text>
+            ) : null}
 
-    <TouchableOpacity
-      onPress={sendUpload}
-      style={[styles.sendBtn, { opacity: lockedForPlan ? 0.5 : 1 }]}
-      disabled={sending || lockedForPlan}
-      activeOpacity={0.9}
-    >
-      {sending ? (
-        <ActivityIndicator color="#111827" />
-      ) : (
-        <Text style={styles.sendBtnText}>ارسال ضمیمه</Text>
-      )}
-    </TouchableOpacity>
-  </View>
-) : hasText ? (
+            <TouchableOpacity
+              onPress={sendUpload}
+              style={[styles.sendBtn, { opacity: lockedForPlan ? 0.5 : 1 }]}
+              disabled={sending || lockedForPlan}
+              activeOpacity={0.9}
+            >
+              {sending ? (
+                <ActivityIndicator color="#111827" />
+              ) : (
+                <Text style={styles.sendBtnText}>ارسال ضمیمه</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : hasText ? (
           <TouchableOpacity
             onPress={sendText}
             style={[
@@ -1099,11 +1100,14 @@ if (!uploadClientMessageId) {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-  onPress={startRecording}
-  style={[styles.roundBtn, { opacity: lockedForPlan || sending ? 0.5 : 1 }]}
-  activeOpacity={0.85}
-  disabled={lockedForPlan || sending}
->
+            onPress={startRecording}
+            style={[
+              styles.roundBtn,
+              { opacity: lockedForPlan || sending ? 0.5 : 1 },
+            ]}
+            activeOpacity={0.85}
+            disabled={lockedForPlan || sending}
+          >
             <Ionicons name="mic" size={18} color="#E5E7EB" />
           </TouchableOpacity>
         )}
@@ -1162,7 +1166,10 @@ function toBackendFileUrl(url?: string | null): string | undefined {
   return `${BACKEND_URL}${path}`;
 }
 
-function isSameTicketSnapshot(prev: Ticket | null, next: Ticket | null): boolean {
+function isSameTicketSnapshot(
+  prev: Ticket | null,
+  next: Ticket | null,
+): boolean {
   if (!prev || !next) return false;
 
   if (prev.id !== next.id) return false;
@@ -1219,9 +1226,10 @@ export default function TicketDetail() {
   const [, setComposerHeight] = useState(88);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
-  const [localImagePreviews, setLocalImagePreviews] = useState<Record<string, string>>({});
+  const [localImagePreviews, setLocalImagePreviews] = useState<
+    Record<string, string>
+  >({});
   const [isUploadingReply, setIsUploadingReply] = useState(false);
-  
 
   const [banner, setBanner] = useState<string>("");
   const [exitModalVisible, setExitModalVisible] = useState(false);
@@ -1237,7 +1245,6 @@ export default function TicketDetail() {
   // ✅ پاکسازی محلی هر تیکت
   const [clearedAtMs, setClearedAtMs] = useState<number>(0);
   const [clearModal, setClearModal] = useState(false);
-  
 
   const authHeaders = useMemo(() => {
     const headers: Record<string, string> = {};
@@ -1250,29 +1257,29 @@ export default function TicketDetail() {
   }, [token]);
 
   useEffect(() => {
-  const show = Keyboard.addListener(
-    Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-    (e) => {
-      if (Platform.OS === "android") {
-        setKeyboardHeight(e.endCoordinates?.height || 0);
-      }
-    }
-  );
+    const show = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (e) => {
+        if (Platform.OS === "android") {
+          setKeyboardHeight(e.endCoordinates?.height || 0);
+        }
+      },
+    );
 
-  const hide = Keyboard.addListener(
-    Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-    () => {
-      if (Platform.OS === "android") {
-        setKeyboardHeight(0);
-      }
-    }
-  );
+    const hide = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => {
+        if (Platform.OS === "android") {
+          setKeyboardHeight(0);
+        }
+      },
+    );
 
-  return () => {
-    show.remove();
-    hide.remove();
-  };
-}, []);
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   const pushError = useCallback((msg: string) => {
     const clean = (msg || "").trim();
@@ -1294,10 +1301,13 @@ export default function TicketDetail() {
         return true;
       };
 
-      const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+      const sub = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress,
+      );
 
       return () => sub.remove();
-    }, [isUploadingReply, router])
+    }, [isUploadingReply, router]),
   );
 
   useEffect(() => {
@@ -1333,7 +1343,8 @@ export default function TicketDetail() {
         ) {
           view = "expired";
         } else if (status.isPro || flagIsPro) {
-          const d = typeof status.daysLeft === "number" ? status.daysLeft : null;
+          const d =
+            typeof status.daysLeft === "number" ? status.daysLeft : null;
           if (d != null && d > 0 && d <= 7) view = "expiring";
           else view = "pro";
         } else {
@@ -1356,33 +1367,38 @@ export default function TicketDetail() {
   }, [syncPlanView]);
 
   useEffect(() => {
-  const checkTechWarning = async () => {
-    try {
-      const currentType = (ticket?.type || typeFromParam) as "tech" | "therapy" | null;
+    const checkTechWarning = async () => {
+      try {
+        const currentType = (ticket?.type || typeFromParam) as
+          | "tech"
+          | "therapy"
+          | null;
 
-      if (currentType !== "tech") return;
+        if (currentType !== "tech") return;
 
-      const seen = await AsyncStorage.getItem(TECH_SUPPORT_WARNING_SEEN_KEY);
+        const seen = await AsyncStorage.getItem(TECH_SUPPORT_WARNING_SEEN_KEY);
 
-      if (seen !== "1") {
-        setTechWarningVisible(true);
-      }
-    } catch {}
-  };
+        if (seen !== "1") {
+          setTechWarningVisible(true);
+        }
+      } catch {}
+    };
 
-  checkTechWarning();
-}, [ticket?.type, typeFromParam]);
+    checkTechWarning();
+  }, [ticket?.type, typeFromParam]);
 
   useFocusEffect(
     useCallback(() => {
       syncPlanView();
-    }, [syncPlanView])
+    }, [syncPlanView]),
   );
 
   // ✅ load clearedAt for THIS ticket (هر تیکت جدا: فنی/درمانگر جدا)
   useEffect(() => {
     if (!id) return;
-    loadClearedAt(String(id)).then(setClearedAtMs).catch(() => setClearedAtMs(0));
+    loadClearedAt(String(id))
+      .then(setClearedAtMs)
+      .catch(() => setClearedAtMs(0));
   }, [id]);
 
   const fetchTicket = useCallback(
@@ -1426,7 +1442,7 @@ export default function TicketDetail() {
         if (!silent) setLoading(false);
       }
     },
-    [id, typeFromParam, pushError, authHeaders]
+    [id, typeFromParam, pushError, authHeaders],
   );
 
   useEffect(() => {
@@ -1445,7 +1461,7 @@ export default function TicketDetail() {
       }, 8000);
 
       return () => clearInterval(interval);
-    }, [id, typeFromParam, fetchTicket])
+    }, [id, typeFromParam, fetchTicket]),
   );
 
   const tryOpenExisting = useCallback(async () => {
@@ -1514,10 +1530,7 @@ export default function TicketDetail() {
 
     if (!titleType) return;
 
-    const title =
-      titleType === "therapy"
-        ? "درمانگر ققنوس"
-        : "پشتیبان فنی";
+    const title = titleType === "therapy" ? "درمانگر ققنوس" : "پشتیبان فنی";
 
     // @ts-ignore
     (navigation as any)?.setOptions?.({ title });
@@ -1527,28 +1540,30 @@ export default function TicketDetail() {
     if (!typeFromParam && id) loadPins(id).then(setPins);
   }, [id, typeFromParam]);
 
-    const togglePin = useCallback(async (mid: string) => {
-    if (typeFromParam || !id) return;
+  const togglePin = useCallback(
+    async (mid: string) => {
+      if (typeFromParam || !id) return;
 
-    const exist = pins.includes(mid);
-    const next = exist ? pins.filter((x) => x !== mid) : [...pins, mid];
+      const exist = pins.includes(mid);
+      const next = exist ? pins.filter((x) => x !== mid) : [...pins, mid];
 
-    setPins(next);
-    await savePins(id, next);
-  }, [typeFromParam, id, pins]);
+      setPins(next);
+      await savePins(id, next);
+    },
+    [typeFromParam, id, pins],
+  );
 
   const jumpToMessage = (mid: string) => {
-  const index = visibleMessages.findIndex((m) => m.id === mid);
+    const index = visibleMessages.findIndex((m) => m.id === mid);
 
-  if (index < 0 || !scrollRef.current) return;
+    if (index < 0 || !scrollRef.current) return;
 
-  scrollRef.current.scrollToIndex({
-    index,
-    animated: true,
-    viewPosition: 0.25,
-  });
-};
-
+    scrollRef.current.scrollToIndex({
+      index,
+      animated: true,
+      viewPosition: 0.25,
+    });
+  };
 
   const pinnedList = useMemo(() => {
     if (!ticket) return [];
@@ -1563,17 +1578,15 @@ export default function TicketDetail() {
   const isProPlan = planView === "pro" || planView === "expiring";
 
   const headerTitle =
-    chatType === "therapy"
-      ? "درمانگر ققنوس"
-      : "پشتیبانی فنی ققنوس";
+    chatType === "therapy" ? "درمانگر ققنوس" : "پشتیبانی فنی ققنوس";
 
   const confirmTechWarning = useCallback(async () => {
-  try {
-    await AsyncStorage.setItem(TECH_SUPPORT_WARNING_SEEN_KEY, "1");
-  } catch {}
+    try {
+      await AsyncStorage.setItem(TECH_SUPPORT_WARNING_SEEN_KEY, "1");
+    } catch {}
 
-  setTechWarningVisible(false);
-}, []);
+    setTechWarningVisible(false);
+  }, []);
 
   const doClearLocal = useCallback(async () => {
     if (!id) return;
@@ -1593,185 +1606,191 @@ export default function TicketDetail() {
     pushError("تاریخچه این گفتگو در گوشیت پاک شد.");
   }, [id, pushError]);
 
-  const renderMessage = useCallback((m: Message) => {
-    const isAdmin = m.sender === "admin";
-    const alignSelf: ViewStyle["alignSelf"] = isAdmin ? "flex-start" : "flex-end";
+  const renderMessage = useCallback(
+    (m: Message) => {
+      const isAdmin = m.sender === "admin";
+      const alignSelf: ViewStyle["alignSelf"] = isAdmin
+        ? "flex-start"
+        : "flex-end";
 
-    const bubbleStyle: ViewStyle[] = [
-      styles.msg,
-      isAdmin ? styles.msgAdmin : styles.msgUser,
-      { alignSelf },
-    ];
+      const bubbleStyle: ViewStyle[] = [
+        styles.msg,
+        isAdmin ? styles.msgAdmin : styles.msgUser,
+        { alignSelf },
+      ];
 
-    const textColor = isAdmin ? "#F9FAFB" : "#E5E7EB";
-    const subColor = isAdmin ? "rgba(249,250,251,.72)" : "rgba(231,238,247,.62)";
+      const textColor = isAdmin ? "#F9FAFB" : "#E5E7EB";
+      const subColor = isAdmin
+        ? "rgba(249,250,251,.72)"
+        : "rgba(231,238,247,.62)";
 
-    const rawIncomingURL = m.fileViewUrl || m.fileUrl || undefined;
-    const incomingURL = toBackendFileUrl(rawIncomingURL);
+      const rawIncomingURL = m.fileViewUrl || m.fileUrl || undefined;
+      const incomingURL = toBackendFileUrl(rawIncomingURL);
 
-    const fullURL = incomingURL;
-    const type: MessageType = m.type || detectType(m.mime, m.fileUrl);
+      const fullURL = incomingURL;
+      const type: MessageType = m.type || detectType(m.mime, m.fileUrl);
 
-    const localPreviewUri =
-      type === "image" ? localImagePreviews[m.id] : undefined;
+      const localPreviewUri =
+        type === "image" ? localImagePreviews[m.id] : undefined;
 
-    const imageUriToRender = localPreviewUri || fullURL;
+      const imageUriToRender = localPreviewUri || fullURL;
 
-    const isPinned = pins.includes(m.id);
-    const stamp = prettyTsJalali(m.ts || m.createdAt);
+      const isPinned = pins.includes(m.id);
+      const stamp = prettyTsJalali(m.ts || m.createdAt);
 
-    return (
-      <View
-        key={m.id}
-        style={bubbleStyle}
-        onLayout={(e) => {
-          msgPositions.current[m.id] = e.nativeEvent.layout.y;
-        }}
-      >
-        <View style={styles.msgTopRow}>
-          <Text style={[styles.msgWho, { color: textColor }]}>
-  {isAdmin
-    ? chatType === "therapy"
-      ? "درمانگر ققنوس"
-      : "پشتیبان فنی"
-    : "شما"}
-</Text>
-
-          <TouchableOpacity
-            onPress={() => togglePin(m.id)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons
-              name={isPinned ? "star" : "star-outline"}
-              size={15}
-              color={isAdmin ? "#FBBF24" : "#D4AF37"}
-            />
-          </TouchableOpacity>
-        </View>
-
-        {type === "image" && imageUriToRender ? (
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => {
-              setViewerUri(imageUriToRender);
-              setViewerVisible(true);
-            }}
-            style={{ marginTop: 6 }}
-          >
-            <Image
-  source={
-    localPreviewUri
-      ? { uri: localPreviewUri }
-      : imageUriToRender
-      ? { uri: imageUriToRender, headers: authHeaders }
-      : undefined
-  }
-  style={styles.msgImage}
-  resizeMode="cover"
-/>
-
-            <Text style={[styles.msgHint, { color: subColor }]}>
-              برای بزرگ‌نمایی لمس کنید
+      return (
+        <View
+          key={m.id}
+          style={bubbleStyle}
+          onLayout={(e) => {
+            msgPositions.current[m.id] = e.nativeEvent.layout.y;
+          }}
+        >
+          <View style={styles.msgTopRow}>
+            <Text style={[styles.msgWho, { color: textColor }]}>
+              {isAdmin
+                ? chatType === "therapy"
+                  ? "درمانگر ققنوس"
+                  : "پشتیبان فنی"
+                : "شما"}
             </Text>
-          </TouchableOpacity>
-        ) : null}
 
-        {type === "voice" && fullURL ? (
-          <View style={{ marginTop: 6 }}>
-            <VoicePlayer
-              id={m.id}
-              uri={fullURL}
-              durationSec={m.durationSec ?? undefined}
-              authHeaders={authHeaders}
-            />
+            <TouchableOpacity
+              onPress={() => togglePin(m.id)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons
+                name={isPinned ? "star" : "star-outline"}
+                size={15}
+                color={isAdmin ? "#FBBF24" : "#D4AF37"}
+              />
+            </TouchableOpacity>
           </View>
-        ) : null}
 
-        {type === "file" && fullURL ? (
-          <TouchableOpacity
-            onPress={async () => {
-              const ok = await Linking.canOpenURL(fullURL);
-              if (ok) Linking.openURL(fullURL);
-              else pushError("لینک فایل قابل باز شدن نیست.");
-            }}
-            activeOpacity={0.9}
-            style={styles.filePill}
-          >
-            <Ionicons name="document-attach" size={18} color="#E5E7EB" />
+          {type === "image" && imageUriToRender ? (
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => {
+                setViewerUri(imageUriToRender);
+                setViewerVisible(true);
+              }}
+              style={{ marginTop: 6 }}
+            >
+              <Image
+                source={
+                  localPreviewUri
+                    ? { uri: localPreviewUri }
+                    : imageUriToRender
+                      ? { uri: imageUriToRender, headers: authHeaders }
+                      : undefined
+                }
+                style={styles.msgImage}
+                resizeMode="cover"
+              />
 
-            <Text style={{ color: "#E5E7EB", fontWeight: "900", fontSize: 12 }}>
-              دانلود فایل
+              <Text style={[styles.msgHint, { color: subColor }]}>
+                برای بزرگ‌نمایی لمس کنید
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {type === "voice" && fullURL ? (
+            <View style={{ marginTop: 6 }}>
+              <VoicePlayer
+                id={m.id}
+                uri={fullURL}
+                durationSec={m.durationSec ?? undefined}
+                authHeaders={authHeaders}
+              />
+            </View>
+          ) : null}
+
+          {type === "file" && fullURL ? (
+            <TouchableOpacity
+              onPress={async () => {
+                const ok = await Linking.canOpenURL(fullURL);
+                if (ok) Linking.openURL(fullURL);
+                else pushError("لینک فایل قابل باز شدن نیست.");
+              }}
+              activeOpacity={0.9}
+              style={styles.filePill}
+            >
+              <Ionicons name="document-attach" size={18} color="#E5E7EB" />
+
+              <Text
+                style={{ color: "#E5E7EB", fontWeight: "900", fontSize: 12 }}
+              >
+                دانلود فایل
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {!!m.text && (
+            <Text
+              style={{
+                marginTop: 6,
+                color: textColor,
+                lineHeight: 18,
+                fontWeight: "700",
+                fontSize: 12,
+              }}
+            >
+              {m.text}
             </Text>
-          </TouchableOpacity>
-        ) : null}
+          )}
 
-        {!!m.text && (
-          <Text
-            style={{
-              marginTop: 6,
-              color: textColor,
-              lineHeight: 18,
-              fontWeight: "700",
-              fontSize: 12,
-            }}
-          >
-            {m.text}
-          </Text>
-        )}
-
-        {stamp ? (
-          <Text style={[styles.stamp, { color: subColor }]}>
-            {stamp}
-          </Text>
-        ) : null}
-      </View>
-    );
-  }, [pins, localImagePreviews, authHeaders, pushError, togglePin, chatType]);
+          {stamp ? (
+            <Text style={[styles.stamp, { color: subColor }]}>{stamp}</Text>
+          ) : null}
+        </View>
+      );
+    },
+    [pins, localImagePreviews, authHeaders, pushError, togglePin, chatType],
+  );
 
   const renderItem = useCallback(
-  ({ item }: { item: Message }) => renderMessage(item),
-  [renderMessage]
-);
+    ({ item }: { item: Message }) => renderMessage(item),
+    [renderMessage],
+  );
 
-useEffect(() => {
-  const allMessages = ticket?.messages || [];
+  useEffect(() => {
+    const allMessages = ticket?.messages || [];
 
-  const currentVisibleMessages =
-    !clearedAtMs
+    const currentVisibleMessages = !clearedAtMs
       ? allMessages
       : allMessages.filter((m) => msgTimeMs(m) >= clearedAtMs);
 
-  if (!currentVisibleMessages.length) {
-    lastMessageIdRef.current = null;
-    return;
-  }
+    if (!currentVisibleMessages.length) {
+      lastMessageIdRef.current = null;
+      return;
+    }
 
-  const lastMessage = currentVisibleMessages[currentVisibleMessages.length - 1];
-  const previousLastId = lastMessageIdRef.current;
+    const lastMessage =
+      currentVisibleMessages[currentVisibleMessages.length - 1];
+    const previousLastId = lastMessageIdRef.current;
 
-  // بار اول فقط ثبت کن، اسکرول اولیه جدا با onContentSizeChange انجام می‌شود
-  if (!previousLastId) {
+    // بار اول فقط ثبت کن، اسکرول اولیه جدا با onContentSizeChange انجام می‌شود
+    if (!previousLastId) {
+      lastMessageIdRef.current = lastMessage.id;
+      return;
+    }
+
+    // اگر پیام آخر عوض نشده، کاری نکن
+    if (previousLastId === lastMessage.id) return;
+
     lastMessageIdRef.current = lastMessage.id;
-    return;
-  }
 
-  // اگر پیام آخر عوض نشده، کاری نکن
-  if (previousLastId === lastMessage.id) return;
-
-  lastMessageIdRef.current = lastMessage.id;
-
-  // فقط وقتی پیام جدید از ادمین آمده، اسکرول کن پایین
-  if (lastMessage.sender === "admin") {
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
-
-      setTimeout(() => {
+    // فقط وقتی پیام جدید از ادمین آمده، اسکرول کن پایین
+    if (lastMessage.sender === "admin") {
+      requestAnimationFrame(() => {
         scrollRef.current?.scrollToEnd({ animated: true });
-      }, 180);
-    });
-  }
-}, [ticket?.messages, clearedAtMs]);
 
+        setTimeout(() => {
+          scrollRef.current?.scrollToEnd({ animated: true });
+        }, 180);
+      });
+    }
+  }, [ticket?.messages, clearedAtMs]);
 
   /* حالت قفلِ چت درمانگر وقتی پلن PRO نیست */
   if (planLoaded && isTherapyChat && !isProPlan) {
@@ -1779,13 +1798,16 @@ useEffect(() => {
 
     return (
       <KeyboardAvoidingView
-  style={{ flex: 1, backgroundColor: "#0b0f14" }}
-  behavior={Platform.OS === "ios" ? "padding" : undefined}
-  keyboardVerticalOffset={Platform.OS === "ios" ? 0 : undefined}
->
+        style={{ flex: 1, backgroundColor: "#0b0f14" }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : undefined}
+      >
         <Stack.Screen options={{ headerShown: false }} />
 
-        <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
+        <SafeAreaView
+          style={styles.root}
+          edges={["top", "left", "right", "bottom"]}
+        >
           <View pointerEvents="none" style={styles.bgGlowTop} />
           <View pointerEvents="none" style={styles.bgGlowBottom} />
 
@@ -1832,7 +1854,9 @@ useEffect(() => {
               </View>
 
               <Text style={styles.lockTitle}>
-                {isExpiredView ? "اشتراکت منقضی شده" : "این بخش مخصوص اعضای PRO است"}
+                {isExpiredView
+                  ? "اشتراکت منقضی شده"
+                  : "این بخش مخصوص اعضای PRO است"}
               </Text>
 
               <Text style={styles.lockBody}>
@@ -1859,7 +1883,10 @@ useEffect(() => {
             animationType="fade"
             onRequestClose={() => setClearModal(false)}
           >
-            <Pressable style={styles.modalOverlay} onPress={() => setClearModal(false)}>
+            <Pressable
+              style={styles.modalOverlay}
+              onPress={() => setClearModal(false)}
+            >
               <Pressable style={styles.modalCard} onPress={() => {}}>
                 <View style={styles.modalIcon}>
                   <Ionicons name="trash" size={20} color="#ef4444" />
@@ -1905,7 +1932,10 @@ useEffect(() => {
       >
         <Stack.Screen options={{ headerShown: false }} />
 
-        <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
+        <SafeAreaView
+          style={styles.root}
+          edges={["top", "left", "right", "bottom"]}
+        >
           <View pointerEvents="none" style={styles.bgGlowTop} />
           <View pointerEvents="none" style={styles.bgGlowBottom} />
 
@@ -1927,7 +1957,10 @@ useEffect(() => {
       >
         <Stack.Screen options={{ headerShown: false }} />
 
-        <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
+        <SafeAreaView
+          style={styles.root}
+          edges={["top", "left", "right", "bottom"]}
+        >
           <View pointerEvents="none" style={styles.bgGlowTop} />
           <View pointerEvents="none" style={styles.bgGlowBottom} />
 
@@ -1941,20 +1974,22 @@ useEffect(() => {
   }
 
   // ✅ پیام‌ها بعد از clearedAt فقط نمایش داده شوند
-  const visibleMessages =
-    !clearedAtMs
-      ? (ticket?.messages || [])
-      : (ticket?.messages || []).filter((m) => msgTimeMs(m) >= clearedAtMs);
+  const visibleMessages = !clearedAtMs
+    ? ticket?.messages || []
+    : (ticket?.messages || []).filter((m) => msgTimeMs(m) >= clearedAtMs);
 
   return (
     <KeyboardAvoidingView
-  style={{ flex: 1, backgroundColor: "#0b0f14" }}
-  behavior={Platform.OS === "ios" ? "padding" : undefined}
-  keyboardVerticalOffset={Platform.OS === "ios" ? 0 : undefined}
->
+      style={{ flex: 1, backgroundColor: "#0b0f14" }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : undefined}
+    >
       <Stack.Screen options={{ headerShown: false }} />
 
-      <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
+      <SafeAreaView
+        style={styles.root}
+        edges={["top", "left", "right", "bottom"]}
+      >
         <View pointerEvents="none" style={styles.bgGlowTop} />
         <View pointerEvents="none" style={styles.bgGlowBottom} />
 
@@ -2013,10 +2048,10 @@ useEffect(() => {
                   (typ === "voice"
                     ? "ویس"
                     : typ === "image"
-                    ? "عکس"
-                    : typ === "file"
-                    ? "فایل"
-                    : "پیام");
+                      ? "عکس"
+                      : typ === "file"
+                        ? "فایل"
+                        : "پیام");
 
                 return (
                   <TouchableOpacity
@@ -2038,148 +2073,150 @@ useEffect(() => {
         ) : null}
 
         <View style={{ flex: 1 }}>
-    <FlatList
-    ref={scrollRef}
-    data={visibleMessages}
-    renderItem={renderItem}
-    keyExtractor={(item) => item.id}
-    style={{ flex: 1, backgroundColor: "#0b0f14" }}
-    keyboardShouldPersistTaps="handled"
-    keyboardDismissMode="interactive"
-    showsVerticalScrollIndicator={false}
-    initialNumToRender={Math.max(20, visibleMessages.length)}
-    maxToRenderPerBatch={20}
-    windowSize={15}
-    removeClippedSubviews={false}
-    onScrollToIndexFailed={(info) => {
-  setTimeout(() => {
-    scrollRef.current?.scrollToIndex({
-      index: info.index,
-      animated: true,
-      viewPosition: 0.25,
-    });
-  }, 250);
-}}
-    onContentSizeChange={() => {
-      if (!didInitialScroll.current && visibleMessages.length > 0) {
-        scrollRef.current?.scrollToEnd({ animated: false });
-
-        setTimeout(() => {
-          scrollRef.current?.scrollToEnd({ animated: false });
-          didInitialScroll.current = true;
-        }, 120);
-      }
-    }}
-    contentContainerStyle={{
-      paddingHorizontal: 14,
-      paddingTop: 12,
-      paddingBottom: 12,
-      rowGap: 8,
-      direction: "ltr",
-      flexGrow: 1,
-    }}
-    ListEmptyComponent={
-      <View style={styles.emptyWrap}>
-        <Ionicons
-          name="chatbubble-ellipses-outline"
-          size={18}
-          color="rgba(231,238,247,.65)"
-        />
-
-  <Text style={styles.emptyText}>
-  {clearedAtMs ? (
-    <>
-      <Text>تاریخچه این گفتگو در گوشی شما پاک شده.</Text>
-      {"\n"}
-      <Text>پیام‌های جدید از اینجا به بعد نمایش داده می‌شن.</Text>
-    </>
-  ) : (
-    <>
-      <Text>هنوز پیامی در این گفتگو ثبت نشده؛</Text>
-      {"\n"}
-      <Text style={styles.emptyTextHighlight}>
-        برای تجربه بهتر، پیام اول خودت رو به شکل متنی ارسال کن.
-      </Text>
-    </>
-  )}
-</Text>
-      </View>
-    }
-  />
-
-  <View
-  style={[
-    styles.composerDock,
-    {
-      paddingBottom: Math.max(10, insets.bottom + 8),
-      marginBottom: Platform.OS === "android" ? keyboardHeight : 0,
-    },
-  ]}
-  pointerEvents="box-none"
->
-          {chatType === "therapy" && !isProPlan && (
-            <View style={styles.inlineLock}>
-              <Ionicons name="lock-closed" size={16} color="#D4AF37" />
-
-              <Text style={styles.inlineLockText}>
-                ارسال پیام به درمانگر فقط برای اعضای PRO فعاله.
-              </Text>
-            </View>
-          )}
-
-          <Composer
-            ticketId={String(id)}
-            ticketType={typeFromParam}
-            isPro={isProPlan}
-            onMeasureHeight={setComposerHeight}
-            onError={pushError}
-            onUploadingChange={setIsUploadingReply}
-            onLocalImageUploaded={(messageId, localUri) => {
-              setLocalImagePreviews((prev) => ({
-                ...prev,
-                [messageId]: localUri,
-              }));
-            }}
-            onTicketCreated={(newId, fullTicket) => {
-              router.replace(`/support/tickets/${newId}`);
-
-              if (fullTicket) {
-                setTicket((prev) => {
-                  if (isSameTicketSnapshot(prev, fullTicket)) {
-                    return prev;
-                  }
-
-                  return fullTicket;
+          <FlatList
+            ref={scrollRef}
+            data={visibleMessages}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.id}
+            style={{ flex: 1, backgroundColor: "#0b0f14" }}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            showsVerticalScrollIndicator={false}
+            initialNumToRender={Math.max(20, visibleMessages.length)}
+            maxToRenderPerBatch={20}
+            windowSize={15}
+            removeClippedSubviews={false}
+            onScrollToIndexFailed={(info) => {
+              setTimeout(() => {
+                scrollRef.current?.scrollToIndex({
+                  index: info.index,
+                  animated: true,
+                  viewPosition: 0.25,
                 });
-              } else {
-                fetchTicket(true);
-              }
-
-              loadPins(newId).then(setPins);
-
-              // ✅ برای تیکت تازه ساخته‌شده clearedAt جدا را صفر کن
-              saveClearedAt(String(newId), 0).catch(() => {});
-              setClearedAtMs(0);
+              }, 250);
             }}
-            onSent={(updatedTicket) => {
-              if (updatedTicket) {
-                setTicket((prev) => {
-                  if (isSameTicketSnapshot(prev, updatedTicket)) {
-                    return prev;
-                  }
+            onContentSizeChange={() => {
+              if (!didInitialScroll.current && visibleMessages.length > 0) {
+                scrollRef.current?.scrollToEnd({ animated: false });
 
-                  return updatedTicket;
-                });
-              } else {
-                fetchTicket(true);
+                setTimeout(() => {
+                  scrollRef.current?.scrollToEnd({ animated: false });
+                  didInitialScroll.current = true;
+                }, 120);
               }
-
-              requestAnimationFrame(() => {
-  scrollRef.current?.scrollToEnd({ animated: true });
-});
             }}
+            contentContainerStyle={{
+              paddingHorizontal: 14,
+              paddingTop: 12,
+              paddingBottom: 12,
+              rowGap: 8,
+              direction: "ltr",
+              flexGrow: 1,
+            }}
+            ListEmptyComponent={
+              <View style={styles.emptyWrap}>
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
+                  size={18}
+                  color="rgba(231,238,247,.65)"
+                />
+
+                <Text style={styles.emptyText}>
+                  {clearedAtMs ? (
+                    <>
+                      <Text>تاریخچه این گفتگو در گوشی شما پاک شده.</Text>
+                      {"\n"}
+                      <Text>
+                        پیام‌های جدید از اینجا به بعد نمایش داده می‌شن.
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Text>هنوز پیامی در این گفتگو ثبت نشده؛</Text>
+                      {"\n"}
+                      <Text style={styles.emptyTextHighlight}>
+                        برای تجربه بهتر، پیام اول خودت رو به شکل متنی ارسال کن.
+                      </Text>
+                    </>
+                  )}
+                </Text>
+              </View>
+            }
           />
-        </View>
+
+          <View
+            style={[
+              styles.composerDock,
+              {
+                paddingBottom: Math.max(10, insets.bottom + 8),
+                marginBottom: Platform.OS === "android" ? keyboardHeight : 0,
+              },
+            ]}
+            pointerEvents="box-none"
+          >
+            {chatType === "therapy" && !isProPlan && (
+              <View style={styles.inlineLock}>
+                <Ionicons name="lock-closed" size={16} color="#D4AF37" />
+
+                <Text style={styles.inlineLockText}>
+                  ارسال پیام به درمانگر فقط برای اعضای PRO فعاله.
+                </Text>
+              </View>
+            )}
+
+            <Composer
+              ticketId={String(id)}
+              ticketType={typeFromParam}
+              isPro={isProPlan}
+              onMeasureHeight={setComposerHeight}
+              onError={pushError}
+              onUploadingChange={setIsUploadingReply}
+              onLocalImageUploaded={(messageId, localUri) => {
+                setLocalImagePreviews((prev) => ({
+                  ...prev,
+                  [messageId]: localUri,
+                }));
+              }}
+              onTicketCreated={(newId, fullTicket) => {
+                router.replace(`/support/tickets/${newId}`);
+
+                if (fullTicket) {
+                  setTicket((prev) => {
+                    if (isSameTicketSnapshot(prev, fullTicket)) {
+                      return prev;
+                    }
+
+                    return fullTicket;
+                  });
+                } else {
+                  fetchTicket(true);
+                }
+
+                loadPins(newId).then(setPins);
+
+                // ✅ برای تیکت تازه ساخته‌شده clearedAt جدا را صفر کن
+                saveClearedAt(String(newId), 0).catch(() => {});
+                setClearedAtMs(0);
+              }}
+              onSent={(updatedTicket) => {
+                if (updatedTicket) {
+                  setTicket((prev) => {
+                    if (isSameTicketSnapshot(prev, updatedTicket)) {
+                      return prev;
+                    }
+
+                    return updatedTicket;
+                  });
+                } else {
+                  fetchTicket(true);
+                }
+
+                requestAnimationFrame(() => {
+                  scrollRef.current?.scrollToEnd({ animated: true });
+                });
+              }}
+            />
+          </View>
         </View>
 
         {viewerUri ? (
@@ -2198,7 +2235,10 @@ useEffect(() => {
           animationType="fade"
           onRequestClose={() => setClearModal(false)}
         >
-          <Pressable style={styles.modalOverlay} onPress={() => setClearModal(false)}>
+          <Pressable
+            style={styles.modalOverlay}
+            onPress={() => setClearModal(false)}
+          >
             <Pressable style={styles.modalCard} onPress={() => {}}>
               <View style={styles.modalIcon}>
                 <Ionicons name="trash" size={20} color="#ef4444" />
@@ -2241,17 +2281,17 @@ useEffect(() => {
         />
 
         <AppBannerModal
-  visible={techWarningVisible}
-  kind="warning"
-  title="نکته مهم"
-  message={`اینجا فقط برای رسیدگی به مشکلات فنی اپلیکیشن، پرداخت و اشتراک، ورود به حساب، خطاهای برنامه، پخش فایل‌ها، پیشنهادها و انتقادهاست.
+          visible={techWarningVisible}
+          kind="warning"
+          title="نکته مهم"
+          message={`اینجا فقط برای رسیدگی به مشکلات فنی اپلیکیشن، پرداخت و اشتراک، ورود به حساب، خطاهای برنامه، پخش فایل‌ها، پیشنهادها و انتقادهاست.
 
 اگه پیامت درباره حال روحی، رابطه، مسیر درمان، تمرین‌ها یا موضوعات احساسیه، لطفاً از بخش «پناه» برای ارتباط با درمانگر ققنوس استفاده کن.
 
 برای اینکه درخواست‌های فنی سریع‌تر و دقیق‌تر بررسی بشن، پیام‌های درمانی و آموزشی در این بخش پاسخ داده نمی‌شن.`}
-  closeText="متوجه شدم"
-  onClose={confirmTechWarning}
-/>
+          closeText="متوجه شدم"
+          onClose={confirmTechWarning}
+        />
       </SafeAreaView>
     </KeyboardAvoidingView>
   );
@@ -2461,16 +2501,16 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   emptyText: {
-  color: "rgba(231,238,247,.72)",
-  fontSize: 12,
-  fontWeight: "700",
-  textAlign: "center",
-  lineHeight: 20,
-},
-emptyTextHighlight: {
-  color: "#D4AF37",
-  fontWeight: "900",
-},
+    color: "rgba(231,238,247,.72)",
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  emptyTextHighlight: {
+    color: "#D4AF37",
+    fontWeight: "900",
+  },
 
   /* lightbox */
   lbBackdrop: {
@@ -2500,12 +2540,12 @@ emptyTextHighlight: {
 
   /* composer dock */
   composerDock: {
-  backgroundColor: "#0b0f14",
-  borderTopWidth: 1,
-  borderTopColor: "rgba(255,255,255,.06)",
-  paddingTop: 8,
-  paddingHorizontal: 10,
-},
+    backgroundColor: "#0b0f14",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,.06)",
+    paddingTop: 8,
+    paddingHorizontal: 10,
+  },
   inlineLock: {
     flexDirection: "row-reverse",
     alignItems: "center",
@@ -2628,7 +2668,12 @@ emptyTextHighlight: {
   },
 
   /* lock */
-  lockWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: 18 },
+  lockWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 18,
+  },
   lockCard: {
     width: "100%",
     maxWidth: 520,
@@ -2661,7 +2706,12 @@ emptyTextHighlight: {
     alignSelf: "center",
     marginBottom: 12,
   },
-  lockTitle: { color: "#F9FAFB", fontSize: 16, fontWeight: "900", textAlign: "center" },
+  lockTitle: {
+    color: "#F9FAFB",
+    fontSize: 16,
+    fontWeight: "900",
+    textAlign: "center",
+  },
   lockBody: {
     marginTop: 10,
     color: "rgba(231,238,247,.70)",

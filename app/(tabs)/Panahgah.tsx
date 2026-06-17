@@ -71,12 +71,14 @@ function InlineAudioPlayer({
   };
 }) {
   const playerRef = useRef<AudioPlayer | null>(null);
+  const statusSubscriptionRef = useRef<{ remove: () => void } | null>(null);
 
   const opLockRef = useRef(false);
   const mountedRef = useRef(true);
 
   const [playing, setPlaying] = useState(false);
   const [loadingAudio, setLoadingAudio] = useState(false);
+  const [loadStatus, setLoadStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [posMs, setPosMs] = useState(0);
   const [durMs, setDurMs] = useState(0);
 
@@ -97,11 +99,17 @@ function InlineAudioPlayer({
   };
 
   const unload = useCallback(async () => {
-    const p = playerRef.current;
-    playerRef.current = null;
+  const p = playerRef.current;
+  playerRef.current = null;
 
-    try {
-      if (p) {
+  try {
+    statusSubscriptionRef.current?.remove?.();
+    statusSubscriptionRef.current = null;
+  } catch {}
+
+  try {
+    if (p) {
+
         try {
           p.pause();
         } catch {}
@@ -114,13 +122,15 @@ function InlineAudioPlayer({
       if (!mountedRef.current) return;
       setPlaying(false);
       setLoadingAudio(false);
+      setLoadStatus("idle");
       setPosMs(0);
       setDurMs(0);
     }
   }, []);
 
   const attachStatusListener = useCallback((player: AudioPlayer) => {
-    player.addListener("playbackStatusUpdate", (st: AudioStatus) => {
+    statusSubscriptionRef.current?.remove?.();
+    statusSubscriptionRef.current = player.addListener("playbackStatusUpdate", (st: AudioStatus) => {
       if (!st?.isLoaded) return;
       if (!mountedRef.current) return;
 
@@ -128,8 +138,13 @@ function InlineAudioPlayer({
       setPosMs(Math.max(0, Math.floor((st.currentTime || 0) * 1000)));
       setDurMs(Math.max(0, Math.floor((st.duration || 0) * 1000)));
 
+      if (st.isLoaded) {
+        setLoadStatus((prev) => (prev === "loading" ? "ready" : prev));
+      }
+
       if (st.didJustFinish) {
         setPlaying(false);
+        setLoadStatus("idle");
       }
     });
   }, []);
@@ -138,6 +153,8 @@ function InlineAudioPlayer({
     if (playerRef.current) return;
 
     setLoadingAudio(true);
+    setLoadStatus("loading");
+
 
     await setAudioModeAsync({
       playsInSilentMode: true,
@@ -158,17 +175,21 @@ function InlineAudioPlayer({
     setDurMs(Math.max(0, Math.floor((player.duration || 0) * 1000)));
     setPlaying(!!player.playing);
     setLoadingAudio(false);
+    if (player.isLoaded) setLoadStatus("ready");
   }, [url, attachStatusListener]);
 
     const togglePlayPause = useCallback(() => {
     return lock(async () => {
       if (!playerRef.current) {
+        setLoadingAudio(true);
+        setLoadStatus("loading");
         await ensureLoaded();
       }
 
       const p = playerRef.current;
       if (!p) {
         if (mountedRef.current) setLoadingAudio(false);
+        setLoadStatus("error");
         return;
       }
 
@@ -180,17 +201,17 @@ function InlineAudioPlayer({
 
       if (!p.isLoaded) {
         if (mountedRef.current) setLoadingAudio(false);
+        setLoadStatus("error");
         return;
       }
-
       if (p.playing) {
         p.pause();
         if (!mountedRef.current) return;
         setPlaying(false);
         setLoadingAudio(false);
+        setLoadStatus("idle");
         return;
       }
-
       const currentMs = Math.max(0, Math.floor((p.currentTime || 0) * 1000));
       const durationMs = Math.max(0, Math.floor((p.duration || 0) * 1000));
 
@@ -200,9 +221,17 @@ function InlineAudioPlayer({
 
       p.play();
 
+      let started = !!p.playing;
+
+      for (let i = 0; i < 15 && !started; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        started = !!p.playing;
+      }
+
       if (!mountedRef.current) return;
-      setPlaying(true);
+      setPlaying(started);
       setLoadingAudio(false);
+      setLoadStatus(started ? "idle" : "ready");
     });
   }, [ensureLoaded]);
 
@@ -233,32 +262,49 @@ function InlineAudioPlayer({
   }, [unload]);
 
   return (
-    <View style={[styles.audioRow, { borderColor: palette.border2, backgroundColor: palette.glass2 }]}>
-      <View style={styles.audioInnerRow}>
-        <Text style={[styles.audioTimeInline, { color: palette.sub2 }]}>
-          {formatMs(posMs)} / {formatMs(durMs)}
-        </Text>
+    <View>
+      <View style={[styles.audioRow, { borderColor: palette.border2, backgroundColor: palette.glass2 }]}>
+        <View style={styles.audioInnerRow}>
+          <Text style={[styles.audioTimeInline, { color: palette.sub2 }]}>
+            {formatMs(posMs)} / {formatMs(durMs)}
+          </Text>
 
-        <View style={styles.audioBarCol}>
-          <SeekBar progress={progress} palette={palette} onSeek={seekTo} />
+          <View style={styles.audioBarCol}>
+            <SeekBar progress={progress} palette={palette} onSeek={seekTo} />
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.audioPlayBtn,
+              { opacity: pressed ? 0.85 : 1, borderColor: "rgba(255,255,255,.10)" },
+            ]}
+            onPress={togglePlayPause}
+            hitSlop={10}
+            disabled={loadingAudio && !playing}
+          >
+            {loadingAudio && !playing ? (
+              <ActivityIndicator size="small" color={palette.text} />
+            ) : (
+              <Ionicons name={playing ? "pause" : "play"} size={18} color={palette.text} />
+            )}
+          </Pressable>
         </View>
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.audioPlayBtn,
-            { opacity: pressed ? 0.85 : 1, borderColor: "rgba(255,255,255,.10)" },
-          ]}
-          onPress={togglePlayPause}
-          hitSlop={10}
-          disabled={loadingAudio && !playing}
-        >
-          {loadingAudio && !playing ? (
-            <ActivityIndicator size="small" color={palette.text} />
-          ) : (
-            <Ionicons name={playing ? "pause" : "play"} size={18} color={palette.text} />
-          )}
-        </Pressable>
       </View>
+
+      {loadStatus !== "idle" && (
+        <Text
+          style={[
+            styles.audioLoadStatus,
+            {
+              color: loadStatus === "error" ? "#FCA5A5" : palette.gold,
+            },
+          ]}
+        >
+          {loadStatus === "loading" && "در حال آماده‌سازی فایل... صبور باش"}
+          {loadStatus === "ready" && "فایل آماده شنیدنه؛ دوباره دکمه شروع رو بزن"}
+          {loadStatus === "error" && "خطا در دریافت فایل؛ اینترنت رو چک کن و دوباره بزن"}
+        </Text>
+      )}
     </View>
   );
 }
@@ -860,6 +906,14 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontWeight: "900",
     fontSize: 11,
+  },
+
+  audioLoadStatus: {
+    marginTop: 6,
+    fontSize: 10,
+    fontWeight: "800",
+    textAlign: "center",
+    writingDirection: "rtl",
   },
 
   audioBarWrap: {

@@ -57,6 +57,7 @@ export default function BastanIntroScreen() {
   const isPro = planStatus === "pro" || planStatus === "expiring";
 
   const playerRef = useRef<AudioPlayer | null>(null);
+  const statusSubscriptionRef = useRef<{ remove: () => void } | null>(null);
   const mountedRef = useRef(true);
   const opLockRef = useRef(false);
 
@@ -65,6 +66,7 @@ export default function BastanIntroScreen() {
   const [posMs, setPosMs] = useState(0);
   const [durMs, setDurMs] = useState(1);
   const [isBuffering, setIsBuffering] = useState(false);
+  const [loadStatus, setLoadStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [trackW, setTrackW] = useState(0);
 
   const restorePosRef = useRef<number | null>(null);
@@ -180,85 +182,109 @@ export default function BastanIntroScreen() {
   }, [token, introDone, STORAGE_POS_KEY]);
 
   const unload = useCallback(async () => {
+  try {
+    const p = playerRef.current;
+    playerRef.current = null;
+
     try {
-      const p = playerRef.current;
-
-      if (p) {
-        try {
-          if (p.isLoaded && !introDone) {
-            const currentMs = Math.max(0, Math.floor((p.currentTime || 0) * 1000));
-            if (currentMs > 0) {
-              await AsyncStorage.setItem(STORAGE_POS_KEY, String(currentMs));
-            }
-          }
-        } catch {
-          // intentionally ignored
-        }
-
-        try {
-          p.pause();
-        } catch {
-          // intentionally ignored
-        }
-
-        try {
-          p.remove();
-        } catch {
-          // intentionally ignored
-        }
-      }
+      statusSubscriptionRef.current?.remove?.();
+      statusSubscriptionRef.current = null;
     } catch {
       // intentionally ignored
     }
 
-    playerRef.current = null;
-    setIsLoaded(false);
-    setIsPlaying(false);
-    setIsBuffering(false);
-  }, [introDone, STORAGE_POS_KEY]);
-
-  const attachStatusListener = useCallback(
-    (player: AudioPlayer) => {
-      player.addListener("playbackStatusUpdate", async (st: AudioStatus) => {
-        if (!mountedRef.current) return;
-        if (!st.isLoaded) return;
-
-        setIsLoaded(true);
-        setIsPlaying(!!st.playing);
-        setPosMs(Math.max(0, Math.floor((st.currentTime || 0) * 1000)));
-        setDurMs(Math.max(1, Math.floor((st.duration || 0) * 1000)));
-        setIsBuffering(!!st.isBuffering);
-
-        const position = Math.max(0, Math.floor((st.currentTime || 0) * 1000));
-        const duration = Math.max(0, Math.floor((st.duration || 0) * 1000));
-        const nearEnd = duration > 0 && duration - position <= 800;
-
-        if ((st.didJustFinish || nearEnd) && !introDone) {
-          setIsPlaying(false);
-
-          try {
-            await markIntroComplete();
-          } catch {
-            setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
+    if (p) {
+      try {
+        if (p.isLoaded && !introDone) {
+          const currentMs = Math.max(0, Math.floor((p.currentTime || 0) * 1000));
+          if (currentMs > 0) {
+            await AsyncStorage.setItem(STORAGE_POS_KEY, String(currentMs));
           }
         }
+      } catch {
+        // intentionally ignored
+      }
 
-        if (!introDone && duration > 0 && position > 0) {
-          try {
-            if (position % 3000 < 250) {
-              await AsyncStorage.setItem(STORAGE_POS_KEY, String(position));
-            }
-          } catch {
-            // intentionally ignored
-          }
+      try {
+        p.pause();
+      } catch {
+        // intentionally ignored
+      }
+
+      try {
+        p.remove();
+      } catch {
+        // intentionally ignored
+      }
+    }
+  } catch {
+    // intentionally ignored
+  }
+
+  setIsLoaded(false);
+  setIsPlaying(false);
+  setIsBuffering(false);
+  setLoadStatus("idle");
+}, [introDone, STORAGE_POS_KEY]);
+
+
+ const attachStatusListener = useCallback(
+  (player: AudioPlayer) => {
+    try {
+      statusSubscriptionRef.current?.remove?.();
+      statusSubscriptionRef.current = null;
+    } catch {
+      // intentionally ignored
+    }
+
+    statusSubscriptionRef.current = player.addListener("playbackStatusUpdate", async (st: AudioStatus) => {
+      if (!mountedRef.current) return;
+      if (!st.isLoaded) return;
+
+      setIsLoaded(true);
+      setIsPlaying(!!st.playing);
+      setPosMs(Math.max(0, Math.floor((st.currentTime || 0) * 1000)));
+      setDurMs(Math.max(1, Math.floor((st.duration || 0) * 1000)));
+      setIsBuffering(!!st.isBuffering);
+
+      if (st.isLoaded) {
+        setLoadStatus((prev) => (prev === "loading" ? "ready" : prev));
+      }
+
+      const position = Math.max(0, Math.floor((st.currentTime || 0) * 1000));
+      const duration = Math.max(0, Math.floor((st.duration || 0) * 1000));
+      const nearEnd = duration > 0 && duration - position <= 800;
+
+      if ((st.didJustFinish || nearEnd) && !introDone) {
+        setIsPlaying(false);
+        setLoadStatus("idle");
+
+        try {
+          await markIntroComplete();
+        } catch {
+          setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
         }
-      });
-    },
-    [introDone, STORAGE_POS_KEY, markIntroComplete]
-  );
+      }
+
+      if (!introDone && duration > 0 && position > 0) {
+        try {
+          if (position % 3000 < 250) {
+            await AsyncStorage.setItem(STORAGE_POS_KEY, String(position));
+          }
+        } catch {
+          // intentionally ignored
+        }
+      }
+    });
+  },
+  [introDone, STORAGE_POS_KEY, markIntroComplete]
+);
 
   const loadIfNeeded = useCallback(async () => {
     if (playerRef.current) return;
+
+    setIsBuffering(true);
+    setLoadStatus("loading");
 
     await setAudioModeAsync({
       playsInSilentMode: true,
@@ -293,6 +319,8 @@ export default function BastanIntroScreen() {
       setIsPlaying(!!player.playing);
       setPosMs(Math.max(0, Math.floor((player.currentTime || 0) * 1000)));
       setDurMs(Math.max(1, Math.floor((player.duration || 0) * 1000)));
+      setIsBuffering(false);
+      if (player.isLoaded) setLoadStatus("ready");
     }
 
     try {
@@ -325,6 +353,8 @@ export default function BastanIntroScreen() {
       const p = playerRef.current;
       if (!p) {
         setIsBuffering(false);
+        setIsPlaying(false);
+        setLoadStatus("error");
         return;
       }
 
@@ -334,22 +364,41 @@ export default function BastanIntroScreen() {
 
       if (!p.isLoaded) {
         setIsBuffering(false);
+        setIsPlaying(false);
+        setLoadStatus("loading");
         return;
       }
 
-      setIsBuffering(false);
-
       if (p.playing) {
         p.pause();
-      } else {
-        p.play();
+        setIsPlaying(false);
+        setIsBuffering(false);
+        setLoadStatus("idle");
+        return;
       }
+
+      p.play();
+
+      let started = !!p.playing;
+
+      for (let i = 0; i < 15 && !started; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        started = !!p.playing;
+      }
+
+      if (!mountedRef.current) return;
+      setIsPlaying(started);
+      setIsBuffering(false);
+      setLoadStatus(started ? "idle" : "ready");
     });
   } catch {
     setIsBuffering(false);
+    setIsPlaying(false);
+    setLoadStatus("error");
     setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
   }
 }, [loadIfNeeded, isBuffering]);
+
 
   const seekTo = useCallback(
     async (ms: number) => {
@@ -459,6 +508,19 @@ export default function BastanIntroScreen() {
         <Text style={styles.timeText}>
           {fmt(posMs)} / {fmt(durMs)}
         </Text>
+
+        {loadStatus !== "idle" && (
+          <Text
+            style={[
+              styles.audioLoadStatus,
+              { color: loadStatus === "error" ? "#FCA5A5" : "#D4AF37" },
+            ]}
+          >
+            {loadStatus === "loading" && "در حال آماده‌سازی فایل..."}
+            {loadStatus === "ready" && "فایل آماده پخشه؛ دوباره دکمه شروع رو بزن"}
+            {loadStatus === "error" && "خطا در دریافت فایل؛ اینترنت رو چک کن و دوباره تلاش کن"}
+          </Text>
+        )}
 
         <TouchableOpacity
           activeOpacity={0.9}
@@ -588,6 +650,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#E98A15",
   },
   timeText: { color: "rgba(231,238,247,.65)", fontSize: 12, marginBottom: 14 },
+
+  audioLoadStatus: {
+    marginTop: -6,
+    marginBottom: 10,
+    fontSize: 11,
+    fontWeight: "800",
+    textAlign: "center",
+  },
 
   continueBtn: {
     width: "100%",

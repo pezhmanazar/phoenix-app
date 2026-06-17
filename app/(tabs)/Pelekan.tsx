@@ -4,7 +4,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -13,7 +19,10 @@ import {
   Text,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import Baseline from "../../components/pelekan/Baseline";
 import ChoosePath from "../../components/pelekan/ChoosePath";
 import IdlePlaceholder from "../../components/pelekan/IdlePlaceholder";
@@ -63,15 +72,13 @@ type PelekanState = {
   treatment: any | null;
   hasContent: boolean;
   stages: PelekanStage[];
-  progress:
-    | {
-        activeDayId: string | null;
-        dayProgress: any[];
-        taskProgress: any[];
-        xpTotal: number;
-        streak: any;
-      }
-    | null;
+  progress: {
+    activeDayId: string | null;
+    dayProgress: any[];
+    taskProgress: any[];
+    xpTotal: number;
+    streak: any;
+  } | null;
 };
 
 const initialState: PelekanState = {
@@ -135,7 +142,7 @@ export default function PelekanTab() {
       glowTop: "rgba(212,175,55,.14)",
       glowBottom: "rgba(233,138,21,.10)",
     }),
-    []
+    [],
   );
 
   useEffect(() => {
@@ -160,51 +167,77 @@ export default function PelekanTab() {
 
   /* ----------------------------- Fetch State ----------------------------- */
   const fetchState = useCallback(
-  async (opts?: { initial?: boolean; reason?: string }) => {
-    const isInitial = !!opts?.initial;
-    const sessionToken = token;
+    async (opts?: { initial?: boolean; reason?: string }) => {
+      const isInitial = !!opts?.initial;
+      const sessionToken = token;
 
-    // ✅ اگر یک fetch در جریان است، یکی دیگه راه ننداز
-    if (inFlightRef.current) {
-      return;
-    }
-    inFlightRef.current = true;
-
-    try {
-      if (isInitial) setInitialLoading(true);
-      else setRefreshing(true);
-
-      if (!sessionToken) {
-        setState(initialState);
+      // ✅ اگر یک fetch در جریان است، یکی دیگه راه ننداز
+      if (inFlightRef.current) {
         return;
       }
-      const qs = new URLSearchParams();
-      if (enterTreatment) qs.set("enterTreatment", enterTreatment);
+      inFlightRef.current = true;
 
-      const url = `https://api.qoqnoos.app/api/pelekan/state${qs.toString() ? `?${qs.toString()}` : ""}`;
-
-      const res = await fetch(url, {
-        headers: {
-          "Cache-Control": "no-store",
-          Authorization: `Bearer ${sessionToken}`,
-        },
-      });
-
-      let json: any = null;
       try {
-        json = await res.json();
-      } catch {
-        json = null;
-      }
+        if (isInitial) setInitialLoading(true);
+        else setRefreshing(true);
 
-      if (!res.ok || !json?.ok) {
-                setState(initialState);
-        return;
-      }
+        if (!sessionToken) {
+          setState(initialState);
+          return;
+        }
+        const qs = new URLSearchParams();
+        if (enterTreatment) qs.set("enterTreatment", enterTreatment);
 
+        const url = `https://api.qoqnoos.app/api/pelekan/state${qs.toString() ? `?${qs.toString()}` : ""}`;
+
+        const res = await fetch(url, {
+          headers: {
+            "Cache-Control": "no-store",
+            Authorization: `Bearer ${sessionToken}`,
+          },
+        });
+
+        let json: any = null;
+        try {
+          json = await res.json();
+        } catch {
+          json = null;
+        }
+
+        if (!res.ok || !json?.ok) {
+          setState(initialState);
+          return;
+        }
 
         const data = json.data || {};
-
+   if (__DEV__) {
+  console.log(
+    "PELEKAN STATE RAW:",
+    JSON.stringify(
+      {
+        tabState: data?.tabState,
+        treatment: data?.treatment,
+        progress: data?.progress,
+        stages: data?.stages?.map((s: any) => ({
+          id: s.id,
+          code: s.code,
+          status: s.status,
+          sortOrder: s.sortOrder,
+          daysCount: s.days?.length,
+          days: s.days?.map((d: any) => ({
+            id: d.id,
+            code: d.code,
+            title: d.title,
+            dayNumberInStage: d.dayNumberInStage,
+            status: d.status,
+          })),
+        })),
+      },
+      null,
+      2,
+    ),
+  );
+}
         const stagesWithDays = Array.isArray(data?.stages) ? data.stages : [];
         const tStages = Array.isArray(data?.treatment?.stages)
           ? data.treatment.stages
@@ -227,24 +260,15 @@ export default function PelekanTab() {
           };
         });
 
-        const t = data?.treatment;
-        const activeStageCode = String(t?.activeStage || "").trim();
-        const activeDayNumber = Number(t?.activeDay || 0);
-
-        let derivedActiveDayId: string | null = null;
-        if (activeStageCode && activeDayNumber > 0) {
-          const st = mergedStages.find(
-            (x: any) => String(x?.code || "").trim() === activeStageCode
-          );
-          const dayRow = (st?.days || []).find(
-            (d: any) => Number(d?.dayNumberInStage || 0) === activeDayNumber
-          );
-          derivedActiveDayId = dayRow?.id ?? null;
-        }
-
         const progressFromApi = data?.progress ?? null;
-        const activeDayIdFinal =
-          progressFromApi?.activeDayId ?? derivedActiveDayId ?? null;
+
+const progressActiveDayIdRaw =
+  progressFromApi?.activeDayId == null
+    ? null
+    : String(progressFromApi.activeDayId).trim();
+
+const activeDayIdFinal = progressActiveDayIdRaw || null;
+
 
         const safeProgress = progressFromApi
           ? { ...progressFromApi, activeDayId: activeDayIdFinal }
@@ -278,22 +302,22 @@ export default function PelekanTab() {
         else setRefreshing(false);
       }
     },
-    [token, enterTreatment]
+    [token, enterTreatment],
   );
 
- useEffect(() => {
-  if (authLoading) return;
-  fetchState({ initial: true, reason: "mount_or_token_change" });
-}, [authLoading, token, fetchState]);
+  useEffect(() => {
+    if (authLoading) return;
+    fetchState({ initial: true, reason: "mount_or_token_change" });
+  }, [authLoading, token, fetchState]);
 
   useFocusEffect(
-  useCallback(() => {
-    if (initialLoading || authLoading || !token) {
-      return;
-    }
-    fetchState({ initial: false, reason: "focus" });
-  }, [fetchState, initialLoading, authLoading, token])
-);
+    useCallback(() => {
+      if (initialLoading || authLoading || !token) {
+        return;
+      }
+      fetchState({ initial: false, reason: "focus" });
+    }, [fetchState, initialLoading, authLoading, token]),
+  );
 
   // ✅ one-shot param cleanup
   useEffect(() => {
@@ -321,7 +345,8 @@ export default function PelekanTab() {
     if (lastFocusRef.current === key) return;
     lastFocusRef.current = key;
 
-    const wantsReview = focus === "review_tests" || autoStart === "review_tests";
+    const wantsReview =
+      focus === "review_tests" || autoStart === "review_tests";
     const wantsBaseline = autoStart === "baseline";
 
     if (wantsReview) {
@@ -348,7 +373,9 @@ export default function PelekanTab() {
   }, [focus, autoStart, router]);
 
   const reviewSessStatus = String(state?.review?.session?.status || "");
-  const reviewChosenPath = String(state?.review?.session?.chosenPath || "").trim();
+  const reviewChosenPath = String(
+    state?.review?.session?.chosenPath || "",
+  ).trim();
 
   // ✅ اگر کاربر مسیر درمان را انتخاب کرده (skip_review)، دیگر او را به Review برنگردان
   const keepReview =
@@ -420,42 +447,62 @@ export default function PelekanTab() {
       done: false,
     } as any);
 
-    const activeStageCode = String(state?.treatment?.activeStage || "").trim();
-    const activeStage =
-      stages.find((s) => String(s?.code || "").trim() === activeStageCode) ||
-      null;
+    const progressActiveDayId = String(
+  state?.progress?.activeDayId || "",
+).trim();
 
-    for (const st of stages) {
-      const code = String(st?.code || "").trim();
-      const isActive = !!activeStage && code === String(activeStage.code || "");
-      const isPast =
-        !!activeStage && (st.sortOrder ?? 0) < (activeStage.sortOrder ?? 0);
+const activeStageIndex = progressActiveDayId
+  ? stages.findIndex((s: any) =>
+      (s?.days || []).some(
+        (d: any) => String(d?.id || "") === progressActiveDayId,
+      ),
+    )
+  : -1;
 
-      const zig: "L" | "R" = zigCounter++ % 2 === 0 ? "L" : "R";
+if (__DEV__) {
+  console.log("PELEKAN ACTIVE DEBUG:", {
+    progressActiveDayId,
+    activeStageIndex,
+    activeStageCodeFromIndex:
+      activeStageIndex >= 0 ? stages[activeStageIndex]?.code : null,
+  });
+}
+
+for (let stageIndex = 0; stageIndex < stages.length; stageIndex++) {
+  const st = stages[stageIndex];
+  const code = String(st?.code || "").trim();
+
+  const isActive = activeStageIndex >= 0 && stageIndex === activeStageIndex;
+  const isPast = activeStageIndex >= 0 && stageIndex < activeStageIndex;
+
+  const zig: "L" | "R" = zigCounter++ % 2 === 0 ? "L" : "R";
+
+  list.push({
+    kind: "stage_node",
+    id: `sn-${st.id}`,
+    zig,
+    stage: st,
+    done: isPast,
+    active: isActive,
+  } as any);
+
+  if (isPast || isActive || code === "bastan") {
+    for (const d of st.days || []) {
+      const z2: "L" | "R" = zigCounter++ % 2 === 0 ? "L" : "R";
       list.push({
-        kind: "stage_node",
-        id: `sn-${st.id}`,
-        zig,
+        kind: "day",
+        id: `d-${d.id}`,
+        day: d as PelekanDay,
         stage: st,
-        done: isPast ? true : false,
-        active: isActive ? true : false,
-      } as any);
-
-      if (isActive || String(st?.code || "") === "bastan") {
-        for (const d of st.days || []) {
-          const z2: "L" | "R" = zigCounter++ % 2 === 0 ? "L" : "R";
-          list.push({
-            kind: "day",
-            id: `d-${d.id}`,
-            day: d as PelekanDay,
-            stage: st,
-            zig: z2,
-          });
-        }
-      }
-
-      list.push({ kind: "spacer", id: `sp-${st.id}` } as any);
+        zig: z2,
+      });
     }
+  }
+
+  list.push({ kind: "spacer", id: `sp-${st.id}` } as any);
+}
+
+
 
     return list;
   }, [
@@ -463,7 +510,7 @@ export default function PelekanTab() {
     state.stages,
     state?.baseline?.session,
     state?.review?.session,
-    state?.treatment?.activeStage,
+    state?.progress?.activeDayId,
   ]);
 
   const activeDayId = state?.progress?.activeDayId ?? null;
@@ -472,8 +519,7 @@ export default function PelekanTab() {
     if (!activeDayId) return -1;
     return pathItems.findIndex(
       (it: any) =>
-        it?.kind === "day" &&
-        String(it?.day?.id || "") === String(activeDayId)
+        it?.kind === "day" && String(it?.day?.id || "") === String(activeDayId),
     );
   }, [pathItems, activeDayId]);
 
@@ -483,7 +529,7 @@ export default function PelekanTab() {
   const heights = useMemo(
     () =>
       pathItems.map((it: any) => (it?.kind === "spacer" ? SPACER_H : ITEM_H)),
-    [pathItems]
+    [pathItems],
   );
 
   const offsets = useMemo(() => {
@@ -502,7 +548,7 @@ export default function PelekanTab() {
       const offset = offsets[index] ?? 0;
       return { length, offset, index };
     },
-    [heights, offsets]
+    [heights, offsets],
   );
 
   useEffect(() => {
@@ -555,7 +601,7 @@ export default function PelekanTab() {
     (day: PelekanDay, opts?: { mode: "active" | "preview" }) => {
       const stageId = String((day as any)?.stageId || "");
       const st = (state?.stages || []).find(
-        (x: any) => String(x?.id) === stageId
+        (x: any) => String(x?.id) === stageId,
       );
       const stageCode = String(st?.code || "").trim();
       const n = Number((day as any)?.dayNumberInStage || 0);
@@ -584,13 +630,25 @@ export default function PelekanTab() {
         }
 
         router.push(
-          `/pelekan/bastan/action/${encodeURIComponent(actionCode)}` as any
+          `/pelekan/bastan/action/${encodeURIComponent(actionCode)}` as any,
         );
         return;
       }
-
+      //  مرحله گسستن
       if (stageCode === "gosastan") {
-        router.push("/pelekan/gosastan/day1" as any);
+        router.push({
+          pathname: "/pelekan/gosastan/current",
+          params: { dayNumber: String(n) },
+        } as any);
+        return;
+      }
+
+      //  مرحله سوختن
+      if (stageCode === "sookhtan") {
+        router.push({
+          pathname: "/pelekan/sookhtan/current",
+          params: { dayNumber: String(n) },
+        } as any);
         return;
       }
 
@@ -599,13 +657,12 @@ export default function PelekanTab() {
         params: { id: day.id },
       } as any);
     },
-    [router, state?.ui?.paywall?.needed, state?.treatmentAccess, state?.stages]
+    [router, state?.ui?.paywall?.needed, state?.treatmentAccess, state?.stages],
   );
 
   const onTapResults = useCallback(() => {
-  router.push("/(tabs)/ReviewResult" as any);
-}, [router]);
-
+    router.push("/(tabs)/ReviewResult" as any);
+  }, [router]);
 
   /* ----------------------------- Layout ----------------------------- */
   const bottomSafe = insets.bottom + tabBarH;
@@ -648,7 +705,9 @@ export default function PelekanTab() {
         </View>
 
         <View style={[styles.topCol, styles.colCenter]}>
-          <Text style={{ color: palette.text, fontWeight: "900" }}>پلکــــان</Text>
+          <Text style={{ color: palette.text, fontWeight: "900" }}>
+            پلکــــان
+          </Text>
         </View>
 
         <View style={[styles.topCol, styles.colRight]}>

@@ -5,7 +5,6 @@ import {
   Theme,
   ThemeProvider,
 } from "@react-navigation/native";
-import Constants from "expo-constants";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -49,10 +48,6 @@ const PlanStatusProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
 };
 /* ---------------- Navigation ---------------- */
 function RootStack() {
-  const provider = (Constants.expoConfig?.extra as any)?.PAYMENT_PROVIDER;
-  const isBazaar = provider === "bazaar";
-  const isDev = __DEV__;
-
   return (
   <Stack screenOptions={{ headerShown: false }}>
     <Stack.Screen name="splash" options={{ animation: "none" }} />

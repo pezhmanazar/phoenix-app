@@ -1,5 +1,6 @@
 // app/(tabs)/Phoenix.tsx
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
@@ -105,22 +106,18 @@ function PrimarySplitButton({
   );
 }
 
-function FullWidthStatCard({
+function FullWidthFeatureCard({
   title,
   icon,
-  value,
-  valueSuffix,
   iconColor = "#D4AF37",
-  hintText,
+  onPress,
 }: {
   title: string;
   icon: keyof typeof Ionicons.glyphMap;
-  value: number | string;
-  valueSuffix?: string;
   iconColor?: string;
-  hintText?: string;
+  onPress?: () => void;
 }) {
-  return (
+  const content = (
     <GlassCard style={styles.fullCard}>
       <View style={styles.fullCardTopRow}>
         <View style={styles.fullCardTitleRow}>
@@ -129,17 +126,23 @@ function FullWidthStatCard({
           </View>
           <Text style={styles.fullCardTitle}>{title}</Text>
         </View>
+
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color="#E5E7EB"
+          style={{ opacity: 0.7, transform: [{ scaleX: -1 }] }}
+        />
       </View>
-
-      <Text style={styles.fullCardValue}>
-        {toPersianDigits(value)}
-        {!!valueSuffix ? (
-          <Text style={styles.fullCardValueUnit}> {valueSuffix}</Text>
-        ) : null}
-      </Text>
-
-      {!!hintText ? <Text style={styles.fullCardHint}>{hintText}</Text> : null}
     </GlassCard>
+  );
+
+  if (!onPress) return content;
+
+  return (
+    <TouchableOpacity activeOpacity={0.9} onPress={onPress}>
+      {content}
+    </TouchableOpacity>
   );
 }
 
@@ -190,35 +193,44 @@ export default function Phoenix() {
   const [editVisible, setEditVisible] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [hasAppUpdate, setHasAppUpdate] = useState(false);
-  const [latestVersion, setLatestVersion] = useState<string | null>(null);
+  const [, setLatestVersion] = useState<string | null>(null);
   const [updateUrl, setUpdateUrl] = useState<string | null>(null);
 
 
   // ✅ from pelekan/state
-  const [streakDays, setStreakDays] = useState<number>(0);
-  const [completedDays, setCompletedDays] = useState<number>(0);
-  const [xpTotal, setXpTotal] = useState<number>(0);
-  const [statsLoading, setStatsLoading] = useState<boolean>(false);
+const [completedDays, setCompletedDays] = useState<number>(0);
+const [xpTotal, setXpTotal] = useState<number>(0);
+const [statsLoading, setStatsLoading] = useState<boolean>(false);
+
 
   const apiBase = "https://api.qoqnoos.app";
 
   const fetchProgressStats = useCallback(async () => {
     const phone = String(me?.phone || "").trim();
     if (!phone) {
-      setStreakDays(0);
-      setCompletedDays(0);
-      setXpTotal(0);
-      return;
+    setCompletedDays(0);
+    setXpTotal(0);
+    return;
     }
-
     setStatsLoading(true);
     try {
-      const url = `${apiBase}/api/pelekan/state?phone=${encodeURIComponent(
-        phone
-      )}`;
-      const res = await fetch(url, {
-        headers: { "Cache-Control": "no-store" },
-      });
+     const url = `${apiBase}/api/pelekan/state`;
+  const sessionToken = await AsyncStorage.getItem("session_v1");
+
+const res = await fetch(url, {
+  headers: {
+    "Cache-Control": "no-store",
+    Pragma: "no-cache",
+    Accept: "application/json",
+    ...(sessionToken
+      ? {
+          Authorization: `Bearer ${sessionToken}`,
+          "x-session-token": sessionToken,
+        }
+      : {}),
+  },
+});
+
 
       let json: any = null;
       try {
@@ -228,16 +240,12 @@ export default function Phoenix() {
       }
 
       if (!res.ok || !json?.ok) {
-        setStreakDays(0);
-        setCompletedDays(0);
-        setXpTotal(0);
-        return;
-      }
+     setCompletedDays(0);
+     setXpTotal(0);
+     return;
+     }
 
       const data = json?.data || {};
-
-      const s = Number(data?.progress?.streak?.currentDays ?? 0);
-      setStreakDays(Number.isFinite(s) ? s : 0);
 
       const dp = Array.isArray(data?.progress?.dayProgress)
         ? data.progress.dayProgress
@@ -249,10 +257,9 @@ export default function Phoenix() {
       const xp = Number(data?.progress?.xpTotal ?? 0);
       setXpTotal(Number.isFinite(xp) ? xp : 0);
     } catch {
-      setStreakDays(0);
-      setCompletedDays(0);
-      setXpTotal(0);
-    } finally {
+  setCompletedDays(0);
+  setXpTotal(0);
+   } finally {
       setStatsLoading(false);
     }
   }, [apiBase, me?.phone]);
@@ -432,15 +439,13 @@ export default function Phoenix() {
           rightVariant={isProActive ? "gold" : "danger"}
         />
 
-        {/* استمرار روزها */}
-        <FullWidthStatCard
-          title="استمرار روزها"
-          icon="flame"
-          iconColor="#E98A15"
-          value={statsLoading ? "…" : streakDays}
-          valueSuffix={statsLoading ? "" : "روز "}
-          hintText="اگه یک روز رو از دست بدی، این عدد صفر می‌شه."
-        />
+
+       {/* مدال‌ها و تندیس‌ها */}
+       <FullWidthFeatureCard
+       title="مدال‌ها و تندیس‌ها"
+       icon="trophy"
+      iconColor="#D4AF37"
+       />
 
         {/* ✅ Row: (Right) روزهای تکمیل‌شده  |  (Left) امتیازها */}
         <View style={styles.halfRow}>
@@ -464,6 +469,27 @@ export default function Phoenix() {
             style={styles.halfLeft}
           />
         </View>
+
+                {/* نمودار حال روزانه */}
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => router.push("/(tabs)/mood-chart")}
+        >
+          <GlassCard>
+            <View style={styles.linkRow}>
+              <View style={styles.linkRight}>
+                <Ionicons name="bar-chart" size={18} color="#E5E7EB" />
+                <Text style={styles.linkTitle}>نمودار پیشرفت</Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color="#E5E7EB"
+                style={{ opacity: 0.7, transform: [{ scaleX: -1 }] }}
+              />
+            </View>
+          </GlassCard>
+        </TouchableOpacity>
 
         {/* قوانین و مقررات */}
         <TouchableOpacity activeOpacity={0.9} onPress={openTerms}>
@@ -799,26 +825,6 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     fontSize: 14,
     textAlign: "right",
-  },
-  fullCardValue: {
-    marginTop: 14,
-    color: "#F9FAFB",
-    fontWeight: "900",
-    fontSize: 34,
-    textAlign: "left",
-  },
-  fullCardValueUnit: {
-    fontSize: 18,
-    color: "rgba(231,238,247,.80)",
-    fontWeight: "900",
-  },
-  fullCardHint: {
-    marginTop: 8,
-    color: "rgba(231,238,247,.70)",
-    fontWeight: "800",
-    fontSize: 12,
-    textAlign: "right",
-    lineHeight: 18,
   },
 
   /* NEW: half row */
