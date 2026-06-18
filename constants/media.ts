@@ -1,9 +1,9 @@
 // constants/media.ts
 
-const MEDIA_BASE = "https://api.qoqnoos.app/api/media/stream?key=";
+const MEDIA_BASE = "https://media.qoqnoos.app/";
 
 export const mediaUrl = (key: string) =>
-  `${MEDIA_BASE}${encodeURIComponent(key)}`;
+  `${MEDIA_BASE}${key.split("/").map(encodeURIComponent).join("/")}`;
 
 /**
  * 🔊 Audio keys (S3)
@@ -12,6 +12,7 @@ export const mediaUrl = (key: string) =>
  */
 export const AUDIO_KEYS = {
   introOverall: "media/audio/intro/intro-overall.mp3",
+
 
   bastanIntro: "media/audio/bastan/intro-bastan.mp3",
   gosastanIntro: "media/audio/gosastan/intro-gosastan.mp3",
