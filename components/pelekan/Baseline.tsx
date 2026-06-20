@@ -60,7 +60,7 @@ async function postJson(url: string, token: string, body: any) {
   return { res, json };
 }
 
-export default function Baseline({ me, state, onRefresh }: Props) {
+export default function Baseline({ state, onRefresh }: Props) {
   const { token, loading: authLoading } = useAuth();
 
   const palette = useMemo(
@@ -157,12 +157,10 @@ export default function Baseline({ me, state, onRefresh }: Props) {
 
   const fetchBaselineState = useCallback(async () => {
     if (authLoading) {
-      console.log("[Baseline/fetchState] skipped: authLoading");
-      return;
+            return;
     }
 
     if (!token) {
-      console.log("[Baseline/fetchState] no token");
       setLoading(false);
       setStep(null);
       setCompletedResult(null);
@@ -177,25 +175,7 @@ export default function Baseline({ me, state, onRefresh }: Props) {
 
       const url = `${API_BASE}/state`;
 
-      console.log("[Baseline/fetchState] request", {
-        hasToken: !!token,
-        tokenPreview: `${token.slice(0, 12)}...`,
-        url,
-      });
-
       const { res, json } = await fetchJson(url, token);
-
-      console.log("[Baseline/fetchState] response", {
-        status: res.status,
-        ok: res.ok,
-      });
-
-      console.log("[Baseline/fetchState] json", {
-        ok: json?.ok,
-        error: json?.error || null,
-        message: json?.message || null,
-        hasData: !!json?.data,
-      });
 
       if (!res.ok || !json?.ok) {
         setStep(null);
@@ -240,10 +220,6 @@ export default function Baseline({ me, state, onRefresh }: Props) {
         setErrorMsg("STEP_MISSING");
       }
     } catch (e: any) {
-      console.log("[Baseline/fetchState] catch", {
-        message: e?.message || null,
-      });
-
       setStatus("error");
       setStep(null);
       setCompletedResult(null);
@@ -254,12 +230,6 @@ export default function Baseline({ me, state, onRefresh }: Props) {
   }, [token, authLoading]);
 
   useEffect(() => {
-    console.log("[Baseline/useEffect]", {
-      authLoading,
-      hasToken: !!token,
-      tokenPreview: token ? `${token.slice(0, 12)}...` : null,
-    });
-
     if (authLoading) return;
     fetchBaselineState();
   }, [authLoading, token, fetchBaselineState]);
@@ -279,24 +249,7 @@ export default function Baseline({ me, state, onRefresh }: Props) {
       try {
         setBusy(true);
 
-        console.log("[Baseline/postAnswer] request", {
-          hasToken: !!token,
-          tokenPreview: `${token.slice(0, 12)}...`,
-          payload,
-        });
-
         const { res, json } = await postJson(`${API_BASE}/answer`, token, payload);
-
-        console.log("[Baseline/postAnswer] response", {
-          status: res.status,
-          ok: res.ok,
-        });
-
-        console.log("[Baseline/postAnswer] json", {
-          ok: json?.ok,
-          error: json?.error || null,
-          message: json?.message || null,
-        });
 
         if (!res.ok || !json?.ok) {
           showAppModal(
@@ -309,10 +262,6 @@ export default function Baseline({ me, state, onRefresh }: Props) {
 
         return true;
       } catch (e: any) {
-        console.log("[Baseline/postAnswer] catch", {
-          message: e?.message || null,
-        });
-
         showAppModal(
           "error",
           "ارتباط برقرار نشد",
@@ -339,25 +288,7 @@ export default function Baseline({ me, state, onRefresh }: Props) {
 
     try {
       setBusy(true);
-
-      console.log("[Baseline/submit] request", {
-        hasToken: !!token,
-        tokenPreview: `${token.slice(0, 12)}...`,
-      });
-
       const { res, json } = await postJson(`${API_BASE}/submit`, token, {});
-
-      console.log("[Baseline/submit] response", {
-        status: res.status,
-        ok: res.ok,
-      });
-
-      console.log("[Baseline/submit] json", {
-        ok: json?.ok,
-        error: json?.error || null,
-        message: json?.message || null,
-      });
-
       if (!res.ok || !json?.ok) {
         showAppModal(
           "error",
@@ -370,9 +301,6 @@ export default function Baseline({ me, state, onRefresh }: Props) {
       await onRefresh?.();
       await fetchBaselineState();
     } catch (e: any) {
-      console.log("[Baseline/submit] catch", {
-        message: e?.message || null,
-      });
 
       showAppModal(
         "error",
@@ -463,32 +391,12 @@ export default function Baseline({ me, state, onRefresh }: Props) {
     }
 
     try {
-      setBusy(true);
-
-      console.log("[Baseline/seen] request", {
-        hasToken: !!token,
-        tokenPreview: `${token.slice(0, 12)}...`,
-      });
-
-      const { res, json } = await postJson(`${API_BASE}/seen`, token, {});
-
-      console.log("[Baseline/seen] response", {
-        status: res.status,
-        ok: res.ok,
-      });
-
-      console.log("[Baseline/seen] json", {
-        ok: json?.ok,
-        error: json?.error || null,
-        message: json?.message || null,
-      });
-    } catch (e: any) {
-      console.log("[Baseline/seen] catch", {
-        message: e?.message || null,
-      });
-    } finally {
-      setBusy(false);
-    }
+  setBusy(true);
+  await postJson(`${API_BASE}/seen`, token, {});
+} catch {
+} finally {
+  setBusy(false);
+}
 
     await onRefresh?.();
   }, [token, authLoading, onRefresh]);

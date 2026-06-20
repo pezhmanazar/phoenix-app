@@ -1670,13 +1670,22 @@ router.post("/bastan/intro/complete", authUser, async (req, res) => {
 
     const user = await prisma.user.findUnique({
       where: { phone },
-      select: { id: true },
+      select: { id: true, plan: true, planExpiresAt: true },
     });
 
     // ✅ به جای 404
     if (!user) return wcdnOkError(res, "USER_NOT_FOUND");
 
     const now = new Date();
+    const basePlan = getPlanStatus(user.plan, user.planExpiresAt);
+    const { planStatusFinal } = applyDebugPlan(
+      req,
+      basePlan.planStatus,
+      basePlan.daysLeft,
+    );
+
+    const isProLike =
+      planStatusFinal === "pro" || planStatusFinal === "expiring";
 
     const st = await prisma.$transaction(async (tx) => {
       const s = await tx.bastanState.upsert({
@@ -1692,13 +1701,38 @@ router.post("/bastan/intro/complete", authUser, async (req, res) => {
           userId: user.id,
           bastanIntroAudioStartedAt: now,
           bastanIntroAudioCompletedAt: now,
+          ...(isProLike ? { bastanUnlockedAt: now } : {}),
+          lastActiveAt: now,
         },
         update: {
           bastanIntroAudioStartedAt: now,
           bastanIntroAudioCompletedAt: now,
+          ...(isProLike ? { bastanUnlockedAt: now } : {}),
+          lastActiveAt: now,
         },
       });
 
+      if (isProLike) {
+        try {
+          const stages = await prisma.pelekanStage.findMany({
+            orderBy: { sortOrder: "asc" },
+            include: {
+              days: {
+                orderBy: { dayNumberInStage: "asc" },
+                include: { tasks: { orderBy: { sortOrder: "asc" } } },
+              },
+            },
+          });
+
+          await syncBastanActionsToDays(prisma, user.id, stages, new Date());
+          await pelekanEngine.refresh(prisma, user.id);
+        } catch (e) {
+          console.warn(
+            "[pelekan.bastan.intro.complete] sync failed:",
+            e?.message || "unknown_error",
+          );
+        }
+      }
       return s;
     });
 

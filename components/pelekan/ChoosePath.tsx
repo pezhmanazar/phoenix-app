@@ -103,11 +103,6 @@ export default function ChoosePath({ me, state, onRefresh }: Props) {
       } catch {
         json = null;
       }
-
-      console.log("CHOOSE_PATH_RESPONSE_STATUS:", res.status);
-      console.log("CHOOSE_PATH_RESPONSE_JSON:", json);
-      console.log("CHOOSE_PATH_RESPONSE_TEXT:", text);
-
       return { res, json, text };
     },
     [token, authLoading]
