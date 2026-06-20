@@ -886,27 +886,27 @@ router.get("/state", authUser, async (req, res) => {
     const xpTotal = xpAgg?._sum?.amount || 0;
 
     // NOTE:
-// "bastan" is action-based in UI, not day-based.
-// However, treatment state still relies on pelekanDayProgress as the
-// persisted progression source to resolve the currently active item
-// when engineState.activeDayId is missing.
-const allStageDayIds = new Set(
-  stages.flatMap((s) => (s.days || []).map((d) => d.id)),
-);
-
-const activeDayIdFromProgress =
-  dayProgress.find((dp) => {
-    const status = String(dp.status || "").toLowerCase();
-
-    return (
-      allStageDayIds.has(dp.dayId) &&
-      !dp.completedAt &&
-      (status === "active" || status === "in_progress")
+    // "bastan" is action-based in UI, not day-based.
+    // However, treatment state still relies on pelekanDayProgress as the
+    // persisted progression source to resolve the currently active item
+    // when engineState.activeDayId is missing.
+    const allStageDayIds = new Set(
+      stages.flatMap((s) => (s.days || []).map((d) => d.id)),
     );
-  })?.dayId || null;
 
-const activeDayIdRaw =
-  engineState?.activeDayId || activeDayIdFromProgress || null;
+    const activeDayIdFromProgress =
+      dayProgress.find((dp) => {
+        const status = String(dp.status || "").toLowerCase();
+
+        return (
+          allStageDayIds.has(dp.dayId) &&
+          !dp.completedAt &&
+          (status === "active" || status === "in_progress")
+        );
+      })?.dayId || null;
+
+    const activeDayIdRaw =
+      engineState?.activeDayId || activeDayIdFromProgress || null;
 
     const hasAnyProgress = Array.isArray(dayProgress) && dayProgress.length > 0;
     const hasAnyProgressFinal = applyDebugProgress(req, hasAnyProgress);

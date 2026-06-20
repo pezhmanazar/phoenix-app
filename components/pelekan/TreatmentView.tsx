@@ -616,6 +616,7 @@ export default function TreatmentView({
   const canPressDay = available || done;
   const locked = !available && !done;
   const freeActiveLocked = available && !done && !canEnterActive;
+  const shouldPulseDayNode = available && !done && !freeActiveLocked;
 
   const nodeX = zig === "L" ? NODE_X_LEFT : NODE_X_RIGHT;
   const bg = done
@@ -708,7 +709,7 @@ export default function TreatmentView({
         />
       </Svg>
 
-      {available ? (
+      {shouldPulseDayNode ? (
         <Pulsing playing style={[styles.node, nodePositionStyle]}>
           {dayNodeContent}
         </Pulsing>
