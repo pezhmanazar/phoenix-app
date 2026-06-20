@@ -121,9 +121,7 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
           setMode("start");
           anim.setValue(0);
         }
-      } catch (e) {
-        console.log("[IdlePlaceholder] gate read error:", e);
-
+      } catch {
         if (!alive) return;
         setGateReady(false);
         setMode("start");
@@ -143,11 +141,8 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
     try {
       await AsyncStorage.setItem(KEY_START_GATE, "1");
       setGateReady(true);
-    } catch (e) {
-      console.log("[IdlePlaceholder] gate write error:", e);
-    }
-
-    setMode("intro");
+    } catch {
+    } setMode("intro");
     requestAnimationFrame(() => animateTo(1));
   };
 
@@ -175,13 +170,6 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
 
     try {
       setBusy(true);
-
-      console.log("[IdlePlaceholder] startBaseline -> request", {
-        endpoint: `${API_BASE}/api/pelekan/baseline/start`,
-        hasToken: !!token,
-        mePhone: me?.phone,
-      });
-
       const res = await fetch(`${API_BASE}/api/pelekan/baseline/start`, {
         method: "POST",
         headers: {
@@ -198,13 +186,6 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
       } catch {
         json = null;
       }
-
-      console.log("[IdlePlaceholder] startBaseline <- response", {
-        status: res.status,
-        ok: res.ok,
-        body: json ?? rawText,
-      });
-
       if (!res.ok) {
         if (res.status === 401) {
           showAppModal(
@@ -243,8 +224,6 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
 
       await onRefresh?.();
     } catch (e: any) {
-      console.log("[IdlePlaceholder] startBaseline error:", e);
-
       showAppModal(
         "error",
         "ارتباط برقرار نشد",

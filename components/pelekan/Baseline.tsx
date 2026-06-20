@@ -570,11 +570,6 @@ export default function Baseline({ state, onRefresh }: Props) {
               <Text style={[styles.centerText, { color: palette.sub, marginTop: 6, fontSize: 12 }]}>
                 سوال {(questionIndex ?? 0) + 1} از {questionTotal ?? 0}
               </Text>
-
-              <Text style={[styles.centerText, { color: palette.sub2, marginTop: 4, fontSize: 11 }]}>
-                برای دیدن همه گزینه‌ها، صفحه رو به بالا بکش
-              </Text>
-
               <View style={styles.hr} />
 
               <Text style={[styles.qText, styles.rtlText, { color: palette.text }]}>

@@ -452,8 +452,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         15000
       );
 
-      console.log("VERIFY_OTP_RESPONSE:", v);
-
       if (!v?.ok) {
         throw new Error((v as any)?.error || "VERIFY_FAILED");
       }

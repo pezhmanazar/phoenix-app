@@ -70,9 +70,6 @@ export async function verifyCode(
 
   const json = (await res.json().catch(() => ({}))) as any;
 
-  console.log("VERIFY_API_STATUS:", res.status);
-  console.log("VERIFY_API_JSON:", json);
-
   if (!res.ok || !json?.ok) {
     throw new Error(getApiError(json, res.status, "VERIFY_FAILED"));
   }

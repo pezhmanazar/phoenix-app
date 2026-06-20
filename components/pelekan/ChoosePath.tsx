@@ -80,12 +80,6 @@ export default function ChoosePath({ me, state, onRefresh }: Props) {
         throw new Error("NO_AUTH_TOKEN");
       }
 
-      console.log("CHOOSE_PATH_POST:", {
-        url,
-        body,
-        hasToken: !!token,
-      });
-
       const res = await fetch(url, {
         method: "POST",
         headers: {

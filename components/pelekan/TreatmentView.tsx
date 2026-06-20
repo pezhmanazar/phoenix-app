@@ -2,7 +2,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Animated,
   Dimensions,
@@ -19,7 +25,12 @@ import Svg, { Path } from "react-native-svg";
 /* ----------------------------- Types ----------------------------- */
 export type PlanStatus = "free" | "pro" | "expired" | "expiring";
 export type TreatmentAccess = "full" | "frozen_current" | "archive_only";
-export type TabState = "idle" | "baseline_assessment" | "choose_path" | "treating" | "review";
+export type TabState =
+  | "idle"
+  | "baseline_assessment"
+  | "choose_path"
+  | "treating"
+  | "review";
 
 export type PelekanTask = {
   id: string;
@@ -64,21 +75,29 @@ export type PelekanState = {
   user: { planStatus: PlanStatus; daysLeft: number };
   treatmentAccess: TreatmentAccess;
   stages: PelekanStage[];
-  progress:
-    | {
-        activeDayId: string | null;
-        dayProgress: DayProgressRow[];
-        xpTotal: number;
-        streak: { currentDays: number; bestDays: number; lastCompletedAt: string | null };
-      }
-    | null;
+  progress: {
+    activeDayId: string | null;
+    dayProgress: DayProgressRow[];
+    xpTotal: number;
+    streak: {
+      currentDays: number;
+      bestDays: number;
+      lastCompletedAt: string | null;
+    };
+  } | null;
   ui?: any;
   treatment?: any;
   bastanIntro?: any; // ✅ مهم: از سرور میاد
 };
 
 export type HeaderItem = { kind: "header"; id: string; stage: PelekanStage };
-export type DayItem = { kind: "day"; id: string; day: PelekanDay; stage: PelekanStage; zig: "L" | "R" };
+export type DayItem = {
+  kind: "day";
+  id: string;
+  day: PelekanDay;
+  stage: PelekanStage;
+  zig: "L" | "R";
+};
 export type SpacerItem = { kind: "spacer"; id: string };
 
 export type ResultsItem = {
@@ -106,14 +125,23 @@ export type StageNodeItem = {
   active?: boolean;
 };
 
-export type ListItem = HeaderItem | DayItem | SpacerItem | ResultsItem | StartItem | StageNodeItem;
+export type ListItem =
+  | HeaderItem
+  | DayItem
+  | SpacerItem
+  | ResultsItem
+  | StartItem
+  | StageNodeItem;
 
 type Props = {
   item: ListItem;
   index: number;
   state: PelekanState;
 
-  onTapActiveDay?: (day: PelekanDay, opts?: { mode: "active" | "preview" }) => void;
+  onTapActiveDay?: (
+    day: PelekanDay,
+    opts?: { mode: "active" | "preview" },
+  ) => void;
   onTapResults?: () => void;
   onTapStart?: () => void;
 };
@@ -126,7 +154,6 @@ const NODE_X_LEFT = 70;
 const NODE_X_RIGHT = PATH_W - 70;
 const NODE_R = 28;
 const CELL_H = 120;
-
 
 const palette = {
   bg: "#0b0f14",
@@ -199,26 +226,37 @@ function Pulsing({
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
-      ])
+      ]),
     );
 
     loop.start();
     return () => loop.stop();
   }, [playing, scale]);
 
-  return <Animated.View style={[style, { transform: [{ scale }] }]}>{children}</Animated.View>;
+  return (
+    <Animated.View style={[style, { transform: [{ scale }] }]}>
+      {children}
+    </Animated.View>
+  );
 }
 
 function isDoneRow(dp: DayProgressRow | undefined) {
   if (!dp) return false;
   const st = String(dp.status || "").toLowerCase();
   if (st === "done" || st === "completed") return true;
-  if (typeof dp.completionPercent === "number" && dp.completionPercent >= 100) return true;
+  if (typeof dp.completionPercent === "number" && dp.completionPercent >= 100)
+    return true;
   return false;
 }
 
 /* ----------------------------- Component (ONE ITEM) ----------------------------- */
-export default function TreatmentView({ item, state, onTapActiveDay, onTapResults, onTapStart }: Props) {
+export default function TreatmentView({
+  item,
+  state,
+  onTapActiveDay,
+  onTapResults,
+  onTapStart,
+}: Props) {
   const router = useRouter();
   const activeDayId = state.progress?.activeDayId || null;
 
@@ -237,14 +275,13 @@ export default function TreatmentView({ item, state, onTapActiveDay, onTapResult
   const refreshLocalHeards = useCallback(async () => {
     try {
       const [b, g, s] = await Promise.all([
-  AsyncStorage.getItem(KEY_BASTAN_STAGE_AUDIO_V1),
-  AsyncStorage.getItem(KEY_GOSASTAN_STAGE_AUDIO_V1),
-  AsyncStorage.getItem(KEY_SOOKHTAN_STAGE_AUDIO_V1),
-]);
-setBastanHeard(b === "1");
-setGosastanHeard(g === "1");
-setSookhtanHeard(s === "1");
-
+        AsyncStorage.getItem(KEY_BASTAN_STAGE_AUDIO_V1),
+        AsyncStorage.getItem(KEY_GOSASTAN_STAGE_AUDIO_V1),
+        AsyncStorage.getItem(KEY_SOOKHTAN_STAGE_AUDIO_V1),
+      ]);
+      setBastanHeard(b === "1");
+      setGosastanHeard(g === "1");
+      setSookhtanHeard(s === "1");
     } catch {}
   }, []);
 
@@ -255,7 +292,7 @@ setSookhtanHeard(s === "1");
   useFocusEffect(
     useCallback(() => {
       refreshLocalHeards();
-    }, [refreshLocalHeards])
+    }, [refreshLocalHeards]),
   );
 
   // ✅ NEW: گیت واقعی از سرور (نه AsyncStorage)
@@ -278,7 +315,12 @@ setSookhtanHeard(s === "1");
 
   // ✅ یک مودال برای همه آیتم‌ها (نه تکراری)
   const GuardModal = (
-    <Modal transparent visible={guardOpen} animationType="fade" onRequestClose={() => setGuardOpen(false)}>
+    <Modal
+      transparent
+      visible={guardOpen}
+      animationType="fade"
+      onRequestClose={() => setGuardOpen(false)}
+    >
       <View style={g.modalBackdrop}>
         <View style={g.modalCard}>
           <Text style={g.modalTitle}>توجه</Text>
@@ -306,7 +348,13 @@ setSookhtanHeard(s === "1");
         {GuardModal}
 
         <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
-          <Path d={`M ${MID_X} ${CELL_H / 2} L ${MID_X} 0`} stroke={lineColor} strokeWidth={6} fill="none" strokeLinecap="round" />
+          <Path
+            d={`M ${MID_X} ${CELL_H / 2} L ${MID_X} 0`}
+            stroke={lineColor}
+            strokeWidth={6}
+            fill="none"
+            strokeLinecap="round"
+          />
         </Svg>
 
         <TouchableOpacity
@@ -317,13 +365,32 @@ setSookhtanHeard(s === "1");
             {
               left: nodeX - NODE_R,
               top: CELL_H / 2 - NODE_R,
-              backgroundColor: done ? palette.node.doneBg : palette.node.availableBg,
-              borderColor: done ? palette.node.doneBorder : palette.node.availableBorder,
+              backgroundColor: done
+                ? palette.node.doneBg
+                : palette.node.availableBg,
+              borderColor: done
+                ? palette.node.doneBorder
+                : palette.node.availableBorder,
             },
           ]}
         >
-          <Ionicons name={done ? "checkmark-circle" : "star"} size={22} color={done ? palette.node.doneIcon : palette.node.availableIcon} />
-          <Text style={[styles.nodeText, { color: done ? palette.node.doneLabel : palette.node.availableLabel }]}>{item.titleFa}</Text>
+          <Ionicons
+            name={done ? "checkmark-circle" : "star"}
+            size={22}
+            color={done ? palette.node.doneIcon : palette.node.availableIcon}
+          />
+          <Text
+            style={[
+              styles.nodeText,
+              {
+                color: done
+                  ? palette.node.doneLabel
+                  : palette.node.availableLabel,
+              },
+            ]}
+          >
+            {item.titleFa}
+          </Text>
         </TouchableOpacity>
       </View>
     );
@@ -344,7 +411,13 @@ setSookhtanHeard(s === "1");
         {GuardModal}
 
         <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
-          <Path d={`M ${MID_X} ${CELL_H} L ${MID_X} 0`} stroke={lineColor} strokeWidth={6} fill="none" strokeLinecap="round" />
+          <Path
+            d={`M ${MID_X} ${CELL_H} L ${MID_X} 0`}
+            stroke={lineColor}
+            strokeWidth={6}
+            fill="none"
+            strokeLinecap="round"
+          />
         </Svg>
 
         <TouchableOpacity
@@ -360,8 +433,15 @@ setSookhtanHeard(s === "1");
             },
           ]}
         >
-          <Ionicons name={"play"} size={22} color={iconCol} style={{ marginLeft: 2 }} />
-          <Text style={[styles.nodeText, { color: labelCol }]}>{item.titleFa}</Text>
+          <Ionicons
+            name={"play"}
+            size={22}
+            color={iconCol}
+            style={{ marginLeft: 2 }}
+          />
+          <Text style={[styles.nodeText, { color: labelCol }]}>
+            {item.titleFa}
+          </Text>
         </TouchableOpacity>
       </View>
     );
@@ -374,28 +454,56 @@ setSookhtanHeard(s === "1");
 
     const stageCode = String(stage?.code || "");
     const isBastanStage = stageCode === "bastan";
-const isGosastanStage = stageCode === "gosastan";
-const isSookhtanStage = stageCode === "sookhtan";
+    const isGosastanStage = stageCode === "gosastan";
+    const isSookhtanStage = stageCode === "sookhtan";
 
-const heard = isBastanStage
-  ? bastanHeard
-  : isGosastanStage
-    ? gosastanHeard
-    : isSookhtanStage
-      ? sookhtanHeard
-      : false;
+    const heard = isBastanStage
+      ? bastanHeard
+      : isGosastanStage
+        ? gosastanHeard
+        : isSookhtanStage
+          ? sookhtanHeard
+          : false;
 
     const done = !!item.done;
     const active = !!item.active;
 
-    const canOpenStageIntro = isBastanStage || isGosastanStage || isSookhtanStage;
-const shouldPulseStageNode = canOpenStageIntro && active && !done && !heard;
+    const canOpenStageIntro =
+      isBastanStage || isGosastanStage || isSookhtanStage;
+    const bastanStageAvailable = isBastanStage && bastanIntroDone;
 
+    const shouldPulseStageNode =
+      canOpenStageIntro && (active || bastanStageAvailable) && !done && !heard;
 
-    const bg = done || heard ? palette.node.doneBg : active ? palette.node.availableBg : palette.node.lockedBg;
-    const border = done || heard ? palette.node.doneBorder : active ? palette.node.availableBorder : palette.node.lockedBorder;
-    const iconCol = done || heard ? palette.node.doneIcon : active ? palette.node.availableIcon : palette.node.lockedIcon;
-    const labelCol = done || heard ? palette.node.doneLabel : active ? palette.node.availableLabel : palette.node.lockedLabel;
+    const stageAvailable = active || bastanStageAvailable;
+
+    const bg =
+      done || heard
+        ? palette.node.doneBg
+        : stageAvailable
+          ? palette.node.availableBg
+          : palette.node.lockedBg;
+
+    const border =
+      done || heard
+        ? palette.node.doneBorder
+        : stageAvailable
+          ? palette.node.availableBorder
+          : palette.node.lockedBorder;
+
+    const iconCol =
+      done || heard
+        ? palette.node.doneIcon
+        : stageAvailable
+          ? palette.node.availableIcon
+          : palette.node.lockedIcon;
+
+    const labelCol =
+      done || heard
+        ? palette.node.doneLabel
+        : stageAvailable
+          ? palette.node.availableLabel
+          : palette.node.lockedLabel;
 
     const strokeCol = done || heard ? palette.pathDone : palette.pathIdle;
 
@@ -410,32 +518,32 @@ const shouldPulseStageNode = canOpenStageIntro && active && !done && !heard;
 
     const NodeWrap: any = canOpenStageIntro ? TouchableOpacity : View;
 
-       const wrapProps =
-      isBastanStage
+    const wrapProps = isBastanStage
+      ? {
+          activeOpacity: 0.9,
+          onPress: () => {
+            // ✅ گیت اصلی همین است: تا intro تمام نشده، stage-intro باز نشود
+            if (!bastanIntroDone) {
+              openGuard("ابتدا روی دکمه شروع کلیک کن");
+              return;
+            }
+            router.push("/pelekan/bastan/stage-intro" as any);
+          },
+        }
+      : isGosastanStage
         ? {
             activeOpacity: 0.9,
-            onPress: () => {
-              // ✅ گیت اصلی همین است: تا intro تمام نشده، stage-intro باز نشود
-              if (!bastanIntroDone) {
-                openGuard("ابتدا روی دکمه شروع کلیک کن");
-                return;
-              }
-              router.push("/pelekan/bastan/stage-intro" as any);
-            },
+            onPress: () => router.push("/pelekan/gosastan/stage-intro" as any),
           }
-        : isGosastanStage
+        : isSookhtanStage
           ? {
               activeOpacity: 0.9,
-              onPress: () => router.push("/pelekan/gosastan/stage-intro" as any),
+              onPress: () =>
+                router.push("/pelekan/sookhtan/stage-intro" as any),
             }
-          : isSookhtanStage
-            ? {
-                activeOpacity: 0.9,
-                onPress: () => router.push("/pelekan/sookhtan/stage-intro" as any),
-              }
-            : {};
+          : {};
 
-       const nodePositionStyle = {
+    const nodePositionStyle = {
       left: nodeX - NODE_R,
       top: CELL_H / 2 - NODE_R,
       backgroundColor: bg,
@@ -444,8 +552,14 @@ const shouldPulseStageNode = canOpenStageIntro && active && !done && !heard;
 
     const stageNodeContent = (
       <NodeWrap {...wrapProps} style={styles.nodeInner}>
-        <Ionicons name={stageIconName(stageCode) as any} size={22} color={iconCol} />
-        <Text style={[styles.nodeText, { color: labelCol }]}>{stage.titleFa}</Text>
+        <Ionicons
+          name={stageIconName(stageCode) as any}
+          size={22}
+          color={iconCol}
+        />
+        <Text style={[styles.nodeText, { color: labelCol }]}>
+          {stage.titleFa}
+        </Text>
       </NodeWrap>
     );
 
@@ -454,7 +568,13 @@ const shouldPulseStageNode = canOpenStageIntro && active && !done && !heard;
         {GuardModal}
 
         <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
-          <Path d={pathD} stroke={strokeCol} strokeWidth={6} fill="none" strokeLinecap="round" />
+          <Path
+            d={pathD}
+            stroke={strokeCol}
+            strokeWidth={6}
+            fill="none"
+            strokeLinecap="round"
+          />
         </Svg>
 
         {shouldPulseStageNode ? (
@@ -462,32 +582,71 @@ const shouldPulseStageNode = canOpenStageIntro && active && !done && !heard;
             {stageNodeContent}
           </Pulsing>
         ) : (
-          <View style={[styles.node, nodePositionStyle]}>{stageNodeContent}</View>
+          <View style={[styles.node, nodePositionStyle]}>
+            {stageNodeContent}
+          </View>
         )}
       </View>
     );
   }
 
   // day
+  // day
   const { day, zig, stage } = item as any;
-
-  const available = !!activeDayId && day.id === activeDayId;
-  const done = isDoneRow(dayProgressMap.get(day.id));
 
   const access = state.treatmentAccess;
   const canEnterActive = access === "full" || access === "frozen_current";
+
+  const isBastan = String(stage?.code || "") === "bastan";
+  const bastanDayNumber = Number(day?.dayNumberInStage || 0);
+
+  /**
+   * نکته مهم:
+   * بستن با action مستقل مدیریت می‌شود، نه صرفاً activeDayId عمومی پلکان.
+   * بعد از کامل شدن intro، اقدام اول بستن برای کاربر Pro-like باید باز باشد.
+   * این شرط paywall کاربران free را خراب نمی‌کند چون canEnterActive هنوز چک می‌شود.
+   */
+  const bastanFirstActionAvailable =
+    isBastan && bastanIntroDone && bastanDayNumber === 1;
+
+  const available =
+    (!!activeDayId && day.id === activeDayId) || bastanFirstActionAvailable;
+
+  const done = isDoneRow(dayProgressMap.get(day.id));
+
   const canEnter = (available || done) && canEnterActive;
 
   const locked = !available && !done;
 
   const nodeX = zig === "L" ? NODE_X_LEFT : NODE_X_RIGHT;
-  const bg = done ? palette.node.doneBg : available ? palette.node.availableBg : locked ? palette.node.lockedBg : palette.node.availableBg;
-  const border =
-    done ? palette.node.doneBorder : available ? palette.node.availableBorder : locked ? palette.node.lockedBorder : palette.node.availableBorder;
-  const iconCol =
-    done ? palette.node.doneIcon : available ? palette.node.availableIcon : locked ? palette.node.lockedIcon : palette.node.availableIcon;
-  const labelCol =
-    done ? palette.node.doneLabel : available ? palette.node.availableLabel : locked ? palette.node.lockedLabel : palette.node.availableLabel;
+  const bg = done
+    ? palette.node.doneBg
+    : available
+      ? palette.node.availableBg
+      : locked
+        ? palette.node.lockedBg
+        : palette.node.availableBg;
+  const border = done
+    ? palette.node.doneBorder
+    : available
+      ? palette.node.availableBorder
+      : locked
+        ? palette.node.lockedBorder
+        : palette.node.availableBorder;
+  const iconCol = done
+    ? palette.node.doneIcon
+    : available
+      ? palette.node.availableIcon
+      : locked
+        ? palette.node.lockedIcon
+        : palette.node.availableIcon;
+  const labelCol = done
+    ? palette.node.doneLabel
+    : available
+      ? palette.node.availableLabel
+      : locked
+        ? palette.node.lockedLabel
+        : palette.node.availableLabel;
 
   const bottomY = CELL_H;
   const topY = 0;
@@ -498,11 +657,14 @@ const shouldPulseStageNode = canOpenStageIntro && active && !done && !heard;
     C ${nodeX} ${CELL_H * 0.35}, ${MID_X} ${topY + 30}, ${MID_X} ${topY}
   `;
 
-  const iconName = done ? "checkmark-circle" : available ? "star" : "lock-closed-outline";
-  const isBastan = String(stage?.code || "") === "bastan";
+  const iconName = done
+    ? "checkmark-circle"
+    : available
+      ? "star"
+      : "lock-closed-outline";
   const label = isBastan ? "اقدام" : "روز";
 
-   const nodePositionStyle = {
+  const nodePositionStyle = {
     left: nodeX - NODE_R,
     top: CELL_H / 2 - NODE_R,
     backgroundColor: bg,
@@ -531,7 +693,13 @@ const shouldPulseStageNode = canOpenStageIntro && active && !done && !heard;
       {GuardModal}
 
       <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
-        <Path d={pathD} stroke={done ? palette.pathDone : palette.pathIdle} strokeWidth={6} fill="none" strokeLinecap="round" />
+        <Path
+          d={pathD}
+          stroke={done ? palette.pathDone : palette.pathIdle}
+          strokeWidth={6}
+          fill="none"
+          strokeLinecap="round"
+        />
       </Svg>
 
       {available ? (
