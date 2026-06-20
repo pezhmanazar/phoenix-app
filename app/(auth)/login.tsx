@@ -340,8 +340,19 @@ router.push({
     <SafeAreaView style={{ flex: 1, backgroundColor: BG }}>
       <StatusBar style={dark ? "light" : "light"} />
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={{ flex: 1 }}>
+      <KeyboardAvoidingView
+  style={{ flex: 1 }}
+  behavior={Platform.OS === "ios" ? "padding" : "height"}
+>
+  <ScrollView
+    keyboardShouldPersistTaps="handled"
+    showsVerticalScrollIndicator={false}
+    contentContainerStyle={{
+      flexGrow: 1,
+      paddingBottom: 24,
+    }}
+  >
+    <View style={{ flex: 1 }}>
           {/* گلوها */}
           <View
             style={{
@@ -593,7 +604,9 @@ router.push({
             </View>
           </View>
         </View>
-      </KeyboardAvoidingView>
+      </ScrollView>
+    </KeyboardAvoidingView>
+
 
       {/* مودال قوانین */}
       <Modal visible={showTerms} animationType="slide" onRequestClose={() => setShowTerms(false)}>

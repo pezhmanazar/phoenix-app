@@ -48,7 +48,8 @@ function userUrl(path: string) {
 
 async function doJson<T>(
   input: RequestInfo,
-  init?: RequestInit
+  init?: RequestInit,
+  options?: { notFoundError?: string }
 ): Promise<ApiResp<T>> {
   try {
     const baseHeaders: Record<string, string> = {};
@@ -81,11 +82,20 @@ async function doJson<T>(
       headers: baseHeaders,
     });
 
+    if (res.status === 404) {
+      return { ok: false, error: options?.notFoundError || "HTTP_404" };
+    }
+
     const text = await res.text();
     let json: any = {};
+
     try {
       json = text ? JSON.parse(text) : {};
     } catch {
+      if (!res.ok) {
+        return { ok: false, error: `HTTP_${res.status}` };
+      }
+
       return { ok: false, error: `PARSE_ERROR_${res.status}` };
     }
 
@@ -94,7 +104,7 @@ async function doJson<T>(
       return { ok: false, error: err };
     }
 
-    if (typeof json === "object" && json && "ok" in json && "data" in json) {
+    if (typeof json === "object" && json && "ok" in json) {
       return json as ApiResp<T>;
     }
 
@@ -137,12 +147,16 @@ export async function getMeByPhone(
   const url =
     userUrl(`/api/users/me`) + `?phone=${encodeURIComponent(p)}&${cacheBuster}`;
 
-  return doJson<UserRecord | null>(url, {
+  return doJson<UserRecord | null>(
+  url,
+  {
     method: "GET",
     headers: {
       Accept: "application/json",
     },
-  });
+  },
+  { notFoundError: "USER_NOT_FOUND" }
+);
 }
 
 // POST http://192.168.xxx.xxx:4000/api/users/upsert

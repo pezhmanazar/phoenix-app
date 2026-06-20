@@ -126,7 +126,10 @@ export default function VerifyScreen() {
   // تایمر ثانیه‌ای
   useEffect(() => {
     if (secondsLeft <= 0) return;
-    const t = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000);
+    const t = setInterval(
+      () => setSecondsLeft((s) => Math.max(0, s - 1)),
+      1000,
+    );
     return () => clearInterval(t);
   }, [secondsLeft]);
 
@@ -142,10 +145,19 @@ export default function VerifyScreen() {
 
     try {
       await withTimeout(verifyOtp(enCode), 15000);
-      await refresh().catch(() => {});
-      await new Promise((r) => setTimeout(r, 150));
-      router.replace("/(auth)/profile-wizard");
 
+      try {
+        await refresh();
+      } catch {
+        // اگر refresh شکست بخورد، ورود را متوقف نمی‌کنیم.
+      }
+
+      await new Promise((r) => setTimeout(r, 300));
+
+      router.replace({
+        pathname: "/(auth)/profile-wizard",
+        params: { phone },
+      });
     } catch (e: any) {
       const msg = String(e?.message || "");
 
@@ -272,7 +284,10 @@ export default function VerifyScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: BG }}>
       <StatusBar style="light" />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
         <View style={{ flex: 1 }}>
           {/* گلوها مثل لاگین */}
           <View
@@ -298,7 +313,15 @@ export default function VerifyScreen() {
             }}
           />
 
-          <View style={{ flex: 1, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 18, gap: 14 }}>
+          <View
+            style={{
+              flex: 1,
+              paddingHorizontal: 18,
+              paddingTop: 18,
+              paddingBottom: 18,
+              gap: 14,
+            }}
+          >
             {/* هدر */}
             <View style={{ alignItems: "center", gap: 6, marginTop: 6 }}>
               <View
@@ -316,11 +339,26 @@ export default function VerifyScreen() {
                 <Ionicons name="key-outline" size={26} color={GOLD} />
               </View>
 
-              <Text style={{ color: TEXT, fontSize: 20, fontWeight: "900", textAlign: "center" }}>
+              <Text
+                style={{
+                  color: TEXT,
+                  fontSize: 20,
+                  fontWeight: "900",
+                  textAlign: "center",
+                }}
+              >
                 تأیید کد
               </Text>
 
-              <Text style={{ color: MUTED, fontSize: 12.5, lineHeight: 20, textAlign: "center", paddingHorizontal: 12 }}>
+              <Text
+                style={{
+                  color: MUTED,
+                  fontSize: 12.5,
+                  lineHeight: 20,
+                  textAlign: "center",
+                  paddingHorizontal: 12,
+                }}
+              >
                 کد ۶ رقمی ارسال‌شده به{" "}
                 <Text style={{ color: TEXT, fontWeight: "900" }}>{phone}</Text>{" "}
                 را وارد کن.
@@ -361,14 +399,29 @@ export default function VerifyScreen() {
                     {notice.title}
                   </Text>
                   {!!notice.message && (
-                    <Text style={{ color: "rgba(231,238,247,.78)", fontSize: 12.5, lineHeight: 20, textAlign: "right" }}>
+                    <Text
+                      style={{
+                        color: "rgba(231,238,247,.78)",
+                        fontSize: 12.5,
+                        lineHeight: 20,
+                        textAlign: "right",
+                      }}
+                    >
                       {notice.message}
                     </Text>
                   )}
                 </View>
 
-                <Pressable onPress={() => setNotice(null)} hitSlop={10} style={{ padding: 2 }}>
-                  <Ionicons name="close" size={18} color="rgba(231,238,247,.75)" />
+                <Pressable
+                  onPress={() => setNotice(null)}
+                  hitSlop={10}
+                  style={{ padding: 2 }}
+                >
+                  <Ionicons
+                    name="close"
+                    size={18}
+                    color="rgba(231,238,247,.75)"
+                  />
                 </Pressable>
               </View>
             )}
@@ -387,7 +440,14 @@ export default function VerifyScreen() {
             >
               {/* فیلد کد */}
               <View style={{ gap: 8 }}>
-                <Text style={{ color: MUTED, fontSize: 12, fontWeight: "800", textAlign: "right" }}>
+                <Text
+                  style={{
+                    color: MUTED,
+                    fontSize: 12,
+                    fontWeight: "800",
+                    textAlign: "right",
+                  }}
+                >
                   کد تأیید
                 </Text>
 
@@ -398,14 +458,20 @@ export default function VerifyScreen() {
                     gap: 10,
                     borderWidth: 1,
                     borderColor:
-                      code.length === 0 || isCodeReady(code) ? LINE : "rgba(248,113,113,.35)",
+                      code.length === 0 || isCodeReady(code)
+                        ? LINE
+                        : "rgba(248,113,113,.35)",
                     borderRadius: 16,
                     backgroundColor: INPUT_BG,
                     paddingHorizontal: 12,
                     height: 56,
                   }}
                 >
-                  <Ionicons name="shield-checkmark-outline" size={20} color="rgba(231,238,247,.75)" />
+                  <Ionicons
+                    name="shield-checkmark-outline"
+                    size={20}
+                    color="rgba(231,238,247,.75)"
+                  />
                   <TextInput
                     value={code}
                     onChangeText={handleChangeCode}
@@ -426,8 +492,15 @@ export default function VerifyScreen() {
                   />
                 </View>
 
-                <Text style={{ color: helperColor, fontSize: 11.5, textAlign: "right" }}>
-                  کد باید ۶ رقم باشه. بعد از وارد کردن کامل، به‌صورت خودکار بررسی میشه.
+                <Text
+                  style={{
+                    color: helperColor,
+                    fontSize: 11.5,
+                    textAlign: "right",
+                  }}
+                >
+                  کد باید ۶ رقم باشه. بعد از وارد کردن کامل، به‌صورت خودکار
+                  بررسی میشه.
                 </Text>
               </View>
 
@@ -440,7 +513,9 @@ export default function VerifyScreen() {
                   borderRadius: 18,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: !canVerifyNow ? "rgba(255,255,255,.06)" : "rgba(212,175,55,.16)",
+                  backgroundColor: !canVerifyNow
+                    ? "rgba(255,255,255,.06)"
+                    : "rgba(212,175,55,.16)",
                   borderWidth: 1,
                   borderColor: !canVerifyNow ? LINE : "rgba(212,175,55,.35)",
                 }}
@@ -448,17 +523,36 @@ export default function VerifyScreen() {
                 {loading ? (
                   <ActivityIndicator color={TEXT} />
                 ) : (
-                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+                  <View
+                    style={{
+                      flexDirection: "row-reverse",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
                     <Ionicons name="log-in-outline" size={18} color={TEXT} />
-                    <Text style={{ color: TEXT, fontSize: 14, fontWeight: "900" }}>ورود</Text>
+                    <Text
+                      style={{ color: TEXT, fontSize: 14, fontWeight: "900" }}
+                    >
+                      ورود
+                    </Text>
                   </View>
                 )}
               </Pressable>
 
               {/* تایمر resend */}
-              <Text style={{ color: "rgba(231,238,247,.60)", fontSize: 12, textAlign: "center", marginTop: 2 }}>
+              <Text
+                style={{
+                  color: "rgba(231,238,247,.60)",
+                  fontSize: 12,
+                  textAlign: "center",
+                  marginTop: 2,
+                }}
+              >
                 امکان ارسال مجدد تا{" "}
-                <Text style={{ color: TEXT, fontWeight: "900" }}>{secondsLeft} ثانیه</Text>{" "}
+                <Text style={{ color: TEXT, fontWeight: "900" }}>
+                  {secondsLeft} ثانیه
+                </Text>{" "}
                 دیگر
               </Text>
 
@@ -473,22 +567,38 @@ export default function VerifyScreen() {
                   justifyContent: "center",
                   backgroundColor: "rgba(255,255,255,.02)",
                   borderWidth: 1,
-                  borderColor: secondsLeft > 0 || resending ? LINE : "rgba(96,165,250,.35)",
+                  borderColor:
+                    secondsLeft > 0 || resending
+                      ? LINE
+                      : "rgba(96,165,250,.35)",
                   opacity: secondsLeft > 0 || resending ? 0.6 : 1,
                 }}
               >
                 {resending ? (
                   <ActivityIndicator color={TEXT} />
                 ) : (
-                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+                  <View
+                    style={{
+                      flexDirection: "row-reverse",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
                     <Ionicons
                       name="refresh-outline"
                       size={18}
-                      color={secondsLeft > 0 ? "rgba(231,238,247,.65)" : "rgba(96,165,250,1)"}
+                      color={
+                        secondsLeft > 0
+                          ? "rgba(231,238,247,.65)"
+                          : "rgba(96,165,250,1)"
+                      }
                     />
                     <Text
                       style={{
-                        color: secondsLeft > 0 ? "rgba(231,238,247,.65)" : "rgba(96,165,250,1)",
+                        color:
+                          secondsLeft > 0
+                            ? "rgba(231,238,247,.65)"
+                            : "rgba(96,165,250,1)",
                         fontSize: 13,
                         fontWeight: "900",
                       }}
@@ -500,7 +610,14 @@ export default function VerifyScreen() {
               </Pressable>
 
               {/* راهنمای ریز */}
-              <Text style={{ color: "rgba(231,238,247,.55)", fontSize: 11, lineHeight: 18, textAlign: "center" }}>
+              <Text
+                style={{
+                  color: "rgba(231,238,247,.55)",
+                  fontSize: 11,
+                  lineHeight: 18,
+                  textAlign: "center",
+                }}
+              >
                 اگر پیامک نیومد، پوشه اسپم یا پیامک‌های تبلیغاتی رو هم چک کن.
               </Text>
             </View>
@@ -520,9 +637,25 @@ export default function VerifyScreen() {
                 backgroundColor: "rgba(255,255,255,.02)",
               }}
             >
-              <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
-                <Ionicons name="arrow-back-outline" size={16} color="rgba(231,238,247,.75)" />
-                <Text style={{ color: "rgba(231,238,247,.78)", fontSize: 12.5, fontWeight: "800" }}>
+              <View
+                style={{
+                  flexDirection: "row-reverse",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <Ionicons
+                  name="arrow-back-outline"
+                  size={16}
+                  color="rgba(231,238,247,.75)"
+                />
+                <Text
+                  style={{
+                    color: "rgba(231,238,247,.78)",
+                    fontSize: 12.5,
+                    fontWeight: "800",
+                  }}
+                >
                   تغییر شماره
                 </Text>
               </View>
