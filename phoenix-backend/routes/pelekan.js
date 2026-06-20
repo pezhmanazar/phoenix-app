@@ -1201,6 +1201,16 @@ router.get("/bastan/state", authUser, async (req, res) => {
       _count: { _all: true },
     });
 
+    const actionProgressRows = await prisma.bastanActionProgress.findMany({
+      where: { userId: user.id, actionId: { in: actions.map((a) => a.id) } },
+      select: { actionId: true, minRequiredSubtasks: true, status: true },
+    });
+
+    const progressByActionId = {};
+    for (const r of actionProgressRows) {
+      progressByActionId[r.actionId] = r;
+    }
+
     const doneByActionId = {};
     for (const r of doneAgg) doneByActionId[r.actionId] = r._count._all || 0;
 
@@ -1240,7 +1250,13 @@ router.get("/bastan/state", authUser, async (req, res) => {
 
     for (const a of actions) {
       const completed = doneByActionId[a.id] || 0;
-      const minReq = a.minRequiredSubtasks;
+      const userProgress = progressByActionId[a.id] || null;
+      const userMinReq = Number(userProgress?.minRequiredSubtasks || 0);
+
+      const minReq =
+        userMinReq > 0
+          ? userMinReq
+          : Math.max(0, Number(a.minRequiredSubtasks || 0));
       const total = a.totalSubtasks;
       const isComplete = completed >= minReq;
 
@@ -1516,6 +1532,16 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     let xpAwarded = 0;
     let medalAwarded = null;
 
+    const normalizedGateChoice = String(rawGate || "").trim();
+
+    const completesParentAction =
+      subtask.key === "FRL_0_contact_gate" &&
+      normalizedGateChoice === "not_forced";
+
+    const effectiveMinRequiredSubtasks = completesParentAction
+      ? 1
+      : Math.max(0, Number(subtask.action?.minRequiredSubtasks || 0));
+
     await prisma.$transaction(async (tx) => {
       // 1) mark subtask progress done (persist payload)
       await tx.bastanSubtaskProgress.upsert({
@@ -1544,11 +1570,11 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
           userId: user.id,
           actionId: subtask.actionId,
           status: "active",
-          minRequiredSubtasks: subtask.action?.minRequiredSubtasks || 0,
+          minRequiredSubtasks: effectiveMinRequiredSubtasks,
           doneSubtasksCount: 0,
         },
         update: {
-          minRequiredSubtasks: subtask.action?.minRequiredSubtasks || 0,
+          minRequiredSubtasks: effectiveMinRequiredSubtasks,
         },
       });
 
@@ -1557,18 +1583,14 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         where: { userId: user.id, actionId: subtask.actionId, isDone: true },
       });
 
-      const minReqFinal = Math.max(
-        0,
-        Number(subtask.action?.minRequiredSubtasks || 0),
-      );
-
       await tx.bastanActionProgress.update({
         where: {
           userId_actionId: { userId: user.id, actionId: subtask.actionId },
         },
         data: {
           doneSubtasksCount: doneCount,
-          status: doneCount >= minReqFinal ? "done" : "active",
+          minRequiredSubtasks: effectiveMinRequiredSubtasks,
+          status: doneCount >= effectiveMinRequiredSubtasks ? "done" : "active",
         },
       });
 

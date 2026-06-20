@@ -409,7 +409,7 @@ export default function FRL0ContactGateScreen() {
     if (!t || !p) {
       openModal({
         kind: "error",
-        title: "ورود لازم است",
+        title: "ورود لازمه",
         message: "برای ثبت انجام شدن باید وارد حساب باشی",
         primaryText: "باشه",
         onPrimary: closeModal,
@@ -420,17 +420,25 @@ export default function FRL0ContactGateScreen() {
     const startedAt = startedAtRef.current;
     const durationSec = startedAt ? Math.max(0, Math.floor((Date.now() - startedAt) / 1000)) : null;
 
-    const payloadToSend = {
-      version: 1,
-      savedAt: new Date().toISOString(),
-      answer: {
-        gateChoice: gateChoice || "forced",
-        // فشرده، برای لاگ/تحلیل
-        checklistAllChecked: gateChoice === "not_forced" ? checklistOk : true,
-        checklistCount: gateChoice === "not_forced" ? CHECKLIST_ITEMS.filter((x) => checklist[x.key]).length : 0,
-        durationSec,
-      },
-    };
+    const finalGateChoice: GateChoice = gateChoice || "forced";
+
+const payloadToSend = {
+  version: 1,
+  savedAt: new Date().toISOString(),
+
+  // top-level هم می‌فرستیم که سمت سرور راحت و قطعی تشخیص بدهد.
+  gateChoice: finalGateChoice,
+
+  answer: {
+    gateChoice: finalGateChoice,
+    checklistAllChecked: finalGateChoice === "not_forced" ? checklistOk : true,
+    checklistCount:
+      finalGateChoice === "not_forced"
+        ? CHECKLIST_ITEMS.filter((x) => checklist[x.key]).length
+        : 0,
+    durationSec,
+  },
+};
 
     const url = `${apiBase}/api/pelekan/bastan/subtask/complete?phone=${encodeURIComponent(p)}`;
 
@@ -592,7 +600,7 @@ export default function FRL0ContactGateScreen() {
                   {"\n\n"}
                   اگر واقعاً مجبور نیستی (یعنی اگه همکار،همکلاسی، شریک کاری و همسایه نیستید یا فرزند مشترک ندارید )، باید قطع ارتباط کامل رو انتخاب کنی.
                   {"\n"}
-                  {"\n"}اگر مجبور هستی ارتباط داشته باشی باید همین‌جا تمومش کنی و برو ادامهٔ ریزاقدام‌های تماس نقش‌محور رو انجام بده.
+                  {"\n"}اگه مجبوری با پارتنر سابقت ارتباط داشته باشی، این ریزاقدام فقط مسیرت رو مشخص می‌کنه و بعد باید ادامهٔ ریزاقدام‌های تماس نقش‌محور رو انجام بدی.
                 </Text>
               </View>
 
