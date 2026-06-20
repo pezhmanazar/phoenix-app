@@ -1198,7 +1198,19 @@ router.get("/bastan/state", authUser, async (req, res) => {
     }
 
     // intro state
-    const introDone = !!state.introAudioCompletedAt;
+    const pelekanProg = await prisma.pelekanProgress.findUnique({
+      where: { userId: user.id },
+      select: { bastanIntroAudioCompletedAt: true, bastanUnlockedAt: true },
+    });
+
+    const introDone = !!(
+      state.introAudioCompletedAt || pelekanProg?.bastanIntroAudioCompletedAt
+    );
+    const introCompletedAt =
+      state.introAudioCompletedAt ||
+      pelekanProg?.bastanIntroAudioCompletedAt ||
+      null;
+
     const paywallNeededAfterIntro = introDone && !isProLike;
 
     // Build actions UI
@@ -1302,12 +1314,12 @@ router.get("/bastan/state", authUser, async (req, res) => {
       data: {
         user: { planStatus: planStatusFinal, daysLeft: daysLeftFinal },
         intro: {
-          completedAt: state.introAudioCompletedAt,
+          completedAt: introCompletedAt,
           paywallNeededAfterIntro,
         },
         start: {
-          completedAt: state.introAudioCompletedAt,
-          locked: !state.introAudioCompletedAt,
+          completedAt: introCompletedAt,
+          locked: !introDone,
           paywallNeededAfterIntro,
         },
         contract: {
@@ -1712,29 +1724,30 @@ router.post("/bastan/intro/complete", authUser, async (req, res) => {
         },
       });
 
-      if (isProLike) {
-        try {
-          const stages = await prisma.pelekanStage.findMany({
-            orderBy: { sortOrder: "asc" },
-            include: {
-              days: {
-                orderBy: { dayNumberInStage: "asc" },
-                include: { tasks: { orderBy: { sortOrder: "asc" } } },
-              },
-            },
-          });
-
-          await syncBastanActionsToDays(prisma, user.id, stages, new Date());
-          await pelekanEngine.refresh(prisma, user.id);
-        } catch (e) {
-          console.warn(
-            "[pelekan.bastan.intro.complete] sync failed:",
-            e?.message || "unknown_error",
-          );
-        }
-      }
       return s;
     });
+
+    if (isProLike) {
+      try {
+        const stages = await prisma.pelekanStage.findMany({
+          orderBy: { sortOrder: "asc" },
+          include: {
+            days: {
+              orderBy: { dayNumberInStage: "asc" },
+              include: { tasks: { orderBy: { sortOrder: "asc" } } },
+            },
+          },
+        });
+
+        await syncBastanActionsToDays(prisma, user.id, stages, new Date());
+        await pelekanEngine.refresh(prisma, user.id);
+      } catch (e) {
+        console.warn(
+          "[pelekan.bastan.intro.complete] sync failed:",
+          e?.message || "unknown_error",
+        );
+      }
+    }
 
     return res.json({
       ok: true,
@@ -1748,7 +1761,6 @@ router.post("/bastan/intro/complete", authUser, async (req, res) => {
     return wcdnOkError(res, "SERVER_ERROR");
   }
 });
-
 // -------------------- Baseline Endpoints --------------------
 
 // POST /api/pelekan/baseline/start
