@@ -6,19 +6,20 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   InteractionManager,
-  KeyboardAvoidingView,
-  Platform,
+  Keyboard,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  useWindowDimensions,
+  View
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
 import { useUser } from "../../../../hooks/useUser";
+;
 
 /* ----------------------------- UI ----------------------------- */
 const palette = {
@@ -207,7 +208,9 @@ function ThemedModal({
 
 export default function RC2CostsScreen() {
   const insets = useSafeAreaInsets();
+  const { height: screenHeight } = useWindowDimensions();
   const router = useRouter();
+
 
   const { me } = useUser();
   const phone = String(me?.phone || "").trim();
@@ -241,8 +244,13 @@ export default function RC2CostsScreen() {
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
 
-  // ✅ اسکرول نرم بعد از تغییر step
+    // ✅ اسکرول نرم بعد از تغییر step
   const scrollRef = useRef<ScrollView>(null);
+  const scrollYRef = useRef(0);
+  const inputRefs = useRef<Record<string, TextInput | null>>({});
+  const focusedInputKeyRef = useRef<string | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
 
   // ✅ مودال‌ها
   const [confirmLockModal, setConfirmLockModal] = useState(false);
@@ -271,6 +279,53 @@ export default function RC2CostsScreen() {
   const openModal = useCallback((cfg: Omit<typeof modal, "visible"> & { visible?: boolean }) => {
     setModal({ ...cfg, visible: true } as any);
   }, []);
+
+    const ensureFocusedInputVisible = useCallback(() => {
+    const key = focusedInputKeyRef.current;
+    if (!key) return;
+
+    requestAnimationFrame(() => {
+      inputRefs.current[key]?.measureInWindow((_x, y, _w, h) => {
+        const keyboardTop = keyboardHeight > 0 ? screenHeight - keyboardHeight : screenHeight;
+        const bottomGap = 28;
+        const overflow = y + h + bottomGap - keyboardTop;
+
+        if (overflow > 0) {
+          scrollRef.current?.scrollTo({
+            y: Math.max(0, scrollYRef.current + overflow + 24),
+            animated: true,
+          });
+        }
+      });
+    });
+  }, [keyboardHeight, screenHeight]);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener("keyboardDidShow", (e) => {
+      setKeyboardHeight(e.endCoordinates?.height || 0);
+    });
+
+    const hideSub = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardHeight(0);
+      focusedInputKeyRef.current = null;
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (keyboardHeight <= 0) return;
+
+    const t = setTimeout(() => {
+      ensureFocusedInputVisible();
+    }, 80);
+
+    return () => clearTimeout(t);
+  }, [keyboardHeight, ensureFocusedInputVisible]);
+
 
   // ✅ فقط FINAL را می‌خوانیم (نه draft)
   const loadFinalIfAny = useCallback(async () => {
@@ -529,20 +584,23 @@ export default function RC2CostsScreen() {
 
         <View style={{ width: 34, height: 34 }} />
       </View>
-
-      {/* ✅ مثل RC_3 */}
-      <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: palette.bg }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={insets.top + 12}
-      >
+      <View style={{ flex: 1, backgroundColor: palette.bg }}>
         <ScrollView
           ref={scrollRef}
           style={{ backgroundColor: palette.bg }}
-          contentContainerStyle={{ padding: 16, paddingBottom: 18 + insets.bottom + 24 }}
+          contentContainerStyle={{
+            padding: 16,
+            paddingBottom: 18 + insets.bottom + (step === 2 ? keyboardHeight + 120 : 80),
+          }}
           showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
+          keyboardDismissMode="none"
+          scrollEventThrottle={16}
+          onScroll={(e) => {
+            scrollYRef.current = e.nativeEvent.contentOffset.y;
+          }}
         >
+
           {/* Review Banner */}
           {isReview ? (
             <View style={styles.reviewBanner}>
@@ -676,8 +734,18 @@ export default function RC2CostsScreen() {
                       <Text style={styles.noteHint}>{meta.examples}</Text>
 
                       <TextInput
+                        ref={(r) => {
+                          inputRefs.current[`${cat}:0`] = r;
+                        }}
                         value={a0}
                         onChangeText={(t) => setItem(cat, 0, t)}
+                        onFocus={() => {
+                          focusedInputKeyRef.current = `${cat}:0`;
+                          setTimeout(ensureFocusedInputVisible, 120);
+                        }}
+                        onBlur={() => {
+                          if (focusedInputKeyRef.current === `${cat}:0`) focusedInputKeyRef.current = null;
+                        }}
                         placeholder="مورد ۱…"
                         placeholderTextColor="rgba(231,238,247,.35)"
                         style={[styles.inputOne, isReview && styles.inputReadOnly]}
@@ -685,9 +753,20 @@ export default function RC2CostsScreen() {
                         editable={!isReview}
                         selectTextOnFocus={!isReview}
                       />
+
                       <TextInput
+                        ref={(r) => {
+                          inputRefs.current[`${cat}:1`] = r;
+                        }}
                         value={a1}
                         onChangeText={(t) => setItem(cat, 1, t)}
+                        onFocus={() => {
+                          focusedInputKeyRef.current = `${cat}:1`;
+                          setTimeout(ensureFocusedInputVisible, 120);
+                        }}
+                        onBlur={() => {
+                          if (focusedInputKeyRef.current === `${cat}:1`) focusedInputKeyRef.current = null;
+                        }}
                         placeholder="مورد ۲…"
                         placeholderTextColor="rgba(231,238,247,.35)"
                         style={[styles.inputOne, isReview && styles.inputReadOnly]}
@@ -695,9 +774,20 @@ export default function RC2CostsScreen() {
                         editable={!isReview}
                         selectTextOnFocus={!isReview}
                       />
+
                       <TextInput
+                        ref={(r) => {
+                          inputRefs.current[`${cat}:2`] = r;
+                        }}
                         value={a2}
                         onChangeText={(t) => setItem(cat, 2, t)}
+                        onFocus={() => {
+                          focusedInputKeyRef.current = `${cat}:2`;
+                          setTimeout(ensureFocusedInputVisible, 120);
+                        }}
+                        onBlur={() => {
+                          if (focusedInputKeyRef.current === `${cat}:2`) focusedInputKeyRef.current = null;
+                        }}
                         placeholder="مورد ۳…"
                         placeholderTextColor="rgba(231,238,247,.35)"
                         style={[styles.inputOne, isReview && styles.inputReadOnly]}
@@ -792,7 +882,7 @@ export default function RC2CostsScreen() {
             </>
           ) : null}
         </ScrollView>
-      </KeyboardAvoidingView>
+      </View>
 
       {/* ✅ لودینگ ورود */}
       {booting ? (

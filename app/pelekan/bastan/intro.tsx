@@ -182,103 +182,120 @@ export default function BastanIntroScreen() {
   }, [token, introDone, STORAGE_POS_KEY]);
 
   const unload = useCallback(async () => {
-  try {
-    const p = playerRef.current;
-    playerRef.current = null;
-
     try {
-      statusSubscriptionRef.current?.remove?.();
-      statusSubscriptionRef.current = null;
-    } catch {
-      // intentionally ignored
-    }
+      const p = playerRef.current;
+      playerRef.current = null;
 
-    if (p) {
       try {
-        if (p.isLoaded && !introDone) {
-          const currentMs = Math.max(0, Math.floor((p.currentTime || 0) * 1000));
-          if (currentMs > 0) {
-            await AsyncStorage.setItem(STORAGE_POS_KEY, String(currentMs));
-          }
-        }
+        statusSubscriptionRef.current?.remove?.();
+        statusSubscriptionRef.current = null;
       } catch {
         // intentionally ignored
       }
 
-      try {
-        p.pause();
-      } catch {
-        // intentionally ignored
-      }
-
-      try {
-        p.remove();
-      } catch {
-        // intentionally ignored
-      }
-    }
-  } catch {
-    // intentionally ignored
-  }
-
-  setIsLoaded(false);
-  setIsPlaying(false);
-  setIsBuffering(false);
-  setLoadStatus("idle");
-}, [introDone, STORAGE_POS_KEY]);
-
-
- const attachStatusListener = useCallback(
-  (player: AudioPlayer) => {
-    try {
-      statusSubscriptionRef.current?.remove?.();
-      statusSubscriptionRef.current = null;
-    } catch {
-      // intentionally ignored
-    }
-
-    statusSubscriptionRef.current = player.addListener("playbackStatusUpdate", async (st: AudioStatus) => {
-      if (!mountedRef.current) return;
-      if (!st.isLoaded) return;
-
-      setIsLoaded(true);
-      setIsPlaying(!!st.playing);
-      setPosMs(Math.max(0, Math.floor((st.currentTime || 0) * 1000)));
-      setDurMs(Math.max(1, Math.floor((st.duration || 0) * 1000)));
-      setIsBuffering(!!st.isBuffering);
-
-      if (st.isLoaded) {
-        setLoadStatus((prev) => (prev === "loading" ? "ready" : prev));
-      }
-
-      const position = Math.max(0, Math.floor((st.currentTime || 0) * 1000));
-      const duration = Math.max(0, Math.floor((st.duration || 0) * 1000));
-      const nearEnd = duration > 0 && duration - position <= 800;
-
-      if ((st.didJustFinish || nearEnd) && !introDone) {
-        setIsPlaying(false);
-        setLoadStatus("idle");
-
+      if (p) {
         try {
-          await markIntroComplete();
-        } catch {
-          setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
-        }
-      }
-
-      if (!introDone && duration > 0 && position > 0) {
-        try {
-          if (position % 3000 < 250) {
-            await AsyncStorage.setItem(STORAGE_POS_KEY, String(position));
+          if (p.isLoaded && !introDone) {
+            const currentMs = Math.max(0, Math.floor((p.currentTime || 0) * 1000));
+            if (currentMs > 0) {
+              await AsyncStorage.setItem(STORAGE_POS_KEY, String(currentMs));
+            }
           }
         } catch {
           // intentionally ignored
         }
+
+        try {
+          p.pause();
+        } catch {
+          // intentionally ignored
+        }
+
+        try {
+          p.remove();
+        } catch {
+          // intentionally ignored
+        }
       }
-    });
-  },
-  [introDone, STORAGE_POS_KEY, markIntroComplete]
-);
+    } catch {
+      // intentionally ignored
+    }
+
+    if (!mountedRef.current) return;
+
+    setIsLoaded(false);
+    setIsPlaying(false);
+    setIsBuffering(false);
+    setLoadStatus("idle");
+  }, [introDone, STORAGE_POS_KEY]);
+
+  const attachStatusListener = useCallback(
+    (player: AudioPlayer) => {
+      try {
+        statusSubscriptionRef.current?.remove?.();
+        statusSubscriptionRef.current = null;
+      } catch {
+        // intentionally ignored
+      }
+
+      statusSubscriptionRef.current = player.addListener(
+        "playbackStatusUpdate",
+        async (st: AudioStatus) => {
+          if (!mountedRef.current) return;
+
+          if (!st.isLoaded) {
+            setIsLoaded(false);
+            setIsPlaying(false);
+            setIsBuffering(true);
+            setLoadStatus("loading");
+            return;
+          }
+
+          const position = Math.max(0, Math.floor((st.currentTime || 0) * 1000));
+          const duration = Math.max(1, Math.floor((st.duration || 0) * 1000));
+
+          setIsLoaded(true);
+          setIsPlaying(!!st.playing);
+          setPosMs(position);
+          setDurMs(duration);
+          setIsBuffering(!!st.isBuffering);
+
+          if (st.isBuffering) {
+            setLoadStatus("loading");
+          } else if (st.playing) {
+            setLoadStatus("idle");
+          } else {
+            setLoadStatus("ready");
+          }
+
+          const nearEnd = duration > 0 && duration - position <= 800;
+
+          if ((st.didJustFinish || nearEnd) && !introDone) {
+            setIsPlaying(false);
+            setIsBuffering(false);
+            setLoadStatus("idle");
+
+            try {
+              await markIntroComplete();
+            } catch {
+              setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
+            }
+          }
+
+          if (!introDone && duration > 0 && position > 0) {
+            try {
+              if (position % 3000 < 250) {
+                await AsyncStorage.setItem(STORAGE_POS_KEY, String(position));
+              }
+            } catch {
+              // intentionally ignored
+            }
+          }
+        }
+      );
+    },
+    [introDone, STORAGE_POS_KEY, markIntroComplete]
+  );
 
   const loadIfNeeded = useCallback(async () => {
     if (playerRef.current) return;
@@ -299,9 +316,11 @@ export default function BastanIntroScreen() {
         const n = raw ? Number(raw) : 0;
         if (Number.isFinite(n) && n > 0) {
           restorePosRef.current = n;
+        } else {
+          restorePosRef.current = null;
         }
       } catch {
-        // intentionally ignored
+        restorePosRef.current = null;
       }
     } else {
       restorePosRef.current = null;
@@ -319,13 +338,15 @@ export default function BastanIntroScreen() {
       setIsPlaying(!!player.playing);
       setPosMs(Math.max(0, Math.floor((player.currentTime || 0) * 1000)));
       setDurMs(Math.max(1, Math.floor((player.duration || 0) * 1000)));
-      setIsBuffering(false);
-      if (player.isLoaded) setLoadStatus("ready");
     }
 
     try {
+      for (let i = 0; i < 25 && !player.isLoaded; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
       const restore = restorePosRef.current;
-      if (restore && restore > 0 && !introDone) {
+      if (player.isLoaded && restore && restore > 0 && !introDone) {
         const duration = Math.max(0, Math.floor((player.duration || 0) * 1000));
         const safeRestore =
           duration > 0
@@ -334,71 +355,72 @@ export default function BastanIntroScreen() {
 
         await player.seekTo(safeRestore / 1000).catch(() => {});
       }
+
+      if (mountedRef.current && player.isLoaded) {
+        setIsLoaded(true);
+        setIsBuffering(false);
+        setLoadStatus("ready");
+      }
     } catch {
-      // intentionally ignored
+      if (mountedRef.current) {
+        setIsBuffering(false);
+        setLoadStatus("error");
+      }
     }
   }, [AUDIO_URL, introDone, token, STORAGE_POS_KEY, attachStatusListener]);
 
   const togglePlay = useCallback(async () => {
-  if (isBuffering) return;
+    try {
+      await lock(async () => {
+        await loadIfNeeded();
 
-  try {
-    if (!playerRef.current) {
-      setIsBuffering(true);
-    }
+        const p = playerRef.current;
+        if (!p) {
+          setIsBuffering(false);
+          setIsPlaying(false);
+          setLoadStatus("error");
+          return;
+        }
 
-    await lock(async () => {
-      await loadIfNeeded();
+        if (!p.isLoaded) {
+          setIsBuffering(true);
+          setIsPlaying(false);
+          setLoadStatus("loading");
+          return;
+        }
 
-      const p = playerRef.current;
-      if (!p) {
-        setIsBuffering(false);
-        setIsPlaying(false);
-        setLoadStatus("error");
-        return;
-      }
+        if (p.playing) {
+          p.pause();
+          if (!mountedRef.current) return;
+          setIsPlaying(false);
+          setIsBuffering(false);
+          setLoadStatus("ready");
+          return;
+        }
 
-      for (let i = 0; i < 25 && !p.isLoaded; i += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-
-      if (!p.isLoaded) {
-        setIsBuffering(false);
-        setIsPlaying(false);
+        setIsBuffering(true);
         setLoadStatus("loading");
-        return;
-      }
+        p.play();
 
-      if (p.playing) {
-        p.pause();
-        setIsPlaying(false);
-        setIsBuffering(false);
-        setLoadStatus("idle");
-        return;
-      }
+        let started = !!p.playing;
+        for (let i = 0; i < 15 && !started; i += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          started = !!p.playing;
+        }
 
-      p.play();
+        if (!mountedRef.current) return;
 
-      let started = !!p.playing;
-
-      for (let i = 0; i < 15 && !started; i += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        started = !!p.playing;
-      }
-
-      if (!mountedRef.current) return;
-      setIsPlaying(started);
+        setIsPlaying(started);
+        setIsBuffering(!started);
+        setLoadStatus(started ? "idle" : "loading");
+      });
+    } catch {
       setIsBuffering(false);
-      setLoadStatus(started ? "idle" : "ready");
-    });
-  } catch {
-    setIsBuffering(false);
-    setIsPlaying(false);
-    setLoadStatus("error");
-    setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
-  }
-}, [loadIfNeeded, isBuffering]);
-
+      setIsPlaying(false);
+      setLoadStatus("error");
+      setErr("در پخش یا ثبت مقدمه مشکلی پیش آمد، لطفاً دوباره تلاش کن");
+    }
+  }, [loadIfNeeded]);
 
   const seekTo = useCallback(
     async (ms: number) => {

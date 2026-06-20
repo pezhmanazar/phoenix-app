@@ -16,7 +16,6 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  findNodeHandle,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../../../hooks/useAuth";
@@ -315,23 +314,7 @@ export default function RC1RedFlagsScreen() {
       // @ts-ignore
       if (typeof task?.cancel === "function") task.cancel();
     };
-  }, [step, booting]);
-
-  // ✅ وقتی یک input فوکوس شد، بدون measureLayout ببریمش بالا که زیر کیبورد نره
-  const scrollToInput = useCallback(
-    (id: string, extraOffset = 22) => {
-      const input = inputRefs.current[id] as any;
-      const scroll = scrollRef.current as any;
-      if (!input || !scroll) return;
-
-      const node = findNodeHandle(input);
-      if (!node) return;
-
-      const responder = scroll.getScrollResponder?.();
-      responder?.scrollResponderScrollNativeHandleToKeyboard?.(node, extraOffset, true);
-    },
-    []
-  );
+  }, [step, booting]); 
 
   /* ----------------------------- Helpers ----------------------------- */
   const toggleSelect = useCallback(
@@ -569,7 +552,7 @@ export default function RC1RedFlagsScreen() {
           ref={scrollRef}
           contentContainerStyle={{ padding: 16, paddingBottom: 18 + insets.bottom + 120 }}
           showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
         >
           {/* Review Banner */}
           {isReview ? (
@@ -722,8 +705,6 @@ export default function RC1RedFlagsScreen() {
                         value={val}
                         onChangeText={(t) => setNote(id, t)}
                         onFocus={() => {
-                          // کمی تأخیر تا کیبورد بالا بیاید بعد اسکرول کنیم
-                          setTimeout(() => scrollToInput(id, 22), 60);
                         }}
                         placeholder="توضیح بده دقیقاً چه شد، چند بار تکرار شد، و چه اثری روی تو گذاشت…"
                         placeholderTextColor="rgba(231,238,247,.35)"
