@@ -4,8 +4,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import React, { useMemo, useRef, useState } from "react";
 import {
+  Animated,
   Dimensions,
-  FlatList,
+  PanResponder,
   Pressable,
   StatusBar,
   StyleSheet,
@@ -27,12 +28,12 @@ type Slide = {
 export default function Onboarding() {
   const slides = useMemo<Slide[]>(
     () => [
-     {
-       t: "به ققنوس خوش اومدی",
-       d: "ققنوس جاییه برای وقتی که فکر می‌کنی همه چی تموم شده و دیگه حالت خوب نمیشه اما قراره از همون خاکستر، قوی‌تر از قبل بلند شی. اینجا قراره  حالت خوب بشه و دوباره خودت رو بسازی، قدم‌به‌قدم و آگاهانه.",
-       icon: "flame",
-       accent: "gold",
-     },
+      {
+        t: "به ققنوس خوش اومدی",
+        d: "ققنوس جاییه برای وقتی که فکر می‌کنی همه چی تموم شده و دیگه حالت خوب نمیشه اما قراره از همون خاکستر، قوی‌تر از قبل بلند شی. اینجا قراره  حالت خوب بشه و دوباره خودت رو بسازی، قدم‌به‌قدم و آگاهانه.",
+        icon: "flame",
+        accent: "gold",
+      },
       {
         t: "پلکان درمان: مسیر روزانه برای عبور از جدایی  و شكست عشقی",
         d: "هر روز یک قدم کوچیک و مشخص اون هم بدون سردرگمی و بدون ول کردن وسط راه.",
@@ -58,11 +59,58 @@ export default function Onboarding() {
         accent: "green",
       },
     ],
-    []
+    [],
   );
 
-  const listRef = useRef<FlatList<Slide>>(null);
   const [index, setIndex] = useState(0);
+  const indexRef = useRef(0);
+  const translateX = useRef(new Animated.Value(0)).current;
+
+  function goTo(nextIndex: number) {
+    const clamped = Math.max(0, Math.min(nextIndex, slides.length - 1));
+    indexRef.current = clamped;
+    setIndex(clamped);
+
+    Animated.spring(translateX, {
+      toValue: -clamped * width,
+      useNativeDriver: true,
+      tension: 70,
+      friction: 10,
+    }).start();
+  }
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gesture) =>
+        Math.abs(gesture.dx) > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
+
+      onPanResponderMove: (_, gesture) => {
+        const base = -indexRef.current * width;
+        translateX.setValue(base + gesture.dx);
+      },
+
+      onPanResponderRelease: (_, gesture) => {
+        const threshold = width * 0.18;
+        const currentIndex = indexRef.current;
+
+        if (gesture.dx < -threshold && currentIndex < slides.length - 1) {
+          goTo(currentIndex + 1);
+          return;
+        }
+
+        if (gesture.dx > threshold && currentIndex > 0) {
+          goTo(currentIndex - 1);
+          return;
+        }
+
+        goTo(currentIndex);
+      },
+
+      onPanResponderTerminate: () => {
+        goTo(indexRef.current);
+      },
+    }),
+  ).current;
 
   async function finish() {
     await AsyncStorage.setItem(KEY, "1");
@@ -70,8 +118,7 @@ export default function Onboarding() {
   }
 
   function next() {
-    const nxt = Math.min(index + 1, slides.length - 1);
-    listRef.current?.scrollToIndex({ index: nxt, animated: true });
+    goTo(index + 1);
   }
 
   const current = slides[index];
@@ -92,43 +139,46 @@ export default function Onboarding() {
         </View>
 
         {/* Slides */}
-        <FlatList
-          ref={listRef}
-          data={slides}
-          keyExtractor={(_, i) => String(i)}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={(e) => {
-            const i = Math.round(e.nativeEvent.contentOffset.x / width);
-            setIndex(i);
-          }}
-          renderItem={({ item }) => (
-            <View style={[styles.slide, { width }]}>
-              <View style={styles.card}>
-                <View style={styles.iconWrap}>
-                  <View style={[styles.iconBadge, accentStyle(item.accent).badge]}>
-                    <Ionicons
-                      name={item.icon}
-                      size={28}
-                      color={accentStyle(item.accent).icon}
-                    />
+        <View style={styles.carouselViewport} {...panResponder.panHandlers}>
+          <Animated.View
+            style={[
+              styles.carouselTrack,
+              {
+                width: width * slides.length,
+                transform: [{ translateX }],
+              },
+            ]}
+          >
+            {slides.map((item, i) => (
+              <View key={i} style={[styles.slide, { width }]}>
+                <View style={styles.card}>
+                  <View style={styles.iconWrap}>
+                    <View
+                      style={[styles.iconBadge, accentStyle(item.accent).badge]}
+                    >
+                      <Ionicons
+                        name={item.icon}
+                        size={28}
+                        color={accentStyle(item.accent).icon}
+                      />
+                    </View>
                   </View>
-                </View>
 
-                <Text style={styles.title}>{item.t}</Text>
-                <Text style={styles.desc}>{item.d}</Text>
+                  <Text style={styles.title}>{item.t}</Text>
+                  <Text style={styles.desc}>{item.d}</Text>
 
-                {/* یک ریز-هایلایت کوتاه برای حس “برند” */}
-                <View style={styles.highlightRow}>
-                  <View style={[styles.pill, accentStyle(item.accent).pill]}>
-                    <Text style={styles.pillText}>سریع | ساده | قابل اجرا</Text>
+                  <View style={styles.highlightRow}>
+                    <View style={[styles.pill, accentStyle(item.accent).pill]}>
+                      <Text style={styles.pillText}>
+                        سریع | ساده | قابل اجرا
+                      </Text>
+                    </View>
                   </View>
                 </View>
               </View>
-            </View>
-          )}
-        />
+            ))}
+          </Animated.View>
+        </View>
 
         {/* Footer */}
         <View style={styles.footer}>
@@ -150,24 +200,24 @@ export default function Onboarding() {
             style={[styles.cta, accentStyle(current.accent).cta]}
           >
             <Text style={styles.ctaText}>
-  {index === 0
-    ? "دیدن امکانات ققنوس"
-    : index === slides.length - 1
-    ? "شروع"
-    : "بعدی"}
-</Text>
+              {index === 0
+                ? "دیدن امکانات ققنوس"
+                : index === slides.length - 1
+                  ? "شروع"
+                  : "بعدی"}
+            </Text>
             <Ionicons
-  name={
-    index === slides.length - 1
-      ? "sparkles-outline"
-      : index === 0
-      ? "eye-outline"
-      : "arrow-forward-outline"
-  }
-  size={18}
-  color="#e8eef7"
-  style={{ marginLeft: 8 }}
-/>
+              name={
+                index === slides.length - 1
+                  ? "sparkles-outline"
+                  : index === 0
+                    ? "eye-outline"
+                    : "arrow-forward-outline"
+              }
+              size={18}
+              color="#e8eef7"
+              style={{ marginLeft: 8 }}
+            />
           </Pressable>
 
           <Text style={styles.hint}>
@@ -185,35 +235,71 @@ function accentStyle(accent: Slide["accent"]) {
     case "gold":
       return {
         icon: "#D4AF37",
-        badge: { borderColor: "rgba(212,175,55,.45)", backgroundColor: "rgba(212,175,55,.10)" },
-        cta: { borderColor: "rgba(212,175,55,.45)", backgroundColor: "rgba(212,175,55,.16)" },
+        badge: {
+          borderColor: "rgba(212,175,55,.45)",
+          backgroundColor: "rgba(212,175,55,.10)",
+        },
+        cta: {
+          borderColor: "rgba(212,175,55,.45)",
+          backgroundColor: "rgba(212,175,55,.16)",
+        },
         dotActive: { backgroundColor: "#D4AF37" },
-        pill: { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)" },
+        pill: {
+          borderColor: "rgba(212,175,55,.35)",
+          backgroundColor: "rgba(212,175,55,.10)",
+        },
       };
     case "orange":
       return {
         icon: "#E98A15",
-        badge: { borderColor: "rgba(233,138,21,.45)", backgroundColor: "rgba(233,138,21,.10)" },
-        cta: { borderColor: "rgba(233,138,21,.45)", backgroundColor: "rgba(233,138,21,.14)" },
+        badge: {
+          borderColor: "rgba(233,138,21,.45)",
+          backgroundColor: "rgba(233,138,21,.10)",
+        },
+        cta: {
+          borderColor: "rgba(233,138,21,.45)",
+          backgroundColor: "rgba(233,138,21,.14)",
+        },
         dotActive: { backgroundColor: "#E98A15" },
-        pill: { borderColor: "rgba(233,138,21,.35)", backgroundColor: "rgba(233,138,21,.10)" },
+        pill: {
+          borderColor: "rgba(233,138,21,.35)",
+          backgroundColor: "rgba(233,138,21,.10)",
+        },
       };
     case "green":
       return {
         icon: "#22c55e",
-        badge: { borderColor: "rgba(34,197,94,.45)", backgroundColor: "rgba(34,197,94,.10)" },
-        cta: { borderColor: "rgba(34,197,94,.45)", backgroundColor: "rgba(34,197,94,.14)" },
+        badge: {
+          borderColor: "rgba(34,197,94,.45)",
+          backgroundColor: "rgba(34,197,94,.10)",
+        },
+        cta: {
+          borderColor: "rgba(34,197,94,.45)",
+          backgroundColor: "rgba(34,197,94,.14)",
+        },
         dotActive: { backgroundColor: "#22c55e" },
-        pill: { borderColor: "rgba(34,197,94,.35)", backgroundColor: "rgba(34,197,94,.10)" },
+        pill: {
+          borderColor: "rgba(34,197,94,.35)",
+          backgroundColor: "rgba(34,197,94,.10)",
+        },
       };
     case "blue":
     default:
       return {
         icon: "#60a5fa",
-        badge: { borderColor: "rgba(96,165,250,.45)", backgroundColor: "rgba(96,165,250,.10)" },
-        cta: { borderColor: "rgba(96,165,250,.45)", backgroundColor: "rgba(96,165,250,.14)" },
+        badge: {
+          borderColor: "rgba(96,165,250,.45)",
+          backgroundColor: "rgba(96,165,250,.10)",
+        },
+        cta: {
+          borderColor: "rgba(96,165,250,.45)",
+          backgroundColor: "rgba(96,165,250,.14)",
+        },
         dotActive: { backgroundColor: "#60a5fa" },
-        pill: { borderColor: "rgba(96,165,250,.35)", backgroundColor: "rgba(96,165,250,.10)" },
+        pill: {
+          borderColor: "rgba(96,165,250,.35)",
+          backgroundColor: "rgba(96,165,250,.10)",
+        },
       };
   }
 }
@@ -256,10 +342,21 @@ const styles = StyleSheet.create({
   },
   skip: { color: "rgba(231,238,247,.80)", fontSize: 13, fontWeight: "800" },
 
+  carouselViewport: {
+    flex: 1,
+    overflow: "hidden",
+    direction: "ltr",
+  },
+  carouselTrack: {
+    flex: 1,
+    flexDirection: "row",
+    direction: "ltr",
+  },
   slide: {
     paddingHorizontal: 18,
     justifyContent: "center",
     alignItems: "center",
+    direction: "ltr",
   },
 
   card: {
@@ -323,7 +420,12 @@ const styles = StyleSheet.create({
   },
 
   dots: { flexDirection: "row", gap: 8, justifyContent: "center" },
-  dot: { width: 8, height: 8, borderRadius: 99, backgroundColor: "rgba(255,255,255,.18)" },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 99,
+    backgroundColor: "rgba(255,255,255,.18)",
+  },
   dotActive: { width: 20 },
 
   cta: {
