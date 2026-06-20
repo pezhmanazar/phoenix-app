@@ -613,33 +613,38 @@ export default function TreatmentView({
     (!!activeDayId && day.id === activeDayId) || bastanFirstActionAvailable;
 
   const done = isDoneRow(dayProgressMap.get(day.id));
-
-  const canEnter = (available || done) && canEnterActive;
-
+  const canPressDay = available || done;
   const locked = !available && !done;
+  const freeActiveLocked = available && !done && !canEnterActive;
 
   const nodeX = zig === "L" ? NODE_X_LEFT : NODE_X_RIGHT;
   const bg = done
     ? palette.node.doneBg
-    : available
-      ? palette.node.availableBg
-      : locked
-        ? palette.node.lockedBg
-        : palette.node.availableBg;
+    : freeActiveLocked
+      ? "#2A0F14"
+      : available
+        ? palette.node.availableBg
+        : locked
+          ? palette.node.lockedBg
+          : palette.node.availableBg;
   const border = done
     ? palette.node.doneBorder
-    : available
-      ? palette.node.availableBorder
-      : locked
-        ? palette.node.lockedBorder
-        : palette.node.availableBorder;
+    : freeActiveLocked
+      ? "#EF4444"
+      : available
+        ? palette.node.availableBorder
+        : locked
+          ? palette.node.lockedBorder
+          : palette.node.availableBorder;
   const iconCol = done
     ? palette.node.doneIcon
-    : available
-      ? palette.node.availableIcon
-      : locked
-        ? palette.node.lockedIcon
-        : palette.node.availableIcon;
+    : freeActiveLocked
+      ? "#F87171"
+      : available
+        ? palette.node.availableIcon
+        : locked
+          ? palette.node.lockedIcon
+          : palette.node.availableIcon;
   const labelCol = done
     ? palette.node.doneLabel
     : available
@@ -669,14 +674,15 @@ export default function TreatmentView({
     top: CELL_H / 2 - NODE_R,
     backgroundColor: bg,
     borderColor: border,
-    opacity: available && !canEnter ? 0.55 : 1,
+    opacity: 1,
   };
 
   const dayNodeContent = (
     <TouchableOpacity
       activeOpacity={0.9}
       onPress={() => {
-        if (!canEnter) return;
+        if (!canPressDay) return;
+
         onTapActiveDay?.(day, { mode: available ? "active" : "preview" });
       }}
       style={styles.nodeInner}
