@@ -29,7 +29,7 @@ export const SUBSCRIPTION_PRICING = {
   zarinpal: {
     p30: {
       price: "۱,۰۰۰ تومان",
-      oldPrice: 399000,
+      oldPrice: "۳۹۹,۰۰۰ تومان",
    // oldPrice: undefined,
       amount: 1000,
       months: 1,
