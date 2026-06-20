@@ -413,7 +413,12 @@ export default function TD5HomeObjectScreen() {
   }, [agreeEssentialsNotForced, agreeNoEmotionalContact]);
 
   const canGo2 = acceptedWhy;
-  const canGo5 = acceptedWhy && statusOk && (status !== "has" ? true : planOk) && commitOk;
+  const canGo5 =
+  acceptedWhy &&
+  statusOk &&
+  (status !== "has" ? true : planOk) &&
+  (status !== "has" ? true : commitOk);
+
   const canFinalize = canGo5;
 
   /* ----------------------------- Persist FINAL local ----------------------------- */
@@ -431,8 +436,8 @@ export default function TD5HomeObjectScreen() {
       planPath: status === "has" ? planPath : null,
       returnMethod: status === "has" ? returnMethod : null,
 
-      agreeNoEmotionalContact: true,
-      agreeEssentialsNotForced: true,
+      agreeNoEmotionalContact: status === "has" ? agreeNoEmotionalContact : false,
+      agreeEssentialsNotForced: status === "has" ? agreeEssentialsNotForced : false,
 
       note: String(note || ""),
       durationSec,
@@ -440,7 +445,14 @@ export default function TD5HomeObjectScreen() {
 
     await AsyncStorage.setItem(KEY_TD5_FINAL, JSON.stringify(payload));
     await AsyncStorage.setItem(KEY_BASTAN_DIRTY, new Date().toISOString());
-  }, [note, planPath, returnMethod, status]);
+  }, [
+    agreeEssentialsNotForced,
+    agreeNoEmotionalContact,
+    note,
+    planPath,
+    returnMethod,
+    status,
+  ]);
 
   /* ----------------------------- Server submit (ONLY completion) ----------------------------- */
   const completeOnServer = useCallback(async (): Promise<"ok" | "already" | "fail"> => {
@@ -470,7 +482,7 @@ export default function TD5HomeObjectScreen() {
         hasPlan: status === "has" ? !!planPath : true,
         returnedToEx: status === "has" ? planPath === "return_to_ex" : false,
         hasReturnMethod: status === "has" && planPath === "return_to_ex" ? !!returnMethod : true,
-        committed: commitOk,
+        committed: status === "has" ? commitOk : true,
         durationSec,
       },
     };
@@ -601,6 +613,47 @@ export default function TD5HomeObjectScreen() {
     const f = RETURN_METHODS.find((x) => x.key === returnMethod);
     return f?.title || "—";
   }, [returnMethod]);
+
+    const finalSummaryText = useMemo(() => {
+    if (status === "none") {
+      return (
+        "الان وسیله یا یادگاری فعالی از این رابطه در دسترس تو نیست." +
+        "\n" +
+        "این یعنی از نظر «محرک فیزیکی»، وضعیتت فعلاً امن‌تره." +
+        "\n\n" +
+        "نکته مهم:" +
+        "\n" +
+        "اگه بعداً چیزی پیدا شد، هدیه‌ای باقی مونده بود یا وسیله‌ای دوباره جلوی چشمت اومد، تصمیم لحظه‌ای نگیر؛" +
+        "\n" +
+        "این منطق درمانی رو اجرا کن که دسترسی رو قطع کن و به شکل احساسی درگیر نشو."
+      );
+    }
+
+    if (status === "already") {
+      return (
+        "تو این بخش رو قبلاً انجام دادی و یادگاری‌ها رو جمع کردی یا برگردوندی." +
+        "\n" +
+        "این یعنی یک قدم درست رو از قبل برداشتی." +
+        "\n\n" +
+        "نکته مهم:" +
+        "\n" +
+        "اگه در آینده دوباره چیزی پیدا شد یا چیزی برگشت به فضای تو، قرار نیست از سر احساس تصمیم بگیری؛" +
+        "\n" +
+        "باز هم باید دسترسی هیجانی رو قطع کنی، نه اینکه خاطره رو دوباره فعال کنی."
+      );
+    }
+
+    return (
+      "این کار «پاک کردن خاطره» نبود." +
+      "\n" +
+      "این کار «قطع دسترسی» بود." +
+      "\n\n" +
+      "از اینجا به بعد، برنامه تو باید اجرا بشه؛ نه موج احساس." +
+      "\n" +
+      "هر وقت ناراحتی بالا رفت، تصمیم‌گیری ممنوعه و فقط همون مسیری که انتخاب کردی باید انجام بشه."
+    );
+  }, [status]);
+
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "left", "right", "bottom"]}>
@@ -977,18 +1030,13 @@ export default function TD5HomeObjectScreen() {
               <View style={styles.sectionCard}>
                 <Text style={styles.h1}>پایان</Text>
                 <Text style={styles.p}>
-                  این کار «پاک کردن خاطره» نبود.
-                  {"\n"}این کار «قطع دسترسی» بود.
-                  {"\n\n"}خلاصه انتخاب تو:
-                  {"\n"}• وضعیت: {selectedStatusTitle}
-                  {"\n"}
-                  {status === "has" ? `• مسیر: ${selectedPlanTitle}\n` : ""}
-                  {status === "has" && planPath === "return_to_ex" ? `• روش: ${selectedReturnTitle}\n` : ""}
-                  {"\n"}قانون طلایی:
-                  {"\n"}هر وقت موج ناراحتی سراغت اومد، تصمیم‌گیری ممنوع.
-                  {"\n"}فقط نقشه درمانی اجرا میشه.
-                  {"\n"}
-                </Text>
+                {finalSummaryText}
+                {"\n\n"}خلاصه انتخاب تو:
+                {"\n"}• وضعیت: {selectedStatusTitle}
+                {"\n"}
+                {status === "has" ? `• مسیر: ${selectedPlanTitle}\n` : ""}
+                {status === "has" && planPath === "return_to_ex" ? `• روش: ${selectedReturnTitle}\n` : ""}
+                 </Text>
               </View>
 
               <View style={{ marginTop: 14, gap: 10 }}>
@@ -1015,8 +1063,13 @@ export default function TD5HomeObjectScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {!isReview && !canFinalize ? <Text style={styles.warn}>قبل از ثبت، همه مراحل باید کامل بشه.</Text> : null}
-
+                {!isReview && !canFinalize ? (
+                <Text style={styles.warn}>
+                {status === "has"
+                ? "قبل از ثبت، مسیر عملی و تعهدها باید کامل بشه."
+                : "قبل از ثبت، وضعیت فعلی باید مشخص بشه."}
+                </Text>
+                ) : null}
                 {isReview ? (
                   <Text style={styles.small}>نکته: در حالت مرور، می‌تونی مراحل رو ببینی. فقط ادیت قفله.</Text>
                 ) : null}

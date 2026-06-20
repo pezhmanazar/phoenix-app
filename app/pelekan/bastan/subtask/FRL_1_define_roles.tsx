@@ -125,12 +125,12 @@ const OBLIGATION_OPTIONS: { key: ContactObligation; title: string; desc: string;
     desc: "تماس فقط برای پیگیری یک پرونده، قرارداد، یا موضوع اداری مشخصه.",
   },
   {
-    key: "none_of_above",
-    title: "هیچ‌کدوم از موارد بالا نیست",
-    desc:
-      "⚠️ این یعنی «اجبار واقعی» نداری. این ریزاقدام برای تو نیست. باید برگردی و مسیر «مجبور نیستم» رو انتخاب کنی.",
-    danger: true,
-  },
+  key: "none_of_above",
+  title: "هیچ‌کدوم از موارد بالا نیست",
+  desc:
+    "این یعنی الان «اجبار واقعی» نداری؛ اما برای اینکه اگر در آینده در چنین موقعیتی قرار گرفتی بلد باشی چطور تماس نقش‌محور بسازی، ادامه بده و مراحل بعدی رو آموزشی انجام بده.",
+  danger: true,
+},
 ];
 
 const CHANNEL_OPTIONS: { key: ContactChannel; title: string; desc: string }[] = [
@@ -383,7 +383,6 @@ export default function FRL1DefineRolesScreen() {
 
   /* ----------------------------- Step 2 multi-select logic ----------------------------- */
   const noneSelected = useMemo(() => obligations.includes("none_of_above"), [obligations]);
-  const hasAnyValidObligation = useMemo(() => obligations.some((x) => x !== "none_of_above"), [obligations]);
 
   const toggleObligation = useCallback(
     (k: ContactObligation) => {
@@ -433,12 +432,12 @@ export default function FRL1DefineRolesScreen() {
 
   // Step2: at least one selection OR none_of_above selected (but that blocks going forward)
   const step2PickedAnything = obligations.length > 0;
-  const step2InvalidForThisFlow = noneSelected;
-
+  
   const roleOk = useMemo(() => {
-    if (!step2PickedAnything || step2InvalidForThisFlow) return false;
-    return trimLen(myRoleTitle) >= 2 && trimLen(theirRoleTitle) >= 2 && !!channel;
-  }, [channel, myRoleTitle, step2PickedAnything, step2InvalidForThisFlow, theirRoleTitle]);
+  if (!step2PickedAnything) return false;
+  return trimLen(myRoleTitle) >= 2 && trimLen(theirRoleTitle) >= 2 && !!channel;
+}, [channel, myRoleTitle, step2PickedAnything, theirRoleTitle]);
+
 
   const topicsOk = useMemo(() => {
     if (!roleOk) return false;
@@ -451,7 +450,7 @@ export default function FRL1DefineRolesScreen() {
   }, [agreeKeepDryOfficial, agreeNoEmotionalContact, agreeNoEscapeRearrangeLife, topicsOk]);
 
   const canGo2 = step1Ok;
-  const canGo3 = step1Ok && step2PickedAnything && !step2InvalidForThisFlow && hasAnyValidObligation;
+  const canGo3 = step1Ok && step2PickedAnything;
   const canGo4 = canGo3 && roleOk && topicsOk;
   const canGo5 = canGo4 && commitOk;
 
@@ -830,11 +829,10 @@ export default function FRL1DefineRolesScreen() {
               </View>
 
               {noneSelected ? (
-                <Text style={[styles.warn, { marginTop: 10 }]}>
-                  این انتخاب یعنی «اجبار واقعی نداری». باید برگردی و مسیر «مجبور نیستم» رو انتخاب کنی.
-                </Text>
-              ) : null}
-
+              <Text style={[styles.warn, { marginTop: 10 }]}>
+              این انتخاب یعنی الان اجبار واقعی نداری؛ اما برای یادگیریِ موقعیت‌های آینده، می‌تونی ادامه بدی و نقش‌ها، کانال مجاز و خط قرمزها رو به‌صورت آموزشی تعریف کنی.
+             </Text>
+            ) : null}
               {!step2PickedAnything ? (
                 <Text style={[styles.warn, { marginTop: 10 }]}>برای ادامه، حداقل یک گزینه رو انتخاب کن.</Text>
               ) : null}

@@ -85,6 +85,7 @@ type FRL0Saved = {
     noBehaviorAnalysis: boolean;
 
     finalCommitment: boolean;
+    futureRoleBasedCommitment: boolean;
   };
 
   durationSec?: number | null;
@@ -236,6 +237,7 @@ function emptyChecklist(): FRL0Saved["checklist"] {
     noBehaviorAnalysis: false,
 
     finalCommitment: false,
+    futureRoleBasedCommitment: false,
   };
 }
 
@@ -379,10 +381,10 @@ export default function FRL0ContactGateScreen() {
   }, [checklist, gateChoice]);
 
   const canFinalize = useMemo(() => {
-    if (!gateChoice) return false;
-    if (gateChoice === "forced") return true;
-    return checklistOk;
-  }, [checklistOk, gateChoice]);
+  if (!gateChoice) return false;
+  if (gateChoice === "forced") return true;
+  return checklistOk && !!checklist.futureRoleBasedCommitment;
+}, [checklist.futureRoleBasedCommitment, checklistOk, gateChoice]);
 
   /* ----------------------------- Persist FINAL local ----------------------------- */
   const persistFinalLocal = useCallback(async () => {
@@ -762,13 +764,38 @@ const payloadToSend = {
                 </Text>
 
                 {gateChoice === "not_forced" ? (
-                  <View style={[styles.pairCard, { marginTop: 10 }]}>
-                    <Text style={styles.pairLabel}>چک‌لیست:</Text>
-                    <Text style={styles.pairText}>
-                      {checkedCount} / {CHECKLIST_ITEMS.length}
-                    </Text>
-                  </View>
-                ) : null}
+  <>
+    <View style={[styles.pairCard, { marginTop: 10 }]}>
+      <Text style={styles.pairLabel}>چک‌لیست:</Text>
+      <Text style={styles.pairText}>
+        {checkedCount} / {CHECKLIST_ITEMS.length}
+      </Text>
+    </View>
+
+    <Pressable
+      onPress={() => toggleChecklist("futureRoleBasedCommitment")}
+      disabled={isReview}
+      style={[
+        styles.choiceCard,
+        { marginTop: 10 },
+        checklist.futureRoleBasedCommitment && styles.choiceCardOn,
+        isReview && { opacity: 0.7 },
+      ]}
+    >
+      <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+        <Ionicons
+          name={checklist.futureRoleBasedCommitment ? "checkmark-circle" : "ellipse-outline"}
+          size={18}
+          color={checklist.futureRoleBasedCommitment ? palette.green : "rgba(231,238,247,.55)"}
+        />
+        <Text style={styles.choiceText}>
+          می‌پذیرم با اینکه الان مجبور به ارتباط نیستم، ریزاقدام‌های بعدیِ تماس نقش‌محور رو هم یاد بگیرم تا اگه یک روز مجبور به ارتباط شدم، ندونستن من باعث آسیب دوباره نشه.
+        </Text>
+      </View>
+    </Pressable>
+  </>
+) : null}
+
               </View>
 
               <View style={{ marginTop: 14, gap: 10 }}>

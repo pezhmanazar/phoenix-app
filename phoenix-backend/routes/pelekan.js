@@ -1532,15 +1532,10 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     let xpAwarded = 0;
     let medalAwarded = null;
 
-    const normalizedGateChoice = String(rawGate || "").trim();
-
-    const completesParentAction =
-      subtask.key === "FRL_0_contact_gate" &&
-      normalizedGateChoice === "not_forced";
-
-    const effectiveMinRequiredSubtasks = completesParentAction
-      ? 1
-      : Math.max(0, Number(subtask.action?.minRequiredSubtasks || 0));
+    const effectiveMinRequiredSubtasks = Math.max(
+      0,
+      Number(subtask.action?.minRequiredSubtasks || 0),
+    );
 
     await prisma.$transaction(async (tx) => {
       // 1) mark subtask progress done (persist payload)
