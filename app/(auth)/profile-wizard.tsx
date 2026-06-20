@@ -127,11 +127,27 @@ function bannerStyle(type: BannerType) {
   };
 }
 
-const isUserNotFoundError = (error?: string | null) =>
-  error === "USER_NOT_FOUND" ||
-  error === "PARSE_ERROR_404" ||
-  error === "HTTP_404" ||
-  error === "NOT_FOUND";
+const isUserNotFoundError = (error?: string | null) => {
+  const e = String(error || "")
+    .trim()
+    .toUpperCase();
+
+  return (
+    !e ||
+    e === "USER_NOT_FOUND" ||
+    e === "USER_NOT_FOUND_BY_PHONE" ||
+    e === "PARSE_ERROR_404" ||
+    e === "HTTP_404" ||
+    e === "404" ||
+    e === "NOT_FOUND" ||
+    e === "404_NOT_FOUND" ||
+    e.includes("USER_NOT_FOUND") ||
+    e.includes("NOT_FOUND") ||
+    e.includes("NOT FOUND") ||
+    e.includes("HTTP 404") ||
+    e.includes("STATUS 404")
+  );
+};
 
 export default function ProfileWizard() {
   const { phone, loading: authLoading } = useAuth();
@@ -283,11 +299,11 @@ export default function ProfileWizard() {
 
         const r = await getMeByPhone(resolvedPhone);
         if (!r.ok) {
+          // کاربر جدید هنوز در دیتابیس نیست؛ این وضعیت خطا نیست.
           if (isUserNotFoundError(r.error)) {
             await AsyncStorage.removeItem("profile_completed_flag");
             await AsyncStorage.removeItem("phoenix_profile");
             setBootError(null);
-            showBanner("info", "خوش اومدی", "لطفاً اطلاعاتت رو تکمیل کن.");
             return;
           }
 
@@ -300,7 +316,6 @@ export default function ProfileWizard() {
           );
           return;
         }
-
         if (!r.data) {
           await AsyncStorage.removeItem("profile_completed_flag");
           await AsyncStorage.removeItem("phoenix_profile");
@@ -352,15 +367,23 @@ export default function ProfileWizard() {
           }),
         );
       } catch (e: any) {
-        console.warn(
-          "[ProfileWizard] getMeByPhone exception:",
-          e?.message || e,
-        );
-        setBootError(e?.message || "NETWORK_ERROR");
+        const msg = e?.message || String(e || "");
+
+        console.warn("[ProfileWizard] getMeByPhone exception:", msg);
+
+        // اگر api/user برای 404 به جای r.ok=false exception پرتاب کند، باز هم خطا نمایش نده.
+        if (isUserNotFoundError(msg)) {
+          await AsyncStorage.removeItem("profile_completed_flag");
+          await AsyncStorage.removeItem("phoenix_profile");
+          setBootError(null);
+          return;
+        }
+
+        setBootError(msg || "NETWORK_ERROR");
         showBanner(
           "error",
           "مشکل شبکه",
-          getFriendlyErrorMessage(e?.message || "NETWORK_ERROR"),
+          getFriendlyErrorMessage(msg || "NETWORK_ERROR"),
           4500,
         );
       } finally {
