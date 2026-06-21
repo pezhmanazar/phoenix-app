@@ -1608,19 +1608,19 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         const safetyResult = String(rawGate);
 
         await tx.bastanState.upsert({
-          where: { userId: user.id },
-          create: {
-            userId: user.id,
-            lastSafetyCheckAt: now,
-            lastSafetyCheckResult: safetyResult,
-            ...(safetyResult === "none" ? { gosastanUnlockedAt: now } : {}),
-          },
-          update: {
-            lastSafetyCheckAt: now,
-            lastSafetyCheckResult: safetyResult,
-            ...(safetyResult === "none" ? { gosastanUnlockedAt: now } : {}),
-          },
-        });
+  where: { userId: user.id },
+  create: {
+    userId: user.id,
+    lastSafetyCheckAt: now,
+    lastSafetyCheckResult: safetyResult,
+    gosastanUnlockedAt: now,
+  },
+  update: {
+    lastSafetyCheckAt: now,
+    lastSafetyCheckResult: safetyResult,
+    gosastanUnlockedAt: now,
+  },
+});
 
         if (safetyResult === "none") {
           const MEDAL_CODE = "BASTAN_COMPLETE";
@@ -1689,7 +1689,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
           subtask.key === "CC_3_24h_safety_check"
             ? {
                 safetyResult: rawGate,
-                gosastanUnlocked: String(rawGate) === "none",
+                gosastanUnlocked: true,
                 xpAwarded,
                 medalAwarded,
               }
