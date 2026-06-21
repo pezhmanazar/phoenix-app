@@ -1608,19 +1608,19 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         const safetyResult = String(rawGate);
 
         await tx.bastanState.upsert({
-  where: { userId: user.id },
-  create: {
-    userId: user.id,
-    lastSafetyCheckAt: now,
-    lastSafetyCheckResult: safetyResult,
-    gosastanUnlockedAt: now,
-  },
-  update: {
-    lastSafetyCheckAt: now,
-    lastSafetyCheckResult: safetyResult,
-    gosastanUnlockedAt: now,
-  },
-});
+          where: { userId: user.id },
+          create: {
+            userId: user.id,
+            lastSafetyCheckAt: now,
+            lastSafetyCheckResult: safetyResult,
+            gosastanUnlockedAt: now,
+          },
+          update: {
+            lastSafetyCheckAt: now,
+            lastSafetyCheckResult: safetyResult,
+            gosastanUnlockedAt: now,
+          },
+        });
 
         if (safetyResult === "none") {
           const MEDAL_CODE = "BASTAN_COMPLETE";

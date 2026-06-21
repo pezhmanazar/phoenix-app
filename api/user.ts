@@ -109,8 +109,11 @@ async function doJson<T>(
     }
 
     return { ok: true, data: json as T };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || "NETWORK_ERROR" };
+   } catch (e: any) {
+    return {
+      ok: false,
+      error: e?.message || e?.name || "NETWORK_ERROR",
+    };
   }
 }
 
@@ -146,7 +149,6 @@ export async function getMeByPhone(
   const cacheBuster = `cb=${Date.now()}`;
   const url =
     userUrl(`/api/users/me`) + `?phone=${encodeURIComponent(p)}&${cacheBuster}`;
-
   return doJson<UserRecord | null>(
   url,
   {
@@ -187,6 +189,18 @@ export async function upsertUserByPhone(
   if (typeof payload.profileCompleted === "boolean") {
     safePayload.profileCompleted = payload.profileCompleted;
   }
+
+  if (typeof payload.avatarUrl === "string") {
+  safePayload.avatarUrl = payload.avatarUrl;
+}
+
+if (typeof payload.plan === "string") {
+  safePayload.plan = payload.plan;
+}
+
+if (typeof payload.lastLoginAt === "string") {
+  safePayload.lastLoginAt = payload.lastLoginAt;
+}
 
   return doJson<UserRecord>(url, {
     method: "POST",

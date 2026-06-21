@@ -1,8 +1,8 @@
 // app/gate.tsx
-import { useEffect, useState } from "react";
-import { View, ActivityIndicator } from "react-native";
-import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, View } from "react-native";
 import { useAuth } from "../hooks/useAuth";
 
 const ONBOARDING_KEY = "hasOnboarded_v1";

@@ -11,10 +11,10 @@ import React, {
   createContext,
   useContext,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
+
 
 /* ==============================
    🔹 TYPES
@@ -520,19 +520,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const value = useMemo<AuthContextValue>(
-    () => ({
-      ...state,
-      setToken,
-      setPhone,
-      signOut,
-      refreshFromStore,
-      requestCode,
-      verifyOtp,
-    }),
-    [state]
-  );
-
+  const value: AuthContextValue = {
+  ...state,
+  setToken,
+  setPhone,
+  signOut,
+  refreshFromStore,
+  requestCode,
+  verifyOtp,
+};
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 }
 

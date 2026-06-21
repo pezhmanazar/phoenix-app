@@ -299,23 +299,19 @@ export default function ProfileWizard() {
 
         const r = await getMeByPhone(resolvedPhone);
         if (!r.ok) {
-          // کاربر جدید هنوز در دیتابیس نیست؛ این وضعیت خطا نیست.
+          // Boot prefill نباید مسیر ویزارد را خراب کند؛ خطای واقعی در submit نمایش داده می‌شود.
+          await AsyncStorage.removeItem("profile_completed_flag");
+
           if (isUserNotFoundError(r.error)) {
-            await AsyncStorage.removeItem("profile_completed_flag");
             await AsyncStorage.removeItem("phoenix_profile");
-            setBootError(null);
-            return;
+          } else {
+            console.warn("[ProfileWizard] boot getMeByPhone failed:", r.error);
           }
 
-          setBootError(r.error || "NETWORK_ERROR");
-          showBanner(
-            "error",
-            "خطا در ارتباط با سرور",
-            getFriendlyErrorMessage(r.error || "NETWORK_ERROR"),
-            4500,
-          );
+          setBootError(null);
           return;
         }
+
         if (!r.data) {
           await AsyncStorage.removeItem("profile_completed_flag");
           await AsyncStorage.removeItem("phoenix_profile");
@@ -326,6 +322,11 @@ export default function ProfileWizard() {
 
         if (d.profileCompleted === true && !redirectedRef.current) {
           await AsyncStorage.setItem("profile_completed_flag", "1");
+          await AsyncStorage.multiRemove([
+            "force_profile_wizard_v1",
+            "force_profile_phone_v1",
+          ]);
+
           redirectedRef.current = true;
           router.replace("/(tabs)");
           return;
@@ -371,7 +372,6 @@ export default function ProfileWizard() {
 
         console.warn("[ProfileWizard] getMeByPhone exception:", msg);
 
-        // اگر api/user برای 404 به جای r.ok=false exception پرتاب کند، باز هم خطا نمایش نده.
         if (isUserNotFoundError(msg)) {
           await AsyncStorage.removeItem("profile_completed_flag");
           await AsyncStorage.removeItem("phoenix_profile");
@@ -379,13 +379,10 @@ export default function ProfileWizard() {
           return;
         }
 
-        setBootError(msg || "NETWORK_ERROR");
-        showBanner(
-          "error",
-          "مشکل شبکه",
-          getFriendlyErrorMessage(msg || "NETWORK_ERROR"),
-          4500,
-        );
+        console.warn("[ProfileWizard] boot getMeByPhone failed silently:", msg);
+        await AsyncStorage.removeItem("profile_completed_flag");
+        setBootError(null);
+        return;
       } finally {
         setBootChecking(false);
       }
@@ -585,16 +582,6 @@ export default function ProfileWizard() {
 
   /* ---------------- Submit ---------------- */
   const onSubmit = async () => {
-    if (bootChecking) {
-      showBanner(
-        "info",
-        "لطفاً کمی صبر کن",
-        "در حال بررسی وضعیت پروفایل از سرور…",
-        2500,
-      );
-      return;
-    }
-
     // ✅ بنر "عدم شماره" فقط هنگام کلیک کاربر
     if (!resolvedPhone) {
       showBanner(
@@ -678,6 +665,11 @@ export default function ProfileWizard() {
           birthDate: normalizeIsoDateOnly(d.birthDate) ?? safeBirth ?? null,
         }),
       );
+
+      await AsyncStorage.multiRemove([
+        "force_profile_wizard_v1",
+        "force_profile_phone_v1",
+      ]);
 
       await refresh({ force: true }).catch(() => {});
       if (!redirectedRef.current) {
@@ -1396,7 +1388,7 @@ export default function ProfileWizard() {
                     Keyboard.dismiss();
                     onSubmit();
                   }}
-                  disabled={formLocked || bootChecking}
+                  disabled={formLocked}
                   activeOpacity={0.9}
                   style={{
                     height: 54,
@@ -1409,32 +1401,15 @@ export default function ProfileWizard() {
                     alignItems: "center",
                     justifyContent: "center",
                     marginTop: 16,
-                    opacity: formLocked || bootChecking ? 0.65 : 1,
+                    opacity: formLocked ? 0.65 : 1,
                   }}
                 >
                   <Text
                     style={{ color: P.text, fontSize: 14, fontWeight: "900" }}
                   >
-                    {formLocked
-                      ? "در حال ورود…"
-                      : bootChecking
-                        ? "در حال بررسی…"
-                        : "ذخیره و شروع"}
+                    {formLocked ? "در حال ورود…" : "ذخیره و شروع"}
                   </Text>
                 </TouchableOpacity>
-
-                {bootChecking ? (
-                  <Text
-                    style={{
-                      color: P.muted2,
-                      fontSize: 11,
-                      marginTop: 10,
-                      textAlign: "center",
-                    }}
-                  >
-                    لطفاً چند ثانیه صبر کن تا وضعیت از سرور بررسی شود.
-                  </Text>
-                ) : null}
               </View>
             </View>
           </ScrollView>

@@ -568,7 +568,7 @@ export default function EditProfileModal({ onClose }: Props) {
       openDialog({
         tone: "danger",
         title: "خطا",
-        message: "در ریست/پاک‌سازی داده‌ها مشکلی پیش آمد.",
+        message: "در ریست یا پاک‌سازی داده‌ها مشکلی پیش اومد.",
         buttons: [{ text: "باشه", kind: "primary", onPress: closeDialog }],
       });
     } finally {

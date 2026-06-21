@@ -1,7 +1,7 @@
 // app/(tabs)/_layout.tsx
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Tabs } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   AppState,
@@ -13,6 +13,7 @@ import {
 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BACKEND_URL } from "../../constants/backend";
+import { useAuth } from "../../hooks/useAuth";
 import { useUser } from "../../hooks/useUser";
 import { checkAppUpdate } from "../../lib/appUpdate";
 
@@ -194,13 +195,84 @@ function TabIconBox({
 
 /* ===== خود layout تب‌ها ===== */
 export default function TabsLayout() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { me } = useUser();
+  const { phone, isAuthenticated } = useAuth();
+  const { me, refreshing, refresh } = useUser();
+
 
   const [unreadCount, setUnreadCount] = useState(0);
   const [hasAppUpdate, setHasAppUpdate] = useState(false);
   const isCheckingUpdateRef = useRef(false);
   const isRefreshingRef = useRef(false);
+
+  useEffect(() => {
+  if (!isAuthenticated) {
+    router.replace("/(auth)/login");
+    return;
+  }
+
+  if (!phone) {
+    router.replace("/(auth)/login");
+    return;
+  }
+
+  if (!me && !refreshing) {
+    refresh({ force: true }).catch(() => {});
+  }
+  
+}, [isAuthenticated, phone, me, refreshing, refresh, router]);
+
+
+useEffect(() => {
+  let cancelled = false;
+
+  const checkForcedWizard = async () => {
+    try {
+      const forced = await AsyncStorage.getItem("force_profile_wizard_v1");
+      const forcedPhone =
+        (await AsyncStorage.getItem("force_profile_phone_v1")) || phone;
+
+      if (cancelled) return;
+
+      if (forced === "1") {
+        router.replace({
+          pathname: "/(auth)/profile-wizard",
+          params: { phone: forcedPhone || "" },
+        });
+      }
+    } catch {
+      // ignore storage read failures
+    }
+  };
+
+  checkForcedWizard();
+
+  return () => {
+    cancelled = true;
+  };
+}, [phone, router]);
+
+useEffect(() => {
+  if (!isAuthenticated) return;
+  if (!phone) return;
+  if (!me) return;
+
+  const profileCompleted = me.profileCompleted === true;
+
+  if (!profileCompleted) {
+    AsyncStorage.multiSet([
+      ["force_profile_wizard_v1", "1"],
+      ["force_profile_phone_v1", phone],
+    ]).catch(() => {});
+    return;
+  }
+
+  AsyncStorage.multiRemove([
+    "force_profile_wizard_v1",
+    "force_profile_phone_v1",
+  ]).catch(() => {});
+}, [isAuthenticated, phone, me]);
 
   const refreshUnread = useCallback(async () => {
     if (isRefreshingRef.current) return;
