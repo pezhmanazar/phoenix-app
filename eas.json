@@ -20,7 +20,9 @@
         "buildType": "apk"
       },
       "env": {
-        "PAYMENT_PROVIDER": "zarinpal"
+        "PAYMENT_PROVIDER": "zarinpal",
+        "EXPO_PUBLIC_APP_API_URL": "https://api.qoqnoos.app",
+        "EXPO_PUBLIC_BACKEND_URL": "https://api.qoqnoos.app"
       }
     },
     "bazaar": {
