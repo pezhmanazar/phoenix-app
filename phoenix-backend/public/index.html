@@ -981,6 +981,47 @@
         display: block;
       }
 
+      .brand.img-fallback,
+      .mobile-cta.img-fallback,
+      .trust-logo.img-fallback,
+      .hero-visual.img-fallback,
+      .phone-shot.img-fallback {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .brand.img-fallback {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+      }
+
+      .mobile-cta.img-fallback {
+        width: 44px;
+        height: 44px;
+        border-radius: 14px;
+      }
+
+      .trust-logo.img-fallback {
+        width: 92px;
+        height: 92px;
+        border-radius: 16px;
+      }
+
+      .hero-visual.img-fallback {
+        width: 100%;
+        min-height: 220px;
+        border-radius: 26px;
+      }
+
+      .phone-shot.img-fallback {
+        width: 100%;
+        min-height: 320px;
+        aspect-ratio: 9 / 16;
+        border-radius: 18px;
+      }
+
       .img-fallback {
         background: linear-gradient(
           180deg,
@@ -988,37 +1029,6 @@
           rgba(255, 255, 255, 0.03)
         );
         min-height: 44px;
-      }
-
-      .phone-shot img.img-fallback {
-        min-height: 160px;
-      }
-
-      .brand img.img-fallback,
-      .mobile-cta img.img-fallback,
-      .trust-logo img.img-fallback {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        opacity: 1;
-      }
-
-      .brand img.img-fallback {
-        width: 40px;
-        height: 40px;
-        border-radius: 12px;
-      }
-
-      .mobile-cta img.img-fallback {
-        width: 18px;
-        height: 18px;
-        border-radius: 8px;
-      }
-
-      .trust-logo img.img-fallback {
-        width: 92px;
-        height: 92px;
-        border-radius: 16px;
       }
 
       /* Responsive (content) */
@@ -1058,10 +1068,20 @@
         padding: 12px;
       }
 
-      .hero-visual .img-fallback::after,
-      .phone-shot .img-fallback::after {
+      .brand.img-fallback::after,
+      .mobile-cta.img-fallback::after,
+      .trust-logo.img-fallback::after {
+        content: "⚠";
+        font-size: 12px;
+        padding: 6px;
+      }
+
+      .hero-visual.img-fallback::after,
+      .phone-shot.img-fallback::after {
         content: "تصویر بارگذاری نشد\A فیلترشکن رو خاموش کنید و صفحه رو تازه‌سازی کنید";
-        white-space: pre-line;
+        font-size: 12px;
+        line-height: 1.8;
+        padding: 16px;
       }
 
       .phone-shot .img-fallback {
@@ -1071,11 +1091,6 @@
         display: flex;
         align-items: center;
         justify-content: center;
-      }
-
-      .phone-shot .img-fallback::after {
-        font-size: 12px;
-        line-height: 1.8;
       }
     </style>
   </head>
@@ -1544,7 +1559,8 @@
 
         images.forEach(function (img) {
           img.addEventListener("error", function () {
-            img.classList.add("img-fallback");
+            img.style.display = "none";
+            img.parentElement?.classList.add("img-fallback");
             img.removeAttribute("src");
           });
         });
