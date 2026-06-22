@@ -1125,10 +1125,9 @@
       </div>
 
             <div class="trust-row">
-        <div id="zarinpal-wrapper" class="trust-logo" onclick="loadZarinpal()">
-          <img src="/static/img/zarinpal-logo.png" alt="زرین پال">
-        </div>
-
+            <a id="zarinpal-wrapper" class="trust-logo" href="https://www.zarinpal.com/" target="_blank" rel="noopener">
+           <img src="/static/img/zarinpal-logo.png" alt="زرین پال">
+          </a>
         <div id="enamad-wrapper" class="trust-logo" onclick="loadEnamad()">
           <img src="/static/img/enamad-logo.png" alt="اینماد">
         </div>
@@ -1137,25 +1136,6 @@
   </footer>
 
     <script>
-  function loadZarinpal() {
-  const wrapper = document.getElementById("zarinpal-wrapper");
-  if (!wrapper || wrapper.dataset.loaded === "true") return;
-
-  wrapper.dataset.loaded = "true";
-  wrapper.innerHTML = "";
-
-  const script = document.createElement("script");
-  script.src = "https://www.zarinpal.com/webservice/TrustCode";
-  script.type = "text/javascript";
-  script.async = true;
-
-  script.onerror = function () {
-    wrapper.dataset.loaded = "false";
-    wrapper.innerHTML = '<img src="/static/img/zarinpal-logo.png" alt="زرین پال">';
-  };
-
-  wrapper.appendChild(script);
-}
 
     function loadEnamad() {
       window.open(
@@ -1166,12 +1146,12 @@
     }
 
     // Loader fade out
-    window.addEventListener("load", function () {
-      const el = document.getElementById("pageLoader");
-      if (!el) return;
-      el.classList.add("hidden");
-      setTimeout(() => el.remove(), 350);
-    });
+    window.addEventListener("DOMContentLoaded", function () {
+  const el = document.getElementById("pageLoader");
+  if (!el) return;
+  el.classList.add("hidden");
+  setTimeout(() => el.remove(), 350);
+});
 
     // Close mobile menu after clicking any in-page hash link
     (function () {
