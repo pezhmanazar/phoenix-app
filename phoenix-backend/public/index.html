@@ -849,12 +849,51 @@
       display: block;
     }
 
+    .img-fallback{
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+  min-height: 44px;
+}
+
+.phone-shot img.img-fallback{
+  min-height: 160px;
+}
+
+.brand img.img-fallback,
+.mobile-cta img.img-fallback,
+.trust-logo img.img-fallback{
+  opacity: 0.35;
+}
+
     /* Responsive (content) */
     @media (max-width: 900px){
       .hero-grid{ grid-template-columns: 1fr; }
       .grid{ grid-template-columns: 1fr; }
       .hero h1{ font-size: 28px; }
     }
+
+.img-fallback {
+  display: inline-block;
+  background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+  border: 1px dashed #cbd5e1;
+  border-radius: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.img-fallback::after {
+  content: "تصویر بارگذاری نشد";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  padding: 12px;
+}
+
   </style>
 </head>
 
@@ -886,7 +925,7 @@
         <!-- Logo (click -> home) -->
         <div class="brand">
           <a href="/" aria-label="بازگشت به صفحه اصلی">
-            <img src="/static/img/logo.png" alt="لوگوی ققنوس">
+            <img src="/static/img/logo.png" alt="لوگوی ققنوس" decoding="async" onerror="this.classList.add('img-fallback');this.removeAttribute('src');">
             <div class="brand-title">
               ققنوس
               <span>بازسازی بعد از شکست عشقی</span>
@@ -1161,6 +1200,46 @@
         }
       });
     })();
+
+    (function () {
+  const images = document.querySelectorAll("img");
+
+  images.forEach(function (img) {
+    img.addEventListener("error", function () {
+      img.classList.add("img-fallback");
+
+      if (img.closest(".phone-shot")) {
+        img.style.display = "block";
+        img.style.width = "100%";
+        img.style.height = "160px";
+      }
+
+      if (img.closest(".hero-visual")) {
+        img.style.display = "block";
+        img.style.width = "100%";
+        img.style.height = "220px";
+      }
+
+      if (img.closest(".brand")) {
+        img.style.width = "40px";
+        img.style.height = "40px";
+      }
+
+      if (img.closest(".mobile-cta")) {
+        img.style.width = "18px";
+        img.style.height = "18px";
+      }
+
+      if (img.closest(".trust-logo")) {
+        img.style.width = "92px";
+        img.style.height = "92px";
+      }
+
+      img.removeAttribute("src");
+    });
+  });
+})();
+
   </script>
 </body>
 </html>
