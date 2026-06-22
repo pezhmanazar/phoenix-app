@@ -355,15 +355,19 @@
       padding: 22px;
       box-shadow: 0 18px 50px rgba(0,0,0,0.32);
       display:flex;
-      text-align:center;
       flex-direction: column;
       justify-content: space-between;
+      text-align:center;
+      height: 100%;
     }
+
     .metric{
       display:flex;
       flex-direction: column;
       gap: 10px;
+      flex: 1;
     }
+
     .metric .title{
       font-weight: 900;
       font-size: 14px;
@@ -375,20 +379,49 @@
       line-height: 2;
     }
     .pill-row{
-      margin-top: 12px;
+      margin-top: 14px;
       display:flex;
       justify-content:center;
       gap: 8px;
       flex-wrap: wrap;
     }
+
     .pill{
+      display:inline-flex;
+      align-items:center;
+      gap: 6px;
       font-size: 12px;
       color: rgba(232,236,241,0.9);
       border: 1px solid rgba(255,255,255,0.10);
       background: rgba(255,255,255,0.03);
-      padding: 6px 10px;
+      padding: 7px 11px;
       border-radius: 999px;
+      line-height: 1;
     }
+
+    .pill-icon{
+      width: 16px;
+      height: 16px;
+      flex: 0 0 16px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      border-radius: 999px;
+      color: #101419;
+      font-size: 10px;
+      font-weight: 900;
+      background: linear-gradient(135deg, rgba(212,175,55,0.95), rgba(233,138,21,0.95));
+      box-shadow: 0 6px 16px rgba(212,175,55,0.18);
+    }
+
+    .side-card-cta{
+      margin-top: 14px;
+    }
+
+    .side-card-cta .btn{
+      width: 100%;
+    }
+
         .feature-stack{
       display: grid;
       grid-template-columns: 1fr;
@@ -479,6 +512,13 @@
         border-radius: 12px;
         flex-basis: 38px;
         font-size: 16px;
+      }
+      .side-card{
+        height: auto;
+      }
+
+      .side-card-cta{
+        margin-top: 12px;
       }
     }
 
@@ -905,7 +945,7 @@
         </div>
 
         <div class="side-card">
-                    <div class="metric">
+          <div class="metric">
             <div class="title">سه ستون اصلی ققنوس</div>
             <div class="desc">
               سه ابزار مکمل که کنار هم مسیر عبور، کنترل لحظه‌های سخت و بازسازی ذهنی را می‌سازند.
@@ -938,17 +978,17 @@
             </div>
 
             <div class="pill-row">
-              <div class="pill">روزانه و قدم‌به‌قدم</div>
-              <div class="pill">تمرین‌های عملی</div>
-              <div class="pill">حضور درمانگر در تمام لحظات</div>
+              <span class="pill"><span class="pill-icon">✓</span>روزانه و قدم‌به‌قدم</span>
+              <span class="pill"><span class="pill-icon">●</span>تمرین‌های عملی</span>
+              <span class="pill"><span class="pill-icon">★</span>حضور درمانگر در تمام لحظات</span>
             </div>
           </div>
-          </div>
 
-          <div class="mt-14">
-            <a class="btn btn-ghost w-100" href="/download.html">رفتن به صفحه دانلود</a>
+          <div class="side-card-cta">
+            <a class="btn btn-ghost" href="/download.html">رفتن به صفحه دانلود</a>
           </div>
         </div>
+
       </div>
     </section>
 
