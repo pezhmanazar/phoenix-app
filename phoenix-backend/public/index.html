@@ -389,6 +389,98 @@
       padding: 6px 10px;
       border-radius: 999px;
     }
+        .feature-stack{
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-top: 16px;
+      text-align: right;
+    }
+
+    .feature-mini{
+      position: relative;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 14px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.025));
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+      transition: .22s ease;
+      overflow: hidden;
+    }
+
+    .feature-mini::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      background: linear-gradient(90deg, rgba(212,175,55,0.08), transparent 55%);
+      opacity:.75;
+      pointer-events:none;
+    }
+
+    .feature-mini:hover{
+      transform: translateY(-3px);
+      border-color: rgba(212,175,55,0.22);
+      background: linear-gradient(180deg, rgba(255,255,255,0.075), rgba(255,255,255,0.03));
+    }
+
+    .feature-icon{
+      position: relative;
+      z-index: 1;
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      flex: 0 0 42px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      color: #101419;
+      background: linear-gradient(135deg, rgba(212,175,55,0.95), rgba(233,138,21,0.95));
+      box-shadow: 0 10px 24px rgba(212,175,55,0.18);
+    }
+
+    .feature-copy{
+      position: relative;
+      z-index: 1;
+      min-width: 0;
+    }
+
+    .feature-copy strong{
+      display: block;
+      font-size: 13px;
+      font-weight: 900;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .feature-copy span{
+      display: block;
+      font-size: 12px;
+      line-height: 1.9;
+      color: var(--muted);
+    }
+
+    @media (max-width: 900px){
+      .feature-stack{
+        gap: 8px;
+      }
+
+      .feature-mini{
+        padding: 12px 12px;
+        border-radius: 16px;
+      }
+
+      .feature-icon{
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+        flex-basis: 38px;
+        font-size: 16px;
+      }
+    }
 
         /* Premium Visuals */
         .hero-visual{
@@ -813,16 +905,44 @@
         </div>
 
         <div class="side-card">
-          <div class="metric">
+                    <div class="metric">
             <div class="title">سه ستون اصلی ققنوس</div>
             <div class="desc">
-              پلکان (مسیر ۷ مرحله‌ای درمان) + پناهگاه (تکنیک‌های فوری برای لحظات اورژانسی) + مشعل (بازسازی و آموزش شناختی)
+              سه ابزار مکمل که کنار هم مسیر عبور، کنترل لحظه‌های سخت و بازسازی ذهنی را می‌سازند.
             </div>
+
+            <div class="feature-stack">
+              <div class="feature-mini">
+                <div class="feature-icon">۱</div>
+                <div class="feature-copy">
+                  <strong>پلکان</strong>
+                  <span>مسیر ۷ مرحله‌ای و روزمحور برای عبور تدریجی و واقعی از رابطه قبلی</span>
+                </div>
+              </div>
+
+              <div class="feature-mini">
+                <div class="feature-icon">۲</div>
+                <div class="feature-copy">
+                  <strong>پناهگاه</strong>
+                  <span>تکنیک‌های فوری برای مدیریت وسوسه، اضطراب، خشم و لحظه‌های اورژانسی</span>
+                </div>
+              </div>
+
+              <div class="feature-mini">
+                <div class="feature-icon">۳</div>
+                <div class="feature-copy">
+                  <strong>مشعل</strong>
+                  <span>بازسازی شناختی، آموزش عمیق و اصلاح الگوهای تکراری در رابطه</span>
+                </div>
+              </div>
+            </div>
+
             <div class="pill-row">
               <div class="pill">روزانه و قدم‌به‌قدم</div>
               <div class="pill">تمرین‌های عملی</div>
               <div class="pill">حضور درمانگر در تمام لحظات</div>
             </div>
+          </div>
           </div>
 
           <div class="mt-14">
