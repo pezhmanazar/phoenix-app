@@ -841,6 +841,14 @@
     #zarinpal img{ width: 92px; }
     .enamad-img{ width: 92px; display:block; }
 
+    .trust-logo{
+      cursor: pointer;
+    }
+    .trust-logo img{
+      width: 92px;
+      display: block;
+    }
+
     /* Responsive (content) */
     @media (max-width: 900px){
       .hero-grid{ grid-template-columns: 1fr; }
@@ -1116,33 +1124,35 @@
         <div>پرداخت امن از طریق زرین‌پال | دارای نماد اعتماد الکترونیکی</div>
       </div>
 
-      <div class="trust-row">
-        <!-- Zarinpal -->
-        <div id="zarinpal">
-          <script src="https://www.zarinpal.com/webservice/TrustCode" type="text/javascript"></script>
+            <div class="trust-row">
+        <div id="zarinpal-wrapper" class="trust-logo" onclick="loadZarinpal()">
+          <img src="/static/img/zarinpal-logo.png" alt="زرین پال">
         </div>
 
-        <!-- Enamad -->
-        <a
-          referrerpolicy="origin"
-          target="_blank"
-          rel="noopener"
-          aria-label="مشاهده نشان اعتماد اینماد ققنوس"
-          href="https://trustseal.enamad.ir/?id=683249&Code=kNJsbo2Cym96iOqBtjSeWJjYDW3nFd98"
-        >
-          <img
-            class="enamad-img"
-            referrerpolicy="origin"
-            src="https://trustseal.enamad.ir/logo.aspx?id=683249&Code=kNJsbo2Cym96iOqBtjSeWJjYDW3nFd98"
-            alt="نشان اعتماد اینماد"
-            code="kNJsbo2Cym96iOqBtjSeWJjYDW3nFd98"
-          />
-        </a>
+        <div id="enamad-wrapper" class="trust-logo" onclick="loadEnamad()">
+          <img src="/static/img/enamad-logo.png" alt="اینماد">
+        </div>
       </div>
     </div>
   </footer>
 
-  <script>
+    <script>
+    function loadZarinpal() {
+      const wrapper = document.getElementById("zarinpal-wrapper");
+      if (!wrapper || wrapper.dataset.loaded === "true") return;
+
+      wrapper.dataset.loaded = "true";
+      wrapper.innerHTML = '<script src="https://www.zarinpal.com/webservice/TrustCode" type="text/javascript"><\/script>';
+    }
+
+    function loadEnamad() {
+      window.open(
+        "https://trustseal.enamad.ir/?id=683249&Code=kNJsbo2Cym96iOqBtjSeWJjYDW3nFd98",
+        "enamad",
+        "width=600,height=700,resizable=yes,scrollbars=yes"
+      );
+    }
+
     // Loader fade out
     window.addEventListener("load", function () {
       const el = document.getElementById("pageLoader");
