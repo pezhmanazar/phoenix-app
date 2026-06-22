@@ -390,6 +390,106 @@
       border-radius: 999px;
     }
 
+        /* Premium Visuals */
+    .hero-visual{
+      position: relative;
+      margin-bottom: 18px;
+      border-radius: 30px;
+      overflow: hidden;
+      border: 1px solid rgba(212,175,55,0.18);
+      background: rgba(255,255,255,0.03);
+      box-shadow: 0 30px 90px rgba(0,0,0,0.42);
+    }
+    .hero-visual img{
+      width: 100%;
+      display: block;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+    }
+    .hero-visual::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      background:
+        linear-gradient(180deg, rgba(11,15,20,0.02), rgba(11,15,20,0.18)),
+        radial-gradient(circle at 75% 20%, rgba(212,175,55,0.18), transparent 34%);
+      pointer-events:none;
+    }
+
+    .screenshots-card{
+      position: relative;
+      overflow: hidden;
+      padding: 18px 14px 20px;
+    }
+    .screenshots-card::before{
+      content:"";
+      position:absolute;
+      inset:-120px auto auto 50%;
+      width: 420px;
+      height: 420px;
+      transform: translateX(-50%);
+      background: radial-gradient(circle, rgba(212,175,55,0.16), transparent 62%);
+      filter: blur(30px);
+      pointer-events:none;
+    }
+    .screenshots-row{
+      position: relative;
+      display:grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 14px;
+      align-items:end;
+    }
+    .phone-shot{
+      border-radius: 24px;
+      padding: 7px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.11), rgba(255,255,255,0.025));
+      border: 1px solid rgba(255,255,255,0.10);
+      box-shadow: 0 18px 45px rgba(0,0,0,0.34);
+      transition: .22s ease;
+    }
+    .phone-shot:nth-child(2),
+    .phone-shot:nth-child(4){
+      transform: translateY(16px);
+    }
+    .phone-shot:hover{
+      transform: translateY(-4px);
+      border-color: rgba(212,175,55,0.30);
+    }
+    .phone-shot:nth-child(2):hover,
+    .phone-shot:nth-child(4):hover{
+      transform: translateY(10px);
+    }
+    .phone-shot img{
+      width:100%;
+      display:block;
+      border-radius: 18px;
+      background:#111;
+    }
+
+    @media (max-width: 900px){
+      .hero-visual{
+        border-radius: 22px;
+        margin-bottom: 14px;
+      }
+      .screenshots-row{
+        display:flex;
+        gap: 12px;
+        overflow-x:auto;
+        padding: 4px 2px 12px;
+        scroll-snap-type: x mandatory;
+      }
+      .phone-shot{
+        min-width: 42%;
+        scroll-snap-align: center;
+      }
+      .phone-shot:nth-child(2),
+      .phone-shot:nth-child(4),
+      .phone-shot:nth-child(2):hover,
+      .phone-shot:nth-child(4):hover{
+        transform:none;
+      }
+    }
+
     /* --- Mobile Header: hamburger right, logo center, download left --- */
     .menu-toggle { display: none; }
     .hamburger{ display:none; }
@@ -668,6 +768,10 @@
   <main class="container">
     <!-- HERO -->
     <section class="hero">
+    <div class="hero-visual">
+        <img src="/static/img/hero.webp" alt="روایت بازسازی عاطفی با اپ ققنوس">
+      </div>
+
       <div class="hero-grid">
         <div class="hero-card">
           <div class="kicker">مسیر علمی، ساختارمند و روزمحور</div>
@@ -751,6 +855,35 @@
         </div>
       </div>
     </section>
+
+        <!-- SCREENSHOTS -->
+    <section class="section" id="screenshots">
+      <div class="section-title">
+        <h2>نگاهی به فضای داخل اپ ققنوس</h2>
+        <p>مسیر درمان، پناهگاه فوری، مشعل و پشتیبانی در یک فضای منظم</p>
+      </div>
+
+      <div class="card screenshots-card">
+        <div class="screenshots-row">
+          <div class="phone-shot">
+            <img src="/static/img/screenshots/01-pelekan.webp" alt="نمای پلکان اپ ققنوس">
+          </div>
+          <div class="phone-shot">
+            <img src="/static/img/screenshots/02-panahgah.webp" alt="نمای پناهگاه اپ ققنوس">
+          </div>
+          <div class="phone-shot">
+            <img src="/static/img/screenshots/03-mashaal.webp" alt="نمای مشعل اپ ققنوس">
+          </div>
+          <div class="phone-shot">
+            <img src="/static/img/screenshots/04-panah.webp" alt="نمای پناه اپ ققنوس">
+          </div>
+          <div class="phone-shot">
+            <img src="/static/img/screenshots/05-profile.webp" alt="نمای پروفایل اپ ققنوس">
+          </div>
+        </div>
+      </div>
+    </section>
+
 
     <!-- ✅ NEW: DIFFERENCE (after INSIDE) -->
     <section class="section" id="diff">
