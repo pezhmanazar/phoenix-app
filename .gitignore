@@ -60,5 +60,3 @@ phoenix-backend/prisma/dev.db
  
 # local backup folders 
 server-backup-extract/
-
-phoenix-backend/downloads/
