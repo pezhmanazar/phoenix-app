@@ -639,11 +639,14 @@
       flex-wrap:wrap;
       margin-top:10px;
     }
-    #zarinpal img{ width:92px; }
-    .enamad-img{
-      width:92px;
-      display:block;
-    }
+    .trust-logo{
+  cursor:pointer;
+}
+
+.trust-logo img{
+  width:92px;
+  display:block;
+}
   </style>
 </head>
 
@@ -819,31 +822,20 @@
       </div>
 
       <div class="trust-row">
-        <div id="zarinpal">
-          <script src="https://www.zarinpal.com/webservice/TrustCode" type="text/javascript"></script>
-        </div>
+  <a class="trust-logo" href="/trust.html" target="_blank" rel="noopener" aria-label="مشاهده گواهی زرین‌پال ققنوس">
+    <img src="/static/img/zarinpal-logo.png" alt="زرین پال">
+  </a>
 
-        <a
-          referrerpolicy="origin"
-          target="_blank"
-          rel="noopener"
-          aria-label="مشاهده نشان اعتماد اینماد ققنوس"
-          href="https://trustseal.enamad.ir/?id=683249&Code=kNJsbo2Cym96iOqBtjSeWJjYDW3nFd98"
-        >
-          <img
-            class="enamad-img"
-            referrerpolicy="origin"
-            src="https://trustseal.enamad.ir/logo.aspx?id=683249&Code=kNJsbo2Cym96iOqBtjSeWJjYDW3nFd98"
-            alt="نشان اعتماد اینماد"
-            code="kNJsbo2Cym96iOqBtjSeWJjYDW3nFd98"
-          />
-        </a>
-      </div>
+  <a class="trust-logo" href="/trust.html" target="_blank" rel="noopener" aria-label="مشاهده نماد اعتماد ققنوس">
+    <img src="/static/img/enamad-logo.png" alt="اینماد">
+  </a>
+</div>
+
     </div>
   </footer>
 
   <script>
-    window.addEventListener("load", function () {
+    window.addEventListener("DOMContentLoaded", function () {
       const el = document.getElementById("pageLoader");
       if (!el) return;
       el.classList.add("hidden");
