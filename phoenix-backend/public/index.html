@@ -1137,13 +1137,25 @@
   </footer>
 
     <script>
-    function loadZarinpal() {
-      const wrapper = document.getElementById("zarinpal-wrapper");
-      if (!wrapper || wrapper.dataset.loaded === "true") return;
+  function loadZarinpal() {
+  const wrapper = document.getElementById("zarinpal-wrapper");
+  if (!wrapper || wrapper.dataset.loaded === "true") return;
 
-      wrapper.dataset.loaded = "true";
-      wrapper.innerHTML = '<script src="https://www.zarinpal.com/webservice/TrustCode" type="text/javascript"><\/script>';
-    }
+  wrapper.dataset.loaded = "true";
+  wrapper.innerHTML = "";
+
+  const script = document.createElement("script");
+  script.src = "https://www.zarinpal.com/webservice/TrustCode";
+  script.type = "text/javascript";
+  script.async = true;
+
+  script.onerror = function () {
+    wrapper.dataset.loaded = "false";
+    wrapper.innerHTML = '<img src="/static/img/zarinpal-logo.png" alt="زرین پال">';
+  };
+
+  wrapper.appendChild(script);
+}
 
     function loadEnamad() {
       window.open(
