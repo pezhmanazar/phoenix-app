@@ -1,762 +1,902 @@
 <!doctype html>
 <html lang="fa" dir="rtl">
-<head>
-  <meta charset="utf-8" />
-  <title>دانلود ققنوس | دریافت اپلیکیشن</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <head>
+    <meta charset="utf-8" />
+    <title>دانلود ققنوس | دریافت اپلیکیشن</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <link rel="icon" type="image/png" href="/static/img/favicon.png" />
-  <!-- <link href="https://cdn.jsdelivr.net/npm/vazirmatn@33.003/Vazirmatn-font-face.css" rel="stylesheet"> -->
+    <link rel="icon" type="image/png" href="/static/img/favicon.png" />
+    <!-- <link href="https://cdn.jsdelivr.net/npm/vazirmatn@33.003/Vazirmatn-font-face.css" rel="stylesheet"> -->
 
-  <style>
-    @font-face {
-  font-family: 'Anjoman';
-  src: url('/fonts/anjoman/Anjoman-Regular.ttf') format('truetype');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Anjoman';
-  src: url('/fonts/anjoman/Anjoman-Medium.ttf') format('truetype');
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Anjoman';
-  src: url('/fonts/anjoman/Anjoman-SemiBold.ttf') format('truetype');
-  font-weight: 600;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Anjoman';
-  src: url('/fonts/anjoman/Anjoman-Bold.ttf') format('truetype');
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Anjoman';
-  src: url('/fonts/anjoman/Anjoman-Bold.ttf') format('truetype');
-  font-weight: 800;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Anjoman';
-  src: url('/fonts/anjoman/Anjoman-Bold.ttf') format('truetype');
-  font-weight: 900;
-  font-style: normal;
-  font-display: swap;
-}
-    :root{
-      --bg:#0b0f14;
-      --text:#e8ecf1;
-      --muted:#9aa4b2;
-      --gold:#D4AF37;
-      --orange:#E98A15;
-      --green:#22c55e;
-      --green2:#10b981;
-
-      --glass: rgba(255,255,255,0.05);
-      --glass2: rgba(255,255,255,0.03);
-      --border2: rgba(255,255,255,0.06);
-      --shadow: 0 20px 60px rgba(0,0,0,0.35);
-    }
-
-    *{box-sizing:border-box}
-    html,body{height:100%}
-
-    body{
-      margin:0;
-      font-family: 'Anjoman', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      overflow-x:hidden;
-      line-height: 2;
-    }
-
-    .container{
-      width: min(1100px, 92%);
-      margin: 0 auto;
-    }
-
-    .bg{
-      position: fixed;
-      inset: 0;
-      pointer-events:none;
-      z-index:-1;
-    }
-    .glow{
-      position:absolute;
-      width: 520px;
-      height: 520px;
-      border-radius: 999px;
-      filter: blur(70px);
-      opacity: .22;
-      transform: translateZ(0);
-    }
-    .glow.gold{
-      background: radial-gradient(circle, var(--gold), transparent 60%);
-      right:-160px;
-      top:-120px;
-    }
-    .glow.orange{
-      background: radial-gradient(circle, var(--orange), transparent 60%);
-      left:-180px;
-      bottom:-160px;
-      opacity:.18;
-    }
-
-    #pageLoader{
-      position: fixed;
-      inset: 0;
-      z-index: 9999;
-      background: rgba(11,15,20,0.92);
-      -webkit-backdrop-filter: blur(10px);
-      backdrop-filter: blur(10px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: opacity .25s ease, visibility .25s ease;
-    }
-    #pageLoader.hidden{
-      opacity: 0;
-      visibility: hidden;
-    }
-    .loader-card{
-      width: min(420px, 86%);
-      border-radius: 24px;
-      border: 1px solid rgba(255,255,255,0.10);
-      background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
-      box-shadow: 0 25px 70px rgba(0,0,0,0.45);
-      padding: 18px 16px;
-      display:flex;
-      align-items:center;
-      gap: 14px;
-    }
-    .loader-mark{
-      width: 44px;
-      height: 44px;
-      border-radius: 999px;
-      background: radial-gradient(circle, rgba(212,175,55,0.28), rgba(233,138,21,0.10));
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      border: 1px solid rgba(255,255,255,0.10);
-    }
-    .spinner{
-      width: 18px;
-      height: 18px;
-      border-radius: 999px;
-      border: 2px solid rgba(232,236,241,0.25);
-      border-top-color: rgba(212,175,55,0.95);
-      animation: spin 0.9s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .loader-text .t1{ font-weight: 900; font-size: 13px; color: rgba(232,236,241,0.95); }
-    .loader-text .t2{ margin-top: 3px; font-size: 12px; color: rgba(154,164,178,0.95); }
-
-    header{
-      position: sticky;
-      top:0;
-      z-index:50;
-      background: rgba(11,15,20,0.78);
-      -webkit-backdrop-filter: blur(14px);
-      backdrop-filter: blur(14px);
-      border-bottom: 1px solid var(--border2);
-    }
-    .nav{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      padding: 14px 0;
-      gap: 14px;
-    }
-    .brand{
-      display:flex;
-      align-items:center;
-      gap: 10px;
-      min-width: 180px;
-    }
-    .brand a{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      text-decoration:none;
-      color: inherit;
-    }
-    .brand img{ height: 40px; display:block; }
-    .brand-title{
-      font-weight: 900;
-      letter-spacing: -0.2px;
-      color: var(--text);
-      font-size: 14px;
-      line-height: 1.2;
-    }
-    .brand-title span{
-      display:block;
-      color: rgba(212,175,55,0.92);
-      font-size: 12px;
-      font-weight: 700;
-      margin-top: 2px;
-    }
-
-    .nav-links{
-      display:flex;
-      align-items:center;
-      gap: 10px;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-    .nav-links a{
-      text-decoration:none;
-      color: var(--muted);
-      font-size: 13px;
-      padding: 8px 12px;
-      border-radius: 999px;
-      border: 1px solid transparent;
-      transition: .2s ease;
-      white-space: nowrap;
-    }
-    .nav-links a:hover{
-      color: var(--text);
-      border-color: rgba(212,175,55,0.28);
-      background: rgba(212,175,55,0.06);
-    }
-
-    .nav-cta{
-      display:flex;
-      align-items:center;
-      gap: 10px;
-      min-width: 180px;
-      justify-content: flex-end;
-    }
-
-    .btn{
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      gap:10px;
-      padding: 10px 14px;
-      border-radius: 999px;
-      border: 1px solid transparent;
-      cursor:pointer;
-      font-size: 13px;
-      text-decoration:none;
-      transition: .2s ease;
-      white-space: nowrap;
-      -webkit-user-select: none;
-      user-select: none;
-    }
-    .btn-primary{
-      background: linear-gradient(135deg, rgba(212,175,55,0.95), rgba(233,138,21,0.95));
-      color: #101419;
-      border-color: rgba(255,255,255,0.08);
-      box-shadow: 0 14px 35px rgba(212,175,55,0.14);
-      font-weight: 900;
-    }
-    .btn-primary:hover{ transform: translateY(-1px); }
-
-    .btn-ghost{
-      background: rgba(255,255,255,0.04);
-      border-color: var(--border2);
-      color: var(--text);
-    }
-    .btn-ghost:hover{
-      border-color: rgba(255,255,255,0.14);
-      background: rgba(255,255,255,0.06);
-    }
-
-    .cta-btn{
-      width: 100%;
-      min-height: 56px;
-      padding: 14px 14px;
-      border-radius: 18px;
-      font-size: 14px;
-      font-weight: 900;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      text-align:center;
-    }
-
-    .btn-soon{
-      cursor: default;
-      color: #07110b;
-      background: linear-gradient(135deg, rgba(34,197,94,0.95), rgba(16,185,129,0.95));
-      border: 1px solid rgba(255,255,255,0.10);
-      box-shadow: 0 14px 38px rgba(34,197,94,0.14);
-    }
-    .btn-soon:hover{ transform: none; }
-
-    .gold-link{
-      color: rgba(212,175,55,0.98);
-      font-weight: 900;
-      text-decoration: none;
-    }
-    .gold-link:hover{ text-decoration: underline; }
-
-    .menu-toggle { display: none; }
-    .hamburger{ display:none; }
-    .mobile-cta{ display:none; }
-    .mobile-menu{ display:none; }
-
-    .hamburger{
-      width:44px;
-      height:44px;
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,0.10);
-      background: rgba(255,255,255,0.04);
-      align-items:center;
-      justify-content:center;
-      cursor:pointer;
-    }
-    .hamburger span{
-      display:block;
-      width:18px;
-      height:2px;
-      background: rgba(232,236,241,0.9);
-      border-radius: 999px;
-      position: relative;
-    }
-    .hamburger span::before,
-    .hamburger span::after{
-      content:"";
-      position:absolute;
-      left:0;
-      width:18px;
-      height:2px;
-      background: rgba(232,236,241,0.9);
-      border-radius: 999px;
-    }
-    .hamburger span::before{ top:-6px; }
-    .hamburger span::after{ top:6px; }
-
-    @media (max-width: 900px){
-      .nav-links,
-      .nav-cta{ display:none; }
-
-      .nav{
-        display:grid;
-        grid-template-columns: 44px 1fr 44px;
-        align-items:center;
-        gap: 10px;
+    <style>
+      @font-face {
+        font-family: "Anjoman";
+        src: url("/fonts/anjoman/Anjoman-Regular.ttf") format("truetype");
+        font-weight: 400;
+        font-style: normal;
+        font-display: swap;
       }
 
-      .hamburger{ display:flex; justify-self: start; }
-
-      .brand{ min-width:auto; justify-self:center; }
-      .brand-title{ display:none; }
-      .brand img{ height: 38px; }
-
-      .mobile-cta{
-        display:flex;
-        justify-self:end;
-        width:44px;
-        height:44px;
-        padding:0;
-        border-radius:14px;
-        align-items:center;
-        justify-content:center;
-        font-size:0;
-        line-height:0;
-      }
-      .mobile-cta img{
-        width:18px;
-        height:18px;
-        display:block;
+      @font-face {
+        font-family: "Anjoman";
+        src: url("/fonts/anjoman/Anjoman-Medium.ttf") format("truetype");
+        font-weight: 500;
+        font-style: normal;
+        font-display: swap;
       }
 
-      .mobile-menu{
-        display:none;
-        padding: 10px 0 14px;
-        border-top: 1px solid rgba(255,255,255,0.06);
+      @font-face {
+        font-family: "Anjoman";
+        src: url("/fonts/anjoman/Anjoman-SemiBold.ttf") format("truetype");
+        font-weight: 600;
+        font-style: normal;
+        font-display: swap;
       }
-      .mobile-menu a{
-        display:block;
-        padding: 12px 12px;
-        margin: 6px 0;
-        border-radius: 14px;
+
+      @font-face {
+        font-family: "Anjoman";
+        src: url("/fonts/anjoman/Anjoman-Bold.ttf") format("truetype");
+        font-weight: 700;
+        font-style: normal;
+        font-display: swap;
+      }
+
+      @font-face {
+        font-family: "Anjoman";
+        src: url("/fonts/anjoman/Anjoman-Bold.ttf") format("truetype");
+        font-weight: 800;
+        font-style: normal;
+        font-display: swap;
+      }
+
+      @font-face {
+        font-family: "Anjoman";
+        src: url("/fonts/anjoman/Anjoman-Bold.ttf") format("truetype");
+        font-weight: 900;
+        font-style: normal;
+        font-display: swap;
+      }
+      :root {
+        --bg: #0b0f14;
+        --text: #e8ecf1;
+        --muted: #9aa4b2;
+        --gold: #d4af37;
+        --orange: #e98a15;
+        --green: #22c55e;
+        --green2: #10b981;
+
+        --glass: rgba(255, 255, 255, 0.05);
+        --glass2: rgba(255, 255, 255, 0.03);
+        --border2: rgba(255, 255, 255, 0.06);
+        --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        font-family:
+          "Anjoman",
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          sans-serif;
+        background: var(--bg);
         color: var(--text);
-        text-decoration:none;
-        border: 1px solid rgba(255,255,255,0.06);
-        background: rgba(255,255,255,0.03);
+        overflow-x: hidden;
+        line-height: 2;
+      }
+
+      .container {
+        width: min(1100px, 92%);
+        margin: 0 auto;
+      }
+
+      .bg {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: -1;
+      }
+      .glow {
+        position: absolute;
+        width: 520px;
+        height: 520px;
+        border-radius: 999px;
+        filter: blur(70px);
+        opacity: 0.22;
+        transform: translateZ(0);
+      }
+      .glow.gold {
+        background: radial-gradient(circle, var(--gold), transparent 60%);
+        right: -160px;
+        top: -120px;
+      }
+      .glow.orange {
+        background: radial-gradient(circle, var(--orange), transparent 60%);
+        left: -180px;
+        bottom: -160px;
+        opacity: 0.18;
+      }
+
+      #pageLoader {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: rgba(11, 15, 20, 0.92);
+        -webkit-backdrop-filter: blur(10px);
+        backdrop-filter: blur(10px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition:
+          opacity 0.25s ease,
+          visibility 0.25s ease;
+      }
+      #pageLoader.hidden {
+        opacity: 0;
+        visibility: hidden;
+      }
+      .loader-card {
+        width: min(420px, 86%);
+        border-radius: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.05),
+          rgba(255, 255, 255, 0.02)
+        );
+        box-shadow: 0 25px 70px rgba(0, 0, 0, 0.45);
+        padding: 18px 16px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .loader-mark {
+        width: 44px;
+        height: 44px;
+        border-radius: 999px;
+        background: radial-gradient(
+          circle,
+          rgba(212, 175, 55, 0.28),
+          rgba(233, 138, 21, 0.1)
+        );
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .spinner {
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        border: 2px solid rgba(232, 236, 241, 0.25);
+        border-top-color: rgba(212, 175, 55, 0.95);
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .loader-text .t1 {
+        font-weight: 900;
+        font-size: 13px;
+        color: rgba(232, 236, 241, 0.95);
+      }
+      .loader-text .t2 {
+        margin-top: 3px;
+        font-size: 12px;
+        color: rgba(154, 164, 178, 0.95);
+      }
+
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        background: rgba(11, 15, 20, 0.78);
+        -webkit-backdrop-filter: blur(14px);
+        backdrop-filter: blur(14px);
+        border-bottom: 1px solid var(--border2);
+      }
+      .nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 0;
+        gap: 14px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 180px;
+      }
+      .brand a {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        color: inherit;
+      }
+      .brand img {
+        height: 40px;
+        display: block;
+      }
+      .brand-title {
+        font-weight: 900;
+        letter-spacing: -0.2px;
+        color: var(--text);
         font-size: 14px;
+        line-height: 1.2;
       }
-      .mobile-menu a:active{
-        background: rgba(212,175,55,0.08);
-        border-color: rgba(212,175,55,0.22);
+      .brand-title span {
+        display: block;
+        color: rgba(212, 175, 55, 0.92);
+        font-size: 12px;
+        font-weight: 700;
+        margin-top: 2px;
       }
-      .menu-toggle:checked ~ .mobile-menu{ display:block; }
-    }
 
-    .page{ padding: 34px 0 6px; }
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .nav-links a {
+        text-decoration: none;
+        color: var(--muted);
+        font-size: 13px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        transition: 0.2s ease;
+        white-space: nowrap;
+      }
+      .nav-links a:hover {
+        color: var(--text);
+        border-color: rgba(212, 175, 55, 0.28);
+        background: rgba(212, 175, 55, 0.06);
+      }
 
-    .hero{
-      background: linear-gradient(180deg, var(--glass), var(--glass2));
-      border: 1px solid var(--border2);
-      border-radius: 24px;
-      box-shadow: var(--shadow);
-      padding: 22px 18px;
-      position: relative;
-      overflow:hidden;
-    }
-    .hero::before{
-      content:"";
-      position:absolute;
-      inset:-60px -80px auto auto;
-      width: 280px;
-      height: 280px;
-      background: radial-gradient(circle, rgba(212,175,55,0.22), transparent 60%);
-      filter: blur(20px);
-      opacity: .9;
-    }
-    .kicker{
-      color: rgba(212,175,55,0.95);
-      font-weight: 800;
-      font-size: 13px;
-      letter-spacing: .2px;
-    }
-    .hero h1{
-      margin: 10px 0 10px;
-      font-size: 26px;
-      line-height: 1.5;
-      letter-spacing: -0.2px;
-    }
-    .hero p{
-      margin: 0;
-      color: var(--muted);
-      font-size: 13px;
-      max-width: 80ch;
-    }
+      .nav-cta {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 180px;
+        justify-content: flex-end;
+      }
 
-    .grid{
-      margin-top: 14px;
-      display:grid;
-      grid-template-columns: 1fr;
-      gap: 12px;
-      width: 100%;
-      max-width: none;
-    }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        cursor: pointer;
+        font-size: 13px;
+        text-decoration: none;
+        transition: 0.2s ease;
+        white-space: nowrap;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      .btn-primary {
+        background: linear-gradient(
+          135deg,
+          rgba(212, 175, 55, 0.95),
+          rgba(233, 138, 21, 0.95)
+        );
+        color: #101419;
+        border-color: rgba(255, 255, 255, 0.08);
+        box-shadow: 0 14px 35px rgba(212, 175, 55, 0.14);
+        font-weight: 900;
+      }
+      .btn-primary:hover {
+        transform: translateY(-1px);
+      }
 
-    .card{
-      width: 100%;
-      background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02));
-      border: 1px solid var(--border2);
-      border-radius: 20px;
-      padding: 16px 16px;
-      box-shadow: 0 18px 50px rgba(0,0,0,0.28);
-    }
+      .btn-ghost {
+        background: rgba(255, 255, 255, 0.04);
+        border-color: var(--border2);
+        color: var(--text);
+      }
+      .btn-ghost:hover {
+        border-color: rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.06);
+      }
 
-    .card-title{
-      display:flex;
-      align-items:center;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 10px;
-      flex-wrap: wrap;
-    }
-    .card-title h2{
-      margin:0;
-      font-size: 15px;
-      font-weight: 900;
-      letter-spacing: -0.2px;
-    }
-    .badge{
-      font-size: 12px;
-      color: rgba(232,236,241,0.9);
-      border: 1px solid rgba(255,255,255,0.10);
-      background: rgba(255,255,255,0.03);
-      padding: 6px 10px;
-      border-radius: 999px;
-    }
+      .cta-btn {
+        width: 100%;
+        min-height: 56px;
+        padding: 14px 14px;
+        border-radius: 18px;
+        font-size: 14px;
+        font-weight: 900;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+      }
 
-    .store-btn{
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      gap: 10px;
-      padding: 12px 12px;
-      border-radius: 18px;
-      border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(255,255,255,0.03);
-      text-decoration:none;
-      transition: .2s ease;
-      width: 100%;
-      min-height: 64px;
-    }
-    .store-btn:hover{
-      background: rgba(255,255,255,0.05);
-      border-color: rgba(212,175,55,0.22);
-    }
-    .store-btn img{
-      height: 38px;
-      display:block;
-    }
-    .store-btn .label{
-      color: var(--muted);
-      font-size: 12px;
-    }
+      .btn-soon {
+        cursor: default;
+        color: #07110b;
+        background: linear-gradient(
+          135deg,
+          rgba(34, 197, 94, 0.95),
+          rgba(16, 185, 129, 0.95)
+        );
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 14px 38px rgba(34, 197, 94, 0.14);
+      }
+      .btn-soon:hover {
+        transform: none;
+      }
 
-    .cta-row{
-      margin-top:14px;
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      justify-content:center;
-      align-items:center;
-    }
+      .gold-link {
+        color: rgba(212, 175, 55, 0.98);
+        font-weight: 900;
+        text-decoration: none;
+      }
+      .gold-link:hover {
+        text-decoration: underline;
+      }
 
-    .label-muted{
-      margin: 0 0 10px;
-      color: var(--muted);
-    }
+      .menu-toggle {
+        display: none;
+      }
+      .hamburger {
+        display: none;
+      }
+      .mobile-cta {
+        display: none;
+      }
+      .mobile-menu {
+        display: none;
+      }
 
-    .benefit-text{
-      color: var(--green);
-      font-weight: 900;
-      text-shadow: 0 0 18px rgba(34,197,94,0.14);
-    }
+      .hamburger {
+        width: 44px;
+        height: 44px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.04);
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      .hamburger span {
+        display: block;
+        width: 18px;
+        height: 2px;
+        background: rgba(232, 236, 241, 0.9);
+        border-radius: 999px;
+        position: relative;
+      }
+      .hamburger span::before,
+      .hamburger span::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        width: 18px;
+        height: 2px;
+        background: rgba(232, 236, 241, 0.9);
+        border-radius: 999px;
+      }
+      .hamburger span::before {
+        top: -6px;
+      }
+      .hamburger span::after {
+        top: 6px;
+      }
 
-    .direct-row{
-      display:flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-top: 10px;
-    }
-    .direct-row .btn{ flex:1 1 180px; }
+      @media (max-width: 900px) {
+        .nav-links,
+        .nav-cta {
+          display: none;
+        }
 
-    .note{
-      margin-top: 10px;
-      color: rgba(232,236,241,0.82);
-      font-size: 12px;
-      border: 1px dashed rgba(255,255,255,0.12);
-      background: rgba(255,255,255,0.02);
-      border-radius: 16px;
-      padding: 12px 12px;
-    }
-    .note strong{ color: rgba(212,175,55,0.95); }
+        .nav {
+          display: grid;
+          grid-template-columns: 44px 1fr 44px;
+          align-items: center;
+          gap: 10px;
+        }
 
-    footer{
-      margin-top: 26px;
-      padding: 22px 0 38px;
-      border-top: 1px solid var(--border2);
-      background: rgba(255,255,255,0.02);
-    }
-    .footer-top{
-      display:flex;
-      justify-content: space-between;
-      gap: 12px;
-      align-items: center;
-      flex-wrap: wrap;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.8;
-      padding-bottom: 12px;
-    }
-    .trust-row{
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      gap: 18px;
-      flex-wrap: wrap;
-      margin-top: 10px;
-    }
-    #zarinpal img{ width: 92px; }
-    .enamad-img{ width: 92px; display:block; }
-  </style>
-</head>
+        .hamburger {
+          display: flex;
+          justify-self: start;
+        }
 
-<body>
-  <div id="pageLoader" aria-label="در حال بارگذاری">
-    <div class="loader-card">
-      <div class="loader-mark"><div class="spinner"></div></div>
-      <div class="loader-text">
-        <div class="t1">ققنوس</div>
-        <div class="t2">در حال آماده‌سازی...</div>
+        .brand {
+          min-width: auto;
+          justify-self: center;
+        }
+        .brand-title {
+          display: none;
+        }
+        .brand img {
+          height: 38px;
+        }
+
+        .mobile-cta {
+          display: flex;
+          justify-self: end;
+          width: 44px;
+          height: 44px;
+          padding: 0;
+          border-radius: 14px;
+          align-items: center;
+          justify-content: center;
+          font-size: 0;
+          line-height: 0;
+        }
+        .mobile-cta img {
+          width: 18px;
+          height: 18px;
+          display: block;
+        }
+
+        .mobile-menu {
+          display: none;
+          padding: 10px 0 14px;
+          border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .mobile-menu a {
+          display: block;
+          padding: 12px 12px;
+          margin: 6px 0;
+          border-radius: 14px;
+          color: var(--text);
+          text-decoration: none;
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          background: rgba(255, 255, 255, 0.03);
+          font-size: 14px;
+        }
+        .mobile-menu a:active {
+          background: rgba(212, 175, 55, 0.08);
+          border-color: rgba(212, 175, 55, 0.22);
+        }
+        .menu-toggle:checked ~ .mobile-menu {
+          display: block;
+        }
+      }
+
+      .page {
+        padding: 34px 0 6px;
+      }
+
+      .hero {
+        background: linear-gradient(180deg, var(--glass), var(--glass2));
+        border: 1px solid var(--border2);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+        padding: 22px 18px;
+        position: relative;
+        overflow: hidden;
+      }
+      .hero::before {
+        content: "";
+        position: absolute;
+        inset: -60px -80px auto auto;
+        width: 280px;
+        height: 280px;
+        background: radial-gradient(
+          circle,
+          rgba(212, 175, 55, 0.22),
+          transparent 60%
+        );
+        filter: blur(20px);
+        opacity: 0.9;
+      }
+      .kicker {
+        color: rgba(212, 175, 55, 0.95);
+        font-weight: 800;
+        font-size: 13px;
+        letter-spacing: 0.2px;
+      }
+      .hero h1 {
+        margin: 10px 0 10px;
+        font-size: 26px;
+        line-height: 1.5;
+        letter-spacing: -0.2px;
+      }
+      .hero p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        max-width: 80ch;
+      }
+
+      .grid {
+        margin-top: 14px;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+        width: 100%;
+        max-width: none;
+      }
+
+      .card {
+        width: 100%;
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.045),
+          rgba(255, 255, 255, 0.02)
+        );
+        border: 1px solid var(--border2);
+        border-radius: 20px;
+        padding: 16px 16px;
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+      }
+
+      .card-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+      }
+      .card-title h2 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 900;
+        letter-spacing: -0.2px;
+      }
+      .badge {
+        font-size: 12px;
+        color: rgba(232, 236, 241, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.03);
+        padding: 6px 10px;
+        border-radius: 999px;
+      }
+
+      .store-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 12px 12px;
+        border-radius: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.03);
+        text-decoration: none;
+        transition: 0.2s ease;
+        width: 100%;
+        min-height: 64px;
+      }
+      .store-btn:hover {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(212, 175, 55, 0.22);
+      }
+      .store-btn img {
+        height: 38px;
+        display: block;
+      }
+      .store-btn .label {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .cta-row {
+        margin-top: 14px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .label-muted {
+        margin: 0 0 10px;
+        color: var(--muted);
+      }
+
+      .benefit-text {
+        color: var(--green);
+        font-weight: 900;
+        text-shadow: 0 0 18px rgba(34, 197, 94, 0.14);
+      }
+
+      .direct-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+      }
+      .direct-row .btn {
+        flex: 1 1 180px;
+      }
+
+      .note {
+        margin-top: 10px;
+        color: rgba(232, 236, 241, 0.82);
+        font-size: 12px;
+        border: 1px dashed rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.02);
+        border-radius: 16px;
+        padding: 12px 12px;
+      }
+      .note strong {
+        color: rgba(212, 175, 55, 0.95);
+      }
+
+      footer {
+        margin-top: 26px;
+        padding: 22px 0 38px;
+        border-top: 1px solid var(--border2);
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .footer-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.8;
+        padding-bottom: 12px;
+      }
+      .trust-row {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 18px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+      }
+      #zarinpal img {
+        width: 92px;
+      }
+      .enamad-img {
+        width: 92px;
+        display: block;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="pageLoader" aria-label="در حال بارگذاری">
+      <div class="loader-card">
+        <div class="loader-mark"><div class="spinner"></div></div>
+        <div class="loader-text">
+          <div class="t1">ققنوس</div>
+          <div class="t2">در حال آماده‌سازی...</div>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div class="bg">
-    <div class="glow gold"></div>
-    <div class="glow orange"></div>
-  </div>
+    <div class="bg">
+      <div class="glow gold"></div>
+      <div class="glow orange"></div>
+    </div>
 
-  <header>
-    <div class="container">
-      <div class="nav">
-        <label class="hamburger" for="menuToggle" aria-label="باز کردن منو">
-          <span></span>
-        </label>
+    <header>
+      <div class="container">
+        <div class="nav">
+          <label class="hamburger" for="menuToggle" aria-label="باز کردن منو">
+            <span></span>
+          </label>
 
-        <div class="brand">
-          <a href="/" aria-label="بازگشت به صفحه اصلی">
-            <img src="/static/img/logo.png" alt="لوگوی ققنوس">
-            <div class="brand-title">
-              ققنوس
-              <span>دانلود اپلیکیشن</span>
-            </div>
+          <div class="brand">
+            <a href="/" aria-label="بازگشت به صفحه اصلی">
+              <img src="/static/img/logo.png" alt="لوگوی ققنوس" />
+              <div class="brand-title">
+                ققنوس
+                <span>دانلود اپلیکیشن</span>
+              </div>
+            </a>
+          </div>
+
+          <nav class="nav-links" aria-label="منوی اصلی">
+            <a href="/">خانه</a>
+            <a href="/#changes">تاثیرات اپ</a>
+            <a href="/#inside">ویژگی‌های اشتراک</a>
+            <a href="/store.html">راهنمای اشتراک</a>
+            <a href="/contact.html"> تماس با ما</a>
+            <a href="/terms.html">قوانین استفاده</a>
+          </nav>
+
+          <a
+            class="btn btn-primary mobile-cta"
+            href="#get"
+            aria-label="رفتن به بخش دانلود"
+          >
+            <img src="/static/img/download.png" alt="" />
           </a>
+
+          <div class="nav-cta">
+            <a class="btn btn-ghost" href="/terms.html">قوانین</a>
+            <a class="btn btn-primary" href="#get">دانلود</a>
+          </div>
         </div>
 
-        <nav class="nav-links" aria-label="منوی اصلی">
+        <input class="menu-toggle" type="checkbox" id="menuToggle" />
+
+        <nav class="mobile-menu" aria-label="منوی موبایل">
           <a href="/">خانه</a>
           <a href="/#changes">تاثیرات اپ</a>
           <a href="/#inside">ویژگی‌های اشتراک</a>
           <a href="/store.html">راهنمای اشتراک</a>
-          <a href="/contact.html"> تماس با ما</a>
+          <a href="/contact.html">تماس با ما</a>
           <a href="/terms.html">قوانین استفاده</a>
         </nav>
+      </div>
+    </header>
 
-        <a class="btn btn-primary mobile-cta" href="#get" aria-label="رفتن به بخش دانلود">
-          <img src="/static/img/download.png" alt="">
-        </a>
-
-        <div class="nav-cta">
-          <a class="btn btn-ghost" href="/terms.html">قوانین</a>
-          <a class="btn btn-primary" href="#get">دانلود</a>
+    <main class="container">
+      <section class="page">
+        <div class="hero" id="get">
+          <div class="kicker">
+            سریع‌ترین راه شروع بازسازی بعد از جدایی و شکست عشقی
+          </div>
+          <h1>دانلود ققنوس</h1>
+          <p>
+            ققنوس رو می‌تونی به‌صورت مستقیم برای اندروید دریافت کنی، از
+            کافه‌بازار نصب کنی، یا منتظر نسخه iOS (PWA) باشی که به‌زودی منتشر
+            می‌شه.
+          </p>
         </div>
-      </div>
 
-      <input class="menu-toggle" type="checkbox" id="menuToggle" />
+        <div class="grid">
+          <!-- Direct Download -->
+          <div class="card">
+            <div class="card-title">
+              <h2>دانلود مستقیم اندروید</h2>
+              <span class="badge">پیشنهاد ویژه</span>
+            </div>
 
-      <nav class="mobile-menu" aria-label="منوی موبایل">
-        <a href="/">خانه</a>
-        <a href="/#changes">تاثیرات اپ</a>
-        <a href="/#inside">ویژگی‌های اشتراک</a>
-        <a href="/store.html">راهنمای اشتراک</a>
-        <a href="/contact.html">تماس با ما</a>
-        <a href="/terms.html">قوانین استفاده</a>
-      </nav>
-    </div>
-  </header>
+            <p class="label label-muted benefit-text">
+              مزیت دانلود مستقیم: فعال‌سازی اشتراک با قیمت مناسب‌تر.
+            </p>
 
-  <main class="container">
-    <section class="page">
-      <div class="hero" id="get">
-        <div class="kicker">سریع‌ترین راه شروع بازسازی بعد از جدایی و شکست عشقی</div>
-        <h1>دانلود ققنوس</h1>
-        <p>
-          ققنوس رو می‌تونی به‌صورت مستقیم برای اندروید دریافت کنی، از کافه‌بازار نصب کنی،
-          یا منتظر نسخه iOS (PWA) باشی که به‌زودی منتشر می‌شه.
-        </p>
-      </div>
+            <div class="direct-row">
+              <a
+                class="btn btn-primary cta-btn"
+                href="https://dl.qoqnoos.app/downloads/qoqnoos-v1.0.0.apk"
+                target="_blank"
+                rel="noopener"
+                aria-label="دانلود مستقیم فایل APK"
+              >
+                دانلود مستقیم APK
+              </a>
+            </div>
 
-      <div class="grid">
-        <!-- Direct Download -->
-        <div class="card">
-          <div class="card-title">
-            <h2>دانلود مستقیم اندروید</h2>
-            <span class="badge">پیشنهاد ویژه</span>
+            <div class="note">
+              <strong>نکته:</strong> اگه بعد از دانلود مستقیم، گوشی برای نصب
+              هشدار داد یا اجازه خواست، کافیه به مرورگر اجازه نصب اپ بدی تا نصب
+              بدون مشکل انجام بشه.
+            </div>
           </div>
 
-          <p class="label label-muted benefit-text">
-            مزیت دانلود مستقیم: فعال‌سازی اشتراک با قیمت مناسب‌تر.
-          </p>
+          <!-- Bazaar -->
+          <!--
+  Bazaar - old active market link, keep for later
 
-          <div class="direct-row">
-            <a class="btn btn-primary cta-btn" href="https://example.com/DIRECT_APK" target="_blank" rel="noopener" aria-label="دانلود مستقیم فایل APK">
-              دانلود مستقیم APK
+  <div class="card">
+    <div class="card-title">
+      <h2>دانلود از کافه‌بازار</h2>
+    </div>
+
+    <p class="label label-muted">
+      اگه ترجیح می‌دی از مارکت رسمی نصب کنی، ققنوس از طریق بازار هم در دسترسه.
+    </p>
+
+    <a class="store-btn" href="https://example.com/BAZAAR_LINK" target="_blank" rel="noopener" aria-label="دانلود ققنوس از کافه‌بازار">
+      <img src="/static/img/bazaar.png" alt="دریافت از بازار">
+      <div class="label">باز کردن صفحه ققنوس در بازار</div>
+    </a>
+  </div>
+-->
+
+          <!-- Bazaar -->
+          <div class="card">
+            <div class="card-title">
+              <h2>دانلود از کافه‌بازار</h2>
+            </div>
+
+            <p class="label label-muted">
+              نسخه ققنوس در کافه‌بازار برای بررسی ارسال شده و به‌زودی پس از
+              تایید فعال می‌شود.
+            </p>
+
+            <a
+              class="btn btn-soon cta-btn"
+              href="javascript:void(0)"
+              aria-disabled="true"
+            >
+              به‌زودی در کافه‌بازار
             </a>
           </div>
+          <!-- iOS -->
+          <div class="card">
+            <div class="card-title">
+              <h2>نسخه iOS (PWA)</h2>
+            </div>
 
-          <div class="note">
-            <strong>نکته:</strong> اگه بعد از دانلود مستقیم، گوشی برای نصب هشدار داد یا اجازه خواست،
-            کافیه به مرورگر اجازه نصب اپ بدی تا نصب بدون مشکل انجام بشه.
+            <p class="label label-muted">
+              نسخه مخصوص iPhone هنوز در حال آماده‌سازیه و به‌زودی فعال می‌شه.
+            </p>
+
+            <a
+              class="btn btn-soon cta-btn"
+              href="javascript:void(0)"
+              aria-disabled="true"
+              >به‌زودی…</a
+            >
+
+            <div class="note">
+              اگر دوست داری از زمان انتشار نسخه iOS باخبر شوی، از صفحه
+              <a class="gold-link" href="/contact.html">تماس با ما</a>
+              به ما پیام بده تا راه ارتباطی‌ات ثبت شود.
+            </div>
           </div>
         </div>
 
-        <!-- Bazaar -->
-        <div class="card">
-          <div class="card-title">
-            <h2>دانلود از کافه‌بازار</h2>
+        <div class="cta-row">
+          <a class="btn btn-ghost" href="/">بازگشت به صفحه اصلی</a>
+          <a class="btn btn-primary" href="/#inside">ویژگی‌های اشتراک ققنوس</a>
+          <a class="btn btn-ghost" href="/store.html">نحوه فعال‌سازی اشتراک</a>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="container">
+        <div class="footer-top">
+          <div>© تمامی حقوق، برای برند ققنوس، محفوظ است.</div>
+          <div>پرداخت امن از طریق زرین‌پال | دارای نماد اعتماد الکترونیکی</div>
+        </div>
+
+        <div class="trust-row">
+          <div id="zarinpal">
+            <script
+              src="https://www.zarinpal.com/webservice/TrustCode"
+              type="text/javascript"
+            ></script>
           </div>
 
-          <p class="label label-muted">
-            اگه ترجیح می‌دی از مارکت رسمی نصب کنی، ققنوس از طریق بازار هم در دسترسه.
-          </p>
-
-          <a class="store-btn" href="https://example.com/BAZAAR_LINK" target="_blank" rel="noopener" aria-label="دانلود ققنوس از کافه‌بازار">
-            <img src="/static/img/bazaar.png" alt="دریافت از بازار">
-            <div class="label">باز کردن صفحه ققنوس در بازار</div>
+          <a
+            referrerpolicy="origin"
+            target="_blank"
+            rel="noopener"
+            aria-label="مشاهده نشان اعتماد اینماد ققنوس"
+            href="https://trustseal.enamad.ir/?id=683249&Code=kNJsbo2Cym96iOqBtjSeWJjYDW3nFd98"
+          >
+            <img
+              class="enamad-img"
+              referrerpolicy="origin"
+              src="https://trustseal.enamad.ir/logo.aspx?id=683249&Code=kNJsbo2Cym96iOqBtjSeWJjYDW3nFd98"
+              alt="نشان اعتماد اینماد"
+              code="kNJsbo2Cym96iOqBtjSeWJjYDW3nFd98"
+            />
           </a>
         </div>
-
-        <!-- iOS -->
-        <div class="card">
-          <div class="card-title">
-            <h2>نسخه iOS (PWA)</h2>
-          </div>
-
-          <p class="label label-muted">
-            نسخه مخصوص iPhone هنوز در حال آماده‌سازیه و به‌زودی فعال می‌شه.
-          </p>
-
-          <a class="btn btn-soon cta-btn" href="javascript:void(0)" aria-disabled="true">به‌زودی…</a>
-
-          <div class="note">
-            اگر دوست داری از زمان انتشار نسخه iOS باخبر شوی، از صفحه
-            <a class="gold-link" href="/contact.html">تماس با ما</a>
-            به ما پیام بده تا راه ارتباطی‌ات ثبت شود.
-          </div>
-        </div>
       </div>
+    </footer>
 
-      <div class="cta-row">
-        <a class="btn btn-ghost" href="/">بازگشت به صفحه اصلی</a>
-        <a class="btn btn-primary" href="/#inside">ویژگی‌های اشتراک ققنوس</a>
-        <a class="btn btn-ghost" href="/store.html">نحوه فعال‌سازی اشتراک</a>
-      </div>
-    </section>
-  </main>
-
-  <footer>
-    <div class="container">
-      <div class="footer-top">
-        <div>© تمامی حقوق، برای برند ققنوس، محفوظ است.</div>
-        <div>پرداخت امن از طریق زرین‌پال | دارای نماد اعتماد الکترونیکی</div>
-      </div>
-
-      <div class="trust-row">
-        <div id="zarinpal">
-          <script src="https://www.zarinpal.com/webservice/TrustCode" type="text/javascript"></script>
-        </div>
-
-        <a
-          referrerpolicy="origin"
-          target="_blank"
-          rel="noopener"
-          aria-label="مشاهده نشان اعتماد اینماد ققنوس"
-          href="https://trustseal.enamad.ir/?id=683249&Code=kNJsbo2Cym96iOqBtjSeWJjYDW3nFd98"
-        >
-          <img
-            class="enamad-img"
-            referrerpolicy="origin"
-            src="https://trustseal.enamad.ir/logo.aspx?id=683249&Code=kNJsbo2Cym96iOqBtjSeWJjYDW3nFd98"
-            alt="نشان اعتماد اینماد"
-            code="kNJsbo2Cym96iOqBtjSeWJjYDW3nFd98"
-          />
-        </a>
-      </div>
-    </div>
-  </footer>
-
-  <script>
-    window.addEventListener("load", function () {
-      const el = document.getElementById("pageLoader");
-      if (!el) return;
-      el.classList.add("hidden");
-      setTimeout(() => el.remove(), 350);
-    });
-  </script>
-</body>
+    <script>
+      window.addEventListener("load", function () {
+        const el = document.getElementById("pageLoader");
+        if (!el) return;
+        el.classList.add("hidden");
+        setTimeout(() => el.remove(), 350);
+      });
+    </script>
+  </body>
 </html>
