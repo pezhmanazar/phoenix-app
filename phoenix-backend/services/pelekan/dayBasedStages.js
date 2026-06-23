@@ -313,23 +313,36 @@ async function handleNoContactTask({
     };
   }
 
-  const nextCurrentDays = (Number(streak.currentDays) || 0) + 1;
+    const safeDaysAfterLastReset = await prisma.noContactLog.count({
+    where: {
+      userId,
+      ...(streak.lastNoContactResetAt
+        ? { eventAt: { gt: streak.lastNoContactResetAt } }
+        : {}),
+      OR: [
+        { eventType: { in: ["none", "role_based"] } },
+        { eventType: null, hadContact: false },
+      ],
+    },
+  });
+
+  const nextCurrentDays = safeDaysAfterLastReset;
   const nextBestDays = Math.max(Number(streak.bestDays) || 0, nextCurrentDays);
 
   const safeUpdateData = {
-  currentDays: nextCurrentDays,
-  bestDays: nextBestDays,
-  lastCompletedAt: now,
+    currentDays: nextCurrentDays,
+    bestDays: nextBestDays,
+    lastCompletedAt: now,
 
-  // فقط هشدار نمایشی پاک می‌شود
-  noContactWarningState: "none",
-};
-
+    // فقط هشدار نمایشی پاک می‌شود؛ قول/اخطار/ریست قبلی دست نمی‌خورد
+    noContactWarningState: "none",
+  };
 
   const updated = await prisma.pelekanStreak.update({
     where: { userId },
     data: safeUpdateData,
   });
+
 
   return {
     ok: true,
