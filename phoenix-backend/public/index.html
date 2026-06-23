@@ -1092,47 +1092,6 @@
         align-items: center;
         justify-content: center;
       }
-
-      /* ایجاد افکت بصری مسیر بازسازی */
-      .hero-visual {
-        position: relative;
-      }
-
-      .hero-visual::after {
-        content: "→ عبور از وابستگی و رسیدن به خودِ تازه";
-        position: absolute;
-        bottom: 20px;
-        right: 20px;
-        background: rgba(11, 15, 20, 0.7);
-        color: var(--gold);
-        padding: 8px 16px;
-        border-radius: 999px;
-        font-size: 12px;
-        border: 1px solid rgba(212, 175, 55, 0.3);
-        z-index: 5;
-        pointer-events: none;
-        animation: fadeIn 1s ease;
-      }
-
-      @keyframes fadeIn {
-        from {
-          opacity: 0;
-          transform: translateY(10px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-
-      @media (max-width: 900px) {
-        .hero-visual::after {
-          font-size: 10px;
-          padding: 6px 12px;
-          bottom: 10px;
-          right: 10px;
-        }
-      }
     </style>
   </head>
 
