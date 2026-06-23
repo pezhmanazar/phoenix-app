@@ -620,10 +620,7 @@
 
     @media (max-width: 900px){
       h1{ font-size: 24px; }
-
-      .selector-box{
-        grid-template-columns: 1fr;
-      }
+      .selector-box{ grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -647,7 +644,6 @@
   <header>
     <div class="container">
       <div class="nav">
-
         <a class="btn btn-primary mobile-cta" href="/download.html" aria-label="دانلود اپلیکیشن">
           <img src="/static/img/download.png" alt="">
         </a>
@@ -691,17 +687,16 @@
   <main class="container">
     <section class="page" aria-label="راهنمای نصب مستقیم ققنوس">
       <div class="page-grid">
-
         <div class="card">
           <div class="kicker" id="pageKicker">راهنمای نصب مستقیم ققنوس</div>
           <h1 id="pageTitle">اگر گوشی اجازه نصب نداد، اینجا قدم‌به‌قدم درستش کن.</h1>
           <p class="lead" id="pageLead">
-            بعضی گوشی‌ها موقع نصب مستقیم، پیام «نصب از منبع ناشناس» نشان می‌دهند. این یعنی باید به مرورگر یا برنامه‌ای که فایل را با آن دانلود کرده‌ای، اجازه نصب بدهی.
+            بعضی گوشی‌ها موقع نصب مستقیم، پیام «نصب از منبع ناشناس» نشان می‌دهند. این یعنی باید به همان برنامه‌ای که فایل را با آن دانلود یا باز کرده‌ای، مثل Chrome یا Files یا Telegram، اجازه نصب بدهی.
           </p>
 
-          <div class="selector-box" aria-label="انتخاب زبان و مدل گوشی">
+          <div class="selector-box" aria-label="انتخاب زبان و برند گوشی">
             <div class="field">
-              <label for="languageSelect">زبان راهنما</label>
+              <label for="languageSelect" id="languageLabel">زبان گوشی</label>
               <select id="languageSelect">
                 <option value="fa">فارسی</option>
                 <option value="en">English</option>
@@ -709,7 +704,7 @@
             </div>
 
             <div class="field">
-              <label for="deviceSelect" id="deviceLabel">مدل گوشی</label>
+              <label for="deviceSelect" id="deviceLabel">برند گوشی</label>
               <select id="deviceSelect">
                 <option value="samsung">Samsung / سامسونگ</option>
                 <option value="xiaomi">Xiaomi / شیائومی</option>
@@ -720,7 +715,7 @@
           <div class="steps" id="stepsBox" aria-label="مراحل فعال‌سازی نصب"></div>
 
           <div class="note" id="warningBox">
-            <b>نکته مهم:</b> فقط فایل ققنوس را از سایت رسمی qoqnoos.app دانلود کن. بعد از نصب اپ، اگر خواستی می‌توانی دوباره این اجازه را از تنظیمات گوشی خاموش کنی.
+            <b>نکته مهم:</b> اگر فایل را مثلاً با Chrome دانلود کرده‌ای، باید مجوز را برای خود Chrome روشن کنی؛ اگر با Files یا Telegram یا Bazaar باز کرده‌ای، باید همان برنامه را فعال کنی، نه یک برنامه دیگر.
           </div>
 
           <div class="success-note" id="successBox">
@@ -732,7 +727,6 @@
             <a class="btn btn-ghost" href="/contact.html" id="contactBtn">نیاز به راهنمایی دارم</a>
           </div>
         </div>
-
       </div>
     </section>
   </main>
@@ -761,7 +755,9 @@
       const loader = document.getElementById("pageLoader");
       if (loader) {
         loader.classList.add("hidden");
-        setTimeout(() => loader.remove(), 350);
+        setTimeout(function () {
+          loader.remove();
+        }, 350);
       }
 
       const languageSelect = document.getElementById("languageSelect");
@@ -771,6 +767,7 @@
       const pageKicker = document.getElementById("pageKicker");
       const pageTitle = document.getElementById("pageTitle");
       const pageLead = document.getElementById("pageLead");
+      const languageLabel = document.getElementById("languageLabel");
       const deviceLabel = document.getElementById("deviceLabel");
       const warningBox = document.getElementById("warningBox");
       const successBox = document.getElementById("successBox");
@@ -783,60 +780,70 @@
           lang: "fa",
           kicker: "راهنمای نصب مستقیم ققنوس",
           title: "اگر گوشی اجازه نصب نداد، اینجا قدم‌به‌قدم درستش کن.",
-          lead: "بعضی گوشی‌ها موقع نصب مستقیم، پیام «نصب از منبع ناشناس» نشان می‌دهند. این یعنی باید به مرورگر یا برنامه‌ای که فایل را با آن دانلود کرده‌ای، اجازه نصب بدهی.",
-          languageLabel: "زبان راهنما",
-          deviceLabel: "مدل گوشی",
-          warning: "<b>نکته مهم:</b> فقط فایل ققنوس را از سایت رسمی qoqnoos.app دانلود کن. بعد از نصب اپ، اگر خواستی می‌توانی دوباره این اجازه را از تنظیمات گوشی خاموش کنی.",
+          lead: "بعضی گوشی‌ها موقع نصب مستقیم، پیام «نصب از منبع ناشناس» نشان می‌دهند. در اندرویدهای جدید باید به همان برنامه‌ای که فایل را با آن دانلود یا باز کرده‌ای، مثل Chrome، Files، Telegram یا Bazaar، اجازه نصب بدهی.",
+          languageLabel: "زبان گوشی",
+          deviceLabel: "برند گوشی",
+          warning: "<b>نکته مهم:</b> اگر فایل را مثلاً با <b>Chrome</b> دانلود کرده‌ای، باید مجوز را برای خود <b>Chrome</b> روشن کنی. اگر فایل را با <b>Files</b> یا <b>Telegram</b> یا <b>Bazaar</b> باز کرده‌ای، باید همان برنامه منبع را فعال کنی، نه یک برنامه دیگر.",
           success: "اگر نصب کامل شد، اپ ققنوس را باز کن و با شماره موبایل خودت وارد شو.",
           downloadBtn: "بازگشت به صفحه دانلود",
           contactBtn: "نیاز به راهنمایی دارم",
           samsung: [
-            "<b>فایل ققنوس را باز کن.</b> بعد از دانلود، روی فایل APK بزن.",
-            "اگر پیام امنیتی دیدی، روی <b>Settings / تنظیمات</b> بزن.",
-            "گزینه <b>Allow from this source</b> یا <b>اجازه از این منبع</b> را روشن کن.",
-            "به صفحه نصب برگرد و روی <b>Install / نصب</b> بزن.",
-            "بعد از پایان نصب، روی <b>Open / باز کردن</b> بزن و وارد ققنوس شو."
+            "<b>اول فایل نصب ققنوس را باز کن.</b> بعد از دانلود، روی فایل APK بزن. اگر پیام خطا دیدی که گوشی اجازه نصب از این منبع را نمی‌دهد، ادامه مراحل را انجام بده.",
+            "<b>اگر زبان گوشی فارسی است</b> دنبال این مسیر بگرد: <b>تنظیمات ← امنیت و حریم خصوصی ← تنظیمات امنیتی بیشتر ← نصب برنامه‌های ناشناخته</b>.",
+            "<b>اگر زبان گوشی انگلیسی است</b> دنبال این مسیر بگرد: <b>Settings → Security and privacy → More security settings → Install unknown apps</b>.",
+            "حالا <b>همان برنامه‌ای</b> را انتخاب کن که فایل ققنوس را با آن دانلود یا باز کرده‌ای؛ مثلاً <b>Chrome</b> یا <b>My Files / Files</b> یا <b>Telegram</b> یا <b>Bazaar</b>.",
+            "داخل همان صفحه، گزینه <b>Allow from this source</b> یا <b>اجازه از این منبع</b> را روشن کن.",
+            "اگر باز هم نصب انجام نشد و گوشی سامسونگ جدید است، احتمال دارد <b>Auto Blocker</b> فعال باشد. در این صورت برو به: <b>Settings → Security and privacy → Auto Blocker</b> یا <b>تنظیمات ← امنیت و حریم خصوصی ← مسدودکننده خودکار</b> و آن را موقتاً خاموش کن.",
+            "حالا برگرد به فایل APK ققنوس و دوباره روی <b>Install / نصب</b> بزن. بعد از پایان نصب، روی <b>Open / باز کردن</b> بزن."
           ],
           xiaomi: [
-            "<b>فایل ققنوس را باز کن.</b> بعد از دانلود، روی فایل APK بزن.",
-            "اگر پیام امنیتی دیدی، وارد <b>Settings / تنظیمات</b> شو.",
-            "اجازه نصب برای مرورگر یا برنامه دانلود را روشن کن.",
-            "اگر صفحه هشدار شیائومی آمد، چند ثانیه صبر کن و سپس روی <b>Allow / اجازه دادن</b> بزن.",
-            "به نصب برگرد، روی <b>Install / نصب</b> بزن و بعد از نصب، ققنوس را باز کن."
+            "<b>اول فایل نصب ققنوس را باز کن.</b> بعد از دانلود، روی فایل APK بزن. اگر پیام امنیتی یا خطای نصب از منبع ناشناس دیدی، ادامه مراحل را انجام بده.",
+            "<b>سریع‌ترین راه در شیائومی</b> این است که وارد تنظیمات شوی و در بخش جستجو عبارت <b>Install unknown apps</b> یا <b>نصب برنامه‌های ناشناخته</b> را جستجو کنی.",
+            "اگر خواستی مسیر دستی را بروی و <b>زبان گوشی فارسی است</b>، معمولاً این مسیر را پیدا می‌کنی: <b>تنظیمات ← حریم خصوصی</b> یا <b>محافظت از حریم خصوصی ← مجوزهای ویژه / دسترسی‌های ویژه ← نصب برنامه‌های ناشناخته</b>.",
+            "اگر <b>زبان گوشی انگلیسی است</b>، معمولاً این مسیر را پیدا می‌کنی: <b>Settings → Privacy</b> یا <b>Privacy protection → Special permissions → Install unknown apps</b>.",
+            "حالا <b>همان برنامه منبع</b> را انتخاب کن؛ یعنی برنامه‌ای که فایل را با آن دانلود یا باز کرده‌ای، مثل <b>Chrome</b> یا <b>File Manager / Files</b> یا <b>Telegram</b> یا <b>WhatsApp</b> یا <b>Bazaar</b>.",
+            "اگر فایل را از <b>بازار</b> نصب می‌کنی، باید مجوز را دقیقاً برای <b>خود بازار</b> فعال کنی، نه برای مرورگر.",
+            "سپس گزینه <b>Allow from this source</b> یا <b>اجازه از این منبع</b> را روشن کن. در بعضی مدل‌های شیائومی فقط دکمه <b>Allow / اجازه دادن</b> یا یک سوییچ مشابه می‌بینی.",
+            "برگرد به صفحه نصب فایل ققنوس و دوباره روی <b>Install / نصب</b> بزن. اگر صفحه هشدار اضافه آمد، چند ثانیه صبر کن و بعد <b>Allow / اجازه دادن</b> را بزن."
           ]
         },
         en: {
           dir: "ltr",
           lang: "en",
           kicker: "Qoqnoos direct install guide",
-          title: "If your phone blocks the installation, follow these steps.",
-          lead: "Some Android phones show an unknown source warning when installing an APK directly. You only need to allow installation for the browser or app you used to download Qoqnoos.",
-          languageLabel: "Guide language",
+          title: "If your phone blocks the installation, fix it step by step.",
+          lead: "Some Android phones show an unknown source warning during direct APK installation. On newer Android versions, you must allow installation for the exact app you used to download or open the file, such as Chrome, Files, Telegram, or Bazaar.",
+          languageLabel: "Phone language",
           deviceLabel: "Phone brand",
-          warning: "<b>Important:</b> Download Qoqnoos only from the official qoqnoos.app website. After installing the app, you can turn this permission off again from your phone settings.",
+          warning: "<b>Important:</b> If you downloaded the file with <b>Chrome</b>, enable the permission for <b>Chrome</b> itself. If you opened it with <b>Files</b>, <b>Telegram</b>, or <b>Bazaar</b>, enable the permission for that exact source app, not a different one.",
           success: "After installation, open Qoqnoos and sign in with your mobile number.",
           downloadBtn: "Back to download page",
           contactBtn: "I need help",
           samsung: [
-            "<b>Open the Qoqnoos APK file.</b> Tap the downloaded file.",
-            "If you see a security warning, tap <b>Settings</b>.",
-            "Turn on <b>Allow from this source</b> for your browser or download app.",
-            "Go back to the installation screen and tap <b>Install</b>.",
-            "When installation is complete, tap <b>Open</b> and start using Qoqnoos."
+            "<b>First open the Qoqnoos APK file.</b> After downloading, tap the APK. If you see a warning that your phone cannot install apps from this source, continue with the steps below.",
+            "<b>If your phone language is English</b>, follow this path: <b>Settings → Security and privacy → More security settings → Install unknown apps</b>.",
+            "<b>If your phone language is Persian</b>, look for the same menu with these labels: <b>تنظیمات ← امنیت و حریم خصوصی ← تنظیمات امنیتی بیشتر ← نصب برنامه‌های ناشناخته</b>.",
+            "Then select the <b>exact app</b> you used to download or open the Qoqnoos file, such as <b>Chrome</b>, <b>My Files / Files</b>, <b>Telegram</b>, or <b>Bazaar</b>.",
+            "Turn on <b>Allow from this source</b>.",
+            "If the installation is still blocked on a newer Samsung phone, <b>Auto Blocker</b> may be on. Go to <b>Settings → Security and privacy → Auto Blocker</b> and turn it <b>Off</b> temporarily.",
+            "Now go back to the APK file and tap <b>Install</b>. When the installation finishes, tap <b>Open</b>."
           ],
           xiaomi: [
-            "<b>Open the Qoqnoos APK file.</b> Tap the downloaded file.",
-            "If you see a security warning, go to <b>Settings</b>.",
-            "Allow installation for the browser or app you used to download the file.",
-            "If Xiaomi shows an extra warning screen, wait a few seconds and tap <b>Allow</b>.",
-            "Return to the installation screen, tap <b>Install</b>, then open Qoqnoos."
+            "<b>First open the Qoqnoos APK file.</b> After downloading, tap the APK. If you see a security warning or an unknown apps message, continue with the steps below.",
+            "<b>The fastest way on Xiaomi</b> is to open Settings and search for <b>Install unknown apps</b>.",
+            "<b>If your phone language is English</b>, the manual path is usually: <b>Settings → Privacy</b> or <b>Privacy protection → Special permissions → Install unknown apps</b>.",
+            "<b>If your phone language is Persian</b>, look for the same menu with these labels: <b>تنظیمات ← حریم خصوصی</b> یا <b>محافظت از حریم خصوصی ← مجوزهای ویژه / دسترسی‌های ویژه ← نصب برنامه‌های ناشناخته</b>.",
+            "Then choose the <b>exact source app</b> you used to download or open the file, such as <b>Chrome</b>, <b>File Manager / Files</b>, <b>Telegram</b>, <b>WhatsApp</b>, or <b>Bazaar</b>.",
+            "If you are installing the file through <b>Bazaar</b>, you must enable the permission for <b>Bazaar itself</b>, not for your browser.",
+            "Turn on <b>Allow from this source</b>. On some Xiaomi phones, you may instead see a switch or an <b>Allow</b> button.",
+            "Return to the Qoqnoos installation screen and tap <b>Install</b>. If Xiaomi shows an extra warning page, wait a few seconds and then tap <b>Allow</b>."
           ]
         }
       };
 
       function numberText(index, language) {
         if (language === "fa") {
-          return ["۱", "۲", "۳", "۴", "۵"][index];
+          return ["۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸"][index] || String(index + 1);
         }
         return String(index + 1);
       }
@@ -853,6 +860,7 @@
         pageKicker.textContent = data.kicker;
         pageTitle.textContent = data.title;
         pageLead.textContent = data.lead;
+        languageLabel.textContent = data.languageLabel;
         deviceLabel.textContent = data.deviceLabel;
         warningBox.innerHTML = data.warning;
         successBox.textContent = data.success;
@@ -864,12 +872,10 @@
         data[device].forEach(function (step, index) {
           const item = document.createElement("div");
           item.className = "step";
-
           item.innerHTML = `
             <div class="step-num">${numberText(index, language)}</div>
             <div class="step-body">${step}</div>
           `;
-
           stepsBox.appendChild(item);
         });
       }
