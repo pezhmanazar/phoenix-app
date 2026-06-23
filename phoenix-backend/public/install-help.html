@@ -766,8 +766,8 @@
     const warningBox = document.getElementById("warningBox");
 
     function enLine(text) {
-      return '<span dir="ltr" style="display:block;width:100%;box-sizing:border-box;text-align:left;direction:ltr;margin-top:10px;padding:14px 16px;border-radius:14px;background:rgba(255,255,255,0.045);border:1px solid rgba(255,255,255,0.08);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.9;font-size:15px;min-height:58px;">' + text + '</span>';
-    }
+  return '<div dir="ltr" style="display:block !important;width:100% !important;box-sizing:border-box !important;text-align:left !important;direction:ltr !important;margin-top:10px !important;padding:14px 16px !important;border-radius:14px !important;background:rgba(255,255,255,0.045) !important;border:1px solid rgba(255,255,255,0.08) !important;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif !important;line-height:1.9 !important;font-size:15px !important;min-height:58px !important;word-break:break-word !important;">' + text + '</div>';
+}
 
     const content = {
       samsung: {
