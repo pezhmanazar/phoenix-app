@@ -19,10 +19,18 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     version: config.version ?? "1.0.0",
 
     plugins: [
-  ...(config.plugins || []),
-  "expo-audio",
-  "expo-asset",
-],
+      ...(config.plugins || []),
+      "expo-audio",
+      "expo-asset",
+    ],
+
+    android: {
+      ...(config.android || {}),
+      blockedPermissions: [
+        ...(config.android?.blockedPermissions || []),
+        "android.permission.SYSTEM_ALERT_WINDOW",
+      ],
+    },
 
     extra: {
       ...(config.extra || {}),
