@@ -689,9 +689,9 @@
       <div class="page-grid">
         <div class="card">
           <div class="kicker" id="pageKicker">راهنمای نصب مستقیم ققنوس</div>
-          <h1 id="pageTitle">اگر گوشی اجازه نصب نداد، اینجا قدم‌به‌قدم درستش کن.</h1>
+          <h1 id="pageTitle">اگه گوشی اجازه نصب نداد، اینجا قدم‌به‌قدم درستش کن.</h1>
           <p class="lead" id="pageLead">
-            بعضی گوشی‌ها موقع نصب مستقیم، پیام «نصب از منبع ناشناس» نشان می‌دهند. این یعنی باید به همان برنامه‌ای که فایل را با آن دانلود یا باز کرده‌ای، مثل Chrome یا Files یا Telegram، اجازه نصب بدهی.
+            بعضی گوشی‌ها موقع نصب مستقیم، پیام «نصب از منبع ناشناس» رو نشون می‌دن. این یعنی باید به همون برنامه‌ای که فایل رو با اون دانلود یا باز کردی، مثل Chrome یا Files یا Telegram، اجازه نصب بدی.
           </p>
 
           <div class="selector-box" aria-label="انتخاب زبان و برند گوشی">
@@ -715,11 +715,11 @@
           <div class="steps" id="stepsBox" aria-label="مراحل فعال‌سازی نصب"></div>
 
           <div class="note" id="warningBox">
-            <b>نکته مهم:</b> اگر فایل را مثلاً با Chrome دانلود کرده‌ای، باید مجوز را برای خود Chrome روشن کنی؛ اگر با Files یا Telegram یا Bazaar باز کرده‌ای، باید همان برنامه را فعال کنی، نه یک برنامه دیگر.
+            <b>نکته مهم:</b> اگه فایل رو مثلاً با Chrome دانلود کردی، باید مجوز رو برای خود Chrome روشن کنی؛ اگه با Files یا Telegram یا Bazaar باز کردی، باید همون برنامه رو فعال کنی، نه یک برنامه دیگه.
           </div>
 
           <div class="success-note" id="successBox">
-            اگر نصب کامل شد، اپ ققنوس را باز کن و با شماره موبایل خودت وارد شو.
+            اگه نصب کامل شد، اپ ققنوس رو باز کن و با شماره موبایل خودت وارد شو.
           </div>
 
           <div class="cta-row">
@@ -766,7 +766,7 @@
     const warningBox = document.getElementById("warningBox");
 
     function enLine(text) {
-      return '<span dir="ltr" style="display:block;text-align:left;direction:ltr;margin-top:8px;padding:9px 10px;border-radius:12px;background:rgba(255,255,255,0.045);border:1px solid rgba(255,255,255,0.08);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.8;">' + text + '</span>';
+      return '<span dir="ltr" style="display:block;width:100%;box-sizing:border-box;text-align:left;direction:ltr;margin-top:10px;padding:14px 16px;border-radius:14px;background:rgba(255,255,255,0.045);border:1px solid rgba(255,255,255,0.08);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.9;font-size:15px;min-height:58px;">' + text + '</span>';
     }
 
     const content = {
@@ -842,7 +842,5 @@
     renderGuide();
   });
 </script>
-
-
 </body>
 </html>
