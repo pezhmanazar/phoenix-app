@@ -595,18 +595,59 @@
       font-variant-numeric: tabular-nums;
     }
 
-        .contact-list{
+        .social-full{
+      grid-column:1 / -1;
+    }
+
+    .social-row{
+      margin-top:10px;
       display:grid;
-      gap:10px;
+      grid-template-columns: repeat(6, 46px);
+      gap:12px;
+      align-items:center;
+      justify-content:center;
+      width:100%;
+    }
+
+    .social-btn{
+      width:46px;
+      height:46px;
+      border-radius:16px;
+      border:1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      transition:.2s ease;
+      text-decoration:none;
+    }
+
+    .social-btn:hover{
+      background: rgba(255,255,255,0.05);
+      border-color: rgba(212,175,55,0.22);
+      transform: translateY(-1px);
+    }
+
+    .social-btn img{
+      width:21px;
+      height:21px;
+      display:block;
+      opacity:.95;
+      object-fit:contain;
+    }
+
+    .contact-list{
+      display:grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap:12px;
     }
 
     .contact-item{
       display:flex;
-      align-items:center;
-      justify-content:space-between;
+      flex-direction:column;
       gap:12px;
-      padding:10px 12px;
-      border-radius:16px;
+      padding:14px;
+      border-radius:18px;
       border:1px solid rgba(255,255,255,0.07);
       background: rgba(255,255,255,0.025);
       min-width:0;
@@ -615,7 +656,8 @@
     .contact-platform{
       display:flex;
       align-items:center;
-      gap:9px;
+      justify-content:space-between;
+      gap:10px;
       color: rgba(232,236,241,0.94);
       font-weight:900;
       font-size:13px;
@@ -623,50 +665,68 @@
     }
 
     .contact-platform img{
-      width:22px;
-      height:22px;
+      width:24px;
+      height:24px;
       display:block;
       object-fit:contain;
-      flex:0 0 22px;
+      flex:0 0 24px;
     }
 
     .contact-values{
-      display:flex;
-      flex-direction:column;
-      align-items:flex-start;
-      gap:5px;
+      display:grid;
+      gap:8px;
       direction:ltr;
       min-width:0;
     }
 
-    .contact-values a,
-    .contact-values span{
-      color: rgba(212,175,55,0.95);
+    .contact-pill{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      min-height:38px;
+      padding:8px 10px;
+      border-radius:13px;
+      background: rgba(0,0,0,0.16);
+      border:1px solid rgba(255,255,255,0.06) !important;
+      color: rgba(232,236,241,0.96) !important;
       text-decoration:none;
-      border-bottom:1px dashed rgba(212,175,55,0.32);
       font-weight:800;
-      font-size:13px;
+      font-size:12px;
+      line-height:1.5;
       word-break:break-word;
-      text-align:left;
     }
 
-    .contact-values span{
-      color: rgba(232,236,241,0.9);
-      border-bottom:none;
+    .contact-pill:hover{
+      border-color: rgba(212,175,55,0.24) !important;
+      background: rgba(212,175,55,0.06);
+    }
+
+    .contact-label{
+      color: rgba(154,164,178,0.95);
+      font-weight:700;
+      font-size:11px;
+      white-space:nowrap;
+    }
+
+    .contact-value{
+      color: rgba(212,175,55,0.96);
+      text-align:left;
+      direction:ltr;
+      font-variant-numeric: tabular-nums;
+    }
+
+    @media (max-width: 900px){
+      .contact-list{
+        grid-template-columns:1fr;
+      }
     }
 
     @media (max-width: 560px){
-      .contact-item{
-        align-items:flex-start;
-        flex-direction:column;
-      }
-
-      .contact-values{
-        width:100%;
+      .social-row{
+        grid-template-columns: repeat(3, 46px);
       }
     }
-
-
     .note{
       margin-top:14px;
       color:var(--muted);
@@ -797,59 +857,16 @@
           اگه دربارهٔ اشتراک ققنوس، محتوای آموزشی، یا مسائل فنی سوالی داری، از یکی از روش‌های زیر می‌تونی با ما در ارتباط باشی.
         </p>
 
-                <div class="grid">
-          <div class="info">
-            <div class="info-title"><span class="icon">✉</span> راه‌های ارتباطی با پشتیبانی</div>
-            <div class="info-body">
-              <div class="contact-list">
-                <div class="contact-item">
-                  <div class="contact-platform">
-                    <img src="/static/img/telegram.png" alt="Telegram">
-                    تلگرام
-                  </div>
-                  <div class="contact-values">
-                    <a href="https://t.me/qoqnoos_admin1" target="_blank" rel="noopener">@qoqnoos_admin1</a>
-                    <a href="https://t.me/+989381296136" target="_blank" rel="noopener">+98 938 129 6136</a>
-                  </div>
-                </div>
-
-                <div class="contact-item">
-                  <div class="contact-platform">
-                    <img src="/static/img/bale.png" alt="Bale">
-                    بله
-                  </div>
-                  <div class="contact-values">
-                    <a href="https://ble.ir/qoqnoos_admin" target="_blank" rel="noopener">@qoqnoos_admin</a>
-                    <a href="https://ble.ir/09381296136" target="_blank" rel="noopener">0938 129 6136</a>
-                  </div>
-                </div>
-
-                <div class="contact-item">
-                  <div class="contact-platform">
-                    <img src="/static/img/rubika.png" alt="Rubika">
-                    روبیکا
-                  </div>
-                  <div class="contact-values">
-                    <a href="https://Rubika.ir/qoqnoos_admin" target="_blank" rel="noopener">@qoqnoos_admin</a>
-                    <span>0938 129 6136</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="info">
+      <div class="grid">
+          <div class="info social-full">
             <div class="info-title"><span class="icon">🌐</span> شبکه‌های اجتماعی</div>
             <div class="info-body">
               <div class="social-row" aria-label="لینک شبکه‌های اجتماعی">
-                <a class="social-btn" href="https://ble.ir/qoqnoos_app" target="_blank" rel="noopener" aria-label="بله">
-                  <img src="/static/img/bale.png" alt="Bale">
+                <a class="social-btn" href="https://www.youtube.com/@qoqnoos_app" target="_blank" rel="noopener" aria-label="یوتوب">
+                  <img src="/static/img/youtube.png" alt="YouTube">
                 </a>
                 <a class="social-btn" href="https://instagram.com/qoqnoos.app" target="_blank" rel="noopener" aria-label="اینستاگرام">
                   <img src="/static/img/instagram.png" alt="Instagram">
-                </a>
-                <a class="social-btn" href="https://www.youtube.com/@qoqnoos_app" target="_blank" rel="noopener" aria-label="یوتوب">
-                  <img src="/static/img/youtube.png" alt="YouTube">
                 </a>
                 <a class="social-btn" href="https://t.me/qoqnoos_app" target="_blank" rel="noopener" aria-label="تلگرام">
                   <img src="/static/img/telegram.png" alt="Telegram">
@@ -860,6 +877,67 @@
                 <a class="social-btn" href="https://rubika.ir/qoqnoos_app" target="_blank" rel="noopener" aria-label="روبیکا">
                   <img src="/static/img/rubika.png" alt="Rubika">
                 </a>
+                <a class="social-btn" href="https://ble.ir/qoqnoos_app" target="_blank" rel="noopener" aria-label="بله">
+                  <img src="/static/img/bale.png" alt="Bale">
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div class="info info-full">
+            <div class="info-title"><span class="icon">✉</span> راه‌های ارتباطی با پشتیبانی</div>
+            <div class="info-body">
+              <div class="contact-list">
+                <div class="contact-item">
+                  <div class="contact-platform">
+                    <span>تلگرام</span>
+                    <img src="/static/img/telegram.png" alt="Telegram">
+                  </div>
+                  <div class="contact-values">
+                    <a class="contact-pill" href="https://t.me/qoqnoos_admin1" target="_blank" rel="noopener">
+                      <span class="contact-label">آیدی</span>
+                      <span class="contact-value">@qoqnoos_admin1</span>
+                    </a>
+                    <a class="contact-pill" href="https://t.me/+989381296136" target="_blank" rel="noopener">
+                      <span class="contact-label">شماره</span>
+                      <span class="contact-value">+98 938 129 6136</span>
+                    </a>
+                  </div>
+                </div>
+
+                <div class="contact-item">
+                  <div class="contact-platform">
+                    <span>بله</span>
+                    <img src="/static/img/bale.png" alt="Bale">
+                  </div>
+                  <div class="contact-values">
+                    <a class="contact-pill" href="https://ble.ir/qoqnoos_admin" target="_blank" rel="noopener">
+                      <span class="contact-label">آیدی</span>
+                      <span class="contact-value">@qoqnoos_admin</span>
+                    </a>
+                    <a class="contact-pill" href="https://ble.ir/09381296136" target="_blank" rel="noopener">
+                      <span class="contact-label">شماره</span>
+                      <span class="contact-value">0938 129 6136</span>
+                    </a>
+                  </div>
+                </div>
+
+                <div class="contact-item">
+                  <div class="contact-platform">
+                    <span>روبیکا</span>
+                    <img src="/static/img/rubika.png" alt="Rubika">
+                  </div>
+                  <div class="contact-values">
+                    <a class="contact-pill" href="https://Rubika.ir/qoqnoos_admin" target="_blank" rel="noopener">
+                      <span class="contact-label">آیدی</span>
+                      <span class="contact-value">@qoqnoos_admin</span>
+                    </a>
+                    <a class="contact-pill" href="https://Rubika.ir/qoqnoos_admin" target="_blank" rel="noopener">
+                      <span class="contact-label">شماره</span>
+                      <span class="contact-value">0938 129 6136</span>
+                    </a>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -886,7 +964,6 @@
             </div>
           </div>
         </div>
-
 
         <div class="links-row">
           <a class="btn btn-ghost" href="/">صفحه اصلی</a>
