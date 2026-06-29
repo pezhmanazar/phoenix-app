@@ -1041,7 +1041,7 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
       pathStatsMap[normalizedPath].totalViews += views;
       pathStatsMap[normalizedPath].uniqueVisitors += visitors;
 
-      const dateKey = s.date.toISOString().split("T")[0];
+      const dateKey = new Date(s.date).toLocaleDateString("en-CA");
 
       if (!chartMap[dateKey]) {
         chartMap[dateKey] = {
