@@ -181,8 +181,6 @@ router.post("/upsert", authUser, async (req, res) => {
       gender,
       birthDate,
       profileCompleted,
-      avatarUrl,   // در Prisma نداریم، نادیده می‌گیریم
-      lastLoginAt, // در Prisma نداریم، نادیده می‌گیریم
     } = req.body || {};
 
     console.log("[users.upsert] HIT");
@@ -260,13 +258,11 @@ router.post("/", async (req, res) => {
 
     const {
       fullName,
-      avatarUrl,      // نادیده گرفته می‌شود
       gender,
       birthDate,
       profileCompleted,
       plan,
       planExpiresAt,
-      lastLoginAt,    // نادیده گرفته می‌شود
     } = req.body || {};
 
         console.log("[users.root-post] HIT");

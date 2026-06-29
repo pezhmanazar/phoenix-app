@@ -924,3 +924,28 @@ model PelekanReviewSession {
 
   @@index([questionSetId])
 }
+
+model PageViewEvent {
+  id         String   @id @default(uuid())
+  path       String
+  visitorId  String   // یک شناسه هش شده از IP + UserAgent برای تشخیص کاربر یکتا بدون نقض حریم خصوصی
+  userAgent  String?
+  referrer   String?
+  createdAt  DateTime @default(now())
+
+  @@index([path])
+  @@index([createdAt])
+  @@index([path, createdAt])
+}
+
+model PageViewSummary {
+  id             String   @id @default(uuid())
+  path           String
+  date           DateTime // ذخیره به صورت تاریخ بدون ساعت (مثلا 2026-06-29 00:00:00)
+  totalViews     Int      @default(0)
+  uniqueVisitors Int      @default(0)
+
+  @@unique([path, date])
+  @@index([path])
+  @@index([date])
+}
