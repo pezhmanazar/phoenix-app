@@ -323,15 +323,4 @@ router.post("/", async (req, res) => {
     return res.status(500).json({ ok: false, error: errorLabel });
   }
 });
-
-router.get("/test-analytics-db", async (req, res) => {
-  try {
-    const events = await prisma.pageViewEvent.findMany({ take: 10 });
-    const summaries = await prisma.pageViewSummary.findMany();
-    return res.json({ ok: true, events, summaries });
-  } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
 export default router;
