@@ -1039,15 +1039,38 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
     const pathStatsMap = {};
     let totalViews = 0;
 
-    filteredSummaries.forEach((s) => {
-      totalViews += s.count;
-      if (!pathStatsMap[s.path]) {
-        pathStatsMap[s.path] = { path: s.path, totalViews: 0, uniqueVisitors: 0 };
-      }
-      pathStatsMap[s.path].totalViews += s.count;
-      // توجه: به دلیل ذخیره روزانه، جمع زدن ویزیتورهای یکتا تخمینی است
-      pathStatsMap[s.path].uniqueVisitors += s.uniqueCount;
-    });
+    ffilteredSummaries.forEach((s) => {
+  let normalizedPath = String(s.path || "").toLowerCase().trim();
+
+  // حذف اسلش اول و آخر
+  normalizedPath = normalizedPath.replace(/^\/+|\/+$/g, "");
+
+  // صفحه اصلی
+  if (!normalizedPath) {
+    normalizedPath = "home";
+  }
+
+  // حذف فایل‌های غیرصفحه
+  if (normalizedPath === "robots.txt") {
+    return;
+  }
+
+  // یکسان‌سازی html
+  normalizedPath = normalizedPath.replace(/\.html$/g, "");
+
+  totalViews += s.count;
+
+  if (!pathStatsMap[normalizedPath]) {
+    pathStatsMap[normalizedPath] = {
+      path: normalizedPath,
+      totalViews: 0,
+      uniqueVisitors: 0
+    };
+  }
+
+  pathStatsMap[normalizedPath].totalViews += s.count;
+  pathStatsMap[normalizedPath].uniqueVisitors += s.uniqueCount;
+});
 
     const pathStats = Object.values(pathStatsMap).sort((a, b) => b.totalViews - a.totalViews);
 
