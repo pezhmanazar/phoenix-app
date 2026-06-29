@@ -1044,26 +1044,23 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
     const pathStatsMap = {};
     let totalViews = 0;
 
-    filteredSummaries.forEach((s) => {
+filteredSummaries.forEach((s) => {
   let normalizedPath = String(s.path || "").toLowerCase().trim();
 
-  // حذف اسلش اول و آخر
   normalizedPath = normalizedPath.replace(/^\/+|\/+$/g, "");
 
-  // صفحه اصلی
   if (!normalizedPath) {
     normalizedPath = "home";
   }
 
-  // حذف فایل‌های غیرصفحه
   if (normalizedPath === "robots.txt") {
     return;
   }
 
-  // یکسان‌سازی html
   normalizedPath = normalizedPath.replace(/\.html$/g, "");
 
-  totalViews += s.count;
+  // تغییرات اینجا اعمال شد:
+  totalViews += s.totalViews; 
 
   if (!pathStatsMap[normalizedPath]) {
     pathStatsMap[normalizedPath] = {
@@ -1073,8 +1070,8 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
     };
   }
 
-  pathStatsMap[normalizedPath].totalViews += s.count;
-  pathStatsMap[normalizedPath].uniqueVisitors += s.uniqueCount;
+  pathStatsMap[normalizedPath].totalViews += s.totalViews;
+  pathStatsMap[normalizedPath].uniqueVisitors += s.uniqueVisitors;
 });
 
     const pathStats = Object.values(pathStatsMap).sort((a, b) => b.totalViews - a.totalViews);
@@ -1088,8 +1085,8 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
         chartData: filteredSummaries.map(s => ({
           date: s.date.toISOString().split('T')[0],
           path: s.path,
-          views: s.count,
-          visitors: s.uniqueCount
+          views: s.totalViews, 
+          visitors: s.uniqueVisitors
         }))
       }
     });
