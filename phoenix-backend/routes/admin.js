@@ -995,12 +995,48 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
       const p = String(s.path || "").toLowerCase().trim();
       
       // فیلتر کردن زباله‌ها و بات‌ها
-      if (
-        !p || p.includes("wp-") || p.includes("login") || p.includes("admin") ||
-        p.includes("cgi-bin") || p.includes(".php") || p.includes(".env") ||
-        p.includes("robots.txt") || p.includes("static") || p.includes("_next")
+            if (
+        p.includes("wp-content") ||
+        p.includes("wp-admin") ||
+        p.includes("wordpress") ||
+        p.includes("hello") ||
+        p.includes("filemanager") ||
+        p.includes("login") ||
+        p.includes("logon") ||
+        p.includes("cgi-bin") ||
+        p.includes("cscoe") ||
+        p.includes("admin") ||
+        p.includes("web") ||
+        p === "index.html" ||
+        p === "index.php" ||
+        p === "home" ||
+        p === "robots.txt" ||
+        p === "favicon.ico" ||
+        p.includes("/static/") ||
+        p.includes("static/") ||
+        p.includes("/_next/") ||
+        p.includes("_next/") ||
+        p.includes("/assets/") ||
+        p.includes("assets/") ||
+        p.endsWith(".php") ||
+        p.endsWith(".env") ||
+        p.endsWith(".sql") ||
+        p.endsWith(".zip") ||
+        p.endsWith(".jpg") ||
+        p.endsWith(".jpeg") ||
+        p.endsWith(".png") ||
+        p.endsWith(".webp") ||
+        p.endsWith(".svg") ||
+        p.endsWith(".gif") ||
+        p.endsWith(".ico") ||
+        p.endsWith(".css") ||
+        p.endsWith(".js") ||
+        p.endsWith(".map") ||
+        p.endsWith(".woff") ||
+        p.endsWith(".woff2") ||
+        p.endsWith(".ttf")
       ) {
-        return;
+        return false;
       }
 
       // ۱. آمار کلی (جدول)
