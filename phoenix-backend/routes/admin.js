@@ -991,11 +991,11 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
     const chartMap = {}; // برای تجمیع آمار روزانه نمودار
     let totalViews = 0;
 
-    summaries.forEach((s) => {
+        summaries.forEach((s) => {
       const p = String(s.path || "").toLowerCase().trim();
-      
-      // فیلتر کردن زباله‌ها و بات‌ها
-            if (
+
+      const shouldSkip =
+        !p ||
         p.includes("wp-content") ||
         p.includes("wp-admin") ||
         p.includes("wordpress") ||
@@ -1034,22 +1034,24 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
         p.endsWith(".map") ||
         p.endsWith(".woff") ||
         p.endsWith(".woff2") ||
-        p.endsWith(".ttf")
-      ) {
-        return false;
-      }
+        p.endsWith(".ttf");
 
-      // ۱. آمار کلی (جدول)
+      if (shouldSkip) return;
+
       let normalizedPath = p.replace(/^\/+|\/+$/g, "") || "home";
       totalViews += (s.totalViews || 0);
 
       if (!pathStatsMap[normalizedPath]) {
-        pathStatsMap[normalizedPath] = { path: normalizedPath, totalViews: 0, uniqueVisitors: 0 };
+        pathStatsMap[normalizedPath] = {
+          path: normalizedPath,
+          totalViews: 0,
+          uniqueVisitors: 0
+        };
       }
+
       pathStatsMap[normalizedPath].totalViews += (s.totalViews || 0);
       pathStatsMap[normalizedPath].uniqueVisitors += (s.uniqueVisitors || 0);
 
-      // ۲. آمار روزانه (نمودار) - تجمیع بر اساس تاریخ
       const dateKey = s.date.toISOString().split("T")[0];
       if (!chartMap[dateKey]) {
         chartMap[dateKey] = { date: dateKey, views: 0, visitors: 0 };
@@ -1075,7 +1077,6 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-
 
 
 /* ====================== ✅ ANNOUNCEMENTS ====================== */
