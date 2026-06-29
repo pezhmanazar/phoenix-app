@@ -1,14 +1,13 @@
 // routes/admin.js
+import { GetObjectCommand } from "@aws-sdk/client-s3";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { Router } from "express";
 import prisma from "../utils/prisma.js";
-import { uploadBufferToS3, getSignedFileUrl } from "../utils/s3.js";
-import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedFileUrl, s3, uploadBufferToS3 } from "../utils/s3.js";
 
 
 // ⬇️ افزوده‌های مرحله ویس/فایل
-import fs from "fs";
 import multer from "multer";
 import path from "path";
 
@@ -703,7 +702,6 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
     const [
       baselineInProgress,
       baselineCompleted,
-      choosePathUsers,
       reviewInProgress,
       reviewCompleted,
       treatingUsers,
@@ -968,6 +966,60 @@ else levelDistribution.unknown += 1;
     });
   } catch (e) {
     console.error("admin/analytics/pelekan error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+/**
+ * ✅ GET /api/admin/analytics/views?days=7
+ * دریافت آمار خلاصه بازدید صفحات وب‌سایت
+ */
+router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
+  try {
+    const daysRange = Math.max(1, Math.min(90, Number(req.query.days || 7) || 7));
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysRange);
+
+    // ۱. گرفتن خلاصه‌ها در بازه زمانی مشخص شده
+    const summaries = await prisma.pageViewSummary.findMany({
+      where: {
+        date: { gte: startDate }
+      },
+      orderBy: { date: "asc" }
+    });
+
+    // ۲. دسته‌بندی و جمع‌کل آمار به تفکیک مسیرها (Path)
+    const pathStatsMap = {};
+    let totalViews = 0;
+
+    summaries.forEach((s) => {
+      totalViews += s.count;
+      if (!pathStatsMap[s.path]) {
+        pathStatsMap[s.path] = { path: s.path, totalViews: 0, uniqueVisitors: 0 };
+      }
+      pathStatsMap[s.path].totalViews += s.count;
+      // توجه: به دلیل ذخیره روزانه، جمع زدن ویزیتورهای یکتا تخمینی است
+      pathStatsMap[s.path].uniqueVisitors += s.uniqueCount;
+    });
+
+    const pathStats = Object.values(pathStatsMap).sort((a, b) => b.totalViews - a.totalViews);
+
+    return res.json({
+      ok: true,
+      data: {
+        daysRange,
+        totalViews,
+        pathStats,
+        chartData: summaries.map(s => ({
+          date: s.date.toISOString().split('T')[0],
+          path: s.path,
+          views: s.count,
+          visitors: s.uniqueCount
+        }))
+      }
+    });
+  } catch (e) {
+    console.error("admin/analytics/views error:", e?.message || e);
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });

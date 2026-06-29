@@ -7,7 +7,6 @@ import mime from "mime-types";
 import morgan from "morgan";
 import multer from "multer";
 import path from "path";
-import { fileURLToPath } from "url";
 
 import { PrismaClient } from "@prisma/client";
 import crypto from "crypto";
@@ -25,11 +24,6 @@ import publicRouter from "./routes/public.js"; // فقط routeهای عمومی 
 import ticketsRouter, { publicTicketsRouter } from "./routes/tickets.js";
 import usersRouter from "./routes/users.js"; // 🔹 روتر یوزرها
 const prisma = new PrismaClient();
-
-
-// ---------- Paths ----------
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // ---------- App ----------
 const app = express();

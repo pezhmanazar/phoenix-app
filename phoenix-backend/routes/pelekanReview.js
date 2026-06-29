@@ -67,12 +67,6 @@ function computeCanEnterPelekan(session) {
   if (session.test2CompletedAt || session.test2SkippedAt) return true;
   return false;
 }
-
-// ✅ PAYWALL REMOVED FROM REVIEW FLOW
-function computePaywallRequired(user, session) {
-  return false;
-}
-
 /* ------------------------- Result building (NEW) ------------------------- */
 function clamp(n, min, max) {
   const x = Number(n);
@@ -380,13 +374,13 @@ const OPT_YES_NO = [
   { value: 1, labelFa: "بله" },
 ];
 
-const OPT_0_4_REDLINE = [
-  { value: 0, labelFa: "هرگز" },
-  { value: 1, labelFa: "به‌ندرت" },
-  { value: 2, labelFa: "گاهی" },
-  { value: 3, labelFa: "اغلب" },
-  { value: 4, labelFa: "تقریباً همیشه" },
-];
+// const OPT_0_4_REDLINE = [
+//   { value: 0, labelFa: "هرگز" },
+//   { value: 1, labelFa: "به‌ندرت" },
+//   { value: 2, labelFa: "گاهی" },
+//   { value: 3, labelFa: "اغلب" },
+//   { value: 4, labelFa: "تقریباً همیشه" },
+// ];
 
 const OPT_0_4_AGREE = [
   { value: 0, labelFa: "اصلاً" },
