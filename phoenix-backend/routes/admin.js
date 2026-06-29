@@ -983,16 +983,63 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
     // ۱. گرفتن خلاصه‌ها در بازه زمانی مشخص شده
     const summaries = await prisma.pageViewSummary.findMany({
       where: {
-        date: { gte: startDate }
+        date: { gte: startDate },
+        path: {
+          notIn: [
+            "/wp-login.php",
+            "/xmlrpc.php",
+            "/favicon.ico",
+          ],
+        },
       },
       orderBy: { date: "asc" }
     });
 
+    const filteredSummaries = summaries.filter((s) => {
+      const p = String(s.path || "").toLowerCase().trim();
+
+      if (!p) return false;
+
+      // فایل‌ها و اسکن‌های مشکوک
+      if (
+        p.includes("wp-content") ||
+        p.includes("wp-admin") ||
+        p.includes("wordpress") ||
+        p.includes("hello") ||
+        p.includes("filemanager") ||
+        p.includes("/static/") ||
+        p.includes("static/") ||
+        p.includes("/_next/") ||
+        p.includes("_next/") ||
+        p.includes("/assets/") ||
+        p.includes("assets/") ||
+        p.endsWith(".php") ||
+        p.endsWith(".env") ||
+        p.endsWith(".sql") ||
+        p.endsWith(".zip") ||
+        p.endsWith(".jpg") ||
+        p.endsWith(".jpeg") ||
+        p.endsWith(".png") ||
+        p.endsWith(".webp") ||
+        p.endsWith(".svg") ||
+        p.endsWith(".gif") ||
+        p.endsWith(".ico") ||
+        p.endsWith(".css") ||
+        p.endsWith(".js") ||
+        p.endsWith(".map") ||
+        p.endsWith(".woff") ||
+        p.endsWith(".woff2") ||
+        p.endsWith(".ttf")
+      ) {
+        return false;
+      }
+      return true;
+    });
     // ۲. دسته‌بندی و جمع‌کل آمار به تفکیک مسیرها (Path)
     const pathStatsMap = {};
     let totalViews = 0;
 
-    summaries.forEach((s) => {
+    filteredSummaries.forEach((s) => {
       totalViews += s.count;
       if (!pathStatsMap[s.path]) {
         pathStatsMap[s.path] = { path: s.path, totalViews: 0, uniqueVisitors: 0 };
@@ -1010,7 +1057,7 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
         daysRange,
         totalViews,
         pathStats,
-        chartData: summaries.map(s => ({
+        chartData: filteredSummaries.map(s => ({
           date: s.date.toISOString().split('T')[0],
           path: s.path,
           views: s.count,
