@@ -701,6 +701,7 @@ router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) =>
     const [
       baselineInProgress,
       baselineCompleted,
+      _unusedNull, // این برای مقداردهی Promise.resolve(null) است تا ترتیب به هم نخورد
       reviewInProgress,
       reviewCompleted,
       treatingUsers,
