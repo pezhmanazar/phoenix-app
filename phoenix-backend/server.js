@@ -9,6 +9,8 @@ import multer from "multer";
 import path from "path";
 import { fileURLToPath } from "url";
 
+import { PrismaClient } from "@prisma/client";
+import crypto from "crypto";
 import adminAuth from "./middleware/adminAuth.js";
 import adminRouter from "./routes/admin.js";
 import announcementsRouter from "./routes/announcements.js";
@@ -22,6 +24,7 @@ import pelekanReviewRoutes from "./routes/pelekanReview.js";
 import publicRouter from "./routes/public.js"; // فقط routeهای عمومی غیرتیکت (فعلاً AI / utility)
 import ticketsRouter, { publicTicketsRouter } from "./routes/tickets.js";
 import usersRouter from "./routes/users.js"; // 🔹 روتر یوزرها
+const prisma = new PrismaClient();
 
 
 // ---------- Paths ----------
@@ -64,7 +67,49 @@ app.options("*", cors({
 }));
 app.use(morgan("dev"));
 
+// ---------- Page View Analytics Middleware ----------
+app.use(async (req, res, next) => {
+  // فقط درخواست‌های GET که برای فایل‌های استاتیک یا صفحات اصلی هستند را چک کن
+  if (req.method !== "GET") return next();
+  
+  const pathName = req.path;
+  // لیست پسوندهایی که نمی‌خواهیم آمارشان ثبت شود (مثل عکس و فونت)
+  const ignoredExtensions = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".css", ".js", ".ico", ".woff", ".woff2"];
+  if (ignoredExtensions.some(ext => pathName.endsWith(ext))) return next();
+  if (pathName.startsWith("/api/") || pathName.startsWith("/uploads")) return next();
 
+  next(); // برای اینکه کاربر معطل نشود، بقیه پردازش را ادامه بده
+
+  // ثبت در دیتابیس به صورت پس‌زمینه (Async)
+  try {
+    const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown";
+    const ua = req.headers["user-agent"] || "unknown";
+    // ساخت یک شناسه یکتا برای کاربر بدون ذخیره مستقیم IP (برای حفظ حریم خصوصی)
+    const visitorId = crypto.createHash("md5").update(ip + ua).digest("hex");
+
+    await prisma.pageViewEvent.create({
+      data: {
+        path: pathName,
+        visitorId: visitorId,
+        userAgent: ua,
+        referrer: req.headers["referer"] || null,
+      }
+    });
+
+    // آپدیت کردن جدول خلاصه (Summary) برای امروز
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // این بخش به صورت "Upsert" عمل می‌کند: اگر بود اضافه کن، نبود بساز
+    await prisma.pageViewSummary.upsert({
+      where: { path_date: { path: pathName, date: today } },
+      update: { totalViews: { increment: 1 } },
+      create: { path: pathName, date: today, totalViews: 1, uniqueVisitors: 1 }
+    });
+  } catch (err) {
+    console.error("Analytics Error:", err.message);
+  }
+});
 
 // ---------- Static site (Phoenix website) ----------
 app.use(express.static(PUBLIC_DIR)); // /, /store.html, /contact.html, ...
