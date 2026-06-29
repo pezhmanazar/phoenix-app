@@ -977,6 +977,7 @@ else levelDistribution.unknown += 1;
 router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
   try {
     const daysRange = Math.max(1, Math.min(90, Number(req.query.days || 7) || 7));
+
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - daysRange);
 
@@ -988,62 +989,46 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
     });
 
     const pathStatsMap = {};
-    const chartMap = {}; // برای تجمیع آمار روزانه نمودار
+    const chartMap = {};
     let totalViews = 0;
 
-        summaries.forEach((s) => {
-      const p = String(s.path || "").toLowerCase().trim();
+    // فقط صفحات واقعی سایت ققنوس
+    const allowedPaths = new Set([
+      "home",
+      "contact.html",
+      "download.html",
+      "install-help.html",
+      "store.html",
+      "terms.html",
+      "trust.html"
+    ]);
 
-      const shouldSkip =
-  !p ||
-  p.includes("wp-content") ||
-  p.includes("wp-admin") ||
-  p.includes("wordpress") ||
-  p.includes("hello") ||
-  p.includes("filemanager") ||
-  p.includes("login") ||
-  p.includes("logon") ||
-  p.includes("cgi-bin") ||
-  p.includes("cscoe") ||
-  p.startsWith("admin/") ||
-  p.startsWith("web/") ||
-  p === "admin" ||
-  p === "web" ||
-  p === "index.html" ||
-  p === "index.php" ||
-  p === "home" ||
-  p === "robots.txt" ||
-  p.endsWith("/robots.txt") ||
-  p === "favicon.ico" ||
-  p.endsWith("/index.html") ||
-  p.includes("/static/") ||
-  p.includes("static/") ||
-  p.includes("/_next/") ||
-  p.includes("_next/") ||
-  p.includes("/assets/") ||
-  p.includes("assets/") ||
-  p.endsWith(".php") ||
-  p.endsWith(".env") ||
-  p.endsWith(".sql") ||
-  p.endsWith(".zip") ||
-  p.endsWith(".jpg") ||
-  p.endsWith(".jpeg") ||
-  p.endsWith(".png") ||
-  p.endsWith(".webp") ||
-  p.endsWith(".svg") ||
-  p.endsWith(".gif") ||
-  p.endsWith(".ico") ||
-  p.endsWith(".css") ||
-  p.endsWith(".js") ||
-  p.endsWith(".map") ||
-  p.endsWith(".woff") ||
-  p.endsWith(".woff2") ||
-  p.endsWith(".ttf");
+    summaries.forEach((s) => {
+      let normalizedPath = String(s.path || "")
+        .toLowerCase()
+        .trim()
+        .split("?")[0]
+        .split("#")[0]
+        .replace(/^\/+|\/+$/g, "");
 
-      if (shouldSkip) return;
+      // صفحه اصلی
+      if (
+        normalizedPath === "" ||
+        normalizedPath === "/" ||
+        normalizedPath === "index.html"
+      ) {
+        normalizedPath = "home";
+      }
 
-      let normalizedPath = p.replace(/^\/+|\/+$/g, "") || "home";
-      totalViews += (s.totalViews || 0);
+      // اگر جزو صفحات واقعی سایت نیست، حذفش کن
+      if (!allowedPaths.has(normalizedPath)) {
+        return;
+      }
+
+      const views = s.totalViews || 0;
+      const visitors = s.uniqueVisitors || 0;
+
+      totalViews += views;
 
       if (!pathStatsMap[normalizedPath]) {
         pathStatsMap[normalizedPath] = {
@@ -1053,19 +1038,28 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
         };
       }
 
-      pathStatsMap[normalizedPath].totalViews += (s.totalViews || 0);
-      pathStatsMap[normalizedPath].uniqueVisitors += (s.uniqueVisitors || 0);
+      pathStatsMap[normalizedPath].totalViews += views;
+      pathStatsMap[normalizedPath].uniqueVisitors += visitors;
 
       const dateKey = s.date.toISOString().split("T")[0];
+
       if (!chartMap[dateKey]) {
-        chartMap[dateKey] = { date: dateKey, views: 0, visitors: 0 };
+        chartMap[dateKey] = {
+          date: dateKey,
+          views: 0,
+          visitors: 0
+        };
       }
-      chartMap[dateKey].views += (s.totalViews || 0);
-      chartMap[dateKey].visitors += (s.uniqueVisitors || 0);
+
+      chartMap[dateKey].views += views;
+      chartMap[dateKey].visitors += visitors;
     });
 
-    const pathStats = Object.values(pathStatsMap).sort((a, b) => b.totalViews - a.totalViews);
-    const chartData = Object.values(chartMap).sort((a, b) => a.date.localeCompare(b.date));
+    const pathStats = Object.values(pathStatsMap)
+      .sort((a, b) => b.totalViews - a.totalViews);
+
+    const chartData = Object.values(chartMap)
+      .sort((a, b) => a.date.localeCompare(b.date));
 
     return res.json({
       ok: true,
@@ -1076,9 +1070,13 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
         chartData
       }
     });
+
   } catch (e) {
     console.error("admin/analytics/views error:", e);
-    return res.status(500).json({ ok: false, error: "internal_error" });
+    return res.status(500).json({
+      ok: false,
+      error: "internal_error"
+    });
   }
 });
 
