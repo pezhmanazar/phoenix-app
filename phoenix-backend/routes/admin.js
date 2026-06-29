@@ -1036,6 +1036,11 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
       return true;
     });
     // ۲. دسته‌بندی و جمع‌کل آمار به تفکیک مسیرها (Path)
+    console.log("Filtered Summaries Count:", filteredSummaries.length);
+    if (filteredSummaries.length > 0) {
+        console.log("Sample Data:", filteredSummaries[0]);
+    }
+
     const pathStatsMap = {};
     let totalViews = 0;
 
