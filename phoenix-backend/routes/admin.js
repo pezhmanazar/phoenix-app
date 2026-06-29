@@ -4,8 +4,7 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { Router } from "express";
 import prisma from "../utils/prisma.js";
-import { getSignedFileUrl, s3, uploadBufferToS3 } from "../utils/s3.js";
-
+import { getSignedFileUrl, uploadBufferToS3 } from "../utils/s3.js";
 
 // ⬇️ افزوده‌های مرحله ویس/فایل
 import multer from "multer";
