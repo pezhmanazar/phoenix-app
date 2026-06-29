@@ -980,96 +980,50 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - daysRange);
 
-    // ۱. گرفتن خلاصه‌ها در بازه زمانی مشخص شده
     const summaries = await prisma.pageViewSummary.findMany({
       where: {
         date: { gte: startDate },
-        path: {
-          notIn: [
-            "/wp-login.php",
-            "/xmlrpc.php",
-            "/favicon.ico",
-          ],
-        },
       },
       orderBy: { date: "asc" }
     });
 
-    const filteredSummaries = summaries.filter((s) => {
-      const p = String(s.path || "").toLowerCase().trim();
-
-      if (!p) return false;
-
-      // فایل‌ها و اسکن‌های مشکوک
-      if (
-        p.includes("wp-content") ||
-        p.includes("wp-admin") ||
-        p.includes("wordpress") ||
-        p.includes("hello") ||
-        p.includes("filemanager") ||
-        p.includes("/static/") ||
-        p.includes("static/") ||
-        p.includes("/_next/") ||
-        p.includes("_next/") ||
-        p.includes("/assets/") ||
-        p.includes("assets/") ||
-        p.endsWith(".php") ||
-        p.endsWith(".env") ||
-        p.endsWith(".sql") ||
-        p.endsWith(".zip") ||
-        p.endsWith(".jpg") ||
-        p.endsWith(".jpeg") ||
-        p.endsWith(".png") ||
-        p.endsWith(".webp") ||
-        p.endsWith(".svg") ||
-        p.endsWith(".gif") ||
-        p.endsWith(".ico") ||
-        p.endsWith(".css") ||
-        p.endsWith(".js") ||
-        p.endsWith(".map") ||
-        p.endsWith(".woff") ||
-        p.endsWith(".woff2") ||
-        p.endsWith(".ttf")
-      ) {
-        return false;
-      }
-      return true;
-    });
-    // ۲. دسته‌بندی و جمع‌کل آمار به تفکیک مسیرها (Path)
     const pathStatsMap = {};
+    const chartMap = {}; // برای تجمیع آمار روزانه نمودار
     let totalViews = 0;
 
-filteredSummaries.forEach((s) => {
-  let normalizedPath = String(s.path || "").toLowerCase().trim();
+    summaries.forEach((s) => {
+      const p = String(s.path || "").toLowerCase().trim();
+      
+      // فیلتر کردن زباله‌ها و بات‌ها
+      if (
+        !p || p.includes("wp-") || p.includes("login") || p.includes("admin") ||
+        p.includes("cgi-bin") || p.includes(".php") || p.includes(".env") ||
+        p.includes("robots.txt") || p.includes("static") || p.includes("_next")
+      ) {
+        return;
+      }
 
-  normalizedPath = normalizedPath.replace(/^\/+|\/+$/g, "");
+      // ۱. آمار کلی (جدول)
+      let normalizedPath = p.replace(/^\/+|\/+$/g, "") || "home";
+      totalViews += (s.totalViews || 0);
 
-  if (!normalizedPath) {
-    normalizedPath = "home";
-  }
+      if (!pathStatsMap[normalizedPath]) {
+        pathStatsMap[normalizedPath] = { path: normalizedPath, totalViews: 0, uniqueVisitors: 0 };
+      }
+      pathStatsMap[normalizedPath].totalViews += (s.totalViews || 0);
+      pathStatsMap[normalizedPath].uniqueVisitors += (s.uniqueVisitors || 0);
 
-  if (normalizedPath === "robots.txt") {
-    return;
-  }
-
-  normalizedPath = normalizedPath.replace(/\.html$/g, "");
-
-  // تغییرات اینجا اعمال شد:
-  totalViews += s.totalViews; 
-
-  if (!pathStatsMap[normalizedPath]) {
-    pathStatsMap[normalizedPath] = {
-      path: normalizedPath,
-      totalViews: 0,
-      uniqueVisitors: 0
-    };
-  }
-
-  pathStatsMap[normalizedPath].totalViews += s.totalViews;
-  pathStatsMap[normalizedPath].uniqueVisitors += s.uniqueVisitors;
-});
+      // ۲. آمار روزانه (نمودار) - تجمیع بر اساس تاریخ
+      const dateKey = s.date.toISOString().split("T")[0];
+      if (!chartMap[dateKey]) {
+        chartMap[dateKey] = { date: dateKey, views: 0, visitors: 0 };
+      }
+      chartMap[dateKey].views += (s.totalViews || 0);
+      chartMap[dateKey].visitors += (s.uniqueVisitors || 0);
+    });
 
     const pathStats = Object.values(pathStatsMap).sort((a, b) => b.totalViews - a.totalViews);
+    const chartData = Object.values(chartMap).sort((a, b) => a.date.localeCompare(b.date));
 
     return res.json({
       ok: true,
@@ -1077,19 +1031,15 @@ filteredSummaries.forEach((s) => {
         daysRange,
         totalViews,
         pathStats,
-        chartData: filteredSummaries.map(s => ({
-          date: s.date.toISOString().split('T')[0],
-          path: s.path,
-          views: s.totalViews, 
-          visitors: s.uniqueVisitors
-        }))
+        chartData
       }
     });
   } catch (e) {
-    console.error("admin/analytics/views error:", e?.message || e);
+    console.error("admin/analytics/views error:", e);
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 
 
 /* ====================== ✅ ANNOUNCEMENTS ====================== */
