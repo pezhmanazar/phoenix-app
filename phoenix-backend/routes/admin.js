@@ -1039,7 +1039,7 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
     const pathStatsMap = {};
     let totalViews = 0;
 
-    ffilteredSummaries.forEach((s) => {
+    filteredSummaries.forEach((s) => {
   let normalizedPath = String(s.path || "").toLowerCase().trim();
 
   // حذف اسلش اول و آخر
