@@ -1011,7 +1011,9 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
         p === "index.php" ||
         p === "home" ||
         p === "robots.txt" ||
+        p.endsWith("/robots.txt") ||
         p === "favicon.ico" ||
+        p.endsWith("/index.html") ||
         p.includes("/static/") ||
         p.includes("static/") ||
         p.includes("/_next/") ||
