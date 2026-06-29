@@ -1058,8 +1058,23 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
     const pathStats = Object.values(pathStatsMap)
       .sort((a, b) => b.totalViews - a.totalViews);
 
-    const chartData = Object.values(chartMap)
-      .sort((a, b) => a.date.localeCompare(b.date));
+    const chartData = [];
+    const today = new Date();
+
+    for (let i = daysRange - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+
+      const dateKey = d.toLocaleDateString("en-CA");
+
+      chartData.push(
+        chartMap[dateKey] || {
+          date: dateKey,
+          views: 0,
+          visitors: 0
+        }
+      );
+    }
 
     return res.json({
       ok: true,
