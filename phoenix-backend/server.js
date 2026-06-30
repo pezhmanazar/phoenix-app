@@ -62,43 +62,133 @@ app.options("*", cors({
 app.use(morgan("dev"));
 
 // ---------- Page View Analytics Middleware ----------
+const BOT_UA_REGEX =
+  /bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|duckduckbot|slurp|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|skypeuripreview|discordbot|applebot|petalbot|semrushbot|ahrefsbot|mj12bot|uptime|monitor/i;
+
+function getClientIp(req) {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    return forwarded.split(",")[0].trim();
+  }
+  return req.socket?.remoteAddress || "unknown";
+}
+
 app.use(async (req, res, next) => {
-  // فقط درخواست‌های GET که برای فایل‌های استاتیک یا صفحات اصلی هستند را چک کن
   if (req.method !== "GET") return next();
-  
+
   const pathName = req.path;
-  // لیست پسوندهایی که نمی‌خواهیم آمارشان ثبت شود (مثل عکس و فونت)
-  const ignoredExtensions = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".css", ".js", ".ico", ".woff", ".woff2"];
-  if (ignoredExtensions.some(ext => pathName.endsWith(ext))) return next();
-  if (pathName.startsWith("/api/") || pathName.startsWith("/uploads")) return next();
+  const ua = String(req.headers["user-agent"] || "unknown");
 
-  next(); // برای اینکه کاربر معطل نشود، بقیه پردازش را ادامه بده
+  const ignoredExtensions = [
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".svg",
+    ".css",
+    ".js",
+    ".ico",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".eot",
+    ".map",
+    ".webp",
+    ".avif",
+    ".mp4",
+    ".webm",
+    ".mp3",
+    ".wav",
+    ".txt",
+    ".xml",
+    ".json",
+  ];
 
-  // ثبت در دیتابیس به صورت پس‌زمینه (Async)
+  if (ignoredExtensions.some((ext) => pathName.toLowerCase().endsWith(ext))) {
+    return next();
+  }
+
+  if (pathName.startsWith("/api/") || pathName.startsWith("/uploads")) {
+    return next();
+  }
+
+  // فیلتر ربات‌ها
+  if (BOT_UA_REGEX.test(ua)) {
+    return next();
+  }
+
+  next();
+
   try {
-    const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown";
-    const ua = req.headers["user-agent"] || "unknown";
-    // ساخت یک شناسه یکتا برای کاربر بدون ذخیره مستقیم IP (برای حفظ حریم خصوصی)
-    const visitorId = crypto.createHash("md5").update(ip + ua).digest("hex");
+    const ip = getClientIp(req);
+
+    const visitorId = crypto
+      .createHash("md5")
+      .update(`${ip}|${ua}`)
+      .digest("hex");
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const alreadyVisitedToday = await prisma.pageViewEvent.findFirst({
+      where: {
+        path: pathName,
+        visitorId,
+        createdAt: {
+          gte: today,
+        },
+      },
+    });
 
     await prisma.pageViewEvent.create({
       data: {
         path: pathName,
-        visitorId: visitorId,
+        visitorId,
         userAgent: ua,
         referrer: req.headers["referer"] || null,
-      }
+      },
     });
 
-    // آپدیت کردن جدول خلاصه (Summary) برای امروز
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const existingSummary = await prisma.pageViewSummary.findUnique({
+      where: {
+        path_date: {
+          path: pathName,
+          date: today,
+        },
+      },
+    });
 
-    // این بخش به صورت "Upsert" عمل می‌کند: اگر بود اضافه کن، نبود بساز
-    await prisma.pageViewSummary.upsert({
-      where: { path_date: { path: pathName, date: today } },
-      update: { totalViews: { increment: 1 } },
-      create: { path: pathName, date: today, totalViews: 1, uniqueVisitors: 1 }
+    if (!existingSummary) {
+      await prisma.pageViewSummary.create({
+        data: {
+          path: pathName,
+          date: today,
+          totalViews: 1,
+          uniqueVisitors: 1,
+        },
+      });
+      return;
+    }
+
+    await prisma.pageViewSummary.update({
+      where: {
+        path_date: {
+          path: pathName,
+          date: today,
+        },
+      },
+      data: {
+        totalViews: {
+          increment: 1,
+        },
+        ...(alreadyVisitedToday
+          ? {}
+          : {
+              uniqueVisitors: {
+                increment: 1,
+              },
+            }),
+      },
     });
   } catch (err) {
     console.error("Analytics Error:", err.message);
