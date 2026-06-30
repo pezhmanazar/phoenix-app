@@ -1083,199 +1083,121 @@ router.get(
  */
 router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
   try {
-    const daysRange = Math.max(
-      1,
-      Math.min(90, Number(req.query.days || 7) || 7),
-    );
-
+    const daysRange = Math.max(1, Math.min(90, Number(req.query.days || 7) || 7));
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - daysRange);
+    startDate.setHours(0, 0, 0, 0);
 
+    // ۱. دریافت خلاصه‌ها برای نمودار و جدول کل
     const summaries = await prisma.pageViewSummary.findMany({
-      where: {
-        date: { gte: startDate },
-      },
+      where: { date: { gte: startDate } },
       orderBy: { date: "asc" },
     });
 
-    function normalizeAnalyticsPath(value) {
-      if (!value) return "home";
+    // ۲. دریافت ایونت‌های خام برای محاسبات دقیق (یکتا و کلیک)
+    const recentEvents = await prisma.pageViewEvent.findMany({
+      where: { createdAt: { gte: startDate } },
+      select: { path: true, referrer: true, visitorId: true }
+    });
 
-      const raw = String(value).trim();
-
-      try {
-        const url = new URL(raw);
-        value = url.pathname || "/";
-      } catch {
-        value = raw;
-      }
-
-      let normalized = String(value)
-        .toLowerCase()
-        .trim()
-        .split("?")[0]
-        .split("#")[0]
-        .replace(/^\/+|\/+$/g, "");
-
-      if (!normalized || normalized === "index.html") {
-        return "home";
-      }
-
-      return normalized;
+    // تابع کمکی برای یکسان‌سازی آدرس‌ها
+    function normalize(p) {
+      if (!p) return "home";
+      let s = String(p).toLowerCase().trim().split(/[?#]/)[0].replace(/^\/+|\/+$/g, "");
+      if (!s || s === "index.html" || s === "/") return "home";
+      return s;
     }
 
-    const recentEvents = await prisma.pageViewEvent.findMany({
-      where: {
-        createdAt: { gte: startDate },
-      },
-      select: {
-        path: true,
-        referrer: true,
-      },
+    // محاسبات دقیق از روی ایونت‌ها
+    const landingUniqueVisitorsSet = new Set();
+    let homeToDownloadCount = 0;
+    let directDownloadClicks = 0;
+
+    recentEvents.forEach(ev => {
+      const p = normalize(ev.path);
+      const r = normalize(ev.referrer);
+
+      // الف) یکتای لندینگ (صفحه اصلی)
+      if (p === "home") {
+        landingUniqueVisitorsSet.add(ev.visitorId);
+      }
+      // ب) ورود از خانه به دانلود
+      if (p === "download.html" && r === "home") {
+        homeToDownloadCount++;
+      }
+      // ج) کلیک دانلود مستقیم
+      if (ev.path === "EVENT_DIRECT_DOWNLOAD") {
+        directDownloadClicks++;
+      }
     });
 
-    const homeToDownloadCount = recentEvents.filter((event) => {
-      const normalizedPath = normalizeAnalyticsPath(event.path);
-      const normalizedReferrer = normalizeAnalyticsPath(event.referrer);
+    const landingUniqueVisitors = landingUniqueVisitorsSet.size;
+    const conversionRate = homeToDownloadCount > 0 
+      ? Number(((directDownloadClicks / homeToDownloadCount) * 100).toFixed(1)) 
+      : 0;
 
-      return (
-        normalizedPath === "download.html" && normalizedReferrer === "home"
-      );
-    }).length;
-
-    const directDownloadClicks = recentEvents.filter((event) => {
-      return event.path === "EVENT_DIRECT_DOWNLOAD";
-    }).length;
-
-    const landingUniqueVisitors = await prisma.pageViewSummary.aggregate({
-      where: {
-        date: { gte: startDate },
-        path: {
-          in: ["/", "", "/index.html", "index.html", "home"],
-        },
-      },
-      _sum: {
-        uniqueVisitors: true,
-      },
-    });
-
-    const conversionRate =
-      homeToDownloadCount > 0
-        ? Number(
-            ((directDownloadClicks / homeToDownloadCount) * 100).toFixed(2),
-          )
-        : 0;
-
+    // پردازش داده‌های جدول و نمودار (همان منطق قبلی شما با فیلتر صفحات مجاز)
+    const allowedPaths = new Set([
+  "home",
+  "index.html",
+  "contact.html",
+  "download.html",
+  "install-help.html",
+  "store.html",
+  "terms.html",
+  "trust.html",
+  "privacy.html",
+  "faq.html",
+  "about.html",
+  "support.html"
+]);
     const pathStatsMap = {};
     const chartMap = {};
     let totalViews = 0;
 
-    // فقط صفحات واقعی سایت ققنوس
-    const allowedPaths = new Set([
-      "home",
-      "contact.html",
-      "download.html",
-      "install-help.html",
-      "store.html",
-      "terms.html",
-      "trust.html",
-    ]);
-
     summaries.forEach((s) => {
-      let normalizedPath = String(s.path || "")
-        .toLowerCase()
-        .trim()
-        .split("?")[0]
-        .split("#")[0]
-        .replace(/^\/+|\/+$/g, "");
+      const p = normalize(s.path);
+      if (!allowedPaths.has(p)) return;
 
-      // صفحه اصلی
-      if (
-        normalizedPath === "" ||
-        normalizedPath === "/" ||
-        normalizedPath === "index.html"
-      ) {
-        normalizedPath = "home";
+      totalViews += (s.totalViews || 0);
+      if (!pathStatsMap[p]) {
+        pathStatsMap[p] = { path: p, totalViews: 0, uniqueVisitors: 0 };
       }
-
-      // اگر جزو صفحات واقعی سایت نیست، حذفش کن
-      if (!allowedPaths.has(normalizedPath)) {
-        return;
-      }
-
-      const views = s.totalViews || 0;
-      const visitors = s.uniqueVisitors || 0;
-
-      totalViews += views;
-
-      if (!pathStatsMap[normalizedPath]) {
-        pathStatsMap[normalizedPath] = {
-          path: normalizedPath,
-          totalViews: 0,
-          uniqueVisitors: 0,
-        };
-      }
-
-      pathStatsMap[normalizedPath].totalViews += views;
-      pathStatsMap[normalizedPath].uniqueVisitors += visitors;
+      pathStatsMap[p].totalViews += (s.totalViews || 0);
+      pathStatsMap[p].uniqueVisitors += (s.uniqueVisitors || 0);
 
       const dateKey = new Date(s.date).toLocaleDateString("en-CA");
-
-      if (!chartMap[dateKey]) {
-        chartMap[dateKey] = {
-          date: dateKey,
-          views: 0,
-          visitors: 0,
-        };
-      }
-
-      chartMap[dateKey].views += views;
-      chartMap[dateKey].visitors += visitors;
+      if (!chartMap[dateKey]) chartMap[dateKey] = { date: dateKey, views: 0 };
+      chartMap[dateKey].views += (s.totalViews || 0);
     });
 
-    const pathStats = Object.values(pathStatsMap).sort(
-      (a, b) => b.totalViews - a.totalViews,
-    );
-
+    // ساخت داده نهایی نمودار برای تمام روزها (حتی روزهای صفر)
     const chartData = [];
-    const today = new Date();
-
     for (let i = daysRange - 1; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-
-      const dateKey = d.toLocaleDateString("en-CA");
-
-      chartData.push(
-        chartMap[dateKey] || {
-          date: dateKey,
-          views: 0,
-          visitors: 0,
-        },
-      );
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const k = d.toLocaleDateString("en-CA");
+      chartData.push(chartMap[k] || { date: k, views: 0 });
     }
 
     return res.json({
       ok: true,
       data: {
-        daysRange,
         totalViews,
         homeToDownloadCount,
         directDownloadClicks,
         conversionRate,
-        landingUniqueVisitors: landingUniqueVisitors._sum.uniqueVisitors || 0,
-        pathStats,
-        chartData,
+        landingUniqueVisitors,
+        pathStats: Object.values(pathStatsMap),
+        chartData
       },
     });
   } catch (e) {
-    console.error("admin/analytics/views error:", e);
-    return res.status(500).json({
-      ok: false,
-      error: "internal_error",
-    });
+    console.error("Analytics error:", e);
+    return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
+
 
 /* ====================== ✅ ANNOUNCEMENTS ====================== */
 
