@@ -39,24 +39,35 @@ const PUBLIC_DIR = path.join(process.cwd(), "public");
 app.disable("etag");
 app.set("trust proxy", true);
 
+// تابع کمکی برای اعتبارسنجی امن دامنه
+const checkOrigin = (origin, callback) => {
+  if (!origin) return callback(null, true);
+  
+  // ۱. اگر دامنه دقیقاً در لیست ALLOWED_ORIGINS تنظیم شده در .env باشد
+  if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+  
+  // ۲. اگر دامنه ققنوس یا زیردامنه‌های آن باشد (مثل www.qoqnoos.app)
+  try {
+    const hostname = new URL(origin).hostname;
+    if (hostname === "qoqnoos.app" || hostname.endsWith(".qoqnoos.app")) {
+      return callback(null, true);
+    }
+  } catch (e) {}
+  
+  // اگر هیچ‌کدام نبود، بدون کرش کردن سرور، دسترسی مرورگر را مسدود کن
+  return callback(null, false);
+};
+
 app.use(
   cors({
-    origin(origin, callback) {
-      if (!origin) return callback(null, true);
-      if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-      return callback(new Error("Not allowed by CORS"));
-    },
+    origin: checkOrigin,
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "x-admin-token", "x-api-key"],
   })
 );
 app.options("*", cors({
-  origin(origin, callback) {
-    if (!origin) return callback(null, true);
-    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-    return callback(new Error("Not allowed by CORS"));
-  },
+  origin: checkOrigin,
   credentials: true,
 }));
 app.use(morgan("dev"));
