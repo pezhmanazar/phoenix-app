@@ -61,95 +61,6 @@ app.options("*", cors({
 }));
 app.use(morgan("dev"));
 
-// ---------- Page View Analytics Middleware ----------
-const BOT_UA_REGEX =
-  /bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|duckduckbot|slurp|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|skypeuripreview|discordbot|applebot|petalbot|semrushbot|ahrefsbot|mj12bot|uptime|monitor/i;
-
-function getClientIp(req) {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string" && forwarded.trim()) {
-    return forwarded.split(",")[0].trim();
-  }
-  return req.socket?.remoteAddress || "unknown";
-}
-
-app.use(async (req, res, next) => {
-  // فقط GET (برای صفحات) و POST (فقط برای مسیر ثبت بازدید) مجاز هستند
-  if (req.method !== "GET" && !(req.method === "POST" && req.path === "/api/page-view")) {
-    return next();
-  }
-
-  const pathName = req.method === "POST" ? (req.body.path || req.path) : req.path;
-  const ua = String(req.headers["user-agent"] || "unknown");
-
-  // فیلتر فایل‌های اضافی و ربات‌ها
-  const ignoredExtensions = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".css", ".js", ".ico", ".woff", ".woff2", ".ttf", ".eot", ".map", ".webp", ".avif", ".mp4", ".webm", ".mp3", ".wav", ".txt", ".xml", ".json"];
-  if (ignoredExtensions.some((ext) => pathName.toLowerCase().endsWith(ext))) return next();
-  if (pathName.startsWith("/api/") && req.path !== "/api/page-view") return next();
-  if (pathName.startsWith("/uploads")) return next();
-  if (BOT_UA_REGEX.test(ua)) return next();
-
-  // اگر درخواست POST بود، همینجا جواب بدیم که کلاینت منتظر نمونه
-  if (req.method === "POST" && req.path === "/api/page-view") {
-    res.status(204).end();
-  } else {
-    next();
-  }
-
-  try {
-    const ip = getClientIp(req);
-    const visitorId = crypto.createHash("md5").update(`${ip}|${ua}`).digest("hex");
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const isClick = req.method === "POST" && req.body.type === "EVENT_DIRECT_DOWNLOAD";
-
-    if (isClick) {
-      // ثبت کلیک در جدول جداگانه یا با یک ساختار خاص (فعلاً برای سادگی در PageViewEvent با یک مارک خاص ثبت می‌کنیم)
-      await prisma.pageViewEvent.create({
-        data: {
-          path: "EVENT_DIRECT_DOWNLOAD", // یک مسیر قراردادی برای کلیک‌ها
-          visitorId,
-          userAgent: ua,
-          referrer: req.body.referrer || req.headers["referer"] || null,
-        },
-      });
-      // اینجا می‌تونی در آینده به PageViewSummary هم ستون directDownloadClicks رو اضافه کنی و increment کنی
-    } else {
-      // منطق قبلی برای بازدیدهای عادی
-      const alreadyVisitedToday = await prisma.pageViewEvent.findFirst({
-        where: { path: pathName, visitorId, createdAt: { gte: today } },
-      });
-
-      await prisma.pageViewEvent.create({
-        data: { path: pathName, visitorId, userAgent: ua, referrer: req.headers["referer"] || null },
-      });
-
-      const existingSummary = await prisma.pageViewSummary.findUnique({
-        where: { path_date: { path: pathName, date: today } },
-      });
-
-      if (!existingSummary) {
-        await prisma.pageViewSummary.create({
-          data: { path: pathName, date: today, totalViews: 1, uniqueVisitors: 1 },
-        });
-      } else {
-        await prisma.pageViewSummary.update({
-          where: { path_date: { path: pathName, date: today } },
-          data: {
-            totalViews: { increment: 1 },
-            ...(!alreadyVisitedToday ? { uniqueVisitors: { increment: 1 } } : {}),
-          },
-        });
-      }
-    }
-  } catch (err) {
-    console.error("Analytics Error:", err.message);
-  }
-});
-
-// ---------- Static site (Phoenix website) ----------
-app.use(express.static(PUBLIC_DIR)); // /, /store.html, /contact.html, ...
-
 // ---------- Static uploads ----------
 const ROOT_UPLOAD_DIR =
   process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
@@ -198,6 +109,96 @@ const jsonUnlessMultipart = (req, res, next) => {
 };
 
 app.use(jsonUnlessMultipart);
+
+// ---------- Page View Analytics Middleware ----------
+const BOT_UA_REGEX =
+  /bot|crawler|spider|crawling|googlebot|bingbot|yandex|baiduspider|duckduckbot|slurp|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|skypeuripreview|discordbot|applebot|petalbot|semrushbot|ahrefsbot|mj12bot|uptime|monitor/i;
+
+function getClientIp(req) {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    return forwarded.split(",")[0].trim();
+  }
+  return req.socket?.remoteAddress || "unknown";
+}
+
+app.use(async (req, res, next) => {
+  // فقط GET (برای صفحات) و POST (فقط برای مسیر ثبت بازدید) مجاز هستند
+  if (req.method !== "GET" && !(req.method === "POST" && req.path === "/api/page-view")) {
+    return next();
+  }
+
+  const pathName = req.method === "POST" ? (req.body.path || req.path) : req.path;
+  const ua = String(req.headers["user-agent"] || "unknown");
+
+  // فیلتر فایل‌های اضافی و ربات‌ها
+  const ignoredExtensions = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".css", ".js", ".ico", ".woff", ".woff2", ".ttf", ".eot", ".map", ".webp", ".avif", ".mp4", ".webm", ".mp3", ".wav", ".txt", ".xml", ".json"];
+  if (ignoredExtensions.some((ext) => pathName.toLowerCase().endsWith(ext))) return next();
+  if (pathName.startsWith("/api/") && req.path !== "/api/page-view") return next();
+  if (pathName.startsWith("/uploads")) return next();
+  if (BOT_UA_REGEX.test(ua)) return next();
+
+  // اگر درخواست POST بود، همینجا جواب بدیم که کلاینت منتظر نمونه
+  if (req.method === "POST" && req.path === "/api/page-view") {
+    res.status(204).end();
+  } else {
+    next();
+  }
+
+  try {
+    const ip = getClientIp(req);
+    const visitorId = crypto.createHash("md5").update(`${ip}|${ua}`).digest("hex");
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isClick = req.method === "POST" && req.body && req.body.type === "EVENT_DIRECT_DOWNLOAD";
+
+    if (isClick) {
+      // ثبت کلیک در جدول جداگانه یا با یک ساختار خاص (فعلاً برای سادگی در PageViewEvent با یک مارک خاص ثبت می‌کنیم)
+      await prisma.pageViewEvent.create({
+        data: {
+          path: "EVENT_DIRECT_DOWNLOAD", // یک مسیر قراردادی برای کلیک‌ها
+          visitorId,
+          userAgent: ua,
+          referrer: req.body.referrer || req.headers["referer"] || null,
+        },
+      });
+      // اینجا می‌تونی در آینده به PageViewSummary هم ستون directDownloadClicks رو اضافه کنی و increment کنی
+    } else {
+      // منطق قبلی برای بازدیدهای عادی
+      const alreadyVisitedToday = await prisma.pageViewEvent.findFirst({
+        where: { path: pathName, visitorId, createdAt: { gte: today } },
+      });
+
+      await prisma.pageViewEvent.create({
+        data: { path: pathName, visitorId, userAgent: ua, referrer: req.headers["referer"] || null },
+      });
+
+      const existingSummary = await prisma.pageViewSummary.findUnique({
+        where: { path_date: { path: pathName, date: today } },
+      });
+
+      if (!existingSummary) {
+        await prisma.pageViewSummary.create({
+          data: { path: pathName, date: today, totalViews: 1, uniqueVisitors: 1 },
+        });
+      } else {
+        await prisma.pageViewSummary.update({
+          where: { path_date: { path: pathName, date: today } },
+          data: {
+            totalViews: { increment: 1 },
+            ...(!alreadyVisitedToday ? { uniqueVisitors: { increment: 1 } } : {}),
+          },
+        });
+      }
+    }
+  } catch (err) {
+    console.error("Analytics Error:", err.message);
+  }
+});
+
+// ---------- Static site (Phoenix website) ----------
+app.use(express.static(PUBLIC_DIR)); // /, /store.html, /contact.html, ...
+
 app.use(express.urlencoded({ extended: true, limit: "1mb" })); // برای فرم‌های پنل
 
 app.use("/api/announcements", announcementsRouter);

@@ -1103,7 +1103,13 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
     // تابع کمکی برای یکسان‌سازی آدرس‌ها
     function normalize(p) {
       if (!p) return "home";
-      let s = String(p).toLowerCase().trim().split(/[?#]/)[0].replace(/^\/+|\/+$/g, "");
+      let s = String(p).toLowerCase().trim();
+      if (s.startsWith("http://") || s.startsWith("https://")) {
+        try {
+          s = new URL(s).pathname;
+        } catch (e) {}
+      }
+      s = s.split(/[?#]/)[0].replace(/^\/+|\/+$/g, "");
       if (!s || s === "index.html" || s === "/") return "home";
       return s;
     }
