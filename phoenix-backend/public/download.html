@@ -886,35 +886,39 @@
         setTimeout(() => el.remove(), 350);
       });
     </script>
-        <script>
-      window.addEventListener("DOMContentLoaded", function () {
-        const downloadBtn = document.querySelector('a[href="https://dl.qoqnoos.app/downloads/qoqnoos-v1.0.0.apk"]');
-        if (!downloadBtn) return;
+  <script>
+  window.addEventListener("DOMContentLoaded", function () {
+    const downloadBtn = document.querySelector(
+      'a[href="https://dl.qoqnoos.app/downloads/qoqnoos-v1.0.0.apk"]'
+    );
+    if (!downloadBtn) return;
 
-        downloadBtn.addEventListener("click", function () {
-          const payload = JSON.stringify({
-            type: "direct_download_click",
-            path: "/download.html",
-            referrer: document.referrer || "",
-            ts: Date.now()
-          });
-
-          if (navigator.sendBeacon) {
-            navigator.sendBeacon("/api/page-view", new Blob([payload], { type: "application/json" }));
-            return;
-          }
-
-          fetch("/api/page-view", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: payload,
-            keepalive: true
-          }).catch(() => {});
-        });
+    downloadBtn.addEventListener("click", function () {
+      const payload = JSON.stringify({
+        type: "EVENT_DIRECT_DOWNLOAD",
+        path: "/download.html",
+        referrer: document.referrer || "",
+        ts: Date.now()
       });
-    </script>
 
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(
+          "/api/page-view",
+          new Blob([payload], { type: "application/json" })
+        );
+        return;
+      }
+
+      fetch("/api/page-view", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: payload,
+        keepalive: true,
+      }).catch(() => {});
+    });
+  });
+</script>
   </body>
 </html>

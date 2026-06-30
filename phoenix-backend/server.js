@@ -101,9 +101,7 @@ app.use(async (req, res, next) => {
     const visitorId = crypto.createHash("md5").update(`${ip}|${ua}`).digest("hex");
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
-    // تشخیص اینکه آیا این یک "کلیک" است یا "بازدید صفحه"
-    const isClick = req.method === "POST" && req.body.type === "direct_download_click";
+    const isClick = req.method === "POST" && req.body.type === "EVENT_DIRECT_DOWNLOAD";
 
     if (isClick) {
       // ثبت کلیک در جدول جداگانه یا با یک ساختار خاص (فعلاً برای سادگی در PageViewEvent با یک مارک خاص ثبت می‌کنیم)
