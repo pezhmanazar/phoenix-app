@@ -988,6 +988,30 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
       orderBy: { date: "asc" }
     });
 
+    const homeToDownloadCount = await prisma.pageViewEvent.count({
+      where: {
+        createdAt: { gte: startDate },
+        path: {
+          in: ["/download.html", "download.html"]
+        },
+        referrer: {
+          in: ["/", "", "/index.html", "index.html", "home"]
+        }
+      }
+    });
+
+    const directDownloadClicks = await prisma.pageViewEvent.count({
+      where: {
+        createdAt: { gte: startDate },
+        path: "EVENT_DIRECT_DOWNLOAD"
+      }
+    });
+
+    const conversionRate =
+      homeToDownloadCount > 0
+        ? Number(((directDownloadClicks / homeToDownloadCount) * 100).toFixed(2))
+        : 0;
+
     const pathStatsMap = {};
     const chartMap = {};
     let totalViews = 0;
@@ -1081,6 +1105,9 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
       data: {
         daysRange,
         totalViews,
+        homeToDownloadCount,
+        directDownloadClicks,
+        conversionRate,
         pathStats,
         chartData
       }
@@ -1094,7 +1121,6 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
     });
   }
 });
-
 
 /* ====================== ✅ ANNOUNCEMENTS ====================== */
 

@@ -74,122 +74,76 @@ function getClientIp(req) {
 }
 
 app.use(async (req, res, next) => {
-  if (req.method !== "GET") return next();
+  // فقط GET (برای صفحات) و POST (فقط برای مسیر ثبت بازدید) مجاز هستند
+  if (req.method !== "GET" && !(req.method === "POST" && req.path === "/api/page-view")) {
+    return next();
+  }
 
-  const pathName = req.path;
+  const pathName = req.method === "POST" ? (req.body.path || req.path) : req.path;
   const ua = String(req.headers["user-agent"] || "unknown");
 
-  const ignoredExtensions = [
-    ".png",
-    ".jpg",
-    ".jpeg",
-    ".gif",
-    ".svg",
-    ".css",
-    ".js",
-    ".ico",
-    ".woff",
-    ".woff2",
-    ".ttf",
-    ".eot",
-    ".map",
-    ".webp",
-    ".avif",
-    ".mp4",
-    ".webm",
-    ".mp3",
-    ".wav",
-    ".txt",
-    ".xml",
-    ".json",
-  ];
+  // فیلتر فایل‌های اضافی و ربات‌ها
+  const ignoredExtensions = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".css", ".js", ".ico", ".woff", ".woff2", ".ttf", ".eot", ".map", ".webp", ".avif", ".mp4", ".webm", ".mp3", ".wav", ".txt", ".xml", ".json"];
+  if (ignoredExtensions.some((ext) => pathName.toLowerCase().endsWith(ext))) return next();
+  if (pathName.startsWith("/api/") && req.path !== "/api/page-view") return next();
+  if (pathName.startsWith("/uploads")) return next();
+  if (BOT_UA_REGEX.test(ua)) return next();
 
-  if (ignoredExtensions.some((ext) => pathName.toLowerCase().endsWith(ext))) {
-    return next();
+  // اگر درخواست POST بود، همینجا جواب بدیم که کلاینت منتظر نمونه
+  if (req.method === "POST" && req.path === "/api/page-view") {
+    res.status(204).end();
+  } else {
+    next();
   }
-
-  if (pathName.startsWith("/api/") || pathName.startsWith("/uploads")) {
-    return next();
-  }
-
-  // فیلتر ربات‌ها
-  if (BOT_UA_REGEX.test(ua)) {
-    return next();
-  }
-
-  next();
 
   try {
     const ip = getClientIp(req);
-
-    const visitorId = crypto
-      .createHash("md5")
-      .update(`${ip}|${ua}`)
-      .digest("hex");
-
+    const visitorId = crypto.createHash("md5").update(`${ip}|${ua}`).digest("hex");
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const alreadyVisitedToday = await prisma.pageViewEvent.findFirst({
-      where: {
-        path: pathName,
-        visitorId,
-        createdAt: {
-          gte: today,
-        },
-      },
-    });
+    // تشخیص اینکه آیا این یک "کلیک" است یا "بازدید صفحه"
+    const isClick = req.method === "POST" && req.body.type === "direct_download_click";
 
-    await prisma.pageViewEvent.create({
-      data: {
-        path: pathName,
-        visitorId,
-        userAgent: ua,
-        referrer: req.headers["referer"] || null,
-      },
-    });
-
-    const existingSummary = await prisma.pageViewSummary.findUnique({
-      where: {
-        path_date: {
-          path: pathName,
-          date: today,
-        },
-      },
-    });
-
-    if (!existingSummary) {
-      await prisma.pageViewSummary.create({
+    if (isClick) {
+      // ثبت کلیک در جدول جداگانه یا با یک ساختار خاص (فعلاً برای سادگی در PageViewEvent با یک مارک خاص ثبت می‌کنیم)
+      await prisma.pageViewEvent.create({
         data: {
-          path: pathName,
-          date: today,
-          totalViews: 1,
-          uniqueVisitors: 1,
+          path: "EVENT_DIRECT_DOWNLOAD", // یک مسیر قراردادی برای کلیک‌ها
+          visitorId,
+          userAgent: ua,
+          referrer: req.body.referrer || req.headers["referer"] || null,
         },
       });
-      return;
-    }
+      // اینجا می‌تونی در آینده به PageViewSummary هم ستون directDownloadClicks رو اضافه کنی و increment کنی
+    } else {
+      // منطق قبلی برای بازدیدهای عادی
+      const alreadyVisitedToday = await prisma.pageViewEvent.findFirst({
+        where: { path: pathName, visitorId, createdAt: { gte: today } },
+      });
 
-    await prisma.pageViewSummary.update({
-      where: {
-        path_date: {
-          path: pathName,
-          date: today,
-        },
-      },
-      data: {
-        totalViews: {
-          increment: 1,
-        },
-        ...(alreadyVisitedToday
-          ? {}
-          : {
-              uniqueVisitors: {
-                increment: 1,
-              },
-            }),
-      },
-    });
+      await prisma.pageViewEvent.create({
+        data: { path: pathName, visitorId, userAgent: ua, referrer: req.headers["referer"] || null },
+      });
+
+      const existingSummary = await prisma.pageViewSummary.findUnique({
+        where: { path_date: { path: pathName, date: today } },
+      });
+
+      if (!existingSummary) {
+        await prisma.pageViewSummary.create({
+          data: { path: pathName, date: today, totalViews: 1, uniqueVisitors: 1 },
+        });
+      } else {
+        await prisma.pageViewSummary.update({
+          where: { path_date: { path: pathName, date: today } },
+          data: {
+            totalViews: { increment: 1 },
+            ...(!alreadyVisitedToday ? { uniqueVisitors: { increment: 1 } } : {}),
+          },
+        });
+      }
+    }
   } catch (err) {
     console.error("Analytics Error:", err.message);
   }
