@@ -37,7 +37,7 @@ async function attachSignedUrlsToMessages(messages = []) {
           fileSignedUrl: null,
         };
       }
-    })
+    }),
   );
 }
 
@@ -73,8 +73,11 @@ router.post("/login", async (req, res) => {
     let admin = null;
 
     if (apiKey?.trim()) {
-      admin = await prisma.admin.findUnique({ where: { apiKey: apiKey.trim() } });
-      if (!admin) return res.status(401).json({ ok: false, error: "invalid_api_key" });
+      admin = await prisma.admin.findUnique({
+        where: { apiKey: apiKey.trim() },
+      });
+      if (!admin)
+        return res.status(401).json({ ok: false, error: "invalid_api_key" });
     } else if (email && password) {
       const emailNorm = String(email).trim().toLowerCase();
       admin = await prisma.admin.findFirst({
@@ -82,10 +85,15 @@ router.post("/login", async (req, res) => {
       });
 
       if (!admin || !admin.passwordHash) {
-        return res.status(401).json({ ok: false, error: "invalid_credentials" });
+        return res
+          .status(401)
+          .json({ ok: false, error: "invalid_credentials" });
       }
       const ok = await bcrypt.compare(String(password), admin.passwordHash);
-      if (!ok) return res.status(401).json({ ok: false, error: "invalid_credentials" });
+      if (!ok)
+        return res
+          .status(401)
+          .json({ ok: false, error: "invalid_credentials" });
     } else {
       return res.status(400).json({ ok: false, error: "missing_login_fields" });
     }
@@ -136,7 +144,12 @@ router.get("/verify", async (req, res) => {
     const { admin } = session;
     return res.json({
       ok: true,
-      admin: { id: admin.id, email: admin.email, name: admin.name, role: admin.role },
+      admin: {
+        id: admin.id,
+        email: admin.email,
+        name: admin.name,
+        role: admin.role,
+      },
     });
   } catch (e) {
     console.error("admin/verify error:", e?.message || "unknown_error");
@@ -184,7 +197,8 @@ async function sessionAuth(req, res, next) {
     const ck = parseCookies(String(req.headers.cookie || ""));
     const token = hdr || String(ck.admin_token || "").trim();
 
-    if (!token) return res.status(401).json({ ok: false, error: "token_required" });
+    if (!token)
+      return res.status(401).json({ ok: false, error: "token_required" });
 
     const session = await prisma.adminSession.findUnique({
       where: { token },
@@ -203,11 +217,15 @@ async function sessionAuth(req, res, next) {
 }
 
 // ===== نگهبان نقش‌ها
-const allow = (...roles) => (req, res, next) => {
-  if (!req.admin) return res.status(401).json({ ok: false, error: "unauthorized" });
-  if (!roles.includes(req.admin.role)) return res.status(403).json({ ok: false, error: "forbidden" });
-  next();
-};
+const allow =
+  (...roles) =>
+  (req, res, next) => {
+    if (!req.admin)
+      return res.status(401).json({ ok: false, error: "unauthorized" });
+    if (!roles.includes(req.admin.role))
+      return res.status(403).json({ ok: false, error: "forbidden" });
+    next();
+  };
 
 // از اینجا به بعد همه مسیرها حفاظت می‌شوند
 router.use(sessionAuth);
@@ -217,7 +235,8 @@ router.use(sessionAuth);
 // helper: normalize phone مثل users.js
 function normalizePhone(input) {
   const digits = String(input || "").replace(/\D/g, "");
-  if (digits.startsWith("989") && digits.length === 12) return "0" + digits.slice(2);
+  if (digits.startsWith("989") && digits.length === 12)
+    return "0" + digits.slice(2);
   if (digits.startsWith("09") && digits.length === 11) return digits;
   if (digits.startsWith("9") && digits.length === 10) return "0" + digits;
   return null;
@@ -240,19 +259,28 @@ function addMonths(date, months) {
 router.get("/users", allow("agent", "manager", "owner"), async (req, res) => {
   try {
     const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
-    const plan = typeof req.query.plan === "string" ? req.query.plan.trim() : "";
+    const plan =
+      typeof req.query.plan === "string" ? req.query.plan.trim() : "";
 
     const baselineLevel =
-      typeof req.query.baselineLevel === "string" ? req.query.baselineLevel.trim() : "";
+      typeof req.query.baselineLevel === "string"
+        ? req.query.baselineLevel.trim()
+        : "";
 
     const hasBaselineRaw =
-      typeof req.query.hasBaseline === "string" ? req.query.hasBaseline.trim() : "";
+      typeof req.query.hasBaseline === "string"
+        ? req.query.hasBaseline.trim()
+        : "";
 
     const hasTreatmentRaw =
-      typeof req.query.hasTreatment === "string" ? req.query.hasTreatment.trim() : "";
+      typeof req.query.hasTreatment === "string"
+        ? req.query.hasTreatment.trim()
+        : "";
 
     const currentStageCode =
-      typeof req.query.currentStageCode === "string" ? req.query.currentStageCode.trim() : "";
+      typeof req.query.currentStageCode === "string"
+        ? req.query.currentStageCode.trim()
+        : "";
 
     const page = Math.max(1, Number(req.query.page || 1) || 1);
     const limitRaw = Number(req.query.limit || 30) || 30;
@@ -277,7 +305,9 @@ router.get("/users", allow("agent", "manager", "owner"), async (req, res) => {
       const qPhone = normalizePhone(q);
       where.AND.push({
         OR: [
-          ...(qPhone ? [{ phone: { contains: qPhone } }] : [{ phone: { contains: q } }]),
+          ...(qPhone
+            ? [{ phone: { contains: qPhone } }]
+            : [{ phone: { contains: q } }]),
           { fullName: { contains: q, mode: "insensitive" } },
           { id: { contains: q, mode: "insensitive" } },
         ],
@@ -346,7 +376,7 @@ router.get("/users", allow("agent", "manager", "owner"), async (req, res) => {
       },
     });
 
-      const mappedUsers = rawUsers.map((u) => {
+    const mappedUsers = rawUsers.map((u) => {
       const baselineAssessment = u.assessmentSessions?.[0] || null;
       const pelekanProgress = u.pelekanProgress?.[0] || null;
       const activeStageProgress = u.pelekanDayProgress?.[0] || null;
@@ -355,12 +385,13 @@ router.get("/users", allow("agent", "manager", "owner"), async (req, res) => {
       const baselineLevel = baselineAssessment?.scalesJson?.level || null;
 
       const currentStageCode = activeStageProgress?.day?.stage?.code || null;
-      const currentStageTitle = activeStageProgress?.day?.stage?.titleFa || null;
+      const currentStageTitle =
+        activeStageProgress?.day?.stage?.titleFa || null;
 
       const treatmentStartedAt = pelekanProgress?.createdAt || null;
-      const introAudioCompletedAt = pelekanProgress?.bastanIntroAudioCompletedAt || null;
+      const introAudioCompletedAt =
+        pelekanProgress?.bastanIntroAudioCompletedAt || null;
       const waitingForPro = !!introAudioCompletedAt && u.plan === "free";
-
 
       return {
         id: u.id,
@@ -385,10 +416,18 @@ router.get("/users", allow("agent", "manager", "owner"), async (req, res) => {
     });
 
     const hasBaseline =
-      hasBaselineRaw === "true" ? true : hasBaselineRaw === "false" ? false : null;
+      hasBaselineRaw === "true"
+        ? true
+        : hasBaselineRaw === "false"
+          ? false
+          : null;
 
     const hasTreatment =
-      hasTreatmentRaw === "true" ? true : hasTreatmentRaw === "false" ? false : null;
+      hasTreatmentRaw === "true"
+        ? true
+        : hasTreatmentRaw === "false"
+          ? false
+          : null;
 
     const filteredUsers = mappedUsers.filter((u) => {
       if (
@@ -404,7 +443,8 @@ router.get("/users", allow("agent", "manager", "owner"), async (req, res) => {
       if (hasTreatment === true && !u.treatmentStartedAt) return false;
       if (hasTreatment === false && !!u.treatmentStartedAt) return false;
 
-      if (currentStageCode && u.currentStageCode !== currentStageCode) return false;
+      if (currentStageCode && u.currentStageCode !== currentStageCode)
+        return false;
 
       return true;
     });
@@ -420,77 +460,98 @@ router.get("/users", allow("agent", "manager", "owner"), async (req, res) => {
   }
 });
 
-
 /**
  * ✅ Alias قدیمی (اگر جایی هنوز صدا می‌زند)
  * POST /api/admin/users/:id/set-plan  body: { plan:"free"|"pro", days?:number }
  */
-router.post("/users/:id/set-plan", allow("manager", "owner"), async (req, res) => {
-  try {
-    const id = String(req.params.id || "");
-    const plan = String(req.body?.plan || "").trim();
-    const days = Number(req.body?.days || 0);
+router.post(
+  "/users/:id/set-plan",
+  allow("manager", "owner"),
+  async (req, res) => {
+    try {
+      const id = String(req.params.id || "");
+      const plan = String(req.body?.plan || "").trim();
+      const days = Number(req.body?.days || 0);
 
-    if (!id || (plan !== "free" && plan !== "pro")) {
-      return res.status(400).json({ ok: false, error: "bad_request" });
+      if (!id || (plan !== "free" && plan !== "pro")) {
+        return res.status(400).json({ ok: false, error: "bad_request" });
+      }
+
+      let planExpiresAt = null;
+
+      if (plan === "pro") {
+        const addDays = days > 0 ? days : 30;
+
+        // اگر کاربر از قبل PRO و هنوز منقضی نشده بود، به همون تاریخ اضافه کن
+        const current = await prisma.user.findUnique({
+          where: { id },
+          select: { plan: true, planExpiresAt: true },
+        });
+
+        const now = new Date();
+        const curExp = current?.planExpiresAt
+          ? new Date(current.planExpiresAt)
+          : null;
+
+        const base =
+          current?.plan === "pro" && curExp && curExp.getTime() > now.getTime()
+            ? curExp
+            : now;
+
+        planExpiresAt = new Date(base.getTime() + addDays * 24 * 3600 * 1000);
+      }
+
+      const user = await prisma.user.update({
+        where: { id },
+        data: { plan, planExpiresAt },
+        select: {
+          id: true,
+          phone: true,
+          fullName: true,
+          plan: true,
+          planExpiresAt: true,
+        },
+      });
+
+      return res.json({ ok: true, user });
+    } catch (e) {
+      console.error("admin/set-plan error:", e?.message || "unknown_error");
+      return res.status(500).json({ ok: false, error: "internal_error" });
     }
-
-    let planExpiresAt = null;
-
-if (plan === "pro") {
-  const addDays = days > 0 ? days : 30;
-
-  // اگر کاربر از قبل PRO و هنوز منقضی نشده بود، به همون تاریخ اضافه کن
-  const current = await prisma.user.findUnique({
-    where: { id },
-    select: { plan: true, planExpiresAt: true },
-  });
-
-  const now = new Date();
-  const curExp = current?.planExpiresAt ? new Date(current.planExpiresAt) : null;
-
-  const base =
-    current?.plan === "pro" && curExp && curExp.getTime() > now.getTime()
-      ? curExp
-      : now;
-
-  planExpiresAt = new Date(base.getTime() + addDays * 24 * 3600 * 1000);
-}
-
-    const user = await prisma.user.update({
-      where: { id },
-      data: { plan, planExpiresAt },
-      select: { id: true, phone: true, fullName: true, plan: true, planExpiresAt: true },
-    });
-
-    return res.json({ ok: true, user });
-  } catch (e) {
-    console.error("admin/set-plan error:", e?.message || "unknown_error");
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
+  },
+);
 
 /**
  * ✅ Alias قدیمی
  * POST /api/admin/users/:id/cancel-plan
  */
-router.post("/users/:id/cancel-plan", allow("manager", "owner"), async (req, res) => {
-  try {
-    const id = String(req.params.id || "");
-    if (!id) return res.status(400).json({ ok: false, error: "bad_request" });
+router.post(
+  "/users/:id/cancel-plan",
+  allow("manager", "owner"),
+  async (req, res) => {
+    try {
+      const id = String(req.params.id || "");
+      if (!id) return res.status(400).json({ ok: false, error: "bad_request" });
 
-    const user = await prisma.user.update({
-      where: { id },
-      data: { plan: "free", planExpiresAt: null },
-      select: { id: true, phone: true, fullName: true, plan: true, planExpiresAt: true },
-    });
+      const user = await prisma.user.update({
+        where: { id },
+        data: { plan: "free", planExpiresAt: null },
+        select: {
+          id: true,
+          phone: true,
+          fullName: true,
+          plan: true,
+          planExpiresAt: true,
+        },
+      });
 
-    return res.json({ ok: true, user });
-  } catch (e) {
-    console.error("admin/cancel-plan error:", e?.message || "unknown_error");
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
+      return res.json({ ok: true, user });
+    } catch (e) {
+      console.error("admin/cancel-plan error:", e?.message || "unknown_error");
+      return res.status(500).json({ ok: false, error: "internal_error" });
+    }
+  },
+);
 
 /**
  * ✅ اکشن جدید: pro با days
@@ -500,18 +561,27 @@ router.post("/users/:id/pro", allow("manager", "owner"), async (req, res) => {
   try {
     const id = String(req.params.id);
     const daysRaw = Number(req.body?.days ?? 30);
-    const days = Number.isFinite(daysRaw) && daysRaw > 0 ? Math.floor(daysRaw) : 30;
+    const days =
+      Number.isFinite(daysRaw) && daysRaw > 0 ? Math.floor(daysRaw) : 30;
     const planExpiresAt = new Date(Date.now() + days * 24 * 3600 * 1000);
 
     const updated = await prisma.user.update({
       where: { id },
       data: { plan: "pro", planExpiresAt },
-      select: { id: true, phone: true, fullName: true, plan: true, planExpiresAt: true, updatedAt: true },
+      select: {
+        id: true,
+        phone: true,
+        fullName: true,
+        plan: true,
+        planExpiresAt: true,
+        updatedAt: true,
+      },
     });
 
     return res.json({ ok: true, data: updated });
   } catch (e) {
-    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
+    if (e?.code === "P2025")
+      return res.status(404).json({ ok: false, error: "not_found" });
     console.error("admin/users pro error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
@@ -521,61 +591,88 @@ router.post("/users/:id/pro", allow("manager", "owner"), async (req, res) => {
  * ✅ اکشن جدید: تمدید با days (از تاریخ انقضای فعلی اگر هنوز معتبر است، وگرنه از الان)
  * POST /api/admin/users/:id/extend  body:{days:number}
  */
-router.post("/users/:id/extend", allow("manager", "owner"), async (req, res) => {
-  try {
-    const id = String(req.params.id);
-    const daysRaw = Number(req.body?.days);
-    const days = Number.isFinite(daysRaw) && daysRaw > 0 ? Math.floor(daysRaw) : null;
-    if (!days) return res.status(400).json({ ok: false, error: "invalid_days" });
+router.post(
+  "/users/:id/extend",
+  allow("manager", "owner"),
+  async (req, res) => {
+    try {
+      const id = String(req.params.id);
+      const daysRaw = Number(req.body?.days);
+      const days =
+        Number.isFinite(daysRaw) && daysRaw > 0 ? Math.floor(daysRaw) : null;
+      if (!days)
+        return res.status(400).json({ ok: false, error: "invalid_days" });
 
-    const u = await prisma.user.findUnique({
-      where: { id },
-      select: { plan: true, planExpiresAt: true },
-    });
-    if (!u) return res.status(404).json({ ok: false, error: "not_found" });
+      const u = await prisma.user.findUnique({
+        where: { id },
+        select: { plan: true, planExpiresAt: true },
+      });
+      if (!u) return res.status(404).json({ ok: false, error: "not_found" });
 
-    const base =
-      u.planExpiresAt && u.planExpiresAt > new Date() ? u.planExpiresAt : new Date();
+      const base =
+        u.planExpiresAt && u.planExpiresAt > new Date()
+          ? u.planExpiresAt
+          : new Date();
 
-    const planExpiresAt = new Date(base.getTime() + days * 24 * 3600 * 1000);
+      const planExpiresAt = new Date(base.getTime() + days * 24 * 3600 * 1000);
 
-    const updated = await prisma.user.update({
-      where: { id },
-      data: {
-        plan: u.plan === "free" ? "pro" : u.plan,
-        planExpiresAt,
-      },
-      select: { id: true, phone: true, fullName: true, plan: true, planExpiresAt: true, updatedAt: true },
-    });
+      const updated = await prisma.user.update({
+        where: { id },
+        data: {
+          plan: u.plan === "free" ? "pro" : u.plan,
+          planExpiresAt,
+        },
+        select: {
+          id: true,
+          phone: true,
+          fullName: true,
+          plan: true,
+          planExpiresAt: true,
+          updatedAt: true,
+        },
+      });
 
-    return res.json({ ok: true, data: updated });
-  } catch (e) {
-    console.error("admin/users extend error:", e?.message || "unknown_error");
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
+      return res.json({ ok: true, data: updated });
+    } catch (e) {
+      console.error("admin/users extend error:", e?.message || "unknown_error");
+      return res.status(500).json({ ok: false, error: "internal_error" });
+    }
+  },
+);
 
 /**
  * ✅ اکشن جدید: لغو اشتراک
  * POST /api/admin/users/:id/cancel
  */
-router.post("/users/:id/cancel", allow("manager", "owner"), async (req, res) => {
-  try {
-    const id = String(req.params.id);
+router.post(
+  "/users/:id/cancel",
+  allow("manager", "owner"),
+  async (req, res) => {
+    try {
+      const id = String(req.params.id);
 
-    const updated = await prisma.user.update({
-      where: { id },
-      data: { plan: "free", planExpiresAt: null },
-      select: { id: true, phone: true, fullName: true, plan: true, planExpiresAt: true, updatedAt: true },
-    });
+      const updated = await prisma.user.update({
+        where: { id },
+        data: { plan: "free", planExpiresAt: null },
+        select: {
+          id: true,
+          phone: true,
+          fullName: true,
+          plan: true,
+          planExpiresAt: true,
+          updatedAt: true,
+        },
+      });
 
-    return res.json({ ok: true, data: updated });
-  } catch (e) {
-    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/users cancel error:", e?.message || "unknown_error");
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
+      return res.json({ ok: true, data: updated });
+    } catch (e) {
+      if (e?.code === "P2025")
+        return res.status(404).json({ ok: false, error: "not_found" });
+      console.error("admin/users cancel error:", e?.message || "unknown_error");
+      return res.status(500).json({ ok: false, error: "internal_error" });
+    }
+  },
+);
 
 /**
  * ✅ PATCH /api/admin/users/:id/plan
@@ -595,7 +692,10 @@ router.patch("/users/:id/plan", allow("manager", "owner"), async (req, res) => {
     if (plan !== "free") {
       if (req.body?.expiresAt) {
         const d = new Date(req.body.expiresAt);
-        if (isNaN(d.getTime())) return res.status(400).json({ ok: false, error: "invalid_expiresAt" });
+        if (isNaN(d.getTime()))
+          return res
+            .status(400)
+            .json({ ok: false, error: "invalid_expiresAt" });
         planExpiresAt = d;
       } else if (req.body?.months !== undefined) {
         const months = Number(req.body.months);
@@ -623,8 +723,12 @@ router.patch("/users/:id/plan", allow("manager", "owner"), async (req, res) => {
 
     return res.json({ ok: true, data: updated });
   } catch (e) {
-    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/users plan PATCH error:", e?.message || "unknown_error");
+    if (e?.code === "P2025")
+      return res.status(404).json({ ok: false, error: "not_found" });
+    console.error(
+      "admin/users plan PATCH error:",
+      e?.message || "unknown_error",
+    );
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -643,7 +747,8 @@ router.delete("/users/:id", allow("owner"), async (req, res) => {
 
     return res.json({ ok: true });
   } catch (e) {
-    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
+    if (e?.code === "P2025")
+      return res.status(404).json({ ok: false, error: "not_found" });
     console.error("admin/users DELETE error:", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
@@ -693,282 +798,284 @@ router.get("/stats", allow("manager", "owner"), async (_req, res) => {
 });
 
 //* ✅ آنالیتیک پلکان
-router.get("/analytics/pelekan", allow("manager", "owner"), async (_req, res) => {
-  try {
-    const now = new Date();
-    const DAY = 24 * 60 * 60 * 1000;
+router.get(
+  "/analytics/pelekan",
+  allow("manager", "owner"),
+  async (_req, res) => {
+    try {
+      const now = new Date();
+      const DAY = 24 * 60 * 60 * 1000;
 
-    const [
-      baselineInProgress,
-      baselineCompleted,
-      _unusedNull, // این برای مقداردهی Promise.resolve(null) است تا ترتیب به هم نخورد
-      reviewInProgress,
-      reviewCompleted,
-      treatingUsers,
-      activeTreatmentProgresses,
-      waitingForProUsers,
-      introCompletedUsers,
-      introCompletedProUsers,
-      baselineScores,
-      activeStageProgresses,
-    ] = await Promise.all([
-      // assessment در حال انجام
-      prisma.assessmentSession.count({
-  where: {
-    kind: "hb_baseline",
-    status: "in_progress",
-  },
-}),
+      const [
+        baselineInProgress,
+        baselineCompleted,
+        _unusedNull, // این برای مقداردهی Promise.resolve(null) است تا ترتیب به هم نخورد
+        reviewInProgress,
+        reviewCompleted,
+        treatingUsers,
+        activeTreatmentProgresses,
+        waitingForProUsers,
+        introCompletedUsers,
+        introCompletedProUsers,
+        baselineScores,
+        activeStageProgresses,
+      ] = await Promise.all([
+        // assessment در حال انجام
+        prisma.assessmentSession.count({
+          where: {
+            kind: "hb_baseline",
+            status: "in_progress",
+          },
+        }),
 
-      // assessment تکمیل‌شده
-      prisma.assessmentSession.count({
-  where: {
-    kind: "hb_baseline",
-    status: "completed",
-  },
-}),
-      // فعلاً معادل دقیقی در schema نداریم
-      Promise.resolve(null),
+        // assessment تکمیل‌شده
+        prisma.assessmentSession.count({
+          where: {
+            kind: "hb_baseline",
+            status: "completed",
+          },
+        }),
+        // فعلاً معادل دقیقی در schema نداریم
+        Promise.resolve(null),
 
-      // review در حال انجام
-      prisma.pelekanReviewSession.count({
-        where: { status: "in_progress" },
-      }),
+        // review در حال انجام
+        prisma.pelekanReviewSession.count({
+          where: { status: "in_progress" },
+        }),
 
-      // review تکمیل شده یا آنلاک شده
-      prisma.pelekanReviewSession.count({
-        where: {
-          status: { in: ["completed_locked", "unlocked"] },
-        },
-      }),
+        // review تکمیل شده یا آنلاک شده
+        prisma.pelekanReviewSession.count({
+          where: {
+            status: { in: ["completed_locked", "unlocked"] },
+          },
+        }),
 
-      // کاربرانی که وارد درمان پلکان شده‌اند
-      prisma.pelekanDayProgress.findMany({
-  select: { userId: true },
-}),
+        // کاربرانی که وارد درمان پلکان شده‌اند
+        prisma.pelekanDayProgress.findMany({
+          select: { userId: true },
+        }),
 
-      // progressهای فعال درمان
-      prisma.pelekanDayProgress.findMany({
-        where: { status: "active" },
-        select: {
-          id: true,
-          startedAt: true,
-          userId: true,
-          day: {
-            select: {
-              stage: {
-                select: {
-                  code: true,
-                  titleFa: true,
+        // progressهای فعال درمان
+        prisma.pelekanDayProgress.findMany({
+          where: { status: "active" },
+          select: {
+            id: true,
+            startedAt: true,
+            userId: true,
+            day: {
+              select: {
+                stage: {
+                  select: {
+                    code: true,
+                    titleFa: true,
+                  },
                 },
               },
             },
           },
-        },
-      }),
-      
-      // کاربران free که ویس اینترو بستن را گوش کرده‌اند ولی هنوز pro نشده‌اند
-      prisma.pelekanProgress.count({
-        where: {
-          bastanIntroAudioCompletedAt: {
-            not: null,
-          },
-          user: {
-            plan: "free",
-          },
-        },
-      }),
+        }),
 
-            // همه کاربرانی که ویس اینترو بستن را کامل کرده‌اند
-      prisma.pelekanProgress.count({
-        where: {
-          bastanIntroAudioCompletedAt: {
-            not: null,
+        // کاربران free که ویس اینترو بستن را گوش کرده‌اند ولی هنوز pro نشده‌اند
+        prisma.pelekanProgress.count({
+          where: {
+            bastanIntroAudioCompletedAt: {
+              not: null,
+            },
+            user: {
+              plan: "free",
+            },
           },
-        },
-      }),
+        }),
 
-      // کاربرانی که ویس اینترو بستن را کامل کرده‌اند و pro هستند
-      prisma.pelekanProgress.count({
-        where: {
-          bastanIntroAudioCompletedAt: {
-            not: null,
+        // همه کاربرانی که ویس اینترو بستن را کامل کرده‌اند
+        prisma.pelekanProgress.count({
+          where: {
+            bastanIntroAudioCompletedAt: {
+              not: null,
+            },
           },
-          user: {
-            plan: "pro",
+        }),
+
+        // کاربرانی که ویس اینترو بستن را کامل کرده‌اند و pro هستند
+        prisma.pelekanProgress.count({
+          where: {
+            bastanIntroAudioCompletedAt: {
+              not: null,
+            },
+            user: {
+              plan: "pro",
+            },
           },
-        },
-      }),
+        }),
 
-      // نمرات baseline
-      prisma.assessmentSession.findMany({
-        where: {
-          status: "completed",
-          kind: "hb_baseline",
-        },
-        select: {
-  id: true,
-  totalScore: true,
-  createdAt: true,
-  userId: true,
-  scalesJson: true,
-},
-      }),
+        // نمرات baseline
+        prisma.assessmentSession.findMany({
+          where: {
+            status: "completed",
+            kind: "hb_baseline",
+          },
+          select: {
+            id: true,
+            totalScore: true,
+            createdAt: true,
+            userId: true,
+            scalesJson: true,
+          },
+        }),
 
-      // stage distribution
-      prisma.pelekanDayProgress.findMany({
-        where: { status: "active" },
-        select: {
-          id: true,
-          startedAt: true,
-          userId: true,
-          day: {
-            select: {
-              stage: {
-                select: {
-                  code: true,
-                  titleFa: true,
+        // stage distribution
+        prisma.pelekanDayProgress.findMany({
+          where: { status: "active" },
+          select: {
+            id: true,
+            startedAt: true,
+            userId: true,
+            day: {
+              select: {
+                stage: {
+                  select: {
+                    code: true,
+                    titleFa: true,
+                  },
                 },
               },
             },
           },
-        },
-      }),
-    ]);
+        }),
+      ]);
 
-    const stageMap = {};
-    let stuckInTreatmentOver7d = 0;
+      const stageMap = {};
+      let stuckInTreatmentOver7d = 0;
 
-    for (const item of activeStageProgresses) {
-      const stageCode = item.day?.stage?.code || "unknown";
-      const stageTitle = item.day?.stage?.titleFa || "نامشخص";
+      for (const item of activeStageProgresses) {
+        const stageCode = item.day?.stage?.code || "unknown";
+        const stageTitle = item.day?.stage?.titleFa || "نامشخص";
 
-      if (!stageMap[stageCode]) {
-        stageMap[stageCode] = {
-          code: stageCode,
-          title: stageTitle,
-          count: 0,
-          avgDays: 0,
-          stuckOver7d: 0,
-          _sumDays: 0,
-        };
+        if (!stageMap[stageCode]) {
+          stageMap[stageCode] = {
+            code: stageCode,
+            title: stageTitle,
+            count: 0,
+            avgDays: 0,
+            stuckOver7d: 0,
+            _sumDays: 0,
+          };
+        }
+
+        const days = item.startedAt
+          ? (now.getTime() - new Date(item.startedAt).getTime()) / DAY
+          : 0;
+
+        stageMap[stageCode].count += 1;
+        stageMap[stageCode]._sumDays += days;
+
+        if (days > 7) {
+          stageMap[stageCode].stuckOver7d += 1;
+          stuckInTreatmentOver7d += 1;
+        }
       }
 
-      const days = item.startedAt
-        ? (now.getTime() - new Date(item.startedAt).getTime()) / DAY
+      const stageDistribution = Object.values(stageMap).map((s) => ({
+        code: s.code,
+        title: s.title,
+        count: s.count,
+        avgDays: s.count ? Number((s._sumDays / s.count).toFixed(1)) : 0,
+        stuckOver7d: s.stuckOver7d,
+      }));
+
+      let scoreSum = 0;
+      let scorePercentSum = 0;
+
+      const levelDistribution = {
+        manageable: 0,
+        moderate: 0,
+        severe: 0,
+        unknown: 0,
+      };
+
+      const percentBuckets = {
+        "0_30": 0,
+        "31_60": 0,
+        "61_80": 0,
+        "81_100": 0,
+      };
+
+      for (const item of baselineScores) {
+        const score = Number(item.totalScore || 0);
+        const percent = Math.max(0, Math.min(100, (score / 31) * 100));
+
+        scoreSum += score;
+        scorePercentSum += percent;
+
+        const level = item?.scalesJson?.level;
+
+        if (level === "manageable") levelDistribution.manageable += 1;
+        else if (level === "moderate") levelDistribution.moderate += 1;
+        else if (level === "severe") levelDistribution.severe += 1;
+        else levelDistribution.unknown += 1;
+
+        if (percent <= 30) percentBuckets["0_30"] += 1;
+        else if (percent <= 60) percentBuckets["31_60"] += 1;
+        else if (percent <= 80) percentBuckets["61_80"] += 1;
+        else percentBuckets["81_100"] += 1;
+      }
+
+      const baselineAvgScore = baselineScores.length
+        ? Number((scoreSum / baselineScores.length).toFixed(1))
         : 0;
 
-      stageMap[stageCode].count += 1;
-      stageMap[stageCode]._sumDays += days;
+      const baselineAvgPercent = baselineScores.length
+        ? Number((scorePercentSum / baselineScores.length).toFixed(1))
+        : 0;
 
-      if (days > 7) {
-        stageMap[stageCode].stuckOver7d += 1;
-        stuckInTreatmentOver7d += 1;
-      }
+      const uniqueActiveTreatmentUserIds = new Set(
+        activeTreatmentProgresses.map((item) => item.userId).filter(Boolean),
+      );
+
+      const uniqueTreatingUserIds = new Set(
+        treatingUsers.map((item) => item.userId).filter(Boolean),
+      );
+
+      return res.json({
+        ok: true,
+        data: {
+          funnel: {
+            baselineInProgress,
+            baselineCompleted,
+            choosePathUsers: null,
+            reviewInProgress,
+            reviewCompleted,
+            waitingForProUsers,
+            introCompletedUsers,
+            introCompletedProUsers,
+            treatingUsers: uniqueTreatingUserIds.size,
+            activeTreatmentUsers: uniqueActiveTreatmentUserIds.size,
+          },
+
+          baseline: {
+            completedCount: baselineScores.length,
+            avgScore: baselineAvgScore,
+            avgPercent: baselineAvgPercent,
+            levelDistribution,
+            percentBuckets,
+          },
+
+          treatment: {
+            activeUsers: uniqueActiveTreatmentUserIds.size,
+            stageDistribution,
+          },
+
+          stuck: {
+            treatmentOver7d: stuckInTreatmentOver7d,
+          },
+        },
+      });
+    } catch (e) {
+      console.error("admin/analytics/pelekan error:", e);
+      return res.status(500).json({ ok: false, error: "internal_error" });
     }
-
-    const stageDistribution = Object.values(stageMap).map((s) => ({
-      code: s.code,
-      title: s.title,
-      count: s.count,
-      avgDays: s.count ? Number((s._sumDays / s.count).toFixed(1)) : 0,
-      stuckOver7d: s.stuckOver7d,
-    }));
-
-    let scoreSum = 0;
-    let scorePercentSum = 0;
-
-    const levelDistribution = {
-      manageable: 0,
-      moderate: 0,
-      severe: 0,
-      unknown: 0,
-    };
-
-    const percentBuckets = {
-      "0_30": 0,
-      "31_60": 0,
-      "61_80": 0,
-      "81_100": 0,
-    };
-
-    for (const item of baselineScores) {
-      const score = Number(item.totalScore || 0);
-      const percent = Math.max(0, Math.min(100, (score / 31) * 100));
-
-      scoreSum += score;
-      scorePercentSum += percent;
-
-const level = item?.scalesJson?.level;
-
-if (level === "manageable") levelDistribution.manageable += 1;
-else if (level === "moderate") levelDistribution.moderate += 1;
-else if (level === "severe") levelDistribution.severe += 1;
-else levelDistribution.unknown += 1;
-
-
-      if (percent <= 30) percentBuckets["0_30"] += 1;
-      else if (percent <= 60) percentBuckets["31_60"] += 1;
-      else if (percent <= 80) percentBuckets["61_80"] += 1;
-      else percentBuckets["81_100"] += 1;
-    }
-
-    const baselineAvgScore = baselineScores.length
-      ? Number((scoreSum / baselineScores.length).toFixed(1))
-      : 0;
-
-    const baselineAvgPercent = baselineScores.length
-      ? Number((scorePercentSum / baselineScores.length).toFixed(1))
-      : 0;
-
-    const uniqueActiveTreatmentUserIds = new Set(
-      activeTreatmentProgresses.map((item) => item.userId).filter(Boolean)
-    );
-
-    const uniqueTreatingUserIds = new Set(
-  treatingUsers.map((item) => item.userId).filter(Boolean)
+  },
 );
-
-
-    return res.json({
-      ok: true,
-      data: {
-                funnel: {
-          baselineInProgress,
-          baselineCompleted,
-          choosePathUsers: null,
-          reviewInProgress,
-          reviewCompleted,
-          waitingForProUsers,
-          introCompletedUsers,
-          introCompletedProUsers,
-          treatingUsers: uniqueTreatingUserIds.size,
-          activeTreatmentUsers: uniqueActiveTreatmentUserIds.size,
-        },
-
-        baseline: {
-          completedCount: baselineScores.length,
-          avgScore: baselineAvgScore,
-          avgPercent: baselineAvgPercent,
-          levelDistribution,
-          percentBuckets,
-        },
-
-        treatment: {
-          activeUsers: uniqueActiveTreatmentUserIds.size,
-          stageDistribution,
-        },
-
-        stuck: {
-          treatmentOver7d: stuckInTreatmentOver7d,
-        },
-      },
-    });
-  } catch (e) {
-    console.error("admin/analytics/pelekan error:", e);
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
 
 /**
  * ✅ GET /api/admin/analytics/views?days=7
@@ -976,7 +1083,10 @@ else levelDistribution.unknown += 1;
  */
 router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
   try {
-    const daysRange = Math.max(1, Math.min(90, Number(req.query.days || 7) || 7));
+    const daysRange = Math.max(
+      1,
+      Math.min(90, Number(req.query.days || 7) || 7),
+    );
 
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - daysRange);
@@ -985,31 +1095,75 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
       where: {
         date: { gte: startDate },
       },
-      orderBy: { date: "asc" }
+      orderBy: { date: "asc" },
     });
 
-    const homeToDownloadCount = await prisma.pageViewEvent.count({
+    function normalizeAnalyticsPath(value) {
+      if (!value) return "home";
+
+      const raw = String(value).trim();
+
+      try {
+        const url = new URL(raw);
+        value = url.pathname || "/";
+      } catch {
+        value = raw;
+      }
+
+      let normalized = String(value)
+        .toLowerCase()
+        .trim()
+        .split("?")[0]
+        .split("#")[0]
+        .replace(/^\/+|\/+$/g, "");
+
+      if (!normalized || normalized === "index.html") {
+        return "home";
+      }
+
+      return normalized;
+    }
+
+    const recentEvents = await prisma.pageViewEvent.findMany({
       where: {
         createdAt: { gte: startDate },
+      },
+      select: {
+        path: true,
+        referrer: true,
+      },
+    });
+
+    const homeToDownloadCount = recentEvents.filter((event) => {
+      const normalizedPath = normalizeAnalyticsPath(event.path);
+      const normalizedReferrer = normalizeAnalyticsPath(event.referrer);
+
+      return (
+        normalizedPath === "download.html" && normalizedReferrer === "home"
+      );
+    }).length;
+
+    const directDownloadClicks = recentEvents.filter((event) => {
+      return event.path === "EVENT_DIRECT_DOWNLOAD";
+    }).length;
+
+    const landingUniqueVisitors = await prisma.pageViewSummary.aggregate({
+      where: {
+        date: { gte: startDate },
         path: {
-          in: ["/download.html", "download.html"]
+          in: ["/", "", "/index.html", "index.html", "home"],
         },
-        referrer: {
-          in: ["/", "", "/index.html", "index.html", "home"]
-        }
-      }
-    });
-
-    const directDownloadClicks = await prisma.pageViewEvent.count({
-      where: {
-        createdAt: { gte: startDate },
-        path: "EVENT_DIRECT_DOWNLOAD"
-      }
+      },
+      _sum: {
+        uniqueVisitors: true,
+      },
     });
 
     const conversionRate =
       homeToDownloadCount > 0
-        ? Number(((directDownloadClicks / homeToDownloadCount) * 100).toFixed(2))
+        ? Number(
+            ((directDownloadClicks / homeToDownloadCount) * 100).toFixed(2),
+          )
         : 0;
 
     const pathStatsMap = {};
@@ -1024,7 +1178,7 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
       "install-help.html",
       "store.html",
       "terms.html",
-      "trust.html"
+      "trust.html",
     ]);
 
     summaries.forEach((s) => {
@@ -1058,7 +1212,7 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
         pathStatsMap[normalizedPath] = {
           path: normalizedPath,
           totalViews: 0,
-          uniqueVisitors: 0
+          uniqueVisitors: 0,
         };
       }
 
@@ -1071,7 +1225,7 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
         chartMap[dateKey] = {
           date: dateKey,
           views: 0,
-          visitors: 0
+          visitors: 0,
         };
       }
 
@@ -1079,8 +1233,9 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
       chartMap[dateKey].visitors += visitors;
     });
 
-    const pathStats = Object.values(pathStatsMap)
-      .sort((a, b) => b.totalViews - a.totalViews);
+    const pathStats = Object.values(pathStatsMap).sort(
+      (a, b) => b.totalViews - a.totalViews,
+    );
 
     const chartData = [];
     const today = new Date();
@@ -1095,8 +1250,8 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
         chartMap[dateKey] || {
           date: dateKey,
           views: 0,
-          visitors: 0
-        }
+          visitors: 0,
+        },
       );
     }
 
@@ -1108,16 +1263,16 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
         homeToDownloadCount,
         directDownloadClicks,
         conversionRate,
+        landingUniqueVisitors: landingUniqueVisitors._sum.uniqueVisitors || 0,
         pathStats,
-        chartData
-      }
+        chartData,
+      },
     });
-
   } catch (e) {
     console.error("admin/analytics/views error:", e);
     return res.status(500).json({
       ok: false,
-      error: "internal_error"
+      error: "internal_error",
     });
   }
 });
@@ -1149,91 +1304,106 @@ function validateTargets(t) {
 /**
  * ✅ GET /api/admin/announcements?q=&placement=top_banner&enabled=true|false&page=1&limit=50
  */
-router.get("/announcements", allow("agent", "manager", "owner"), async (req, res) => {
-  try {
-    const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
-    const placement = typeof req.query.placement === "string" ? req.query.placement.trim() : "";
-    const enabledRaw = typeof req.query.enabled === "string" ? req.query.enabled.trim().toLowerCase() : "";
+router.get(
+  "/announcements",
+  allow("agent", "manager", "owner"),
+  async (req, res) => {
+    try {
+      const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+      const placement =
+        typeof req.query.placement === "string"
+          ? req.query.placement.trim()
+          : "";
+      const enabledRaw =
+        typeof req.query.enabled === "string"
+          ? req.query.enabled.trim().toLowerCase()
+          : "";
 
-    const page = Math.max(1, Number(req.query.page || 1) || 1);
-    const limitRaw = Number(req.query.limit || 50) || 50;
-    const limit = Math.min(200, Math.max(10, limitRaw));
-    const skip = (page - 1) * limit;
+      const page = Math.max(1, Number(req.query.page || 1) || 1);
+      const limitRaw = Number(req.query.limit || 50) || 50;
+      const limit = Math.min(200, Math.max(10, limitRaw));
+      const skip = (page - 1) * limit;
 
-    const where = {};
-    const AND = [];
+      const where = {};
+      const AND = [];
 
-    if (enabledRaw) {
-      if (!["true", "false"].includes(enabledRaw)) {
-        return res.status(400).json({ ok: false, error: "invalid_enabled" });
+      if (enabledRaw) {
+        if (!["true", "false"].includes(enabledRaw)) {
+          return res.status(400).json({ ok: false, error: "invalid_enabled" });
+        }
+        AND.push({ enabled: enabledRaw === "true" });
       }
-      AND.push({ enabled: enabledRaw === "true" });
-    }
 
-    if (placement) {
-      if (!["top_banner"].includes(placement)) {
-        return res.status(400).json({ ok: false, error: "invalid_placement" });
+      if (placement) {
+        if (!["top_banner"].includes(placement)) {
+          return res
+            .status(400)
+            .json({ ok: false, error: "invalid_placement" });
+        }
+        AND.push({ placement });
       }
-      AND.push({ placement });
-    }
 
-    if (q) {
-      AND.push({
-        OR: [
-          { id: { contains: q, mode: "insensitive" } },
-          { title: { contains: q, mode: "insensitive" } },
-          { message: { contains: q, mode: "insensitive" } },
-        ],
-      });
-    }
+      if (q) {
+        AND.push({
+          OR: [
+            { id: { contains: q, mode: "insensitive" } },
+            { title: { contains: q, mode: "insensitive" } },
+            { message: { contains: q, mode: "insensitive" } },
+          ],
+        });
+      }
 
-    if (AND.length) where.AND = AND;
+      if (AND.length) where.AND = AND;
 
-    const [total, items] = await Promise.all([
-      prisma.announcement.count({ where }),
-      prisma.announcement.findMany({
-        where,
-        orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
-        skip,
-        take: limit,
-        select: {
-          id: true,
-          title: true,
-          message: true,
-          level: true,
-          placement: true,
-          dismissible: true,
-          enabled: true,
-          startAt: true,
-          endAt: true,
-          priority: true,
-          createdAt: true,
-          updatedAt: true,
+      const [total, items] = await Promise.all([
+        prisma.announcement.count({ where }),
+        prisma.announcement.findMany({
+          where,
+          orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+          skip,
+          take: limit,
+          select: {
+            id: true,
+            title: true,
+            message: true,
+            level: true,
+            placement: true,
+            dismissible: true,
+            enabled: true,
+            startAt: true,
+            endAt: true,
+            priority: true,
+            createdAt: true,
+            updatedAt: true,
 
-          // ✅ targets
-          targetFree: true,
-          targetPro: true,
-          targetExpiring: true,
-          targetExpired: true,
+            // ✅ targets
+            targetFree: true,
+            targetPro: true,
+            targetExpiring: true,
+            targetExpired: true,
+          },
+        }),
+      ]);
+
+      return res.json({
+        ok: true,
+        data: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit),
+          items,
         },
-      }),
-    ]);
-
-    return res.json({
-      ok: true,
-      data: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
-        items,
-      },
-    });
-  } catch (e) {
-    console.error("admin/announcements GET error:", e?.message || "unknown_error");
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
+      });
+    } catch (e) {
+      console.error(
+        "admin/announcements GET error:",
+        e?.message || "unknown_error",
+      );
+      return res.status(500).json({ ok: false, error: "internal_error" });
+    }
+  },
+);
 
 /**
  * ✅ POST /api/admin/announcements
@@ -1244,17 +1414,33 @@ router.post("/announcements", allow("manager", "owner"), async (req, res) => {
   try {
     const body = req.body || {};
     const message = typeof body.message === "string" ? body.message.trim() : "";
-    if (!message) return res.status(400).json({ ok: false, error: "message_required" });
+    if (!message)
+      return res.status(400).json({ ok: false, error: "message_required" });
 
-    const title = body.title !== undefined ? (body.title ? String(body.title).trim() : null) : undefined;
+    const title =
+      body.title !== undefined
+        ? body.title
+          ? String(body.title).trim()
+          : null
+        : undefined;
 
-    const level = body.level !== undefined ? String(body.level).trim() : undefined;
-    if (level !== undefined && level !== "" && !["info", "warning", "critical"].includes(level)) {
+    const level =
+      body.level !== undefined ? String(body.level).trim() : undefined;
+    if (
+      level !== undefined &&
+      level !== "" &&
+      !["info", "warning", "critical"].includes(level)
+    ) {
       return res.status(400).json({ ok: false, error: "invalid_level" });
     }
 
-    const placement = body.placement !== undefined ? String(body.placement).trim() : undefined;
-    if (placement !== undefined && placement !== "" && !["top_banner"].includes(placement)) {
+    const placement =
+      body.placement !== undefined ? String(body.placement).trim() : undefined;
+    if (
+      placement !== undefined &&
+      placement !== "" &&
+      !["top_banner"].includes(placement)
+    ) {
       return res.status(400).json({ ok: false, error: "invalid_placement" });
     }
 
@@ -1270,27 +1456,40 @@ router.post("/announcements", allow("manager", "owner"), async (req, res) => {
       return res.status(400).json({ ok: false, error: "invalid_enabled" });
     }
 
-    const priority = body.priority !== undefined ? Number(body.priority) : undefined;
+    const priority =
+      body.priority !== undefined ? Number(body.priority) : undefined;
     if (priority !== undefined && !Number.isFinite(priority)) {
       return res.status(400).json({ ok: false, error: "invalid_priority" });
     }
 
     const startAtParsed = parseDateOrNull(body.startAt, "startAt");
-    if (!startAtParsed.ok) return res.status(400).json({ ok: false, error: startAtParsed.error });
+    if (!startAtParsed.ok)
+      return res.status(400).json({ ok: false, error: startAtParsed.error });
 
     const endAtParsed = parseDateOrNull(body.endAt, "endAt");
-    if (!endAtParsed.ok) return res.status(400).json({ ok: false, error: endAtParsed.error });
+    if (!endAtParsed.ok)
+      return res.status(400).json({ ok: false, error: endAtParsed.error });
 
     // ✅ targets (پیش‌فرض عمومی)
-    const targetFree = body.targetFree !== undefined ? toBool(body.targetFree) : true;
-    const targetPro = body.targetPro !== undefined ? toBool(body.targetPro) : true;
-    const targetExpiring = body.targetExpiring !== undefined ? toBool(body.targetExpiring) : false;
-    const targetExpired = body.targetExpired !== undefined ? toBool(body.targetExpired) : false;
+    const targetFree =
+      body.targetFree !== undefined ? toBool(body.targetFree) : true;
+    const targetPro =
+      body.targetPro !== undefined ? toBool(body.targetPro) : true;
+    const targetExpiring =
+      body.targetExpiring !== undefined ? toBool(body.targetExpiring) : false;
+    const targetExpired =
+      body.targetExpired !== undefined ? toBool(body.targetExpired) : false;
 
-    if ([targetFree, targetPro, targetExpiring, targetExpired].some((x) => x === undefined)) {
+    if (
+      [targetFree, targetPro, targetExpiring, targetExpired].some(
+        (x) => x === undefined,
+      )
+    ) {
       return res.status(400).json({ ok: false, error: "invalid_targets" });
     }
-    if (!validateTargets({ targetFree, targetPro, targetExpiring, targetExpired })) {
+    if (
+      !validateTargets({ targetFree, targetPro, targetExpiring, targetExpired })
+    ) {
       return res.status(400).json({ ok: false, error: "target_required" });
     }
 
@@ -1302,8 +1501,12 @@ router.post("/announcements", allow("manager", "owner"), async (req, res) => {
         ...(placement ? { placement } : {}),
         ...(dismissible !== undefined ? { dismissible } : {}),
         ...(enabled !== undefined ? { enabled } : {}),
-        ...(startAtParsed.value !== undefined ? { startAt: startAtParsed.value } : {}),
-        ...(endAtParsed.value !== undefined ? { endAt: endAtParsed.value } : {}),
+        ...(startAtParsed.value !== undefined
+          ? { startAt: startAtParsed.value }
+          : {}),
+        ...(endAtParsed.value !== undefined
+          ? { endAt: endAtParsed.value }
+          : {}),
         ...(priority !== undefined ? { priority } : {}),
 
         // ✅ targets
@@ -1334,8 +1537,12 @@ router.post("/announcements", allow("manager", "owner"), async (req, res) => {
 
     return res.json({ ok: true, item: created });
   } catch (e) {
-    if (e?.code === "P2002") return res.status(409).json({ ok: false, error: "unique_violation" });
-    console.error("admin/announcements POST error:", e?.message || "unknown_error");
+    if (e?.code === "P2002")
+      return res.status(409).json({ ok: false, error: "unique_violation" });
+    console.error(
+      "admin/announcements POST error:",
+      e?.message || "unknown_error",
+    );
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -1344,168 +1551,210 @@ router.post("/announcements", allow("manager", "owner"), async (req, res) => {
  * ✅ PATCH /api/admin/announcements/:id
  * body: هر فیلدی از announcement + targets
  */
-router.patch("/announcements/:id", allow("manager", "owner"), async (req, res) => {
-  try {
-    const id = String(req.params.id);
-    const body = req.body || {};
-    const data = {};
+router.patch(
+  "/announcements/:id",
+  allow("manager", "owner"),
+  async (req, res) => {
+    try {
+      const id = String(req.params.id);
+      const body = req.body || {};
+      const data = {};
 
-    if (body.title !== undefined) data.title = body.title ? String(body.title).trim() : null;
+      if (body.title !== undefined)
+        data.title = body.title ? String(body.title).trim() : null;
 
-    if (body.message !== undefined) {
-      const m = body.message ? String(body.message).trim() : "";
-      if (!m) return res.status(400).json({ ok: false, error: "message_empty" });
-      data.message = m;
-    }
-
-    if (body.level !== undefined) {
-      const level = String(body.level).trim();
-      if (!["info", "warning", "critical"].includes(level)) {
-        return res.status(400).json({ ok: false, error: "invalid_level" });
+      if (body.message !== undefined) {
+        const m = body.message ? String(body.message).trim() : "";
+        if (!m)
+          return res.status(400).json({ ok: false, error: "message_empty" });
+        data.message = m;
       }
-      data.level = level;
-    }
 
-    if (body.placement !== undefined) {
-      const placement = String(body.placement).trim();
-      if (!["top_banner"].includes(placement)) {
-        return res.status(400).json({ ok: false, error: "invalid_placement" });
+      if (body.level !== undefined) {
+        const level = String(body.level).trim();
+        if (!["info", "warning", "critical"].includes(level)) {
+          return res.status(400).json({ ok: false, error: "invalid_level" });
+        }
+        data.level = level;
       }
-      data.placement = placement;
-    }
 
-    if (body.dismissible !== undefined) {
-      const v = toBool(body.dismissible);
-      if (v === undefined) return res.status(400).json({ ok: false, error: "invalid_dismissible" });
-      data.dismissible = v;
-    }
+      if (body.placement !== undefined) {
+        const placement = String(body.placement).trim();
+        if (!["top_banner"].includes(placement)) {
+          return res
+            .status(400)
+            .json({ ok: false, error: "invalid_placement" });
+        }
+        data.placement = placement;
+      }
 
-    if (body.enabled !== undefined) {
-      const v = toBool(body.enabled);
-      if (v === undefined) return res.status(400).json({ ok: false, error: "invalid_enabled" });
-      data.enabled = v;
-    }
+      if (body.dismissible !== undefined) {
+        const v = toBool(body.dismissible);
+        if (v === undefined)
+          return res
+            .status(400)
+            .json({ ok: false, error: "invalid_dismissible" });
+        data.dismissible = v;
+      }
 
-    if (body.priority !== undefined) {
-      const p = Number(body.priority);
-      if (!Number.isFinite(p)) return res.status(400).json({ ok: false, error: "invalid_priority" });
-      data.priority = p;
-    }
+      if (body.enabled !== undefined) {
+        const v = toBool(body.enabled);
+        if (v === undefined)
+          return res.status(400).json({ ok: false, error: "invalid_enabled" });
+        data.enabled = v;
+      }
 
-    if (body.startAt !== undefined) {
-      const parsed = parseDateOrNull(body.startAt, "startAt");
-      if (!parsed.ok) return res.status(400).json({ ok: false, error: parsed.error });
-      data.startAt = parsed.value;
-    }
+      if (body.priority !== undefined) {
+        const p = Number(body.priority);
+        if (!Number.isFinite(p))
+          return res.status(400).json({ ok: false, error: "invalid_priority" });
+        data.priority = p;
+      }
 
-    if (body.endAt !== undefined) {
-      const parsed = parseDateOrNull(body.endAt, "endAt");
-      if (!parsed.ok) return res.status(400).json({ ok: false, error: parsed.error });
-      data.endAt = parsed.value;
-    }
+      if (body.startAt !== undefined) {
+        const parsed = parseDateOrNull(body.startAt, "startAt");
+        if (!parsed.ok)
+          return res.status(400).json({ ok: false, error: parsed.error });
+        data.startAt = parsed.value;
+      }
 
-    // ✅ targets
-    if (body.targetFree !== undefined) {
-      const v = toBool(body.targetFree);
-      if (v === undefined) return res.status(400).json({ ok: false, error: "invalid_targetFree" });
-      data.targetFree = v;
-    }
-    if (body.targetPro !== undefined) {
-      const v = toBool(body.targetPro);
-      if (v === undefined) return res.status(400).json({ ok: false, error: "invalid_targetPro" });
-      data.targetPro = v;
-    }
-    if (body.targetExpiring !== undefined) {
-      const v = toBool(body.targetExpiring);
-      if (v === undefined) return res.status(400).json({ ok: false, error: "invalid_targetExpiring" });
-      data.targetExpiring = v;
-    }
-    if (body.targetExpired !== undefined) {
-      const v = toBool(body.targetExpired);
-      if (v === undefined) return res.status(400).json({ ok: false, error: "invalid_targetExpired" });
-      data.targetExpired = v;
-    }
+      if (body.endAt !== undefined) {
+        const parsed = parseDateOrNull(body.endAt, "endAt");
+        if (!parsed.ok)
+          return res.status(400).json({ ok: false, error: parsed.error });
+        data.endAt = parsed.value;
+      }
 
-    if (Object.keys(data).length === 0) {
-      return res.status(400).json({ ok: false, error: "no_fields_to_update" });
-    }
+      // ✅ targets
+      if (body.targetFree !== undefined) {
+        const v = toBool(body.targetFree);
+        if (v === undefined)
+          return res
+            .status(400)
+            .json({ ok: false, error: "invalid_targetFree" });
+        data.targetFree = v;
+      }
+      if (body.targetPro !== undefined) {
+        const v = toBool(body.targetPro);
+        if (v === undefined)
+          return res
+            .status(400)
+            .json({ ok: false, error: "invalid_targetPro" });
+        data.targetPro = v;
+      }
+      if (body.targetExpiring !== undefined) {
+        const v = toBool(body.targetExpiring);
+        if (v === undefined)
+          return res
+            .status(400)
+            .json({ ok: false, error: "invalid_targetExpiring" });
+        data.targetExpiring = v;
+      }
+      if (body.targetExpired !== undefined) {
+        const v = toBool(body.targetExpired);
+        if (v === undefined)
+          return res
+            .status(400)
+            .json({ ok: false, error: "invalid_targetExpired" });
+        data.targetExpired = v;
+      }
 
-    // ✅ جلوگیری از "همه false"
-    const touchedTargets =
-      data.targetFree !== undefined ||
-      data.targetPro !== undefined ||
-      data.targetExpiring !== undefined ||
-      data.targetExpired !== undefined;
+      if (Object.keys(data).length === 0) {
+        return res
+          .status(400)
+          .json({ ok: false, error: "no_fields_to_update" });
+      }
 
-    if (touchedTargets) {
-      const cur = await prisma.announcement.findUnique({
+      // ✅ جلوگیری از "همه false"
+      const touchedTargets =
+        data.targetFree !== undefined ||
+        data.targetPro !== undefined ||
+        data.targetExpiring !== undefined ||
+        data.targetExpired !== undefined;
+
+      if (touchedTargets) {
+        const cur = await prisma.announcement.findUnique({
+          where: { id },
+          select: {
+            targetFree: true,
+            targetPro: true,
+            targetExpiring: true,
+            targetExpired: true,
+          },
+        });
+        if (!cur)
+          return res.status(404).json({ ok: false, error: "not_found" });
+
+        const merged = {
+          targetFree: data.targetFree ?? cur.targetFree,
+          targetPro: data.targetPro ?? cur.targetPro,
+          targetExpiring: data.targetExpiring ?? cur.targetExpiring,
+          targetExpired: data.targetExpired ?? cur.targetExpired,
+        };
+
+        if (!validateTargets(merged)) {
+          return res.status(400).json({ ok: false, error: "target_required" });
+        }
+      }
+
+      const updated = await prisma.announcement.update({
         where: { id },
+        data,
         select: {
+          id: true,
+          title: true,
+          message: true,
+          level: true,
+          placement: true,
+          dismissible: true,
+          enabled: true,
+          startAt: true,
+          endAt: true,
+          priority: true,
+          createdAt: true,
+          updatedAt: true,
           targetFree: true,
           targetPro: true,
           targetExpiring: true,
           targetExpired: true,
         },
       });
-      if (!cur) return res.status(404).json({ ok: false, error: "not_found" });
 
-      const merged = {
-        targetFree: data.targetFree ?? cur.targetFree,
-        targetPro: data.targetPro ?? cur.targetPro,
-        targetExpiring: data.targetExpiring ?? cur.targetExpiring,
-        targetExpired: data.targetExpired ?? cur.targetExpired,
-      };
-
-      if (!validateTargets(merged)) {
-        return res.status(400).json({ ok: false, error: "target_required" });
-      }
+      return res.json({ ok: true, item: updated });
+    } catch (e) {
+      if (e?.code === "P2025")
+        return res.status(404).json({ ok: false, error: "not_found" });
+      console.error(
+        "admin/announcements PATCH error:",
+        e?.message || "unknown_error",
+      );
+      return res.status(500).json({ ok: false, error: "internal_error" });
     }
-
-    const updated = await prisma.announcement.update({
-      where: { id },
-      data,
-      select: {
-        id: true,
-        title: true,
-        message: true,
-        level: true,
-        placement: true,
-        dismissible: true,
-        enabled: true,
-        startAt: true,
-        endAt: true,
-        priority: true,
-        createdAt: true,
-        updatedAt: true,
-        targetFree: true,
-        targetPro: true,
-        targetExpiring: true,
-        targetExpired: true,
-      },
-    });
-
-    return res.json({ ok: true, item: updated });
-  } catch (e) {
-    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/announcements PATCH error:", e?.message || "unknown_error");
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
+  },
+);
 
 /**
  * ✅ POST /api/admin/announcements/:id/delete
  */
-router.post("/announcements/:id/delete", allow("manager", "owner"), async (req, res) => {
-  try {
-    const id = String(req.params.id);
-    await prisma.announcement.delete({ where: { id } });
-    return res.json({ ok: true });
-  } catch (e) {
-    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/announcements delete error:", e?.message || "unknown_error");
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
+router.post(
+  "/announcements/:id/delete",
+  allow("manager", "owner"),
+  async (req, res) => {
+    try {
+      const id = String(req.params.id);
+      await prisma.announcement.delete({ where: { id } });
+      return res.json({ ok: true });
+    } catch (e) {
+      if (e?.code === "P2025")
+        return res.status(404).json({ ok: false, error: "not_found" });
+      console.error(
+        "admin/announcements delete error:",
+        e?.message || "unknown_error",
+      );
+      return res.status(500).json({ ok: false, error: "internal_error" });
+    }
+  },
+);
 
 /* ====================== ✅ profile ====================== */
 router.patch("/profile", async (req, res) => {
@@ -1514,12 +1763,14 @@ router.patch("/profile", async (req, res) => {
     const data = {};
     if (name !== undefined) {
       const n = String(name).trim();
-      if (n.length === 0) return res.status(400).json({ ok: false, error: "name_empty" });
+      if (n.length === 0)
+        return res.status(400).json({ ok: false, error: "name_empty" });
       data.name = n;
     }
     if (password !== undefined) {
       const p = String(password);
-      if (p.length < 6) return res.status(400).json({ ok: false, error: "password_too_short" });
+      if (p.length < 6)
+        return res.status(400).json({ ok: false, error: "password_too_short" });
       data.passwordHash = await bcrypt.hash(p, 10);
     }
     if (Object.keys(data).length === 0) {
@@ -1545,7 +1796,10 @@ router.get("/tickets", async (req, res) => {
   try {
     const { status, type, q } = req.query;
     const where = {};
-    if (typeof status === "string" && ["open", "pending", "closed"].includes(status)) {
+    if (
+      typeof status === "string" &&
+      ["open", "pending", "closed"].includes(status)
+    ) {
       where.status = status;
     }
     if (typeof type === "string" && ["tech", "therapy"].includes(type)) {
@@ -1558,7 +1812,9 @@ router.get("/tickets", async (req, res) => {
         { description: { contains: term, mode: "insensitive" } },
         { contact: { contains: term, mode: "insensitive" } },
         { openedByName: { contains: term, mode: "insensitive" } },
-        { messages: { some: { text: { contains: term, mode: "insensitive" } } } },
+        {
+          messages: { some: { text: { contains: term, mode: "insensitive" } } },
+        },
       ];
     }
 
@@ -1571,122 +1827,9 @@ router.get("/tickets", async (req, res) => {
     };
     const whereFinal = { ...where, AND: [hasContentFilter] };
 
-  const tickets = await prisma.ticket.findMany({
-  where: whereFinal,
-  orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
-  include: {
-    messages: { orderBy: { createdAt: "asc" } },
-    assignedAdmin: {
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-      },
-    },
-  },
-  take: 200,
-});
-
-// جمع‌آوری شماره‌ها و userId ها
-const userIds = [];
-const phones = [];
-
-for (const t of tickets) {
-  const openedByIdRaw = (t.openedById || "").trim();
-  const contactRaw = (t.contact || "").trim();
-
-  if (openedByIdRaw && isUuid(openedByIdRaw)) {
-    userIds.push(openedByIdRaw);
-  }
-
-  const candidates = [
-    contactRaw,
-    (!isUuid(openedByIdRaw) ? openedByIdRaw : ""),
-  ].filter(Boolean);
-
-  for (const p of candidates) {
-    const normalized = normalizePhone(p) || String(p).replace(/\D/g, "");
-    if (normalized) phones.push(normalized);
-    phones.push(p);
-  }
-}
-
-// یکتا
-const uniqUserIds = Array.from(new Set(userIds));
-const uniqPhones = Array.from(new Set(phones));
-
-// گرفتن همه کاربران مرتبط
-const users = await prisma.user.findMany({
-  where: {
-    OR: [
-      ...(uniqUserIds.length ? [{ id: { in: uniqUserIds } }] : []),
-      ...(uniqPhones.length ? [{ phone: { in: uniqPhones } }] : []),
-    ],
-  },
-  select: {
-    id: true,
-    phone: true,
-    fullName: true,
-    gender: true,
-    birthDate: true,
-    plan: true,
-    planExpiresAt: true,
-  },
-});
-
-    const mapped = tickets.map((t) => {
-  const openedByIdRaw = (t.openedById || "").trim();
-  const contactRaw = (t.contact || "").trim();
-
-  let user = null;
-
-  if (openedByIdRaw && isUuid(openedByIdRaw)) {
-    user = users.find((u) => u.id === openedByIdRaw) || null;
-  }
-
-  if (!user) {
-    const candidates = [
-      contactRaw,
-      (!isUuid(openedByIdRaw) ? openedByIdRaw : ""),
-    ].filter(Boolean);
-
-    const normalizedCandidates = candidates
-      .map((p) => normalizePhone(p) || String(p).replace(/\D/g, ""))
-      .filter(Boolean);
-
-    user =
-      users.find(
-        (u) =>
-          candidates.includes(u.phone) ||
-          normalizedCandidates.includes(u.phone)
-      ) || null;
-  }
-
-  return {
-    ...t,
-    title: t.openedByName || t.title,
-    displayTitle: t.openedByName || t.title,
-    user,
-  };
-});
-
-
-    res.json({ ok: true, tickets: mapped });
-  } catch (e) {
-    console.error("admin/tickets error:", e?.message || "unknown_error");
-    res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
-function isUuid(v) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v || ""));
-}
-
-router.get("/tickets/:id", allow("agent", "manager", "owner"), async (req, res) => {
-  try {
-    let t = await prisma.ticket.findUnique({
-      where: { id: String(req.params.id) },
+    const tickets = await prisma.ticket.findMany({
+      where: whereFinal,
+      orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
       include: {
         messages: { orderBy: { createdAt: "asc" } },
         assignedAdmin: {
@@ -1698,23 +1841,112 @@ router.get("/tickets/:id", allow("agent", "manager", "owner"), async (req, res) 
           },
         },
       },
+      take: 200,
     });
 
-    if (!t) {
-      return res.status(404).json({ ok: false, error: "not_found" });
+    // جمع‌آوری شماره‌ها و userId ها
+    const userIds = [];
+    const phones = [];
+
+    for (const t of tickets) {
+      const openedByIdRaw = (t.openedById || "").trim();
+      const contactRaw = (t.contact || "").trim();
+
+      if (openedByIdRaw && isUuid(openedByIdRaw)) {
+        userIds.push(openedByIdRaw);
+      }
+
+      const candidates = [
+        contactRaw,
+        !isUuid(openedByIdRaw) ? openedByIdRaw : "",
+      ].filter(Boolean);
+
+      for (const p of candidates) {
+        const normalized = normalizePhone(p) || String(p).replace(/\D/g, "");
+        if (normalized) phones.push(normalized);
+        phones.push(p);
+      }
     }
 
-    // اگر هنوز مسئول ندارد، ادمین فعلی مسئول شود
-    if (!t.assignedAdminId && req.admin?.id) {
-      await prisma.ticket.update({
-        where: { id: t.id },
-        data: {
-          assignedAdminId: req.admin.id,
-        },
-      });
+    // یکتا
+    const uniqUserIds = Array.from(new Set(userIds));
+    const uniqPhones = Array.from(new Set(phones));
 
-      t = await prisma.ticket.findUnique({
-        where: { id: t.id },
+    // گرفتن همه کاربران مرتبط
+    const users = await prisma.user.findMany({
+      where: {
+        OR: [
+          ...(uniqUserIds.length ? [{ id: { in: uniqUserIds } }] : []),
+          ...(uniqPhones.length ? [{ phone: { in: uniqPhones } }] : []),
+        ],
+      },
+      select: {
+        id: true,
+        phone: true,
+        fullName: true,
+        gender: true,
+        birthDate: true,
+        plan: true,
+        planExpiresAt: true,
+      },
+    });
+
+    const mapped = tickets.map((t) => {
+      const openedByIdRaw = (t.openedById || "").trim();
+      const contactRaw = (t.contact || "").trim();
+
+      let user = null;
+
+      if (openedByIdRaw && isUuid(openedByIdRaw)) {
+        user = users.find((u) => u.id === openedByIdRaw) || null;
+      }
+
+      if (!user) {
+        const candidates = [
+          contactRaw,
+          !isUuid(openedByIdRaw) ? openedByIdRaw : "",
+        ].filter(Boolean);
+
+        const normalizedCandidates = candidates
+          .map((p) => normalizePhone(p) || String(p).replace(/\D/g, ""))
+          .filter(Boolean);
+
+        user =
+          users.find(
+            (u) =>
+              candidates.includes(u.phone) ||
+              normalizedCandidates.includes(u.phone),
+          ) || null;
+      }
+
+      return {
+        ...t,
+        title: t.openedByName || t.title,
+        displayTitle: t.openedByName || t.title,
+        user,
+      };
+    });
+
+    res.json({ ok: true, tickets: mapped });
+  } catch (e) {
+    console.error("admin/tickets error:", e?.message || "unknown_error");
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+function isUuid(v) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(v || ""),
+  );
+}
+
+router.get(
+  "/tickets/:id",
+  allow("agent", "manager", "owner"),
+  async (req, res) => {
+    try {
+      let t = await prisma.ticket.findUnique({
+        where: { id: String(req.params.id) },
         include: {
           messages: { orderBy: { createdAt: "asc" } },
           assignedAdmin: {
@@ -1727,280 +1959,340 @@ router.get("/tickets/:id", allow("agent", "manager", "owner"), async (req, res) 
           },
         },
       });
-    }
 
-    // ✅ user lookup: openedById اگر UUID بود = userId، وگرنه با phone های ممکن
-    let user = null;
-
-    const openedByIdRaw = (t.openedById || "").trim();
-    const contactRaw = (t.contact || "").trim();
-
-    if (openedByIdRaw && isUuid(openedByIdRaw)) {
-      user = await prisma.user.findUnique({
-        where: { id: openedByIdRaw },
-        select: {
-          id: true,
-          phone: true,
-          fullName: true,
-          gender: true,
-          birthDate: true,
-          plan: true,
-          planExpiresAt: true,
-          createdAt: true,
-        },
-      }).catch(() => null);
-    }
-
-    if (!user) {
-      const candidates = [
-        contactRaw,
-        (!isUuid(openedByIdRaw) ? openedByIdRaw : ""),
-      ].filter(Boolean);
-
-      const normalized = candidates
-        .map((p) => normalizePhone(p) || String(p).replace(/\D/g, ""))
-        .filter(Boolean);
-
-      const uniq = Array.from(new Set([...candidates, ...normalized])).filter(Boolean);
-
-      if (uniq.length) {
-        user = await prisma.user.findFirst({
-          where: { phone: { in: uniq } },
-          select: {
-            id: true,
-            phone: true,
-            fullName: true,
-            gender: true,
-            birthDate: true,
-            plan: true,
-            planExpiresAt: true,
-            createdAt: true,
-          },
-        }).catch(() => null);
+      if (!t) {
+        return res.status(404).json({ ok: false, error: "not_found" });
       }
-    }
 
-    let therapySnapshot = null;
+      // اگر هنوز مسئول ندارد، ادمین فعلی مسئول شود
+      if (!t.assignedAdminId && req.admin?.id) {
+        await prisma.ticket.update({
+          where: { id: t.id },
+          data: {
+            assignedAdminId: req.admin.id,
+          },
+        });
 
-    if (user?.id) {
-      const now = new Date();
-      const DAY = 24 * 60 * 60 * 1000;
-
-      const [
-        baselineAssessment,
-        activeStageProgress,
-        pelekanProgress,
-        previousTicketsCount,
-      ] = await Promise.all([
-        prisma.assessmentSession.findFirst({
-          where: {
-            userId: user.id,
-            status: "completed",
-            kind: "hb_baseline",
-          },
-          orderBy: {
-            createdAt: "desc",
-          },
-          select: {
-            id: true,
-            totalScore: true,
-            createdAt: true,
-            completedAt: true,
-            userId: true,
-            scalesJson: true,
-          },
-        }),
-
-        prisma.pelekanDayProgress.findFirst({
-          where: {
-            userId: user.id,
-            status: "active",
-          },
-          select: {
-            id: true,
-            startedAt: true,
-            userId: true,
-            day: {
+        t = await prisma.ticket.findUnique({
+          where: { id: t.id },
+          include: {
+            messages: { orderBy: { createdAt: "asc" } },
+            assignedAdmin: {
               select: {
-                stage: {
-                  select: {
-                    code: true,
-                    titleFa: true,
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+              },
+            },
+          },
+        });
+      }
+
+      // ✅ user lookup: openedById اگر UUID بود = userId، وگرنه با phone های ممکن
+      let user = null;
+
+      const openedByIdRaw = (t.openedById || "").trim();
+      const contactRaw = (t.contact || "").trim();
+
+      if (openedByIdRaw && isUuid(openedByIdRaw)) {
+        user = await prisma.user
+          .findUnique({
+            where: { id: openedByIdRaw },
+            select: {
+              id: true,
+              phone: true,
+              fullName: true,
+              gender: true,
+              birthDate: true,
+              plan: true,
+              planExpiresAt: true,
+              createdAt: true,
+            },
+          })
+          .catch(() => null);
+      }
+
+      if (!user) {
+        const candidates = [
+          contactRaw,
+          !isUuid(openedByIdRaw) ? openedByIdRaw : "",
+        ].filter(Boolean);
+
+        const normalized = candidates
+          .map((p) => normalizePhone(p) || String(p).replace(/\D/g, ""))
+          .filter(Boolean);
+
+        const uniq = Array.from(new Set([...candidates, ...normalized])).filter(
+          Boolean,
+        );
+
+        if (uniq.length) {
+          user = await prisma.user
+            .findFirst({
+              where: { phone: { in: uniq } },
+              select: {
+                id: true,
+                phone: true,
+                fullName: true,
+                gender: true,
+                birthDate: true,
+                plan: true,
+                planExpiresAt: true,
+                createdAt: true,
+              },
+            })
+            .catch(() => null);
+        }
+      }
+
+      let therapySnapshot = null;
+
+      if (user?.id) {
+        const now = new Date();
+        const DAY = 24 * 60 * 60 * 1000;
+
+        const [
+          baselineAssessment,
+          activeStageProgress,
+          pelekanProgress,
+          previousTicketsCount,
+        ] = await Promise.all([
+          prisma.assessmentSession.findFirst({
+            where: {
+              userId: user.id,
+              status: "completed",
+              kind: "hb_baseline",
+            },
+            orderBy: {
+              createdAt: "desc",
+            },
+            select: {
+              id: true,
+              totalScore: true,
+              createdAt: true,
+              completedAt: true,
+              userId: true,
+              scalesJson: true,
+            },
+          }),
+
+          prisma.pelekanDayProgress.findFirst({
+            where: {
+              userId: user.id,
+              status: "active",
+            },
+            select: {
+              id: true,
+              startedAt: true,
+              userId: true,
+              day: {
+                select: {
+                  stage: {
+                    select: {
+                      code: true,
+                      titleFa: true,
+                    },
                   },
                 },
               },
             },
-          },
-        }),
+          }),
 
-        prisma.pelekanProgress.findFirst({
-          where: {
-            userId: user.id,
-          },
-          orderBy: {
-            createdAt: "desc",
-          },
-          select: {
-            id: true,
-            userId: true,
-            bastanIntroAudioCompletedAt: true,
-            createdAt: true,
-          },
-        }).catch(() => null),
+          prisma.pelekanProgress
+            .findFirst({
+              where: {
+                userId: user.id,
+              },
+              orderBy: {
+                createdAt: "desc",
+              },
+              select: {
+                id: true,
+                userId: true,
+                bastanIntroAudioCompletedAt: true,
+                createdAt: true,
+              },
+            })
+            .catch(() => null),
 
-        prisma.ticket.count({
-          where: {
-            NOT: { id: t.id },
-            OR: [
-              { openedById: user.id },
-              ...(user.phone ? [{ contact: user.phone }] : []),
-            ],
-          },
-        }),
-      ]);
+          prisma.ticket.count({
+            where: {
+              NOT: { id: t.id },
+              OR: [
+                { openedById: user.id },
+                ...(user.phone ? [{ contact: user.phone }] : []),
+              ],
+            },
+          }),
+        ]);
 
-      // baseline
-      let baseline = null;
-      if (baselineAssessment) {
-        const score = Number(baselineAssessment.totalScore || 0);
-        const percent = Math.max(0, Math.min(100, (score / 31) * 100));
-        const level = baselineAssessment?.scalesJson?.level || "unknown";
+        // baseline
+        let baseline = null;
+        if (baselineAssessment) {
+          const score = Number(baselineAssessment.totalScore || 0);
+          const percent = Math.max(0, Math.min(100, (score / 31) * 100));
+          const level = baselineAssessment?.scalesJson?.level || "unknown";
 
-        baseline = {
-          score,
-          percent: Number(percent.toFixed(1)),
-          level,
-          createdAt: baselineAssessment.createdAt || null,
-          completedAt: baselineAssessment.completedAt || null,
-        };
-      }
-
-      // current stage
-      let currentStage = null;
-      let stuckOver7d = false;
-
-      if (activeStageProgress?.day?.stage) {
-        const startedAt = activeStageProgress.startedAt || null;
-
-        let daysInStage = 0;
-        if (startedAt) {
-          daysInStage = (now.getTime() - new Date(startedAt).getTime()) / DAY;
+          baseline = {
+            score,
+            percent: Number(percent.toFixed(1)),
+            level,
+            createdAt: baselineAssessment.createdAt || null,
+            completedAt: baselineAssessment.completedAt || null,
+          };
         }
 
-        stuckOver7d = daysInStage > 7;
+        // current stage
+        let currentStage = null;
+        let stuckOver7d = false;
 
-        currentStage = {
-          code: activeStageProgress.day.stage.code || "unknown",
-          title: activeStageProgress.day.stage.titleFa || "نامشخص",
-          startedAt,
-          daysInStage: Number(daysInStage.toFixed(1)),
-          stuckOver7d,
+        if (activeStageProgress?.day?.stage) {
+          const startedAt = activeStageProgress.startedAt || null;
+
+          let daysInStage = 0;
+          if (startedAt) {
+            daysInStage = (now.getTime() - new Date(startedAt).getTime()) / DAY;
+          }
+
+          stuckOver7d = daysInStage > 7;
+
+          currentStage = {
+            code: activeStageProgress.day.stage.code || "unknown",
+            title: activeStageProgress.day.stage.titleFa || "نامشخص",
+            startedAt,
+            daysInStage: Number(daysInStage.toFixed(1)),
+            stuckOver7d,
+          };
+        }
+
+        // subscription
+        const expiresAt = user.planExpiresAt || null;
+        const isExpired = expiresAt
+          ? new Date(expiresAt).getTime() < now.getTime()
+          : false;
+
+        let daysLeft = null;
+        if (expiresAt) {
+          daysLeft = Math.ceil(
+            (new Date(expiresAt).getTime() - now.getTime()) / DAY,
+          );
+        }
+
+        const subscription = {
+          plan: user.plan || "free",
+          expiresAt,
+          isExpired,
+          daysLeft,
+        };
+
+        // treatment
+        const treatment = {
+          hasStarted: !!pelekanProgress,
+          startedAt: pelekanProgress?.createdAt || null,
+          introCompletedAt:
+            pelekanProgress?.bastanIntroAudioCompletedAt || null,
+        };
+
+        // risk
+        let riskLevel = "normal";
+
+        if (baseline?.level === "severe") {
+          riskLevel = "high";
+        } else if (stuckOver7d) {
+          riskLevel = "needs_followup";
+        } else if (subscription.isExpired && currentStage) {
+          riskLevel = "needs_followup";
+        }
+
+        therapySnapshot = {
+          baseline,
+          currentStage,
+          treatment,
+          subscription,
+          previousTicketsCount,
+          risk: {
+            level: riskLevel,
+          },
+          dates: {
+            userCreatedAt: user.createdAt || null,
+            treatmentStartedAt: treatment.startedAt,
+            introCompletedAt: treatment.introCompletedAt,
+            lastTicketMessageAt: t.messages?.length
+              ? t.messages[t.messages.length - 1].createdAt
+              : null,
+          },
         };
       }
 
-      // subscription
-      const expiresAt = user.planExpiresAt || null;
-      const isExpired = expiresAt ? new Date(expiresAt).getTime() < now.getTime() : false;
+      const messagesWithSignedUrls = await attachSignedUrlsToMessages(
+        t.messages || [],
+      );
 
-      let daysLeft = null;
-      if (expiresAt) {
-        daysLeft = Math.ceil((new Date(expiresAt).getTime() - now.getTime()) / DAY);
-      }
-
-      const subscription = {
-        plan: user.plan || "free",
-        expiresAt,
-        isExpired,
-        daysLeft,
+      const withDisplay = {
+        ...t,
+        messages: messagesWithSignedUrls,
+        title: t.openedByName || t.title,
+        displayTitle: t.openedByName || t.title,
+        user: user || null,
+        therapySnapshot,
       };
 
-      // treatment
-      const treatment = {
-        hasStarted: !!pelekanProgress,
-        startedAt: pelekanProgress?.createdAt || null,
-        introCompletedAt: pelekanProgress?.bastanIntroAudioCompletedAt || null,
-      };
-
-      // risk
-      let riskLevel = "normal";
-
-      if (baseline?.level === "severe") {
-        riskLevel = "high";
-      } else if (stuckOver7d) {
-        riskLevel = "needs_followup";
-      } else if (subscription.isExpired && currentStage) {
-        riskLevel = "needs_followup";
-      }
-
-      therapySnapshot = {
-        baseline,
-        currentStage,
-        treatment,
-        subscription,
-        previousTicketsCount,
-        risk: {
-          level: riskLevel,
-        },
-        dates: {
-          userCreatedAt: user.createdAt || null,
-          treatmentStartedAt: treatment.startedAt,
-          introCompletedAt: treatment.introCompletedAt,
-          lastTicketMessageAt: t.messages?.length
-            ? t.messages[t.messages.length - 1].createdAt
-            : null,
-        },
-      };
+      return res.json({ ok: true, ticket: withDisplay });
+    } catch (e) {
+      console.error("admin/tickets/:id error:", e);
+      return res.status(500).json({ ok: false, error: "internal_error" });
     }
+  },
+);
 
-const messagesWithSignedUrls = await attachSignedUrlsToMessages(t.messages || []);
+router.post(
+  "/tickets/:id/mark-read",
+  allow("agent", "manager", "owner"),
+  async (req, res) => {
+    try {
+      const id = String(req.params.id);
+      const t = await prisma.ticket.update({
+        where: { id },
+        data: { unread: false },
+        select: { id: true, unread: true },
+      });
+      return res.json({ ok: true, ticket: t });
+    } catch (e) {
+      if (e?.code === "P2025")
+        return res.status(404).json({ ok: false, error: "not_found" });
+      console.error(
+        "admin/tickets mark-read error:",
+        e?.message || "unknown_error",
+      );
+      return res.status(500).json({ ok: false, error: "internal_error" });
+    }
+  },
+);
 
-const withDisplay = {
-  ...t,
-  messages: messagesWithSignedUrls,
-  title: t.openedByName || t.title,
-  displayTitle: t.openedByName || t.title,
-  user: user || null,
-  therapySnapshot,
-};
-
-return res.json({ ok: true, ticket: withDisplay });
-  } catch (e) {
-    console.error("admin/tickets/:id error:", e);
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
-router.post("/tickets/:id/mark-read", allow("agent", "manager", "owner"), async (req, res) => {
-  try {
-    const id = String(req.params.id);
-    const t = await prisma.ticket.update({
-      where: { id },
-      data: { unread: false },
-      select: { id: true, unread: true },
-    });
-    return res.json({ ok: true, ticket: t });
-  } catch (e) {
-    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/tickets mark-read error:", e?.message || "unknown_error");
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
-router.post("/tickets/:id/mark-unread", allow("agent", "manager", "owner"), async (req, res) => {
-  try {
-    const id = String(req.params.id);
-    const t = await prisma.ticket.update({
-      where: { id },
-      data: { unread: true },
-      select: { id: true, unread: true },
-    });
-    return res.json({ ok: true, ticket: t });
-  } catch (e) {
-    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
-    console.error("admin/tickets mark-unread error:", e?.message || "unknown_error");
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
+router.post(
+  "/tickets/:id/mark-unread",
+  allow("agent", "manager", "owner"),
+  async (req, res) => {
+    try {
+      const id = String(req.params.id);
+      const t = await prisma.ticket.update({
+        where: { id },
+        data: { unread: true },
+        select: { id: true, unread: true },
+      });
+      return res.json({ ok: true, ticket: t });
+    } catch (e) {
+      if (e?.code === "P2025")
+        return res.status(404).json({ ok: false, error: "not_found" });
+      console.error(
+        "admin/tickets mark-unread error:",
+        e?.message || "unknown_error",
+      );
+      return res.status(500).json({ ok: false, error: "internal_error" });
+    }
+  },
+);
 
 router.patch("/tickets/:id", allow("manager", "owner"), async (req, res) => {
   try {
@@ -2008,7 +2300,11 @@ router.patch("/tickets/:id", allow("manager", "owner"), async (req, res) => {
     const { status, pinned, unread } = req.body || {};
     const data = {};
     const toBool = (v) =>
-      typeof v === "boolean" ? v : typeof v === "string" ? v.toLowerCase() === "true" : undefined;
+      typeof v === "boolean"
+        ? v
+        : typeof v === "string"
+          ? v.toLowerCase() === "true"
+          : undefined;
 
     if (status !== undefined) {
       if (!["open", "pending", "closed"].includes(status)) {
@@ -2034,56 +2330,78 @@ router.patch("/tickets/:id", allow("manager", "owner"), async (req, res) => {
     });
     res.json({ ok: true, ticket });
   } catch (e) {
-    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
+    if (e?.code === "P2025")
+      return res.status(404).json({ ok: false, error: "not_found" });
     console.error("admin/tickets PATCH error:", e?.message || "unknown_error");
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
 
-router.post("/tickets/:id/reply", allow("agent", "manager", "owner"), async (req, res) => {
-  try {
-    const id = String(req.params.id);
-    const { text } = req.body || {};
+router.post(
+  "/tickets/:id/reply",
+  allow("agent", "manager", "owner"),
+  async (req, res) => {
+    try {
+      const id = String(req.params.id);
+      const { text } = req.body || {};
 
-    if (typeof text !== "string" || !text.trim()) {
-      return res.status(400).json({ ok: false, error: "text_required" });
+      if (typeof text !== "string" || !text.trim()) {
+        return res.status(400).json({ ok: false, error: "text_required" });
+      }
+
+      const exists = await prisma.ticket.findUnique({ where: { id } });
+      if (!exists)
+        return res.status(404).json({ ok: false, error: "not_found" });
+
+      await prisma.message.create({
+        data: { ticketId: id, sender: "admin", text: text.trim() },
+      });
+
+      await prisma.ticket.update({
+        where: { id },
+        data: { updatedAt: new Date() },
+      });
+
+      const ticket = await prisma.ticket.findUnique({
+        where: { id },
+        include: { messages: { orderBy: { createdAt: "asc" } } },
+      });
+
+      return res.json({ ok: true, ticket });
+    } catch (e) {
+      console.error(
+        "admin/tickets reply error:",
+        e?.message || "unknown_error",
+      );
+      return res.status(500).json({ ok: false, error: "internal_error" });
     }
+  },
+);
 
-    const exists = await prisma.ticket.findUnique({ where: { id } });
-    if (!exists) return res.status(404).json({ ok: false, error: "not_found" });
+router.post(
+  "/tickets/:id/delete",
+  allow("manager", "owner"),
+  async (req, res) => {
+    try {
+      const id = req.params.id;
 
-    await prisma.message.create({
-      data: { ticketId: id, sender: "admin", text: text.trim() },
-    });
+      await prisma.message.deleteMany({ where: { ticketId: id } });
+      const deleted = await prisma.ticket
+        .delete({ where: { id } })
+        .catch(() => null);
 
-    await prisma.ticket.update({ where: { id }, data: { updatedAt: new Date() } });
-
-    const ticket = await prisma.ticket.findUnique({
-      where: { id },
-      include: { messages: { orderBy: { createdAt: "asc" } } },
-    });
-
-    return res.json({ ok: true, ticket });
-  } catch (e) {
-    console.error("admin/tickets reply error:", e?.message || "unknown_error");
-    return res.status(500).json({ ok: false, error: "internal_error" });
-  }
-});
-
-router.post("/tickets/:id/delete", allow("manager", "owner"), async (req, res) => {
-  try {
-    const id = req.params.id;
-
-    await prisma.message.deleteMany({ where: { ticketId: id } });
-    const deleted = await prisma.ticket.delete({ where: { id } }).catch(() => null);
-
-    if (!deleted) return res.status(404).json({ ok: false, error: "not_found" });
-    return res.json({ ok: true });
-  } catch (e) {
-    console.error("admin tickets/:id/delete error:", e?.message || "unknown_error");
-    return res.status(500).json({ ok: false, error: "server_error" });
-  }
-});
+      if (!deleted)
+        return res.status(404).json({ ok: false, error: "not_found" });
+      return res.json({ ok: true });
+    } catch (e) {
+      console.error(
+        "admin tickets/:id/delete error:",
+        e?.message || "unknown_error",
+      );
+      return res.status(500).json({ ok: false, error: "server_error" });
+    }
+  },
+);
 
 /* ====================== ⬇️ reply-upload ====================== */
 
@@ -2101,7 +2419,6 @@ function mimeToMessageType(mime = "") {
   return "file";
 }
 
-
 router.post(
   "/tickets/:id/reply-upload",
   allow("agent", "manager", "owner"),
@@ -2110,26 +2427,28 @@ router.post(
     try {
       const id = String(req.params.id);
       const exists = await prisma.ticket.findUnique({ where: { id } });
-      if (!exists) return res.status(404).json({ ok: false, error: "not_found" });
+      if (!exists)
+        return res.status(404).json({ ok: false, error: "not_found" });
 
-      if (!req.file) return res.status(400).json({ ok: false, error: "file_required" });
+      if (!req.file)
+        return res.status(400).json({ ok: false, error: "file_required" });
 
       const { mimetype, size, buffer, originalname } = req.file;
 
-// ساختن کلید S3
-const ext = path.extname(originalname || "").toLowerCase();
-const base = crypto.randomBytes(16).toString("hex");
+      // ساختن کلید S3
+      const ext = path.extname(originalname || "").toLowerCase();
+      const base = crypto.randomBytes(16).toString("hex");
 
-const key = `tickets/${id}/${base}${ext || ""}`;
+      const key = `tickets/${id}/${base}${ext || ""}`;
 
-// آپلود فایل به S3
-await uploadBufferToS3({
-  buffer,
-  key,
-  contentType: mimetype || "application/octet-stream",
-});
+      // آپلود فایل به S3
+      await uploadBufferToS3({
+        buffer,
+        key,
+        contentType: mimetype || "application/octet-stream",
+      });
 
-const fileUrl = key;
+      const fileUrl = key;
 
       const messageType = mimeToMessageType(mimetype);
       const text = req.body?.text ? String(req.body.text).trim() : null;
@@ -2153,7 +2472,10 @@ const fileUrl = key;
         },
       });
 
-      await prisma.ticket.update({ where: { id }, data: { updatedAt: new Date() } });
+      await prisma.ticket.update({
+        where: { id },
+        data: { updatedAt: new Date() },
+      });
 
       const ticket = await prisma.ticket.findUnique({
         where: { id },
@@ -2168,7 +2490,7 @@ const fileUrl = key;
       }
       return res.status(500).json({ ok: false, error: "internal_error" });
     }
-  }
+  },
 );
 
 router.get(
@@ -2211,13 +2533,13 @@ router.get(
 
       res.setHeader(
         "Content-Type",
-        msg.mime || s3res.ContentType || "application/octet-stream"
+        msg.mime || s3res.ContentType || "application/octet-stream",
       );
 
       const fileName = key.split("/").pop() || `file-${messageId}`;
       res.setHeader(
         "Content-Disposition",
-        `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`
+        `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`,
       );
 
       if (s3res.ContentLength != null) {
@@ -2233,10 +2555,8 @@ router.get(
       console.error("admin ticket message file error:", e);
       return res.status(500).json({ ok: false, error: "internal_error" });
     }
-  }
+  },
 );
-
-
 
 /* ====== 👇👇👇 ایجاد ادمین فقط توسط Owner 👇👇👇 ====== */
 router.post("/admins", allow("owner"), async (req, res) => {
@@ -2273,8 +2593,10 @@ router.post("/admins", allow("owner"), async (req, res) => {
       const target = Array.isArray(e?.meta?.target)
         ? e.meta.target.join(",")
         : String(e?.meta?.target || "");
-      if (target.includes("email")) return res.status(409).json({ ok: false, error: "email_taken" });
-      if (target.includes("apiKey")) return res.status(409).json({ ok: false, error: "api_key_taken" });
+      if (target.includes("email"))
+        return res.status(409).json({ ok: false, error: "email_taken" });
+      if (target.includes("apiKey"))
+        return res.status(409).json({ ok: false, error: "api_key_taken" });
       return res.status(409).json({ ok: false, error: "unique_violation" });
     }
     console.error("admin/create-admin error:", e?.message || "unknown_error");
@@ -2292,7 +2614,14 @@ router.get("/admins", allow("owner"), async (_req, res) => {
   try {
     const admins = await prisma.admin.findMany({
       orderBy: [{ role: "asc" }, { createdAt: "desc" }],
-      select: { id: true, email: true, name: true, role: true, apiKey: true, createdAt: true },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        apiKey: true,
+        createdAt: true,
+      },
       take: 500,
     });
     res.json({ ok: true, admins });
@@ -2311,25 +2640,35 @@ router.patch("/admins/:id", allow("owner"), async (req, res) => {
       return res.status(400).json({ ok: false, error: "invalid_role" });
     }
     if (role && role !== "owner") {
-      const target = await prisma.admin.findUnique({ where: { id }, select: { role: true } });
-      if (!target) return res.status(404).json({ ok: false, error: "not_found" });
+      const target = await prisma.admin.findUnique({
+        where: { id },
+        select: { role: true },
+      });
+      if (!target)
+        return res.status(404).json({ ok: false, error: "not_found" });
       if (target.role === "owner") {
         const cnt = await ownersCount();
-        if (cnt <= 1) return res.status(409).json({ ok: false, error: "last_owner_protected" });
+        if (cnt <= 1)
+          return res
+            .status(409)
+            .json({ ok: false, error: "last_owner_protected" });
       }
     }
 
     const updated = await prisma.admin.update({
       where: { id },
       data: {
-        ...(name !== undefined ? { name: name ? String(name).trim() : null } : {}),
+        ...(name !== undefined
+          ? { name: name ? String(name).trim() : null }
+          : {}),
         ...(role ? { role: String(role) } : {}),
       },
       select: { id: true, email: true, name: true, role: true, apiKey: true },
     });
     res.json({ ok: true, admin: updated });
   } catch (e) {
-    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
+    if (e?.code === "P2025")
+      return res.status(404).json({ ok: false, error: "not_found" });
     console.error("admin/admins PATCH error:", e?.message || "unknown_error");
     res.status(500).json({ ok: false, error: "internal_error" });
   }
@@ -2343,17 +2682,24 @@ router.delete("/admins/:id", allow("owner"), async (req, res) => {
       return res.status(409).json({ ok: false, error: "cannot_delete_self" });
     }
 
-    const target = await prisma.admin.findUnique({ where: { id }, select: { role: true } });
+    const target = await prisma.admin.findUnique({
+      where: { id },
+      select: { role: true },
+    });
     if (!target) return res.status(404).json({ ok: false, error: "not_found" });
     if (target.role === "owner") {
       const cnt = await ownersCount();
-      if (cnt <= 1) return res.status(409).json({ ok: false, error: "last_owner_protected" });
+      if (cnt <= 1)
+        return res
+          .status(409)
+          .json({ ok: false, error: "last_owner_protected" });
     }
 
     await prisma.admin.delete({ where: { id } });
     res.json({ ok: true });
   } catch (e) {
-    if (e?.code === "P2025") return res.status(404).json({ ok: false, error: "not_found" });
+    if (e?.code === "P2025")
+      return res.status(404).json({ ok: false, error: "not_found" });
     console.error("admin/admins DELETE error:", e?.message || "unknown_error");
     res.status(500).json({ ok: false, error: "internal_error" });
   }
@@ -2368,7 +2714,10 @@ router.post("/admins/:id/reset-password", allow("owner"), async (req, res) => {
       return res.status(400).json({ ok: false, error: "password_too_short" });
     }
 
-    const target = await prisma.admin.findUnique({ where: { id }, select: { id: true } });
+    const target = await prisma.admin.findUnique({
+      where: { id },
+      select: { id: true },
+    });
     if (!target) return res.status(404).json({ ok: false, error: "not_found" });
 
     const hash = await bcrypt.hash(password, 10);
@@ -2380,7 +2729,10 @@ router.post("/admins/:id/reset-password", allow("owner"), async (req, res) => {
 
     return res.json({ ok: true });
   } catch (e) {
-    console.error("admin/admins reset-password error:", e?.message || "unknown_error");
+    console.error(
+      "admin/admins reset-password error:",
+      e?.message || "unknown_error",
+    );
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
