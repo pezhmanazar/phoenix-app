@@ -128,7 +128,8 @@ app.use(async (req, res, next) => {
     return next();
   }
 
-  const pathName = req.method === "POST" ? (req.body.path || req.path) : req.path;
+  const body = req.body && typeof req.body === "object" ? req.body : {};
+  const pathName = req.method === "POST" ? (body.path || req.path) : req.path;
   const ua = String(req.headers["user-agent"] || "unknown");
 
   // فیلتر فایل‌های اضافی و ربات‌ها
@@ -150,7 +151,7 @@ app.use(async (req, res, next) => {
     const visitorId = crypto.createHash("md5").update(`${ip}|${ua}`).digest("hex");
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const isClick = req.method === "POST" && req.body && req.body.type === "EVENT_DIRECT_DOWNLOAD";
+    const isClick = req.method === "POST" && body.type === "EVENT_DIRECT_DOWNLOAD";
 
     if (isClick) {
       // ثبت کلیک در جدول جداگانه یا با یک ساختار خاص (فعلاً برای سادگی در PageViewEvent با یک مارک خاص ثبت می‌کنیم)
@@ -159,7 +160,7 @@ app.use(async (req, res, next) => {
           path: "EVENT_DIRECT_DOWNLOAD", // یک مسیر قراردادی برای کلیک‌ها
           visitorId,
           userAgent: ua,
-          referrer: req.body.referrer || req.headers["referer"] || null,
+          referrer: body.referrer || req.headers["referer"] || null,
         },
       });
       // اینجا می‌تونی در آینده به PageViewSummary هم ستون directDownloadClicks رو اضافه کنی و increment کنی
