@@ -178,6 +178,13 @@ export default function RootLayout() {
       Constants.expoConfig?.extra?.eas?.projectId ??
       Constants.easConfig?.projectId;
 
+      if (!projectId) {
+  Alert.alert("Push Debug", "EAS projectId پیدا نشد.");
+  return;
+}
+
+Alert.alert("Push Debug", `Permission: ${finalStatus}\nProject ID: ${projectId}`);
+
     const token = await Notifications.getExpoPushTokenAsync({
       projectId,
     });
@@ -185,8 +192,12 @@ export default function RootLayout() {
     console.log("EXPO_PUSH_TOKEN:", token.data);
     Alert.alert("Expo Push Token", token.data);
   })().catch((error) => {
-    console.log("PUSH_SETUP_ERROR:", error);
-  });
+  console.log("PUSH_SETUP_ERROR:", error);
+  Alert.alert(
+    "Push Setup Error",
+    error instanceof Error ? error.message : String(error)
+  );
+});
 }, []);
   if (!fontsLoaded) return null;
   return (
