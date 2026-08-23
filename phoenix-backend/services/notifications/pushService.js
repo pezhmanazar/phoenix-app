@@ -1,4 +1,5 @@
 import prisma from "../../utils/prisma.js";
+import { getFirebaseAdmin } from "../firebase/firebaseAdmin.js";
 
 export async function sendPushToUser(userId, payload) {
   try {
@@ -16,16 +17,65 @@ export async function sendPushToUser(userId, payload) {
       };
     }
 
-    console.log("[PUSH_TARGETS]", {
+    const admin = getFirebaseAdmin();
+    const messaging = admin.messaging();
+
+    const tokens = devices.map((device) => device.token);
+
+    const message = {
+      tokens,
+      notification: {
+        title: payload.title,
+        body: payload.body,
+      },
+      data: payload.data || {},
+    };
+
+    const response = await messaging.sendEachForMulticast(message);
+
+    console.log("[PUSH_RESULT]", {
       userId,
-      devices: devices.length,
-      payload,
+      successCount: response.successCount,
+      failureCount: response.failureCount,
     });
+
+    // اگر توکن‌هایی دیگر معتبر نیستند، غیرفعال کنیم
+    if (response.failureCount > 0) {
+      const invalidTokens = [];
+
+      response.responses.forEach((item, index) => {
+        if (!item.success) {
+          const errorCode = item.error?.code;
+
+          if (
+            errorCode === "messaging/registration-token-not-registered" ||
+            errorCode === "messaging/invalid-registration-token"
+          ) {
+            invalidTokens.push(tokens[index]);
+          }
+        }
+      });
+
+      if (invalidTokens.length) {
+        await prisma.deviceToken.updateMany({
+          where: {
+            token: {
+              in: invalidTokens,
+            },
+          },
+          data: {
+            isActive: false,
+          },
+        });
+      }
+    }
 
     return {
       ok: true,
-      targets: devices.length,
+      successCount: response.successCount,
+      failureCount: response.failureCount,
     };
+
   } catch (error) {
     console.error(
       "[pushService.sendPushToUser]",
@@ -35,6 +85,7 @@ export async function sendPushToUser(userId, payload) {
     return {
       ok: false,
       error: "PUSH_SERVICE_ERROR",
+      message: error?.message || String(error),
     };
   }
 }
