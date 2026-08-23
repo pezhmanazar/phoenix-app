@@ -4,7 +4,10 @@ import prisma from "../utils/prisma.js";
 
 const router = express.Router();
 
-router.post("/register-device", authUser, async (req, res) => {
+router.post("/register-device", (req, res, next) => {
+  console.log("[register-device] HIT");
+  next();
+}, authUser, async (req, res) => {
   try {
     const userPhone = req.user?.phone;
 

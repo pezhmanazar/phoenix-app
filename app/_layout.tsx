@@ -18,6 +18,7 @@ import * as Notifications from "expo-notifications";
 import * as AuthModule from "../hooks/useAuth";
 import * as PlanModule from "../hooks/usePlanStatus";
 import * as UserModule from "../hooks/useUser";
+import { registerDeviceToken } from "../lib/notifications/registerDevice";
 import { getPaymentProvider } from "../lib/payments/getPaymentProvider";
 
 Notifications.setNotificationHandler({
@@ -109,6 +110,9 @@ export default function RootLayout() {
       await getPaymentProvider();
     })();
   }, []);
+  useEffect(() => {
+  registerDeviceToken();
+}, []);
   useEffect(() => {
     if (!fontsLoaded) return;
     const pickFamily = (style: any) => {
