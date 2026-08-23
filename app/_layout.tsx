@@ -10,7 +10,7 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useMemo } from "react";
-import { I18nManager, StyleSheet, Text, TextInput } from "react-native";
+import { Alert, I18nManager, StyleSheet, Text, TextInput } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { PhoenixProvider, usePhoenix } from "../hooks/PhoenixContext";
 // 🔌 Context modules
@@ -21,6 +21,16 @@ import * as AuthModule from "../hooks/useAuth";
 import * as PlanModule from "../hooks/usePlanStatus";
 import * as UserModule from "../hooks/useUser";
 import { getPaymentProvider } from "../lib/payments/getPaymentProvider";
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
 /* ---------------- Providers ---------------- */
 const AuthProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -173,6 +183,7 @@ export default function RootLayout() {
     });
 
     console.log("EXPO_PUSH_TOKEN:", token.data);
+    Alert.alert("Expo Push Token", token.data);
   })().catch((error) => {
     console.log("PUSH_SETUP_ERROR:", error);
   });
