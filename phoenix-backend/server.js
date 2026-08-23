@@ -15,6 +15,7 @@ import adminRouter from "./routes/admin.js";
 import announcementsRouter from "./routes/announcements.js";
 import authRouter from "./routes/auth.js"; // 🔹 روتر جدید احراز هویت / OTP
 import mediaRouter from "./routes/media.js";
+import notificationsRouter from "./routes/notifications.js";
 import payRouter from "./routes/pay.js"; // 🔹 روتر پرداخت / زرین‌پال (جدید)
 import payBazaarRouter from "./routes/payBazaar.js"; // ✅ روتر پرداخت بازار (جدید)
 import paymentsRouter from "./routes/payments.js";
@@ -52,7 +53,7 @@ const checkOrigin = (origin, callback) => {
     if (hostname === "qoqnoos.app" || hostname.endsWith(".qoqnoos.app")) {
       return callback(null, true);
     }
-  } catch (e) {}
+  } catch (_) {}
   
   // اگر هیچ‌کدام نبود، بدون کرش کردن سرور، دسترسی مرورگر را مسدود کن
   return callback(null, false);
@@ -409,6 +410,9 @@ app.use(
 
 // 🔹 مسیرهای یوزر (me / upsert)
 app.use("/api/users", usersRouter);
+
+// 🔹 مسیرهای نوتیفیکیشن
+app.use("/api/notifications", notificationsRouter);
 
 // 🔹 مسیرهای احراز هویت (OTP و JWT)
 app.use("/api/auth", authRouter);
