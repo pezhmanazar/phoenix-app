@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "342806899261",
+    "project_id": "qoqnoos",
+    "storage_bucket": "qoqnoos.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:342806899261:android:45dfb31dea5008c7779854",
+        "android_client_info": {
+          "package_name": "com.pezhman.phoenix"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBo9dowQUdMOcfI7ymgtjTe7f2LuNO-5lE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -15,6 +15,7 @@
     },
     "android": {
       "package": "com.pezhman.phoenix",
+      "googleServicesFile": "./google-services.json",
       "versionCode": 14,
       "adaptiveIcon": {
         "backgroundColor": "#0b0f14",
@@ -35,6 +36,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-notifications",
       [
         "expo-splash-screen",
         {
