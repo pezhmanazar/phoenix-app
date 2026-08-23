@@ -46,7 +46,7 @@ function userUrl(path: string) {
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-async function doJson<T>(
+export async function doJson<T>(
   input: RequestInfo,
   init?: RequestInit,
   options?: { notFoundError?: string }

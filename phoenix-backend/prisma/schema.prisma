@@ -39,7 +39,7 @@ model Ticket {
   openedByName String?
 
   assignedAdminId String?
-  assignedAdmin   Admin?   @relation("AssignedTickets", fields: [assignedAdminId], references: [id], onDelete: SetNull)
+  assignedAdmin   Admin?  @relation("AssignedTickets", fields: [assignedAdminId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -48,7 +48,6 @@ model Ticket {
 
   @@index([assignedAdminId])
 }
-
 
 enum MessageType {
   text
@@ -77,8 +76,8 @@ model Message {
 
   createdAt DateTime @default(now())
 
-  @@index([ticketId])
   @@unique([ticketId, sender, clientMessageId])
+  @@index([ticketId])
   @@index([clientMessageId])
 }
 
@@ -98,10 +97,9 @@ model Admin {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  assignedTickets Ticket[] @relation("AssignedTickets")
-  sessions AdminSession[]
+  assignedTickets Ticket[]       @relation("AssignedTickets")
+  sessions        AdminSession[]
 }
-
 
 model AdminSession {
   id        String    @id @default(uuid())
@@ -149,6 +147,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   subscriptions Subscription[]
+  deviceTokens  DeviceToken[]
 
   // ✅ Announcements
   announcementSeen AnnouncementSeen[]
@@ -428,7 +427,7 @@ model PelekanTask {
   code        String? @unique
   titleFa     String
   description String?
-  sortOrder   Int    @default(0)
+  sortOrder   Int     @default(0)
 
   weightPercent   Int     @default(10)
   xpReward        Int     @default(0)
@@ -577,9 +576,9 @@ model PelekanStreak {
   lastCompletedAt DateTime?
   yellowCardAt    DateTime?
 
-  noContactWarningState    String   @default("none")
-  noContactViolationCount  Int      @default(0)
-  noContactResetCount      Int      @default(0)
+  noContactWarningState    String    @default("none")
+  noContactViolationCount  Int       @default(0)
+  noContactResetCount      Int       @default(0)
   lastNoContactViolationAt DateTime?
   lastNoContactResetAt     DateTime?
 
@@ -850,7 +849,7 @@ model ReviewQuestion {
   textFa String
   helpFa String?
 
-  ui Json? 
+  ui Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -926,12 +925,12 @@ model PelekanReviewSession {
 }
 
 model PageViewEvent {
-  id         String   @id @default(uuid())
-  path       String
-  visitorId  String   // یک شناسه هش شده از IP + UserAgent برای تشخیص کاربر یکتا بدون نقض حریم خصوصی
-  userAgent  String?
-  referrer   String?
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  path      String
+  visitorId String // یک شناسه هش شده از IP + UserAgent برای تشخیص کاربر یکتا بدون نقض حریم خصوصی
+  userAgent String?
+  referrer  String?
+  createdAt DateTime @default(now())
 
   @@index([path])
   @@index([createdAt])
@@ -948,4 +947,26 @@ model PageViewSummary {
   @@unique([path, date])
   @@index([path])
   @@index([date])
+}
+
+model DeviceToken {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  token String @unique
+
+  platform   String  @default("android")
+  deviceName String?
+
+  isActive Boolean @default(true)
+
+  lastUsedAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([isActive])
 }
