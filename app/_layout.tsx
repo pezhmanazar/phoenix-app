@@ -10,12 +10,10 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useMemo } from "react";
-import { Alert, I18nManager, StyleSheet, Text, TextInput } from "react-native";
+import { I18nManager, StyleSheet, Text, TextInput } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { PhoenixProvider, usePhoenix } from "../hooks/PhoenixContext";
 // 🔌 Context modules
-import Constants from "expo-constants";
-import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import * as AuthModule from "../hooks/useAuth";
 import * as PlanModule from "../hooks/usePlanStatus";
@@ -148,57 +146,7 @@ export default function RootLayout() {
     // چون خودت prevent کردی، بعد از لود فونت‌ها آزادش کن
     SplashScreen.hideAsync().catch(() => {});
   }, [fontsLoaded]);
-  useEffect(() => {
-  (async () => {
-    if (!Device.isDevice) {
-      console.log("Push notifications require a physical device");
-      return;
-    }
 
-    await Notifications.setNotificationChannelAsync("default", {
-      name: "default",
-      importance: Notifications.AndroidImportance.MAX,
-    });
-
-    const { status: existingStatus } =
-      await Notifications.getPermissionsAsync();
-
-    let finalStatus = existingStatus;
-
-    if (existingStatus !== "granted") {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-
-    console.log("NOTIFICATION_PERMISSION:", finalStatus);
-
-    if (finalStatus !== "granted") return;
-
-    const projectId =
-      Constants.expoConfig?.extra?.eas?.projectId ??
-      Constants.easConfig?.projectId;
-
-      if (!projectId) {
-  Alert.alert("Push Debug", "EAS projectId پیدا نشد.");
-  return;
-}
-
-Alert.alert("Push Debug", `Permission: ${finalStatus}\nProject ID: ${projectId}`);
-
-    const token = await Notifications.getExpoPushTokenAsync({
-      projectId,
-    });
-
-    console.log("EXPO_PUSH_TOKEN:", token.data);
-    Alert.alert("Expo Push Token", token.data);
-  })().catch((error) => {
-  console.log("PUSH_SETUP_ERROR:", error);
-  Alert.alert(
-    "Push Setup Error",
-    error instanceof Error ? error.message : String(error)
-  );
-});
-}, []);
   if (!fontsLoaded) return null;
   return (
     <SafeAreaProvider>
