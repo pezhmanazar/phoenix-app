@@ -416,10 +416,13 @@ router.post("/:id/reply", allowAdmin("agent", "manager", "owner"), async (req, r
     if (!exists) {
       return res.status(404).json({ ok: false, error: "not_found" });
     }
+    console.log("[ADMIN_REPLY_ROUTE] reached");
 
     const message = await prisma.message.create({
       data: { ticketId: id, sender: "admin", text },
     });
+
+    console.log("[MESSAGE_CREATED] before push");
 
 // ارسال نوتیفیکیشن به کاربر
 let targetUserId = exists.openedById;
