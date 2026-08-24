@@ -2325,10 +2325,10 @@ router.post(
 
       if (targetUserId) {
         const result = await sendPushToUser(targetUserId, {
+          type: "ticket_reply",
           title: "پاسخ جدید در پناه",
           body: text.trim(),
           data: {
-            type: "ticket_reply",
             ticketId: id,
           },
         });
