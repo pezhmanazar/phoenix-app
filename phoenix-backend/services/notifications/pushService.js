@@ -89,3 +89,42 @@ export async function sendPushToUser(userId, payload) {
     };
   }
 }
+export async function sendPushToUsers(userIds, payload) {
+  const results = [];
+
+  for (const userId of userIds) {
+    const result = await sendPushToUser(userId, payload);
+    results.push({
+      userId,
+      result,
+    });
+  }
+
+  return results;
+}
+export async function sendPushToSegment(where, payload) {
+  const users = await prisma.user.findMany({
+    where,
+    select: {
+      id: true,
+    },
+  });
+
+  if (!users.length) {
+    return {
+      ok: false,
+      error: "NO_USERS_FOUND",
+    };
+  }
+
+  const results = await sendPushToUsers(
+    users.map((u) => u.id),
+    payload
+  );
+
+  return {
+    ok: true,
+    count: users.length,
+    results,
+  };
+}

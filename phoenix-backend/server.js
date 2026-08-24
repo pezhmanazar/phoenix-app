@@ -22,6 +22,7 @@ import paymentsRouter from "./routes/payments.js";
 import pelekanRouter from "./routes/pelekan.js";
 import pelekanReviewRoutes from "./routes/pelekanReview.js";
 import publicRouter from "./routes/public.js"; // فقط routeهای عمومی غیرتیکت (فعلاً AI / utility)
+import testNotificationsRouter from "./routes/testNotifications.js";
 import ticketsRouter, { publicTicketsRouter } from "./routes/tickets.js";
 import usersRouter from "./routes/users.js"; // 🔹 روتر یوزرها
 const prisma = new PrismaClient();
@@ -413,6 +414,9 @@ app.use("/api/users", usersRouter);
 
 // 🔹 مسیرهای نوتیفیکیشن
 app.use("/api/notifications", notificationsRouter);
+
+// 🧪 تست موقت نوتیفیکیشن
+app.use("/api/test-notifications", testNotificationsRouter);
 
 // 🔹 مسیرهای احراز هویت (OTP و JWT)
 app.use("/api/auth", authRouter);

@@ -1,6 +1,8 @@
 //services/notifications/notificationService.js
 import prisma from "../../utils/prisma.js";
-import { sendPushToUser } from "./pushService.js";
+import {
+  sendPushToUser,
+} from "./pushService.js";
 
 export async function createAndSendNotification({
   userId,
@@ -79,4 +81,58 @@ try {
     notification,
     pushResult,
   };
+}
+export async function sendNotificationToUsers({
+  userIds,
+  type = "system",
+  title,
+  body,
+  data = {},
+}) {
+  const notifications = [];
+
+  for (const userId of userIds) {
+    const result = await createAndSendNotification({
+      userId,
+      type,
+      title,
+      body,
+      data,
+    });
+
+    notifications.push(result);
+  }
+
+  return notifications;
+}
+
+
+export async function sendNotificationToSegment({
+  where,
+  type = "system",
+  title,
+  body,
+  data = {},
+}) {
+  const users = await prisma.user.findMany({
+    where,
+    select: {
+      id: true,
+    },
+  });
+
+  if (!users.length) {
+    return {
+      ok: false,
+      error: "NO_USERS_FOUND",
+    };
+  }
+
+  return sendNotificationToUsers({
+    userIds: users.map((u) => u.id),
+    type,
+    title,
+    body,
+    data,
+  });
 }
