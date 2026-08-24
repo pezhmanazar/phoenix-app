@@ -23,7 +23,10 @@ export async function createAndSendNotification({
   });
 
 
-  const pushResult = await sendPushToUser(userId, {
+  let pushResult;
+
+try {
+  pushResult = await sendPushToUser(userId, {
     title,
     body,
     data: {
@@ -31,6 +34,14 @@ export async function createAndSendNotification({
       type,
     },
   });
+} catch (error) {
+  console.error("[NOTIFICATION_PUSH_ERROR]", error?.message || error);
+
+  pushResult = {
+    ok: false,
+    error: "PUSH_FAILED",
+  };
+}
 
 
   if (pushResult.ok && pushResult.devices) {
