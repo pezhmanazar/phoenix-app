@@ -4,6 +4,7 @@ import pkg from "@prisma/client";
 
 import express from "express";
 
+import { createAndSendNotification } from "../services/notifications/notificationService.js";
 import { finalizeSubscription } from "../utils/subscription.js";
 const { PrismaClient } = pkg;
 
@@ -184,6 +185,19 @@ router.post("/verify", async (req, res) => {
       now,
       metaJson,
     });
+    if (result.userId && !result.alreadyFinalized) {
+  await createAndSendNotification({
+    userId: result.userId,
+    type: "subscription",
+    title: "اشتراک ققنوس فعال شد",
+    body: `اشتراک پرو شما به مدت ${months} ماه فعال شد.`,
+    data: {
+      type: "subscription",
+      provider: "bazaar",
+      subscriptionId: result.subscriptionId,
+    },
+  });
+}
 
     return res.json({
       ok: true,
