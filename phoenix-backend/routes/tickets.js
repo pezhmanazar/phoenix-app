@@ -420,7 +420,7 @@ router.post("/:id/reply", allowAdmin("agent", "manager", "owner"), async (req, r
     const message = await prisma.message.create({
       data: { ticketId: id, sender: "admin", text },
     });
-    
+
 // ارسال نوتیفیکیشن به کاربر
 let targetUserId = exists.openedById;
 
@@ -436,6 +436,11 @@ if (!targetUserId && exists.contact) {
 
   targetUserId = user?.id;
 }
+console.log("[TICKET_PUSH_TARGET]", {
+  openedById: exists.openedById,
+  contact: exists.contact,
+  targetUserId,
+});
 
 if (targetUserId) {
   await sendPushToUser(
