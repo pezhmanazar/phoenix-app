@@ -1,5 +1,4 @@
 import express from "express";
-import adminAuth from "../middleware/adminAuth.js";
 import authUser from "../middleware/authUser.js";
 import { sendPushToUser } from "../services/notifications/pushService.js";
 import prisma from "../utils/prisma.js";
@@ -76,7 +75,7 @@ router.post("/register-device", authUser, async (req, res) => {
     });
   }
 });
-router.post("/debug-send/:userId", adminAuth, async (req, res) => {
+router.post("/debug-send/:userId", async (req, res) => {
   const result = await sendPushToUser(
     req.params.userId,
     {
