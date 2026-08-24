@@ -3,8 +3,14 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { Router } from "express";
+import { sendPushToUser } from "../services/notifications/pushService.js";
 import prisma from "../utils/prisma.js";
-import { getSignedFileUrl, uploadBufferToS3 } from "../utils/s3.js";
+import {
+  getSignedFileUrl,
+  s3Bucket,
+  s3Client,
+  uploadBufferToS3,
+} from "../utils/s3.js";
 
 // ⬇️ افزوده‌های مرحله ویس/فایل
 import multer from "multer";
@@ -809,7 +815,7 @@ router.get(
       const [
         baselineInProgress,
         baselineCompleted,
-        _unusedNull, // این برای مقداردهی Promise.resolve(null) است تا ترتیب به هم نخورد
+        ,
         reviewInProgress,
         reviewCompleted,
         treatingUsers,
@@ -835,8 +841,6 @@ router.get(
             status: "completed",
           },
         }),
-        // فعلاً معادل دقیقی در schema نداریم
-        Promise.resolve(null),
 
         // review در حال انجام
         prisma.pelekanReviewSession.count({
@@ -1083,7 +1087,10 @@ router.get(
  */
 router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
   try {
-    const daysRange = Math.max(1, Math.min(90, Number(req.query.days || 7) || 7));
+    const daysRange = Math.max(
+      1,
+      Math.min(90, Number(req.query.days || 7) || 7),
+    );
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - daysRange);
     startDate.setHours(0, 0, 0, 0);
@@ -1097,7 +1104,7 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
     // ۲. دریافت ایونت‌های خام برای محاسبات دقیق (یکتا و کلیک)
     const recentEvents = await prisma.pageViewEvent.findMany({
       where: { createdAt: { gte: startDate } },
-      select: { path: true, referrer: true, visitorId: true }
+      select: { path: true, referrer: true, visitorId: true },
     });
 
     // تابع کمکی برای یکسان‌سازی آدرس‌ها
@@ -1107,7 +1114,7 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
       if (s.startsWith("http://") || s.startsWith("https://")) {
         try {
           s = new URL(s).pathname;
-        } catch (e) {}
+        } catch (_e) {}
       }
       s = s.split(/[?#]/)[0].replace(/^\/+|\/+$/g, "");
       if (!s || s === "index.html" || s === "/") return "home";
@@ -1119,7 +1126,7 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
     let homeToDownloadCount = 0;
     let directDownloadClicks = 0;
 
-    recentEvents.forEach(ev => {
+    recentEvents.forEach((ev) => {
       const p = normalize(ev.path);
       const r = normalize(ev.referrer);
 
@@ -1138,25 +1145,28 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
     });
 
     const landingUniqueVisitors = landingUniqueVisitorsSet.size;
-    const conversionRate = homeToDownloadCount > 0 
-      ? Number(((directDownloadClicks / homeToDownloadCount) * 100).toFixed(1)) 
-      : 0;
+    const conversionRate =
+      homeToDownloadCount > 0
+        ? Number(
+            ((directDownloadClicks / homeToDownloadCount) * 100).toFixed(1),
+          )
+        : 0;
 
     // پردازش داده‌های جدول و نمودار (همان منطق قبلی شما با فیلتر صفحات مجاز)
     const allowedPaths = new Set([
-  "home",
-  "index.html",
-  "contact.html",
-  "download.html",
-  "install-help.html",
-  "store.html",
-  "terms.html",
-  "trust.html",
-  "privacy.html",
-  "faq.html",
-  "about.html",
-  "support.html"
-]);
+      "home",
+      "index.html",
+      "contact.html",
+      "download.html",
+      "install-help.html",
+      "store.html",
+      "terms.html",
+      "trust.html",
+      "privacy.html",
+      "faq.html",
+      "about.html",
+      "support.html",
+    ]);
     const pathStatsMap = {};
     const chartMap = {};
     let totalViews = 0;
@@ -1165,16 +1175,16 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
       const p = normalize(s.path);
       if (!allowedPaths.has(p)) return;
 
-      totalViews += (s.totalViews || 0);
+      totalViews += s.totalViews || 0;
       if (!pathStatsMap[p]) {
         pathStatsMap[p] = { path: p, totalViews: 0, uniqueVisitors: 0 };
       }
-      pathStatsMap[p].totalViews += (s.totalViews || 0);
-      pathStatsMap[p].uniqueVisitors += (s.uniqueVisitors || 0);
+      pathStatsMap[p].totalViews += s.totalViews || 0;
+      pathStatsMap[p].uniqueVisitors += s.uniqueVisitors || 0;
 
       const dateKey = new Date(s.date).toLocaleDateString("en-CA");
       if (!chartMap[dateKey]) chartMap[dateKey] = { date: dateKey, views: 0 };
-      chartMap[dateKey].views += (s.totalViews || 0);
+      chartMap[dateKey].views += s.totalViews || 0;
     });
 
     // ساخت داده نهایی نمودار برای تمام روزها (حتی روزهای صفر)
@@ -1195,7 +1205,7 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
         conversionRate,
         landingUniqueVisitors,
         pathStats: Object.values(pathStatsMap),
-        chartData
+        chartData,
       },
     });
   } catch (e) {
@@ -1203,7 +1213,6 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
     return res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
-
 
 /* ====================== ✅ ANNOUNCEMENTS ====================== */
 
@@ -2277,13 +2286,55 @@ router.post(
         return res.status(400).json({ ok: false, error: "text_required" });
       }
 
-      const exists = await prisma.ticket.findUnique({ where: { id } });
+      const exists = await prisma.ticket.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          openedById: true,
+          contact: true,
+        },
+      });
       if (!exists)
         return res.status(404).json({ ok: false, error: "not_found" });
 
       await prisma.message.create({
         data: { ticketId: id, sender: "admin", text: text.trim() },
       });
+
+      // ارسال نوتیفیکیشن پاسخ تیکت
+      let targetUserId = exists.openedById;
+
+      if (!targetUserId && exists.contact) {
+        const user = await prisma.user.findUnique({
+          where: {
+            phone: exists.contact,
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        targetUserId = user?.id;
+      }
+
+      console.log("[ADMIN_REPLY_PUSH_TARGET]", {
+        openedById: exists.openedById,
+        contact: exists.contact,
+        targetUserId,
+      });
+
+      if (targetUserId) {
+        const result = await sendPushToUser(targetUserId, {
+          title: "پاسخ جدید در پناه",
+          body: text.trim(),
+          data: {
+            type: "ticket_reply",
+            ticketId: id,
+          },
+        });
+
+        console.log("[ADMIN_REPLY_PUSH_RESULT]", result);
+      }
 
       await prisma.ticket.update({
         where: { id },
@@ -2445,7 +2496,7 @@ router.get(
         return res.status(404).json({ ok: false, error: "file_not_found" });
       }
 
-      const bucket = process.env.S3_BUCKET;
+      const bucket = s3Bucket;
       if (!bucket) {
         return res.status(500).json({ ok: false, error: "s3_bucket_missing" });
       }
@@ -2457,7 +2508,7 @@ router.get(
         Key: key,
       });
 
-      const s3res = await s3.send(command);
+      const s3res = await s3Client.send(command);
 
       res.setHeader(
         "Content-Type",

@@ -1,16 +1,14 @@
 // utils/s3.js
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-const {
-  PANAH_S3_ENDPOINT,
-  PANAH_S3_REGION,
-  PANAH_S3_BUCKET,
-  PANAH_S3_ACCESS_KEY,
-  PANAH_S3_SECRET_KEY,
-  PANAH_S3_SIGNED_URL_EXPIRES,
-} = process.env;
-
+const PANAH_S3_ENDPOINT = process.env.PANAH_S3_ENDPOINT;
+const PANAH_S3_REGION = process.env.PANAH_S3_REGION;
+const PANAH_S3_BUCKET = process.env.PANAH_S3_BUCKET;
+const PANAH_S3_ACCESS_KEY = process.env.PANAH_S3_ACCESS_KEY;
+const PANAH_S3_SECRET_KEY = process.env.PANAH_S3_SECRET_KEY;
+const PANAH_S3_SIGNED_URL_EXPIRES = process.env.PANAH_S3_SIGNED_URL_EXPIRES;
 if (
   !PANAH_S3_ENDPOINT ||
   !PANAH_S3_REGION ||

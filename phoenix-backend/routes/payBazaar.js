@@ -1,11 +1,11 @@
 // phoenix-backend/routes/payBazaar.js
 
 import pkg from "@prisma/client";
-const { PrismaClient } = pkg;
 
 import express from "express";
 
 import { finalizeSubscription } from "../utils/subscription.js";
+const { PrismaClient } = pkg;
 
 const router = express.Router();
 const prisma = new PrismaClient();

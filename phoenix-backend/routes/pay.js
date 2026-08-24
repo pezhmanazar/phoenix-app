@@ -1,7 +1,6 @@
 // phoenix-app/phoenix-backend/routes/pay.js
 
 import pkg from "@prisma/client";
-const { PrismaClient } = pkg;
 
 import express from "express";
 import {
@@ -10,6 +9,7 @@ import {
 } from "../config/subscriptionPricing.js";
 
 import { finalizeSubscription } from "../utils/subscription.js";
+const { PrismaClient } = pkg;
 
 const router = express.Router();
 const prisma = new PrismaClient();
