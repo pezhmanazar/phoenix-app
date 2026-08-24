@@ -6,7 +6,7 @@ import {
   ThemeProvider,
 } from "@react-navigation/native";
 import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useMemo } from "react";
@@ -20,6 +20,7 @@ import * as PlanModule from "../hooks/usePlanStatus";
 import * as UserModule from "../hooks/useUser";
 import { registerDeviceToken } from "../lib/notifications/registerDevice";
 import { getPaymentProvider } from "../lib/payments/getPaymentProvider";
+
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -112,6 +113,25 @@ export default function RootLayout() {
   }, []);
   useEffect(() => {
   registerDeviceToken();
+}, []);
+useEffect(() => {
+  const subscription =
+    Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        const data = response.notification.request.content.data;
+
+        if (
+          data?.type === "ticket_reply" &&
+          data?.ticketId
+        ) {
+          router.push(`/support/tickets/${data.ticketId}`);
+        }
+      }
+    );
+
+  return () => {
+    subscription.remove();
+  };
 }, []);
   useEffect(() => {
     if (!fontsLoaded) return;

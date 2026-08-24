@@ -2329,6 +2329,7 @@ router.post(
           title: "پاسخ جدید در پناه",
           body: text.trim(),
           data: {
+            type: "ticket_reply",
             ticketId: id,
           },
         });
@@ -2495,6 +2496,7 @@ router.post(
                 ? "یک تصویر جدید دریافت کردی"
                 : "یک فایل جدید دریافت کردی",
           data: {
+            type: "ticket_reply",
             ticketId: id,
           },
         });
