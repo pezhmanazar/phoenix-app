@@ -1,4 +1,5 @@
 import express from "express";
+import { sendIncompleteBaselineReminders } from "../services/notifications/notificationJobs.js";
 import prisma from "../utils/prisma.js";
 
 const router = express.Router();
@@ -37,6 +38,23 @@ router.get("/baseline-check", async (req, res) => {
     });
   }
 });
+router.get("/baseline-send-test", async (req, res) => {
+  try {
+    const result = await sendIncompleteBaselineReminders();
 
+    return res.json({
+      ok: true,
+      result,
+    });
+
+  } catch (e) {
+    console.error("[BASELINE_SEND_TEST]", e);
+
+    return res.status(500).json({
+      ok: false,
+      error: e.message,
+    });
+  }
+});
 
 export default router;
