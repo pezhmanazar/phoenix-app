@@ -8,6 +8,7 @@ import {
   getZarinpalPlanConfig,
 } from "../config/subscriptionPricing.js";
 
+import { createAndSendNotification } from "../services/notifications/notificationService.js";
 import { finalizeSubscription } from "../utils/subscription.js";
 const { PrismaClient } = pkg;
 
@@ -357,20 +358,31 @@ router.get("/verify", async (req, res) => {
     if (!PAY_REAL) {
       const refId = `TEST-${Date.now()}`;
 
-      await finalizeSubscription(prisma, {
-        phone,
-        provider: "zarinpal",
-        authority,
-        refId,
-        amount,
-        months,
-        plan,
-        now,
-        metaJson: {
-          mode: "mock",
-          authority,
-        },
-      });
+      const result = await finalizeSubscription(prisma, {
+  phone,
+  provider: "zarinpal",
+  authority,
+  refId,
+  amount,
+  months,
+  plan,
+  now,
+  metaJson: {
+    mode: "mock",
+    authority,
+  },
+});
+
+await createAndSendNotification({
+  userId: result.userId,
+  type: "subscription",
+  title: "اشتراک ققنوس فعال شد",
+  body: "اشتراک PRO شما با موفقیت فعال شد.",
+  data: {
+    screen: "subscription",
+  },
+});
+
 
       return res.redirect(302, buildResultUrl({ ok: true, authority }));
     }
@@ -450,19 +462,29 @@ router.get("/verify", async (req, res) => {
       fee: data.fee || null,
     };
 
-    await finalizeSubscription(prisma, {
-      phone,
-      provider: "zarinpal",
-      authority,
-      refId,
-      amount,
-      months,
-      plan,
-      now,
-      metaJson,
-    });
+    const result = await finalizeSubscription(prisma, {
+  phone,
+  provider: "zarinpal",
+  authority,
+  refId,
+  amount,
+  months,
+  plan,
+  now,
+  metaJson,
+});
 
-    return res.redirect(302, buildResultUrl({ ok: true, authority }));
+await createAndSendNotification({
+  userId: result.userId,
+  type: "subscription",
+  title: "اشتراک ققنوس فعال شد",
+  body: "اشتراک پرو شما با موفقیت فعال شد.",
+  data: {
+    screen: "subscription",
+  },
+});
+
+return res.redirect(302, buildResultUrl({ ok: true, authority }));
     } catch (e) {
     console.error("VERIFY_ERR", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
