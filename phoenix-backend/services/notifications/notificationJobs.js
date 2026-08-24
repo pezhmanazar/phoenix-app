@@ -4,18 +4,11 @@ import { createAndSendNotification } from "./notificationService.js";
 
 export async function sendIncompleteBaselineReminders() {
 
-  const oneDayAgo = new Date(
-    Date.now() - 24 * 60 * 60 * 1000
-  );
-
-
   const sessions = await prisma.assessmentSession.findMany({
     where: {
       kind: "hb_baseline",
       status: "in_progress",
-      updatedAt: {
-        lt: oneDayAgo,
-      },
+     
     },
     select: {
       userId: true,
