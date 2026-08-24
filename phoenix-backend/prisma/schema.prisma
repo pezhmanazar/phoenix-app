@@ -97,8 +97,9 @@ model Admin {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  assignedTickets Ticket[]       @relation("AssignedTickets")
-  sessions        AdminSession[]
+  assignedTickets       Ticket[]               @relation("AssignedTickets")
+  sessions              AdminSession[]
+  notificationCampaigns NotificationCampaign[]
 }
 
 model AdminSession {
@@ -148,6 +149,7 @@ model User {
 
   subscriptions Subscription[]
   deviceTokens  DeviceToken[]
+  notifications Notification[]
 
   // ✅ Announcements
   announcementSeen AnnouncementSeen[]
@@ -964,9 +966,117 @@ model DeviceToken {
 
   lastUsedAt DateTime @default(now())
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+  deliveries NotificationDelivery[]
 
   @@index([userId])
   @@index([isActive])
+}
+
+model NotificationCampaign {
+  id String @id @default(uuid())
+
+  title       String
+  description String?
+
+  type NotificationCampaignType
+
+  createdById String?
+  createdBy   Admin?  @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  status NotificationCampaignStatus @default(draft)
+
+  scheduledAt DateTime?
+  sentAt      DateTime?
+
+  targetRule Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  notifications Notification[]
+}
+
+model Notification {
+  id String @id @default(uuid())
+
+  campaignId String?
+  campaign   NotificationCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type NotificationType
+
+  title String
+  body  String
+
+  data Json?
+
+  createdAt DateTime @default(now())
+
+  deliveries NotificationDelivery[]
+
+  @@index([userId])
+  @@index([type])
+}
+
+model NotificationDelivery {
+  id String @id @default(uuid())
+
+  notificationId String
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  deviceTokenId String?
+  deviceToken   DeviceToken? @relation(fields: [deviceTokenId], references: [id], onDelete: SetNull)
+
+  status NotificationDeliveryStatus @default(pending)
+
+  providerMessageId String?
+
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  openedAt    DateTime?
+
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+
+  @@index([notificationId])
+  @@index([deviceTokenId])
+}
+
+enum NotificationType {
+  ticket_reply
+  subscription
+  payment
+  pelekan
+  assessment
+  reminder
+  marketing
+  system
+}
+
+enum NotificationCampaignType {
+  therapeutic
+  sales
+  system
+  motivational
+}
+
+enum NotificationCampaignStatus {
+  draft
+  scheduled
+  sending
+  completed
+  failed
+}
+
+enum NotificationDeliveryStatus {
+  pending
+  sent
+  delivered
+  opened
+  failed
 }
