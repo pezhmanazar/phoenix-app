@@ -1,3 +1,4 @@
+//phoenix-app\phoenix-backend\services\notifications\pushService.js
 import prisma from "../../utils/prisma.js";
 import { getFirebaseAdmin } from "../firebase/firebaseAdmin.js";
 
@@ -17,26 +18,6 @@ export async function sendPushToUser(userId, payload) {
       };
     }
 
-    // ثبت Notification
-    const notification = await prisma.notification.create({
-      data: {
-        userId,
-        type: payload.type || "system",
-        title: payload.title,
-        body: payload.body,
-        data: payload.data || {},
-      },
-    });
-
-    // ساخت Delivery برای هر دستگاه
-    await prisma.notificationDelivery.createMany({
-  data: devices.map((device) => ({
-    notificationId: notification.id,
-    deviceTokenId: device.id,
-    status: "pending",
-  })),
-});
-
     const admin = getFirebaseAdmin();
     const messaging = admin.messaging();
 
@@ -53,68 +34,46 @@ export async function sendPushToUser(userId, payload) {
 
     const response = await messaging.sendEachForMulticast(message);
 
-    // ذخیره نتیجه ارسال
-    for (let i = 0; i < response.responses.length; i++) {
-      const item = response.responses[i];
+    const invalidTokens = [];
 
-      await prisma.notificationDelivery.updateMany({
+    response.responses.forEach((item, index) => {
+      if (!item.success) {
+        const errorCode = item.error?.code;
+
+        if (
+          errorCode === "messaging/registration-token-not-registered" ||
+          errorCode === "messaging/invalid-registration-token"
+        ) {
+          invalidTokens.push(tokens[index]);
+        }
+      }
+    });
+
+    if (invalidTokens.length) {
+      await prisma.deviceToken.updateMany({
         where: {
-          notificationId: notification.id,
-          deviceTokenId: devices[i].id,
+          token: {
+            in: invalidTokens,
+          },
         },
         data: {
-          status: item.success ? "sent" : "failed",
-          providerMessageId: item.messageId || null,
-          errorMessage: item.error?.message || null,
-          sentAt: item.success ? new Date() : null,
+          isActive: false,
         },
       });
     }
 
     console.log("[PUSH_RESULT]", {
       userId,
-      notificationId: notification.id,
       successCount: response.successCount,
       failureCount: response.failureCount,
     });
 
-
-    // غیرفعال کردن توکن‌های خراب
-    if (response.failureCount > 0) {
-      const invalidTokens = [];
-
-      response.responses.forEach((item, index) => {
-        if (!item.success) {
-          const errorCode = item.error?.code;
-
-          if (
-            errorCode === "messaging/registration-token-not-registered" ||
-            errorCode === "messaging/invalid-registration-token"
-          ) {
-            invalidTokens.push(tokens[index]);
-          }
-        }
-      });
-
-      if (invalidTokens.length) {
-        await prisma.deviceToken.updateMany({
-          where: {
-            token: {
-              in: invalidTokens,
-            },
-          },
-          data: {
-            isActive: false,
-          },
-        });
-      }
-    }
-
     return {
       ok: true,
-      notificationId: notification.id,
       successCount: response.successCount,
       failureCount: response.failureCount,
+      responses: response.responses,
+      devices,
     };
 
   } catch (error) {

@@ -3,7 +3,7 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { Router } from "express";
-import { sendPushToUser } from "../services/notifications/pushService.js";
+import { createAndSendNotification } from "../services/notifications/notificationService.js";
 import prisma from "../utils/prisma.js";
 import {
   getSignedFileUrl,
@@ -2324,12 +2324,12 @@ router.post(
       });
 
       if (targetUserId) {
-        const result = await sendPushToUser(targetUserId, {
+        const result = await createAndSendNotification({
+          userId: targetUserId,
           type: "ticket_reply",
           title: "پاسخ جدید در پناه",
           body: text.trim(),
           data: {
-            type: "ticket_reply",
             ticketId: id,
           },
         });
@@ -2486,7 +2486,8 @@ router.post(
       });
 
       if (targetUserId) {
-        const result = await sendPushToUser(targetUserId, {
+        const result = await createAndSendNotification({
+          userId: targetUserId,
           type: "ticket_reply",
           title: "پاسخ جدید در پناه",
           body:
@@ -2496,7 +2497,6 @@ router.post(
                 ? "یک تصویر جدید دریافت کردی"
                 : "یک فایل جدید دریافت کردی",
           data: {
-            type: "ticket_reply",
             ticketId: id,
           },
         });
