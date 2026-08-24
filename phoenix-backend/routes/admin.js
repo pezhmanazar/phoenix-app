@@ -2461,6 +2461,47 @@ router.post(
         include: { messages: { orderBy: { createdAt: "asc" } } },
       });
 
+      // ارسال نوتیفیکیشن پاسخ فایل/ویس/تصویر
+      let targetUserId = exists.openedById;
+
+      if (!targetUserId && exists.contact) {
+        const user = await prisma.user.findUnique({
+          where: {
+            phone: exists.contact,
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        targetUserId = user?.id;
+      }
+
+      console.log("[ADMIN_UPLOAD_REPLY_PUSH_TARGET]", {
+        openedById: exists.openedById,
+        contact: exists.contact,
+        targetUserId,
+        messageType,
+      });
+
+      if (targetUserId) {
+        const result = await sendPushToUser(targetUserId, {
+          type: "ticket_reply",
+          title: "پاسخ جدید در پناه",
+          body:
+            messageType === "voice"
+              ? "یک پیام صوتی جدید دریافت کردی"
+              : messageType === "image"
+                ? "یک تصویر جدید دریافت کردی"
+                : "یک فایل جدید دریافت کردی",
+          data: {
+            ticketId: id,
+          },
+        });
+
+        console.log("[ADMIN_UPLOAD_REPLY_PUSH_RESULT]", result);
+      }
+
       return res.json({ ok: true, ticket, message: created });
     } catch (e) {
       console.error("admin/reply-upload error:", e?.message || "unknown_error");
