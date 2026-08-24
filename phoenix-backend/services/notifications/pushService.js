@@ -17,6 +17,26 @@ export async function sendPushToUser(userId, payload) {
       };
     }
 
+    // ثبت Notification
+    const notification = await prisma.notification.create({
+      data: {
+        userId,
+        type: payload.type || "system",
+        title: payload.title,
+        body: payload.body,
+        data: payload.data || {},
+      },
+    });
+
+    // ساخت Delivery برای هر دستگاه
+    await prisma.notificationDelivery.createMany({
+  data: devices.map((device) => ({
+    notificationId: notification.id,
+    deviceTokenId: device.id,
+    status: "pending",
+  })),
+});
+
     const admin = getFirebaseAdmin();
     const messaging = admin.messaging();
 
@@ -33,13 +53,33 @@ export async function sendPushToUser(userId, payload) {
 
     const response = await messaging.sendEachForMulticast(message);
 
+    // ذخیره نتیجه ارسال
+    for (let i = 0; i < response.responses.length; i++) {
+      const item = response.responses[i];
+
+      await prisma.notificationDelivery.updateMany({
+        where: {
+          notificationId: notification.id,
+          deviceTokenId: devices[i].id,
+        },
+        data: {
+          status: item.success ? "sent" : "failed",
+          providerMessageId: item.messageId || null,
+          errorMessage: item.error?.message || null,
+          sentAt: item.success ? new Date() : null,
+        },
+      });
+    }
+
     console.log("[PUSH_RESULT]", {
       userId,
+      notificationId: notification.id,
       successCount: response.successCount,
       failureCount: response.failureCount,
     });
 
-    // اگر توکن‌هایی دیگر معتبر نیستند، غیرفعال کنیم
+
+    // غیرفعال کردن توکن‌های خراب
     if (response.failureCount > 0) {
       const invalidTokens = [];
 
@@ -72,6 +112,7 @@ export async function sendPushToUser(userId, payload) {
 
     return {
       ok: true,
+      notificationId: notification.id,
       successCount: response.successCount,
       failureCount: response.failureCount,
     };
