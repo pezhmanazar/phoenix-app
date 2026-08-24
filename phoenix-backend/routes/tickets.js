@@ -1,26 +1,25 @@
 // routes/tickets.js
 import pkg from "@prisma/client";
-const { PrismaClient } = pkg;
 
 import { Router } from "express";
 import multer from "multer";
-import path from "path";
 import { allowAdmin, authAdmin } from "../middleware/authAdmin.js";
 import authUser from "../middleware/authUser.js";
+import { sendPushToUser } from "../services/notifications/pushService.js";
 import { isUserPro } from "../services/planStatus.js";
+import {
+  getS3ObjectStream,
+  uploadBufferToS3,
+} from "../utils/s3.js";
 import {
   requireTicketIdentity,
   ticketMatchesIdentity,
 } from "./_ticketIdentity.js";
-import {
-  uploadBufferToS3,
-  getS3ObjectStream,
-} from "../utils/s3.js";
+const { PrismaClient } = pkg;
 
 const prisma = new PrismaClient();
 
-const UPLOAD_ROOT =
-  process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
+
 
 const ALLOWED_MIME_TYPES = [
   "image/jpeg",
@@ -409,7 +408,13 @@ router.post("/:id/reply", allowAdmin("agent", "manager", "owner"), async (req, r
       return res.status(400).json({ ok: false, error: "text required" });
     }
 
-    const exists = await prisma.ticket.findUnique({ where: { id } });
+    const exists = await prisma.ticket.findUnique({
+  where: { id },
+  select: {
+    id: true,
+    openedById: true,
+  },
+});
     if (!exists) {
       return res.status(404).json({ ok: false, error: "not_found" });
     }
@@ -417,6 +422,22 @@ router.post("/:id/reply", allowAdmin("agent", "manager", "owner"), async (req, r
     const message = await prisma.message.create({
       data: { ticketId: id, sender: "admin", text },
     });
+
+    // ارسال نوتیفیکیشن به کاربر
+if (exists.openedById) {
+  await sendPushToUser(
+    exists.openedById,
+    {
+      type: "ticket_reply",
+      title: "پاسخ جدید در پناه",
+      body: text.slice(0, 120),
+      data: {
+        screen: "panah",
+        ticketId: id,
+      },
+    }
+  );
+}
 
     const ticket = await prisma.ticket.findUnique({
       where: { id },
