@@ -19,8 +19,6 @@ const { PrismaClient } = pkg;
 
 const prisma = new PrismaClient();
 
-
-
 const ALLOWED_MIME_TYPES = [
   "image/jpeg",
   "image/png",
@@ -39,7 +37,6 @@ const upload = multer({
     return cb(new Error("INVALID_FILE_TYPE"));
   },
 });
-
 
 
 /* ================= helper پلن برای چت درمانگر ================= */
@@ -408,13 +405,14 @@ router.post("/:id/reply", allowAdmin("agent", "manager", "owner"), async (req, r
       return res.status(400).json({ ok: false, error: "text required" });
     }
 
-    const exists = await prisma.ticket.findUnique({
-  where: { id },
-  select: {
+  const exists = await prisma.ticket.findUnique({
+    where: { id },
+    select: {
     id: true,
     openedById: true,
+    contact: true,
   },
-});
+    });
     if (!exists) {
       return res.status(404).json({ ok: false, error: "not_found" });
     }
@@ -422,11 +420,26 @@ router.post("/:id/reply", allowAdmin("agent", "manager", "owner"), async (req, r
     const message = await prisma.message.create({
       data: { ticketId: id, sender: "admin", text },
     });
+    
+// ارسال نوتیفیکیشن به کاربر
+let targetUserId = exists.openedById;
 
-    // ارسال نوتیفیکیشن به کاربر
-if (exists.openedById) {
+if (!targetUserId && exists.contact) {
+  const user = await prisma.user.findUnique({
+    where: {
+      phone: exists.contact,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  targetUserId = user?.id;
+}
+
+if (targetUserId) {
   await sendPushToUser(
-    exists.openedById,
+    targetUserId,
     {
       type: "ticket_reply",
       title: "پاسخ جدید در پناه",
