@@ -1855,7 +1855,6 @@ router.get(
   },
 );
 
-
 /**
  * POST /api/admin/notification-campaigns
  *
@@ -1993,6 +1992,160 @@ router.post(
       console.error(
         "admin/notification-campaigns POST error:",
         e?.message || "unknown_error",
+      );
+
+      return res.status(500).json({
+        ok: false,
+        error: "internal_error",
+      });
+    }
+  },
+);
+
+/**
+ * POST /api/admin/notification-campaigns/:id/send
+ *
+ * ارسال کمپین
+ */
+router.post(
+  "/notification-campaigns/:id/send",
+  allow("manager", "owner"),
+  async (req, res) => {
+    try {
+      const campaignId = String(req.params.id || "").trim();
+
+      if (!campaignId) {
+        return res.status(400).json({
+          ok: false,
+          error: "campaign_id_required",
+        });
+      }
+
+      const campaign =
+        await prisma.notificationCampaign.findUnique({
+          where: {
+            id: campaignId,
+          },
+        });
+
+      if (!campaign) {
+        return res.status(404).json({
+          ok: false,
+          error: "campaign_not_found",
+        });
+      }
+
+      if (campaign.status !== "draft") {
+        return res.status(400).json({
+          ok: false,
+          error: "campaign_already_processed",
+        });
+      }
+
+      const rule = campaign.targetRule || {};
+
+      let users = [];
+
+      if (rule.plan === "free") {
+        users = await prisma.user.findMany({
+          where: {
+            plan: "free",
+          },
+          select: {
+            id: true,
+          },
+        });
+      } else if (rule.plan === "pro") {
+        users = await prisma.user.findMany({
+          where: {
+            plan: "pro",
+          },
+          select: {
+            id: true,
+          },
+        });
+      } else {
+        users = await prisma.user.findMany({
+          select: {
+            id: true,
+          },
+        });
+      }
+
+      await prisma.notificationCampaign.update({
+        where: {
+          id: campaignId,
+        },
+        data: {
+          status: "sending",
+          targetCount: users.length,
+        },
+      });
+
+
+      let sent = 0;
+      let failed = 0;
+
+
+      for (const user of users) {
+
+        try {
+
+          const result =
+            await createAndSendNotification({
+              userId: user.id,
+              type: campaign.notificationType || "marketing",
+              title: campaign.pushTitle,
+              body: campaign.pushBody,
+              data: {
+                campaignId: campaign.id,
+              },
+            });
+
+
+          if (result?.pushResult?.ok) {
+            sent++;
+          } else {
+            failed++;
+          }
+
+
+        } catch (e) {
+          failed++;
+          console.error(
+            "[CAMPAIGN_SEND_USER_FAILED]",
+            user.id,
+            e?.message
+          );
+        }
+      }
+
+
+      await prisma.notificationCampaign.update({
+        where: {
+          id: campaignId,
+        },
+        data: {
+          status: "completed",
+          sentAt: new Date(),
+        },
+      });
+
+
+      return res.json({
+        ok: true,
+        result: {
+          targetCount: users.length,
+          sent,
+          failed,
+        },
+      });
+
+
+    } catch (e) {
+      console.error(
+        "admin/notification-campaigns SEND error:",
+        e?.message || e,
       );
 
       return res.status(500).json({
