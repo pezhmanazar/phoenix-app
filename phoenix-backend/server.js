@@ -25,6 +25,7 @@ import publicRouter from "./routes/public.js"; // فقط routeهای عمومی 
 import testNotificationsRouter from "./routes/testNotifications.js";
 import ticketsRouter, { publicTicketsRouter } from "./routes/tickets.js";
 import usersRouter from "./routes/users.js"; // 🔹 روتر یوزرها
+import { startNotificationScheduler } from "./services/notifications/notificationScheduler.js";
 const prisma = new PrismaClient();
 
 // ---------- App ----------
@@ -469,4 +470,6 @@ app.use((err, _req, res, _next) => {
 // ---------- Start ----------
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Phoenix backend running on http://0.0.0.0:${PORT}`);
+
+  startNotificationScheduler();
 });
