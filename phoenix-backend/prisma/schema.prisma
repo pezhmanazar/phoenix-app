@@ -977,11 +977,24 @@ model DeviceToken {
 model NotificationCampaign {
   id String @id @default(uuid())
 
+  // نام داخلی کمپین در پنل
   title       String
   description String?
 
+  // دسته‌بندی کمپین
   type NotificationCampaignType
 
+  // نوع Notificationهایی که از این کمپین ساخته می‌شوند
+  notificationType NotificationType @default(marketing)
+
+  // محتوایی که کاربر روی گوشی می‌بیند
+  pushTitle String
+  pushBody  String
+
+  // اطلاعات اضافی مثل Deep Link
+  data Json?
+
+  // ادمینی که کمپین را ساخته
   createdById String?
   createdBy   Admin?  @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
@@ -990,12 +1003,20 @@ model NotificationCampaign {
   scheduledAt DateTime?
   sentAt      DateTime?
 
+  // قوانین هدف‌گیری کاربران
   targetRule Json?
+
+  // تعداد کاربران واجد شرایط در لحظه ارسال
+  targetCount Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   notifications Notification[]
+
+  @@index([status])
+  @@index([type])
+  @@index([scheduledAt])
 }
 
 model Notification {
