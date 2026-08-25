@@ -2,6 +2,7 @@ import {
   sendIncompleteBaselineReminders,
   sendPelekanIntroReminders,
   sendTreatmentStartReminders,
+  sendScheduledCampaigns,
 } from "./notificationJobs.js";
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -65,6 +66,17 @@ console.log(
     skipped: treatmentStartResult.skipped,
     failed: treatmentStartResult.failed,
   }
+);
+console.log(
+  "[NOTIFICATION_SCHEDULER] scheduled campaign job started"
+);
+
+const scheduledCampaignResult =
+  await sendScheduledCampaigns();
+
+console.log(
+  "[NOTIFICATION_SCHEDULER] scheduled campaign job finished",
+  scheduledCampaignResult
 );
   } catch (error) {
     console.error(

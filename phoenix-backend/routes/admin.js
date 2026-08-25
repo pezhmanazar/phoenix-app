@@ -1921,7 +1921,9 @@ router.post(
           notificationType,
           pushTitle,
           pushBody,
-          status: "draft",
+          status: scheduledAt
+          ? "scheduled"
+          : "draft",
           scheduledAt,
           targetRule,
           createdById: req.admin.id,

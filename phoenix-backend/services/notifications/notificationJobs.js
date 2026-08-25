@@ -1,6 +1,6 @@
 import prisma from "../../utils/prisma.js";
 import { createAndSendNotification } from "./notificationService.js";
-
+import { sendCampaignById } from "./campaignService.js";
 
 export async function sendIncompleteBaselineReminders() {
 
@@ -319,6 +319,77 @@ export async function sendTreatmentStartReminders() {
     found: progressRows.length,
     sent,
     skipped,
+    failed,
+  };
+}
+
+export async function sendScheduledCampaigns() {
+  const now = new Date();
+
+  const campaigns =
+    await prisma.notificationCampaign.findMany({
+      where: {
+        status: "scheduled",
+        scheduledAt: {
+          lte: now,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+
+  let sent = 0;
+  let failed = 0;
+
+
+  for (const campaign of campaigns) {
+    try {
+
+      const result =
+        await sendCampaignById(campaign.id);
+
+
+      if (
+        result.sent > 0 ||
+        result.targetCount === 0
+      ) {
+        sent++;
+      } else {
+        failed++;
+      }
+
+
+      console.log(
+        "[SCHEDULED_CAMPAIGN_SENT]",
+        {
+          campaignId: campaign.id,
+          result,
+        }
+      );
+
+
+    } catch (error) {
+
+      failed++;
+
+      console.error(
+        "[SCHEDULED_CAMPAIGN_FAILED]",
+        {
+          campaignId: campaign.id,
+          error:
+            error?.message || error,
+        }
+      );
+
+    }
+  }
+
+
+  return {
+    found: campaigns.length,
+    sent,
     failed,
   };
 }
