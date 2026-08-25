@@ -6,7 +6,7 @@ import {
 } from "./notificationJobs.js";
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
-const CAMPAIGN_INTERVAL_MS = 60 * 1000;
+const CAMPAIGN_INTERVAL_MS = 5 * 60 * 1000;
 
 let schedulerTimer = null;
 let campaignTimer = null;
