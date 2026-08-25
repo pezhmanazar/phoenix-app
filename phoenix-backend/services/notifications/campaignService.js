@@ -25,11 +25,25 @@ export async function sendCampaignById(campaignId) {
 
 
   const rule = campaign.targetRule || {};
+  const testUserId =
+  typeof options.testUserId === "string"
+    ? options.testUserId.trim()
+    : "";
 
   let users = [];
 
 
-  if (rule.plan === "free") {
+  if (testUserId) {
+  users = await prisma.user.findMany({
+    where: {
+      id: testUserId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+} else if (rule.plan === "free") {
     users = await prisma.user.findMany({
       where: {
         plan: "free",

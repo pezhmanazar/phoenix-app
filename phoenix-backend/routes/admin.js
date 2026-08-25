@@ -1989,7 +1989,12 @@ router.post(
         });
       }
 
-      const result = await sendCampaignById(campaignId);
+      const result = await sendCampaignById(
+  campaignId,
+  {
+    testUserId: req.body?.testUserId,
+  },
+);
 
       return res.json({
         ok: true,
