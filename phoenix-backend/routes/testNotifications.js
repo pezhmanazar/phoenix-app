@@ -90,6 +90,77 @@ router.get("/pelekan-intro-check", async (req, res) => {
     });
   }
 });
+
+router.get("/treatment-start-check", async (req, res) => {
+  try {
+    const oneDayAgo = new Date(
+      Date.now() - 24 * 60 * 60 * 1000
+    );
+
+    const now = new Date();
+
+    const users = await prisma.pelekanProgress.findMany({
+      where: {
+        bastanIntroAudioCompletedAt: {
+          not: null,
+          lt: oneDayAgo,
+        },
+
+        bastanUnlockedAt: null,
+
+        user: {
+          deviceTokens: {
+            some: {
+              isActive: true,
+            },
+          },
+
+          OR: [
+            {
+              plan: {
+                not: "pro",
+              },
+            },
+            {
+              plan: "pro",
+              planExpiresAt: {
+                lte: now,
+              },
+            },
+          ],
+        },
+      },
+
+      select: {
+        userId: true,
+        bastanIntroAudioCompletedAt: true,
+        bastanUnlockedAt: true,
+
+        user: {
+          select: {
+            phone: true,
+            plan: true,
+            planExpiresAt: true,
+          },
+        },
+      },
+    });
+
+    return res.json({
+      ok: true,
+      count: users.length,
+      users,
+    });
+  } catch (e) {
+    console.error("[TREATMENT_START_CHECK]", e);
+
+    return res.status(500).json({
+      ok: false,
+      error: e?.message || "internal_error",
+    });
+  }
+});
+
 router.get("/baseline-send-test", async (req, res) => {
   try {
     const result = await sendIncompleteBaselineReminders();

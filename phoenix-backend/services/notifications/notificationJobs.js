@@ -210,3 +210,115 @@ export async function sendPelekanIntroReminders() {
     failed,
   };
 }
+
+export async function sendTreatmentStartReminders() {
+  const oneDayAgo = new Date(
+    Date.now() - 24 * 60 * 60 * 1000
+  );
+
+  const now = new Date();
+
+  const progressRows = await prisma.pelekanProgress.findMany({
+    where: {
+      bastanIntroAudioCompletedAt: {
+        not: null,
+        lt: oneDayAgo,
+      },
+
+      bastanUnlockedAt: null,
+
+      user: {
+        deviceTokens: {
+          some: {
+            isActive: true,
+          },
+        },
+
+        OR: [
+          {
+            plan: {
+              not: "pro",
+            },
+          },
+          {
+            plan: "pro",
+            planExpiresAt: {
+              lte: now,
+            },
+          },
+        ],
+      },
+    },
+
+    select: {
+      userId: true,
+      bastanIntroAudioCompletedAt: true,
+    },
+  });
+
+  let sent = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const progress of progressRows) {
+    try {
+      const alreadySent = await prisma.notification.findFirst({
+        where: {
+          userId: progress.userId,
+          type: "pelekan",
+          data: {
+            path: ["reason"],
+            equals: "treatment_not_started",
+          },
+          createdAt: {
+            gte: oneDayAgo,
+          },
+        },
+      });
+
+      if (alreadySent) {
+        skipped++;
+        continue;
+      }
+
+      const result = await createAndSendNotification({
+        userId: progress.userId,
+        type: "pelekan",
+        title: "وقتشه درمانت رو شروع کنی",
+        body:
+        "با فعال کردن اشتراک، مسیر درمان قدم‌به‌قدم ققنوس برات باز میشه؛ در «پناه» بدون محدودیت با درمانگر در ارتباطی و «پناهگاه» هم برای لحظه‌های سخت و اورژانسی کنارت خواهد بود.",
+        data: {
+          reason: "treatment_not_started",
+        },
+      });
+
+      if (
+        result.pushResult?.ok &&
+        result.pushResult.successCount > 0
+      ) {
+        sent++;
+      } else {
+        failed++;
+
+        console.log("[TREATMENT_START_REMINDER_FAILED]", {
+          userId: progress.userId,
+          pushResult: result.pushResult,
+        });
+      }
+    } catch (error) {
+      failed++;
+
+      console.error("[TREATMENT_START_REMINDER_ERROR]", {
+        userId: progress.userId,
+        error: error?.message || error,
+      });
+    }
+  }
+
+  return {
+    found: progressRows.length,
+    sent,
+    skipped,
+    failed,
+  };
+}
