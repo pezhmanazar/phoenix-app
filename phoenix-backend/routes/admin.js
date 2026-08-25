@@ -2069,6 +2069,7 @@ router.post(
         try {
           const result = await createAndSendNotification({
             userId: user.id,
+            campaignId: campaign.id,
             type: campaign.notificationType || "marketing",
             title: campaign.pushTitle,
             body: campaign.pushBody,
