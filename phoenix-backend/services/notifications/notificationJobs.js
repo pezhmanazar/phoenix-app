@@ -10,13 +10,20 @@ export async function sendIncompleteBaselineReminders() {
 
 
   const sessions = await prisma.assessmentSession.findMany({
-    where: {
-      kind: "hb_baseline",
-      status: "in_progress",
-      updatedAt: {
-        lt: oneDayAgo,
+  where: {
+    kind: "hb_baseline",
+    status: "in_progress",
+    updatedAt: {
+      lt: oneDayAgo,
+    },
+    user: {
+      deviceTokens: {
+        some: {
+          isActive: true,
+        },
       },
     },
+  },
     select: {
       userId: true,
     },
@@ -119,13 +126,18 @@ export async function sendPelekanIntroReminders() {
         lt: oneDayAgo,
       },
       user: {
-        assessmentSessions: {
-          some: {
-            kind: "hb_baseline",
-            status: "completed",
-          },
-        },
-      },
+  assessmentSessions: {
+    some: {
+      kind: "hb_baseline",
+      status: "completed",
+    },
+  },
+  deviceTokens: {
+    some: {
+      isActive: true,
+    },
+  },
+},
     },
     select: {
       userId: true,
