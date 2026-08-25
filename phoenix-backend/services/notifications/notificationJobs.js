@@ -105,3 +105,96 @@ export async function sendIncompleteBaselineReminders() {
     failed,
   };
 }
+
+export async function sendPelekanIntroReminders() {
+  const oneDayAgo = new Date(
+    Date.now() - 24 * 60 * 60 * 1000
+  );
+
+  const progressRows = await prisma.pelekanProgress.findMany({
+    where: {
+      bastanIntroAudioStartedAt: null,
+      bastanIntroAudioCompletedAt: null,
+      lastActiveAt: {
+        lt: oneDayAgo,
+      },
+      user: {
+        assessmentSessions: {
+          some: {
+            kind: "hb_baseline",
+            status: "completed",
+          },
+        },
+      },
+    },
+    select: {
+      userId: true,
+    },
+  });
+
+  let sent = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const progress of progressRows) {
+    try {
+      const alreadySent = await prisma.notification.findFirst({
+        where: {
+          userId: progress.userId,
+          type: "pelekan",
+          data: {
+            path: ["reason"],
+            equals: "pelekan_intro_not_started",
+          },
+          createdAt: {
+            gte: oneDayAgo,
+          },
+        },
+      });
+
+      if (alreadySent) {
+        skipped++;
+        continue;
+      }
+
+      const result = await createAndSendNotification({
+        userId: progress.userId,
+        type: "pelekan",
+        title: "مسیر درمانت منتظرته",
+        body:
+          "آزمون شکست عاطفی رو کامل کردی، اما هنوز معرفی مسیر درمان رو گوش ندادی. چند دقیقه وقت بذار و ببین ققنوس قراره چطور قدم‌به‌قدم همراهت باشه.",
+        data: {
+          reason: "pelekan_intro_not_started",
+        },
+      });
+
+      if (
+        result.pushResult?.ok &&
+        result.pushResult.successCount > 0
+      ) {
+        sent++;
+      } else {
+        failed++;
+
+        console.log("[PELEKAN_INTRO_REMINDER_FAILED]", {
+          userId: progress.userId,
+          pushResult: result.pushResult,
+        });
+      }
+    } catch (error) {
+      failed++;
+
+      console.error("[PELEKAN_INTRO_REMINDER_ERROR]", {
+        userId: progress.userId,
+        error: error?.message || error,
+      });
+    }
+  }
+
+  return {
+    found: progressRows.length,
+    sent,
+    skipped,
+    failed,
+  };
+}
