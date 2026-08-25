@@ -3,7 +3,10 @@ import prisma from "../../utils/prisma.js";
 import { createAndSendNotification } from "./notificationService.js";
 
 
-export async function sendCampaignById(campaignId) {
+export async function sendCampaignById(
+  campaignId,
+  options = {},
+) {
   const campaign =
     await prisma.notificationCampaign.findUnique({
       where: {
