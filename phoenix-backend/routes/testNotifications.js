@@ -1,8 +1,8 @@
 import express from "express";
 import {
   sendIncompleteBaselineReminders,
-  sendPelekanIntroReminders,
 } from "../services/notifications/notificationJobs.js";
+import { createAndSendNotification } from "../services/notifications/notificationService.js";
 import prisma from "../utils/prisma.js";
 
 const router = express.Router();
@@ -109,20 +109,38 @@ router.get("/baseline-send-test", async (req, res) => {
   }
 });
 
-router.get("/pelekan-intro-send-test", async (req, res) => {
+router.get("/pelekan-intro-send-test/:userId", async (req, res) => {
   try {
-    const result = await sendPelekanIntroReminders();
+    const userId = String(req.params.userId || "").trim();
+
+    if (!userId) {
+      return res.status(400).json({
+        ok: false,
+        error: "userId_required",
+      });
+    }
+
+    const result = await createAndSendNotification({
+      userId,
+      type: "pelekan",
+      title: "مسیر درمانت منتظرته",
+      body:
+        "آزمون شکست عاطفی رو کامل کردی، اما هنوز معرفی مسیر درمان رو گوش ندادی. چند دقیقه وقت بذار و ببین ققنوس قراره چطور قدم‌به‌قدم همراهت باشه.",
+      data: {
+        reason: "pelekan_intro_not_started",
+      },
+    });
 
     return res.json({
       ok: true,
       result,
     });
   } catch (e) {
-    console.error("[PELEKAN_INTRO_SEND_TEST]", e);
+    console.error("[PELEKAN_INTRO_SINGLE_TEST]", e);
 
     return res.status(500).json({
       ok: false,
-      error: e.message,
+      error: e?.message || "internal_error",
     });
   }
 });
