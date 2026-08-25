@@ -38,42 +38,64 @@ export async function sendCampaignById(
 
   if (testUserId) {
   users = await prisma.user.findMany({
-    where: {
-      id: testUserId,
+  where: {
+    id: testUserId,
+    deviceTokens: {
+      some: {
+        isActive: true,
+      },
     },
-    select: {
-      id: true,
-    },
-  });
+  },
+  select: {
+    id: true,
+  },
+});
 
 } else if (rule.plan === "free") {
     users = await prisma.user.findMany({
-      where: {
-        plan: "free",
+  where: {
+    plan: "free",
+    deviceTokens: {
+      some: {
+        isActive: true,
       },
-      select: {
-        id: true,
-      },
-    });
+    },
+  },
+  select: {
+    id: true,
+  },
+});
 
   } else if (rule.plan === "pro") {
 
     users = await prisma.user.findMany({
-      where: {
-        plan: "pro",
+  where: {
+    plan: "pro",
+    deviceTokens: {
+      some: {
+        isActive: true,
       },
-      select: {
-        id: true,
-      },
-    });
+    },
+  },
+  select: {
+    id: true,
+  },
+});
 
   } else {
 
     users = await prisma.user.findMany({
-      select: {
-        id: true,
+  where: {
+    deviceTokens: {
+      some: {
+        isActive: true,
       },
-    });
+    },
+  },
+  select: {
+    id: true,
+  },
+});
 
   }
 
