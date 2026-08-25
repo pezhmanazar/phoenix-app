@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { Router } from "express";
 import { createAndSendNotification } from "../services/notifications/notificationService.js";
+import { sendCampaignById } from "../services/notifications/campaignService.js";
 import prisma from "../utils/prisma.js";
 import {
   getSignedFileUrl,
@@ -1988,125 +1989,13 @@ router.post(
         });
       }
 
-      const campaign = await prisma.notificationCampaign.findUnique({
-        where: {
-          id: campaignId,
-        },
-      });
-
-      if (!campaign) {
-        return res.status(404).json({
-          ok: false,
-          error: "campaign_not_found",
-        });
-      }
-
-      if (campaign.status !== "draft") {
-        return res.status(400).json({
-          ok: false,
-          error: "campaign_already_processed",
-        });
-      }
-
-      const rule = campaign.targetRule || {};
-
-      const testUserId =
-        typeof req.body?.testUserId === "string"
-          ? req.body.testUserId.trim()
-          : "";
-
-      let users = [];
-
-      if (testUserId) {
-        users = await prisma.user.findMany({
-          where: {
-            id: testUserId,
-          },
-          select: {
-            id: true,
-          },
-        });
-      } else if (rule.plan === "free") {
-        users = await prisma.user.findMany({
-          where: {
-            plan: "free",
-          },
-          select: {
-            id: true,
-          },
-        });
-      } else if (rule.plan === "pro") {
-        users = await prisma.user.findMany({
-          where: {
-            plan: "pro",
-          },
-          select: {
-            id: true,
-          },
-        });
-      } else {
-        users = await prisma.user.findMany({
-          select: {
-            id: true,
-          },
-        });
-      }
-
-      await prisma.notificationCampaign.update({
-        where: {
-          id: campaignId,
-        },
-        data: {
-          status: "sending",
-          targetCount: users.length,
-        },
-      });
-
-      let sent = 0;
-      let failed = 0;
-
-      for (const user of users) {
-        try {
-          const result = await createAndSendNotification({
-            userId: user.id,
-            campaignId: campaign.id,
-            type: campaign.notificationType || "marketing",
-            title: campaign.pushTitle,
-            body: campaign.pushBody,
-            data: {
-              campaignId: campaign.id,
-            },
-          });
-
-          if (result?.pushResult?.ok) {
-            sent++;
-          } else {
-            failed++;
-          }
-        } catch (e) {
-          failed++;
-          console.error("[CAMPAIGN_SEND_USER_FAILED]", user.id, e?.message);
-        }
-      }
-
-      await prisma.notificationCampaign.update({
-        where: {
-          id: campaignId,
-        },
-        data: {
-          status: "completed",
-          sentAt: new Date(),
-        },
-      });
+      const result = await sendCampaignById(campaignId);
 
       return res.json({
         ok: true,
-        result: {
-          targetCount: users.length,
-          sent,
-          failed,
-        },
+        result,
       });
+
     } catch (e) {
       console.error(
         "admin/notification-campaigns SEND error:",
@@ -2115,7 +2004,7 @@ router.post(
 
       return res.status(500).json({
         ok: false,
-        error: "internal_error",
+        error: e?.message || "internal_error",
       });
     }
   },
