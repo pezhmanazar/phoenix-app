@@ -1,4 +1,7 @@
-import { sendIncompleteBaselineReminders } from "./notificationJobs.js";
+import {
+  sendIncompleteBaselineReminders,
+  sendPelekanIntroReminders,
+} from "./notificationJobs.js";
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 
@@ -31,6 +34,21 @@ async function runNotificationJobs() {
         failed: result.failed,
       }
     );
+    console.log(
+  "[NOTIFICATION_SCHEDULER] pelekan intro reminder job started"
+);
+
+const pelekanIntroResult = await sendPelekanIntroReminders();
+
+console.log(
+  "[NOTIFICATION_SCHEDULER] pelekan intro reminder job finished",
+  {
+    found: pelekanIntroResult.found,
+    sent: pelekanIntroResult.sent,
+    skipped: pelekanIntroResult.skipped,
+    failed: pelekanIntroResult.failed,
+  }
+);
   } catch (error) {
     console.error(
       "[NOTIFICATION_SCHEDULER] baseline reminder job error:",
