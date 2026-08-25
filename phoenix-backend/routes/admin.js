@@ -1703,20 +1703,13 @@ router.get(
   allow("agent", "manager", "owner"),
   async (req, res) => {
     try {
-      const q =
-        typeof req.query.q === "string"
-          ? req.query.q.trim()
-          : "";
+      const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
 
       const status =
-        typeof req.query.status === "string"
-          ? req.query.status.trim()
-          : "";
+        typeof req.query.status === "string" ? req.query.status.trim() : "";
 
       const type =
-        typeof req.query.type === "string"
-          ? req.query.type.trim()
-          : "";
+        typeof req.query.type === "string" ? req.query.type.trim() : "";
 
       const page = Math.max(1, Number(req.query.page || 1) || 1);
       const limitRaw = Number(req.query.limit || 50) || 50;
@@ -1731,12 +1724,7 @@ router.get(
         "failed",
       ];
 
-      const allowedTypes = [
-        "therapeutic",
-        "sales",
-        "system",
-        "motivational",
-      ];
+      const allowedTypes = ["therapeutic", "sales", "system", "motivational"];
 
       if (status && !allowedStatuses.includes(status)) {
         return res.status(400).json({
@@ -1867,10 +1855,7 @@ router.post(
   async (req, res) => {
     try {
       const body = req.body || {};
-      const title =
-        typeof body.title === "string"
-          ? body.title.trim()
-          : "";
+      const title = typeof body.title === "string" ? body.title.trim() : "";
       if (!title) {
         return res.status(400).json({
           ok: false,
@@ -1879,34 +1864,21 @@ router.post(
       }
 
       const description =
-        body.description !== undefined &&
-        body.description !== null
+        body.description !== undefined && body.description !== null
           ? String(body.description).trim()
           : null;
       const pushTitle =
-        typeof body.pushTitle === "string"
-          ? body.pushTitle.trim()
-          : "";
+        typeof body.pushTitle === "string" ? body.pushTitle.trim() : "";
       const pushBody =
-        typeof body.pushBody === "string"
-          ? body.pushBody.trim()
-          : "";
+        typeof body.pushBody === "string" ? body.pushBody.trim() : "";
       if (!pushTitle || !pushBody) {
         return res.status(400).json({
           ok: false,
           error: "push_content_required",
         });
       }
-      const type =
-        typeof body.type === "string"
-          ? body.type.trim()
-          : "";
-      const allowedTypes = [
-        "therapeutic",
-        "sales",
-        "system",
-        "motivational",
-      ];
+      const type = typeof body.type === "string" ? body.type.trim() : "";
+      const allowedTypes = ["therapeutic", "sales", "system", "motivational"];
       if (!allowedTypes.includes(type)) {
         return res.status(400).json({
           ok: false,
@@ -1924,18 +1896,14 @@ router.post(
         body.scheduledAt !== ""
           ? new Date(body.scheduledAt)
           : null;
-      if (
-        scheduledAt &&
-        Number.isNaN(scheduledAt.getTime())
-      ) {
+      if (scheduledAt && Number.isNaN(scheduledAt.getTime())) {
         return res.status(400).json({
           ok: false,
           error: "invalid_scheduledAt",
         });
       }
       const targetRule =
-        body.targetRule &&
-        typeof body.targetRule === "object"
+        body.targetRule && typeof body.targetRule === "object"
           ? body.targetRule
           : null;
       if (!targetRule) {
@@ -1944,45 +1912,44 @@ router.post(
           error: "targetRule_required",
         });
       }
-      const created =
-        await prisma.notificationCampaign.create({
-          data: {
-            title,
-            description: description || null,
-            type,
-            notificationType,
-            pushTitle,
-            pushBody,
-            status: "draft",
-            scheduledAt,
-            targetRule,
-            createdById: req.admin.id,
-          },
-          select: {
-            id: true,
-            title: true,
-            description: true,
-            type: true,
-            notificationType: true,
-            pushTitle: true,
-            pushBody: true,
-            status: true,
-            scheduledAt: true,
-            sentAt: true,
-            targetRule: true,
-            targetCount: true,
-            createdAt: true,
-            updatedAt: true,
-            createdBy: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                role: true,
-              },
+      const created = await prisma.notificationCampaign.create({
+        data: {
+          title,
+          description: description || null,
+          type,
+          notificationType,
+          pushTitle,
+          pushBody,
+          status: "draft",
+          scheduledAt,
+          targetRule,
+          createdById: req.admin.id,
+        },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          type: true,
+          notificationType: true,
+          pushTitle: true,
+          pushBody: true,
+          status: true,
+          scheduledAt: true,
+          sentAt: true,
+          targetRule: true,
+          targetCount: true,
+          createdAt: true,
+          updatedAt: true,
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
             },
           },
-        });
+        },
+      });
 
       return res.json({
         ok: true,
@@ -2021,12 +1988,11 @@ router.post(
         });
       }
 
-      const campaign =
-        await prisma.notificationCampaign.findUnique({
-          where: {
-            id: campaignId,
-          },
-        });
+      const campaign = await prisma.notificationCampaign.findUnique({
+        where: {
+          id: campaignId,
+        },
+      });
 
       if (!campaign) {
         return res.status(404).json({
@@ -2044,9 +2010,23 @@ router.post(
 
       const rule = campaign.targetRule || {};
 
+      const testUserId =
+        typeof req.body?.testUserId === "string"
+          ? req.body.testUserId.trim()
+          : "";
+
       let users = [];
 
-      if (rule.plan === "free") {
+      if (testUserId) {
+        users = await prisma.user.findMany({
+          where: {
+            id: testUserId,
+          },
+          select: {
+            id: true,
+          },
+        });
+      } else if (rule.plan === "free") {
         users = await prisma.user.findMany({
           where: {
             plan: "free",
@@ -2082,44 +2062,31 @@ router.post(
         },
       });
 
-
       let sent = 0;
       let failed = 0;
 
-
       for (const user of users) {
-
         try {
-
-          const result =
-            await createAndSendNotification({
-              userId: user.id,
-              type: campaign.notificationType || "marketing",
-              title: campaign.pushTitle,
-              body: campaign.pushBody,
-              data: {
-                campaignId: campaign.id,
-              },
-            });
-
+          const result = await createAndSendNotification({
+            userId: user.id,
+            type: campaign.notificationType || "marketing",
+            title: campaign.pushTitle,
+            body: campaign.pushBody,
+            data: {
+              campaignId: campaign.id,
+            },
+          });
 
           if (result?.pushResult?.ok) {
             sent++;
           } else {
             failed++;
           }
-
-
         } catch (e) {
           failed++;
-          console.error(
-            "[CAMPAIGN_SEND_USER_FAILED]",
-            user.id,
-            e?.message
-          );
+          console.error("[CAMPAIGN_SEND_USER_FAILED]", user.id, e?.message);
         }
       }
-
 
       await prisma.notificationCampaign.update({
         where: {
@@ -2131,7 +2098,6 @@ router.post(
         },
       });
 
-
       return res.json({
         ok: true,
         result: {
@@ -2140,8 +2106,6 @@ router.post(
           failed,
         },
       });
-
-
     } catch (e) {
       console.error(
         "admin/notification-campaigns SEND error:",
