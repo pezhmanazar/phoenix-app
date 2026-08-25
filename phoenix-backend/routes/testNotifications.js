@@ -216,4 +216,40 @@ router.get("/pelekan-intro-send-test/:userId", async (req, res) => {
   }
 });
 
+router.get("/treatment-start-send-test/:userId", async (req, res) => {
+  try {
+    const userId = String(req.params.userId || "").trim();
+
+    if (!userId) {
+      return res.status(400).json({
+        ok: false,
+        error: "userId_required",
+      });
+    }
+
+    const result = await createAndSendNotification({
+      userId,
+      type: "pelekan",
+      title: "وقتشه درمانت رو شروع کنی",
+      body:
+        "با فعال کردن اشتراک، مسیر درمان قدم‌به‌قدم ققنوس برات باز میشه؛ در «پناه» بدون محدودیت با درمانگر در ارتباطی و «پناهگاه» هم برای لحظه‌های سخت و اورژانسی کنارت خواهد بود.",
+      data: {
+        reason: "treatment_not_started",
+      },
+    });
+
+    return res.json({
+      ok: true,
+      result,
+    });
+  } catch (e) {
+    console.error("[TREATMENT_START_SINGLE_TEST]", e);
+
+    return res.status(500).json({
+      ok: false,
+      error: e?.message || "internal_error",
+    });
+  }
+});
+
 export default router;
