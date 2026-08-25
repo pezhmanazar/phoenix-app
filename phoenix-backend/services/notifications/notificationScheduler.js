@@ -6,8 +6,10 @@ import {
 } from "./notificationJobs.js";
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
+const CAMPAIGN_INTERVAL_MS = 60 * 1000;
 
 let schedulerTimer = null;
+let campaignTimer = null;
 let isRunning = false;
 
 async function runNotificationJobs() {
@@ -67,17 +69,9 @@ console.log(
     failed: treatmentStartResult.failed,
   }
 );
-console.log(
-  "[NOTIFICATION_SCHEDULER] scheduled campaign job started"
-);
 
 const scheduledCampaignResult =
   await sendScheduledCampaigns();
-
-console.log(
-  "[NOTIFICATION_SCHEDULER] scheduled campaign job finished",
-  scheduledCampaignResult
-);
   } catch (error) {
     console.error(
       "[NOTIFICATION_SCHEDULER] baseline reminder job error:",
@@ -113,4 +107,25 @@ export function startNotificationScheduler() {
       );
     });
   }, ONE_HOUR_MS);
+
+  campaignTimer = setInterval(async () => {
+  try {
+    console.log(
+      "[NOTIFICATION_SCHEDULER] scheduled campaign check started"
+    );
+
+    const result = await sendScheduledCampaigns();
+
+    console.log(
+      "[NOTIFICATION_SCHEDULER] scheduled campaign check finished",
+      result
+    );
+
+  } catch (error) {
+    console.error(
+      "[NOTIFICATION_SCHEDULER] scheduled campaign error:",
+      error?.message || error
+    );
+  }
+}, CAMPAIGN_INTERVAL_MS);
 }

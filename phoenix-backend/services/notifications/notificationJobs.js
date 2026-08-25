@@ -325,8 +325,6 @@ export async function sendTreatmentStartReminders() {
 
 export async function sendScheduledCampaigns() {
   const now = new Date();
-  console.log("[SCHEDULED_DEBUG_NOW]", now.toISOString());
-
   const campaigns =
     await prisma.notificationCampaign.findMany({
       where: {
@@ -339,23 +337,14 @@ export async function sendScheduledCampaigns() {
         id: true,
       },
     });
-    console.log(
-  "[SCHEDULED_DEBUG_CAMPAIGNS]",
-  campaigns
-);
-
 
   let sent = 0;
   let failed = 0;
 
-
   for (const campaign of campaigns) {
     try {
-
       const result =
         await sendCampaignById(campaign.id);
-
-
       if (
         result.sent > 0 ||
         result.targetCount === 0
@@ -364,8 +353,6 @@ export async function sendScheduledCampaigns() {
       } else {
         failed++;
       }
-
-
       console.log(
         "[SCHEDULED_CAMPAIGN_SENT]",
         {
