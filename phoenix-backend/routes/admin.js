@@ -1891,12 +1891,55 @@ router.post(
         typeof body.notificationType === "string"
           ? body.notificationType.trim()
           : "marketing";
-      const scheduledAt =
-        body.scheduledAt !== undefined &&
-        body.scheduledAt !== null &&
-        body.scheduledAt !== ""
-          ? new Date(body.scheduledAt)
-          : null;
+      let scheduledAt = null;
+
+if (
+  body.scheduledAt !== undefined &&
+  body.scheduledAt !== null &&
+  body.scheduledAt !== ""
+) {
+  const raw = String(body.scheduledAt).trim();
+
+  // datetime-local از پنل: 2026-08-25T17:37
+  const iranDateMatch =
+    raw.match(
+      /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/
+    );
+
+  if (iranDateMatch) {
+    const [
+      ,
+      year,
+      month,
+      day,
+      hour,
+      minute,
+    ] = iranDateMatch;
+
+    // ساعت ورودی را تهران فرض می‌کنیم
+    scheduledAt = new Date(
+      Date.UTC(
+        Number(year),
+        Number(month) - 1,
+        Number(day),
+        Number(hour) - 3,
+        Number(minute) - 30,
+      ),
+    );
+  } else {
+    scheduledAt = new Date(raw);
+  }
+}
+
+if (
+  scheduledAt &&
+  Number.isNaN(scheduledAt.getTime())
+) {
+  return res.status(400).json({
+    ok: false,
+    error: "invalid_scheduledAt",
+  });
+}
       if (scheduledAt && Number.isNaN(scheduledAt.getTime())) {
         return res.status(400).json({
           ok: false,
