@@ -1693,6 +1693,308 @@ router.post(
   },
 );
 
+/// notification-campaigns ///
+/**
+ * GET /api/admin/notification-campaigns
+ */
+router.get(
+  "/notification-campaigns",
+  allow("agent", "manager", "owner"),
+  async (req, res) => {
+    try {
+      const q =
+        typeof req.query.q === "string"
+          ? req.query.q.trim()
+          : "";
+
+      const status =
+        typeof req.query.status === "string"
+          ? req.query.status.trim()
+          : "";
+
+      const type =
+        typeof req.query.type === "string"
+          ? req.query.type.trim()
+          : "";
+
+      const page = Math.max(1, Number(req.query.page || 1) || 1);
+      const limitRaw = Number(req.query.limit || 50) || 50;
+      const limit = Math.min(200, Math.max(10, limitRaw));
+      const skip = (page - 1) * limit;
+
+      const allowedStatuses = [
+        "draft",
+        "scheduled",
+        "sending",
+        "completed",
+        "failed",
+      ];
+
+      const allowedTypes = [
+        "therapeutic",
+        "sales",
+        "system",
+        "motivational",
+      ];
+
+      if (status && !allowedStatuses.includes(status)) {
+        return res.status(400).json({
+          ok: false,
+          error: "invalid_status",
+        });
+      }
+
+      if (type && !allowedTypes.includes(type)) {
+        return res.status(400).json({
+          ok: false,
+          error: "invalid_type",
+        });
+      }
+
+      const AND = [];
+
+      if (status) {
+        AND.push({ status });
+      }
+
+      if (type) {
+        AND.push({ type });
+      }
+
+      if (q) {
+        AND.push({
+          OR: [
+            {
+              id: {
+                contains: q,
+                mode: "insensitive",
+              },
+            },
+            {
+              title: {
+                contains: q,
+                mode: "insensitive",
+              },
+            },
+            {
+              description: {
+                contains: q,
+                mode: "insensitive",
+              },
+            },
+          ],
+        });
+      }
+
+      const where = AND.length ? { AND } : {};
+
+      const [total, items] = await Promise.all([
+        prisma.notificationCampaign.count({
+          where,
+        }),
+
+        prisma.notificationCampaign.findMany({
+          where,
+          orderBy: {
+            createdAt: "desc",
+          },
+          skip,
+          take: limit,
+
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            type: true,
+            status: true,
+            scheduledAt: true,
+            sentAt: true,
+            targetRule: true,
+            createdAt: true,
+            updatedAt: true,
+
+            createdBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+              },
+            },
+
+            _count: {
+              select: {
+                notifications: true,
+              },
+            },
+          },
+        }),
+      ]);
+
+      return res.json({
+        ok: true,
+        data: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit),
+          items,
+        },
+      });
+    } catch (e) {
+      console.error(
+        "admin/notification-campaigns GET error:",
+        e?.message || "unknown_error",
+      );
+
+      return res.status(500).json({
+        ok: false,
+        error: "internal_error",
+      });
+    }
+  },
+);
+
+
+/**
+ * POST /api/admin/notification-campaigns
+ *
+ * فقط Draft می‌سازد.
+ * هنوز هیچ Pushی ارسال نمی‌شود.
+ */
+router.post(
+  "/notification-campaigns",
+  allow("manager", "owner"),
+  async (req, res) => {
+    try {
+      const body = req.body || {};
+
+      const title =
+        typeof body.title === "string"
+          ? body.title.trim()
+          : "";
+
+      if (!title) {
+        return res.status(400).json({
+          ok: false,
+          error: "title_required",
+        });
+      }
+
+      const description =
+        body.description !== undefined &&
+        body.description !== null
+          ? String(body.description).trim()
+          : null;
+
+      const type =
+        typeof body.type === "string"
+          ? body.type.trim()
+          : "";
+
+      const allowedTypes = [
+        "therapeutic",
+        "sales",
+        "system",
+        "motivational",
+      ];
+
+      if (!allowedTypes.includes(type)) {
+        return res.status(400).json({
+          ok: false,
+          error: "invalid_type",
+        });
+      }
+
+      const scheduledAt =
+        body.scheduledAt !== undefined &&
+        body.scheduledAt !== null &&
+        body.scheduledAt !== ""
+          ? new Date(body.scheduledAt)
+          : null;
+
+      if (
+        scheduledAt &&
+        Number.isNaN(scheduledAt.getTime())
+      ) {
+        return res.status(400).json({
+          ok: false,
+          error: "invalid_scheduledAt",
+        });
+      }
+
+      const targetRule =
+        body.targetRule &&
+        typeof body.targetRule === "object"
+          ? body.targetRule
+          : null;
+
+      if (!targetRule) {
+        return res.status(400).json({
+          ok: false,
+          error: "targetRule_required",
+        });
+      }
+
+      const created =
+        await prisma.notificationCampaign.create({
+          data: {
+            title,
+            description:
+              description || null,
+
+            type,
+
+            status: "draft",
+
+            scheduledAt,
+
+            targetRule,
+
+            createdById: req.admin.id,
+          },
+
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            type: true,
+            status: true,
+            scheduledAt: true,
+            sentAt: true,
+            targetRule: true,
+            createdAt: true,
+            updatedAt: true,
+
+            createdBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+              },
+            },
+          },
+        });
+
+      return res.json({
+        ok: true,
+        item: created,
+      });
+    } catch (e) {
+      console.error(
+        "admin/notification-campaigns POST error:",
+        e?.message || "unknown_error",
+      );
+
+      return res.status(500).json({
+        ok: false,
+        error: "internal_error",
+      });
+    }
+  },
+);
+
 /* ====================== ✅ profile ====================== */
 router.patch("/profile", async (req, res) => {
   try {
