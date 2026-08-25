@@ -1,6 +1,7 @@
 import {
   sendIncompleteBaselineReminders,
   sendPelekanIntroReminders,
+  sendTreatmentStartReminders,
 } from "./notificationJobs.js";
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -47,6 +48,22 @@ console.log(
     sent: pelekanIntroResult.sent,
     skipped: pelekanIntroResult.skipped,
     failed: pelekanIntroResult.failed,
+  }
+);
+console.log(
+  "[NOTIFICATION_SCHEDULER] treatment start reminder job started"
+);
+
+const treatmentStartResult =
+  await sendTreatmentStartReminders();
+
+console.log(
+  "[NOTIFICATION_SCHEDULER] treatment start reminder job finished",
+  {
+    found: treatmentStartResult.found,
+    sent: treatmentStartResult.sent,
+    skipped: treatmentStartResult.skipped,
+    failed: treatmentStartResult.failed,
   }
 );
   } catch (error) {
