@@ -1694,6 +1694,7 @@ router.post(
 );
 
 /// notification-campaigns ///
+
 /**
  * GET /api/admin/notification-campaigns
  */
@@ -1752,7 +1753,6 @@ router.get(
       }
 
       const AND = [];
-
       if (status) {
         AND.push({ status });
       }
@@ -1787,12 +1787,10 @@ router.get(
       }
 
       const where = AND.length ? { AND } : {};
-
       const [total, items] = await Promise.all([
         prisma.notificationCampaign.count({
           where,
         }),
-
         prisma.notificationCampaign.findMany({
           where,
           orderBy: {
@@ -1800,19 +1798,21 @@ router.get(
           },
           skip,
           take: limit,
-
           select: {
             id: true,
             title: true,
             description: true,
             type: true,
+            notificationType: true,
+            pushTitle: true,
+            pushBody: true,
             status: true,
             scheduledAt: true,
             sentAt: true,
             targetRule: true,
+            targetCount: true,
             createdAt: true,
             updatedAt: true,
-
             createdBy: {
               select: {
                 id: true,
@@ -1860,7 +1860,7 @@ router.get(
  * POST /api/admin/notification-campaigns
  *
  * فقط Draft می‌سازد.
- * هنوز هیچ Pushی ارسال نمی‌شود.
+ * هنوز Push ارسال نمی‌شود.
  */
 router.post(
   "/notification-campaigns",
@@ -1868,12 +1868,10 @@ router.post(
   async (req, res) => {
     try {
       const body = req.body || {};
-
       const title =
         typeof body.title === "string"
           ? body.title.trim()
           : "";
-
       if (!title) {
         return res.status(400).json({
           ok: false,
@@ -1886,19 +1884,30 @@ router.post(
         body.description !== null
           ? String(body.description).trim()
           : null;
-
+      const pushTitle =
+        typeof body.pushTitle === "string"
+          ? body.pushTitle.trim()
+          : "";
+      const pushBody =
+        typeof body.pushBody === "string"
+          ? body.pushBody.trim()
+          : "";
+      if (!pushTitle || !pushBody) {
+        return res.status(400).json({
+          ok: false,
+          error: "push_content_required",
+        });
+      }
       const type =
         typeof body.type === "string"
           ? body.type.trim()
           : "";
-
       const allowedTypes = [
         "therapeutic",
         "sales",
         "system",
         "motivational",
       ];
-
       if (!allowedTypes.includes(type)) {
         return res.status(400).json({
           ok: false,
@@ -1906,13 +1915,16 @@ router.post(
         });
       }
 
+      const notificationType =
+        typeof body.notificationType === "string"
+          ? body.notificationType.trim()
+          : "marketing";
       const scheduledAt =
         body.scheduledAt !== undefined &&
         body.scheduledAt !== null &&
         body.scheduledAt !== ""
           ? new Date(body.scheduledAt)
           : null;
-
       if (
         scheduledAt &&
         Number.isNaN(scheduledAt.getTime())
@@ -1922,50 +1934,46 @@ router.post(
           error: "invalid_scheduledAt",
         });
       }
-
       const targetRule =
         body.targetRule &&
         typeof body.targetRule === "object"
           ? body.targetRule
           : null;
-
       if (!targetRule) {
         return res.status(400).json({
           ok: false,
           error: "targetRule_required",
         });
       }
-
       const created =
         await prisma.notificationCampaign.create({
           data: {
             title,
-            description:
-              description || null,
-
+            description: description || null,
             type,
-
+            notificationType,
+            pushTitle,
+            pushBody,
             status: "draft",
-
             scheduledAt,
-
             targetRule,
-
             createdById: req.admin.id,
           },
-
           select: {
             id: true,
             title: true,
             description: true,
             type: true,
+            notificationType: true,
+            pushTitle: true,
+            pushBody: true,
             status: true,
             scheduledAt: true,
             sentAt: true,
             targetRule: true,
+            targetCount: true,
             createdAt: true,
             updatedAt: true,
-
             createdBy: {
               select: {
                 id: true,
