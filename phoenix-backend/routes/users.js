@@ -62,6 +62,101 @@ if (!phone) {
   }
 });
 
+/* ---------- POST /api/users/app-provider ----------
+   همگام‌سازی provider بیلد نصب‌شده کاربر
+   body: { appProvider: "bazaar" | "direct" }
+------------------------------------------------ */
+router.post("/app-provider", authUser, async (req, res) => {
+  try {
+    noStore(res);
+
+    const phone = normalizePhone(req.user?.phone);
+
+    if (!phone) {
+      return res.status(401).json({
+        ok: false,
+        error: "UNAUTHORIZED",
+      });
+    }
+
+    const appProvider =
+      typeof req.body?.appProvider === "string"
+        ? req.body.appProvider.trim()
+        : "";
+
+    if (
+      appProvider !== "bazaar" &&
+      appProvider !== "direct"
+    ) {
+      return res.status(400).json({
+        ok: false,
+        error: "INVALID_APP_PROVIDER",
+      });
+    }
+
+    const existing = await prisma.user.findUnique({
+      where: {
+        phone,
+      },
+      select: {
+        id: true,
+        appProvider: true,
+      },
+    });
+
+    if (!existing) {
+      return res.status(404).json({
+        ok: false,
+        error: "USER_NOT_FOUND",
+      });
+    }
+
+    // اگر تغییری نکرده، DB را بی‌جهت update نکن
+    if (existing.appProvider === appProvider) {
+      return res.json({
+        ok: true,
+        data: {
+          appProvider,
+          changed: false,
+        },
+      });
+    }
+
+    await prisma.user.update({
+      where: {
+        id: existing.id,
+      },
+      data: {
+        appProvider,
+      },
+    });
+
+    console.log("[users.app-provider] updated", {
+      userId: existing.id,
+      from: existing.appProvider,
+      to: appProvider,
+    });
+
+    return res.json({
+      ok: true,
+      data: {
+        appProvider,
+        changed: true,
+      },
+    });
+  } catch (e) {
+    console.error(
+      "[users.app-provider] error:",
+      e?.message || "unknown_error",
+    );
+
+    return res.status(500).json({
+      ok: false,
+      error: "SERVER_ERROR",
+    });
+  }
+});
+
 /* ---------- POST /api/users/me/delete ----------
    حذف کامل کاربر از DB (به‌جای DELETE چون WCDN DELETE را می‌بُرد)
    POST https://qoqnoos.app/api/users/me/delete?phone=09...

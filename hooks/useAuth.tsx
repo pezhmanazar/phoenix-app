@@ -14,7 +14,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-
+import { syncAppProvider } from "../api/appProvider";
 
 /* ==============================
    🔹 TYPES
@@ -263,6 +263,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // intentionally ignored
       }
 
+      if (token) {
+  syncAppProvider(token).catch((error) => {
+    console.warn(
+      "[auth] app provider sync failed:",
+      error?.message || error
+    );
+  });
+}
+
       if (!mountedRef.current) return;
 
       setState(deriveAuthStateFromToken(token || null, phone || null, false));
@@ -330,6 +339,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       throw new Error("SESSION_STORAGE_SYNC_FAILED");
     }
+
+    if (nextToken) {
+  syncAppProvider(nextToken).catch((error) => {
+    console.warn(
+      "[auth] app provider sync failed:",
+      error?.message || error
+    );
+  });
+}
 
     if (!mountedRef.current) return;
 
