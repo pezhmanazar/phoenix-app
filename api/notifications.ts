@@ -1,5 +1,6 @@
 // api/notifications.ts
 
+import { toAppApi } from "../constants/env";
 import { doJson } from "./user";
 
 /* ---------------- Register Device ---------------- */
@@ -47,11 +48,11 @@ export async function getNotifications(): Promise<
   AppNotification[]
 > {
   const result = await doJson<NotificationListData>(
-    "/api/notifications",
-    {
-      method: "GET",
-    }
-  );
+  toAppApi("/api/notifications"),
+  {
+    method: "GET",
+  }
+);
 
   if (!result.ok) {
     throw new Error(
