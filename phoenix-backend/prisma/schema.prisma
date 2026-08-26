@@ -1036,7 +1036,8 @@ model Notification {
 
   data Json?
 
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
 
   deliveries NotificationDelivery[]
 
