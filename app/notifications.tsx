@@ -3,9 +3,13 @@
 import {
   AppNotification,
   getNotifications,
+  hideNotification,
+  hideReadNotifications,
   markNotificationRead,
 } from "../api/notifications";
 import { Ionicons } from "@expo/vector-icons";
+import * as Notifications from "expo-notifications";
+import AppBannerModal from "../components/ui/AppBannerModal";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -54,6 +58,25 @@ export default function NotificationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [error, setError] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const [clearingRead, setClearingRead] = useState(false);
+
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+
+  const [feedback, setFeedback] = useState<{
+    visible: boolean;
+    kind: "success" | "error" | "warning" | "info";
+    title: string;
+    message: string;
+  }>({
+    visible: false,
+    kind: "info",
+    title: "",
+    message: "",
+  });
 
   const load = useCallback(async () => {
     try {
@@ -72,6 +95,16 @@ export default function NotificationsScreen() {
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    const subscription = Notifications.addNotificationReceivedListener(() => {
+      void load();
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, [load]);
 
   const refresh = () => {
@@ -95,6 +128,64 @@ export default function NotificationsScreen() {
       await markNotificationRead(notificationId);
     } catch (error) {
       console.warn("[notifications] mark read failed:", error);
+    }
+  }, []);
+
+  const hideOne = useCallback(async (notificationId: string) => {
+    setDeletingId(notificationId);
+
+    try {
+      await hideNotification(notificationId);
+
+      setItems((prev) =>
+        prev.filter((notification) => notification.id !== notificationId),
+      );
+
+      setDeleteTargetId(null);
+    } catch (error) {
+      console.warn("[notifications] hide failed:", error);
+
+      setFeedback({
+        visible: true,
+        kind: "error",
+        title: "حذف انجام نشد",
+        message: "در حذف اعلان مشکلی پیش آمد. دوباره تلاش کن.",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  }, []);
+
+  const clearRead = useCallback(async () => {
+    setClearingRead(true);
+
+    try {
+      const hiddenCount = await hideReadNotifications();
+
+      setItems((prev) => prev.filter((notification) => !notification.readAt));
+
+      setClearConfirmOpen(false);
+
+      setFeedback({
+        visible: true,
+        kind: "success",
+        title: "پاکسازی انجام شد",
+        message:
+          hiddenCount > 0
+            ? `${hiddenCount} اعلان خوانده‌شده از مرکز اعلان‌ها پاک شد.`
+            : "اعلان خوانده‌شده‌ای برای پاکسازی وجود نداشت.",
+      });
+    } catch (error) {
+      console.warn("[notifications] hide read failed:", error);
+
+      setFeedback({
+        visible: true,
+        kind: "error",
+        title: "پاکسازی انجام نشد",
+        message: "در پاکسازی اعلان‌های خوانده‌شده مشکلی پیش آمد.",
+      });
+    } finally {
+      setClearingRead(false);
     }
   }, []);
 
@@ -123,6 +214,23 @@ export default function NotificationsScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={refresh} />
           }
         >
+          {items.some((item) => Boolean(item.readAt)) ? (
+            <View style={styles.cleanupRow}>
+              <Pressable
+                disabled={clearingRead}
+                onPress={() => setClearConfirmOpen(true)}
+                style={({ pressed }) => [
+                  styles.clearReadButton,
+                  pressed && { opacity: 0.75 },
+                  clearingRead && { opacity: 0.5 },
+                ]}
+              >
+                <Ionicons name="trash-outline" size={14} color="#9CA3AF" />
+
+                <Text style={styles.clearReadText}>پاک کردن خوانده‌شده‌ها</Text>
+              </Pressable>
+            </View>
+          ) : null}
           {error ? (
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>
@@ -232,6 +340,59 @@ export default function NotificationsScreen() {
           })}
         </ScrollView>
       )}
+      <AppBannerModal
+        visible={Boolean(deleteTargetId)}
+        kind="warning"
+        title="حذف اعلان"
+        message="این اعلان فقط از مرکز اعلان‌های تو پاک می‌شود و دیگر در این صفحه نمایش داده نخواهد شد."
+        closeText="لغو"
+        confirmText="حذف"
+        confirmKind="danger"
+        confirmLoading={Boolean(deletingId)}
+        onClose={() => {
+          if (!deletingId) {
+            setDeleteTargetId(null);
+          }
+        }}
+        onConfirm={() => {
+          if (deleteTargetId) {
+            void hideOne(deleteTargetId);
+          }
+        }}
+      />
+
+      <AppBannerModal
+        visible={clearConfirmOpen}
+        kind="warning"
+        title="پاک کردن اعلان‌های خوانده‌شده"
+        message={`همه اعلان‌های خوانده‌شده از مرکز اعلان‌های تو پاک شوند؟`}
+        closeText="لغو"
+        confirmText="پاک کردن"
+        confirmKind="danger"
+        confirmLoading={clearingRead}
+        onClose={() => {
+          if (!clearingRead) {
+            setClearConfirmOpen(false);
+          }
+        }}
+        onConfirm={() => {
+          void clearRead();
+        }}
+      />
+
+      <AppBannerModal
+        visible={feedback.visible}
+        kind={feedback.kind}
+        title={feedback.title}
+        message={feedback.message}
+        closeText="باشه"
+        onClose={() =>
+          setFeedback((prev) => ({
+            ...prev,
+            visible: false,
+          }))
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -397,7 +558,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "900",
   },
-  
+
   statusRow: {
     width: "100%",
     flexDirection: "row",
@@ -438,5 +599,45 @@ const styles = StyleSheet.create({
     color: "#D4AF37",
     fontSize: 10,
     fontWeight: "800",
+  },
+  cleanupRow: {
+    width: "100%",
+    alignItems: "flex-start",
+    marginBottom: 12,
+  },
+
+  clearReadButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#374151",
+    backgroundColor: "#111820",
+  },
+
+  clearReadText: {
+    color: "#9CA3AF",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  readStatusWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  deleteButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(107,114,128,.25)",
+    backgroundColor: "rgba(107,114,128,.08)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

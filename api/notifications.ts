@@ -131,3 +131,53 @@ export async function markNotificationOpened(
     );
   }
 }
+
+export async function hideNotification(
+  notificationId: string
+): Promise<void> {
+  const result = await doJson<{
+    hidden: boolean;
+  }>(
+    toAppApi(
+      `/api/notifications/${encodeURIComponent(notificationId)}/hide`
+    ),
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  if (!result.ok) {
+    throw new Error(
+      result.error || "HIDE_NOTIFICATION_FAILED"
+    );
+  }
+}
+
+export async function hideReadNotifications(): Promise<number> {
+  const result = await doJson<{
+    hiddenCount: number;
+  }>(
+    toAppApi(
+      "/api/notifications/hide-read"
+    ),
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  if (!result.ok) {
+    throw new Error(
+      result.error || "HIDE_READ_NOTIFICATIONS_FAILED"
+    );
+  }
+
+  return Number(
+    result.data?.hiddenCount || 0
+  );
+}

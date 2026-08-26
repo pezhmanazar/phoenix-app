@@ -98,9 +98,10 @@ router.get("/", authUser, async (req, res) => {
     }
 
     const notifications = await prisma.notification.findMany({
-      where: {
-        userId: user.id,
-      },
+  where: {
+    userId: user.id,
+    hiddenAt: null,
+  },
       orderBy: {
         createdAt: "desc",
       },
@@ -161,12 +162,12 @@ router.get("/unread-count", authUser, async (req, res) => {
     }
 
     const count = await prisma.notification.count({
-      where: {
-        userId: user.id,
-        readAt: null,
-      },
-    });
-
+  where: {
+    userId: user.id,
+    readAt: null,
+    hiddenAt: null,
+  },
+});
     return res.json({
       ok: true,
       data: {
@@ -255,6 +256,152 @@ router.post("/:id/read", authUser, async (req, res) => {
     });
   } catch (e) {
     console.error("[notifications.mark-read]", e?.message || e);
+
+    return res.status(500).json({
+      ok: false,
+      error: "SERVER_ERROR",
+    });
+  }
+});
+
+router.post("/:id/hide", authUser, async (req, res) => {
+  try {
+    const userPhone = req.user?.phone;
+    const notificationId = String(req.params.id || "").trim();
+
+    if (!userPhone) {
+      return res.status(401).json({
+        ok: false,
+        error: "UNAUTHORIZED",
+      });
+    }
+
+    if (!notificationId) {
+      return res.status(400).json({
+        ok: false,
+        error: "NOTIFICATION_ID_REQUIRED",
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: {
+        phone: userPhone,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        ok: false,
+        error: "USER_NOT_FOUND",
+      });
+    }
+
+    const notification = await prisma.notification.findFirst({
+      where: {
+        id: notificationId,
+        userId: user.id,
+      },
+      select: {
+        id: true,
+        readAt: true,
+        hiddenAt: true,
+      },
+    });
+
+    if (!notification) {
+      return res.status(404).json({
+        ok: false,
+        error: "NOTIFICATION_NOT_FOUND",
+      });
+    }
+
+    if (!notification.readAt) {
+      return res.status(400).json({
+        ok: false,
+        error: "ONLY_READ_NOTIFICATION_CAN_BE_HIDDEN",
+      });
+    }
+
+    if (!notification.hiddenAt) {
+      await prisma.notification.update({
+        where: {
+          id: notification.id,
+        },
+        data: {
+          hiddenAt: new Date(),
+        },
+      });
+    }
+
+    return res.json({
+      ok: true,
+      hidden: true,
+    });
+  } catch (e) {
+    console.error(
+      "[notifications.hide]",
+      e?.message || e,
+    );
+
+    return res.status(500).json({
+      ok: false,
+      error: "SERVER_ERROR",
+    });
+  }
+});
+
+router.post("/hide-read", authUser, async (req, res) => {
+  try {
+    const userPhone = req.user?.phone;
+
+    if (!userPhone) {
+      return res.status(401).json({
+        ok: false,
+        error: "UNAUTHORIZED",
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: {
+        phone: userPhone,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        ok: false,
+        error: "USER_NOT_FOUND",
+      });
+    }
+
+    const result = await prisma.notification.updateMany({
+      where: {
+        userId: user.id,
+        readAt: {
+          not: null,
+        },
+        hiddenAt: null,
+      },
+      data: {
+        hiddenAt: new Date(),
+      },
+    });
+
+    return res.json({
+      ok: true,
+      hiddenCount: result.count,
+    });
+  } catch (e) {
+    console.error(
+      "[notifications.hide-read]",
+      e?.message || e,
+    );
 
     return res.status(500).json({
       ok: false,

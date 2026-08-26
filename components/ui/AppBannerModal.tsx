@@ -11,8 +11,14 @@ type Props = {
   title: string;
   message?: string | null;
   refId?: string | null;
+
   closeText?: string;
   onClose: () => void;
+
+  confirmText?: string;
+  onConfirm?: () => void;
+  confirmKind?: "default" | "danger";
+  confirmLoading?: boolean;
 };
 
 export default function AppBannerModal({
@@ -23,6 +29,10 @@ export default function AppBannerModal({
   refId,
   closeText = "بستن",
   onClose,
+  confirmText,
+  onConfirm,
+  confirmKind = "default",
+  confirmLoading = false,
 }: Props) {
   const iconName =
     kind === "success"
@@ -70,9 +80,41 @@ export default function AppBannerModal({
 
           {!!message && <Text style={styles.message}>{message}</Text>}
 
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.85}>
-            <Text style={styles.closeText}>{closeText}</Text>
-          </TouchableOpacity>
+          <View style={styles.actionsRow}>
+  {!!confirmText && !!onConfirm && (
+    <TouchableOpacity
+      onPress={onConfirm}
+      disabled={confirmLoading}
+      style={[
+        styles.confirmBtn,
+        confirmKind === "danger" && styles.confirmDangerBtn,
+        confirmLoading && styles.disabledBtn,
+      ]}
+      activeOpacity={0.85}
+    >
+      <Text
+        style={[
+          styles.confirmText,
+          confirmKind === "danger" && styles.confirmDangerText,
+        ]}
+      >
+        {confirmLoading ? "در حال انجام..." : confirmText}
+      </Text>
+    </TouchableOpacity>
+  )}
+
+  <TouchableOpacity
+    onPress={onClose}
+    disabled={confirmLoading}
+    style={[
+      styles.closeBtn,
+      confirmLoading && styles.disabledBtn,
+    ]}
+    activeOpacity={0.85}
+  >
+    <Text style={styles.closeText}>{closeText}</Text>
+  </TouchableOpacity>
+</View>
         </View>
       </View>
     </Modal>
@@ -133,14 +175,44 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textAlign: "left",
   },
-  closeBtn: {
-    alignSelf: "flex-start",
-    marginTop: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: "#374151",
-  },
+  actionsRow: {
+  marginTop: 16,
+  flexDirection: "row-reverse",
+  alignItems: "center",
+  gap: 8,
+},
+
+closeBtn: {
+  paddingHorizontal: 14,
+  paddingVertical: 8,
+  borderRadius: 999,
+  backgroundColor: "#374151",
+},
+
+confirmBtn: {
+  paddingHorizontal: 14,
+  paddingVertical: 8,
+  borderRadius: 999,
+  backgroundColor: "#92400E",
+},
+
+confirmDangerBtn: {
+  backgroundColor: "#7F1D1D",
+},
+
+confirmText: {
+  color: "#FEF3C7",
+  fontSize: 13,
+  fontWeight: "800",
+},
+
+confirmDangerText: {
+  color: "#FEE2E2",
+},
+
+disabledBtn: {
+  opacity: 0.5,
+},
   closeText: {
     color: "#E5E7EB",
     fontSize: 13,
