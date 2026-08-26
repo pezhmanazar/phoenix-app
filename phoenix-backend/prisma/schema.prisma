@@ -1039,6 +1039,7 @@ model Notification {
 
   createdAt DateTime  @default(now())
   readAt    DateTime?
+  hiddenAt  DateTime?
 
   deliveries NotificationDelivery[]
 
