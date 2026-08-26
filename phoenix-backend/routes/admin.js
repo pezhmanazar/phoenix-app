@@ -4,7 +4,10 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { Router } from "express";
 import { createAndSendNotification } from "../services/notifications/notificationService.js";
-import { sendCampaignById } from "../services/notifications/campaignService.js";
+import {
+  sendCampaignById,
+  buildCampaignTargetWhere,
+} from "../services/notifications/campaignService.js";
 import prisma from "../utils/prisma.js";
 import {
   getSignedFileUrl,
@@ -2005,6 +2008,47 @@ if (
       console.error(
         "admin/notification-campaigns POST error:",
         e?.message || "unknown_error",
+      );
+
+      return res.status(500).json({
+        ok: false,
+        error: "internal_error",
+      });
+    }
+  },
+);
+
+/**
+ * POST /api/admin/notification-campaigns/preview
+ *
+ * محاسبه تعداد کاربران هدف بدون ارسال نوتیفیکیشن
+ */
+router.post(
+  "/notification-campaigns/preview",
+  allow("manager", "owner"),
+  async (req, res) => {
+    try {
+      const targetRule =
+        req.body?.targetRule &&
+        typeof req.body.targetRule === "object"
+          ? req.body.targetRule
+          : {};
+
+      const where =
+        buildCampaignTargetWhere(targetRule);
+
+      const count = await prisma.user.count({
+        where,
+      });
+
+      return res.json({
+        ok: true,
+        count,
+      });
+    } catch (e) {
+      console.error(
+        "admin/notification-campaigns PREVIEW error:",
+        e?.message || e,
       );
 
       return res.status(500).json({
