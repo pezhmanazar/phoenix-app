@@ -2172,6 +2172,163 @@ router.post(
     }
   },
 );
+
+/**
+ * PATCH /api/admin/notification-campaigns/:id
+ *
+ * ویرایش فقط کمپین Draft
+ */
+router.patch(
+  "/notification-campaigns/:id",
+  allow("manager", "owner"),
+  async (req, res) => {
+    try {
+      const campaignId = String(req.params.id || "").trim();
+
+      if (!campaignId) {
+        return res.status(400).json({
+          ok: false,
+          error: "campaign_id_required",
+        });
+      }
+
+      const existing =
+        await prisma.notificationCampaign.findUnique({
+          where: {
+            id: campaignId,
+          },
+        });
+
+      if (!existing) {
+        return res.status(404).json({
+          ok: false,
+          error: "campaign_not_found",
+        });
+      }
+
+      if (existing.status !== "draft") {
+        return res.status(400).json({
+          ok: false,
+          error: "only_draft_can_be_edited",
+        });
+      }
+
+      const body = req.body || {};
+
+      const title =
+        typeof body.title === "string"
+          ? body.title.trim()
+          : "";
+
+      const pushTitle =
+        typeof body.pushTitle === "string"
+          ? body.pushTitle.trim()
+          : "";
+
+      const pushBody =
+        typeof body.pushBody === "string"
+          ? body.pushBody.trim()
+          : "";
+
+      if (!title) {
+        return res.status(400).json({
+          ok: false,
+          error: "title_required",
+        });
+      }
+
+      if (!pushTitle || !pushBody) {
+        return res.status(400).json({
+          ok: false,
+          error: "push_content_required",
+        });
+      }
+
+      const type =
+        typeof body.type === "string"
+          ? body.type.trim()
+          : "";
+
+      const allowedTypes = [
+        "therapeutic",
+        "sales",
+        "system",
+        "motivational",
+      ];
+
+      if (!allowedTypes.includes(type)) {
+        return res.status(400).json({
+          ok: false,
+          error: "invalid_type",
+        });
+      }
+
+      const targetRule =
+        body.targetRule &&
+        typeof body.targetRule === "object"
+          ? body.targetRule
+          : null;
+
+      if (!targetRule) {
+        return res.status(400).json({
+          ok: false,
+          error: "targetRule_required",
+        });
+      }
+
+      const updated =
+        await prisma.notificationCampaign.update({
+          where: {
+            id: campaignId,
+          },
+          data: {
+            title,
+            description:
+              body.description !== undefined &&
+              body.description !== null
+                ? String(body.description).trim() || null
+                : null,
+
+            type,
+
+            notificationType:
+              typeof body.notificationType === "string"
+                ? body.notificationType.trim()
+                : "marketing",
+
+            pushTitle,
+            pushBody,
+
+            data:
+              body.data &&
+              typeof body.data === "object"
+                ? body.data
+                : null,
+
+            targetRule,
+
+            // ویرایش Draft نباید خودکار scheduled شود.
+            scheduledAt: null,
+          },
+        });
+
+      return res.json({
+        ok: true,
+        item: updated,
+      });
+    } catch (e) {
+      console.error(
+        "admin/notification-campaigns PATCH error:",
+        e?.message || e,
+      );
+
+      return res.status(500).json({
+        ok: false,
+        error: "internal_error",
+      });
+    }
+  },
+);
 /**
  * GET /api/admin/notification-campaigns/:id/stats
  *
