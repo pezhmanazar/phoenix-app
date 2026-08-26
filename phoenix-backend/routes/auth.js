@@ -1,6 +1,7 @@
 // routes/auth.js
 import express from "express";
-import jwt from "jsonwebtoken"; // ⬅️ این خط جدید
+import jwt from "jsonwebtoken"; 
+import prisma from "../utils/prisma.js";
 const router = express.Router();
 
 /* ---------------- Config OTP ---------------- */
@@ -163,7 +164,7 @@ router.post("/send-otp", async (req, res) => {
  */
 router.post("/verify-otp", async (req, res) => {
   try {
-    const { phone, code } = req.body || {};
+    const { phone, code, appProvider } = req.body || {};
     if (!phone || !code) {
       return res
         .status(400)
@@ -171,6 +172,17 @@ router.post("/verify-otp", async (req, res) => {
     }
 
     const normalized = normalizeIranPhone(phone);
+    const allowedAppProviders = [
+    "bazaar",
+    "direct",
+    "unknown",
+     ];
+
+const normalizedAppProvider =
+  typeof appProvider === "string" &&
+  allowedAppProviders.includes(appProvider.trim())
+    ? appProvider.trim()
+    : "unknown";
     const record = otpStore.get(normalized);
 
     if (!record) {
@@ -201,6 +213,30 @@ router.post("/verify-otp", async (req, res) => {
     // موفق: OTP مصرف شود
 otpStore.delete(normalized);
 console.log("[auth.verify-otp] SUCCESS");
+
+const existingUser = await prisma.user.findUnique({
+  where: {
+    phone: normalized,
+  },
+});
+
+if (existingUser) {
+  await prisma.user.update({
+    where: {
+      id: existingUser.id,
+    },
+    data: {
+      appProvider: normalizedAppProvider,
+    },
+  });
+} else {
+  await prisma.user.create({
+    data: {
+      phone: normalized,
+      appProvider: normalizedAppProvider,
+    },
+  });
+}
 
 // 🔑 ساختن JWT سشن اپ
 const appSecret =

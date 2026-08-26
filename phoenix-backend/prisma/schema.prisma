@@ -141,6 +141,7 @@ model User {
 
   plan          String    @default("free") // 'free' | 'pro' | 'vip'
   planExpiresAt DateTime?
+  appProvider   String    @default("unknown")
 
   profileCompleted Boolean @default(false)
 
