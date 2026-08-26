@@ -10,7 +10,7 @@ export type PaymentApi = {
   restorePurchases(phone: string): Promise<void>;
 };
 
-function readPaymentProvider(): PaymentProviderId {
+export function readPaymentProvider(): PaymentProviderId {
   const fromExpoConfig = (Constants.expoConfig?.extra as any)?.PAYMENT_PROVIDER;
   const fromManifestExtra = (Constants.manifest as any)?.extra?.PAYMENT_PROVIDER;
   const fromManifest2Extra =

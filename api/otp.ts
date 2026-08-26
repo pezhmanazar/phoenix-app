@@ -1,4 +1,5 @@
 import { toAppApi } from "@/constants/env";
+import { readPaymentProvider } from "@/lib/payments/getPaymentProvider";
 
 type SendResp = {
   ok: true;
@@ -61,11 +62,21 @@ export async function verifyCode(
   code: string
 ): Promise<VerifyResp> {
   const url = toAppApi("/api/auth/verify-otp");
+  const paymentProvider = readPaymentProvider();
+
+const appProvider =
+  paymentProvider === "bazaar"
+    ? "bazaar"
+    : "direct";
 
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phone, code }),
+    body: JSON.stringify({
+  phone,
+  code,
+  appProvider,
+}),
   });
 
   const json = (await res.json().catch(() => ({}))) as any;
