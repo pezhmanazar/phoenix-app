@@ -2066,6 +2066,113 @@ router.post(
 );
 
 /**
+ * POST /api/admin/notification-campaigns/:id/duplicate
+ *
+ * ساخت یک Draft جدید از روی کمپین موجود
+ */
+router.post(
+  "/notification-campaigns/:id/duplicate",
+  allow("manager", "owner"),
+  async (req, res) => {
+    try {
+      const campaignId = String(req.params.id || "").trim();
+
+      if (!campaignId) {
+        return res.status(400).json({
+          ok: false,
+          error: "campaign_id_required",
+        });
+      }
+
+      const source =
+        await prisma.notificationCampaign.findUnique({
+          where: {
+            id: campaignId,
+          },
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            type: true,
+            notificationType: true,
+            pushTitle: true,
+            pushBody: true,
+            data: true,
+            targetRule: true,
+          },
+        });
+
+      if (!source) {
+        return res.status(404).json({
+          ok: false,
+          error: "campaign_not_found",
+        });
+      }
+
+      const duplicated =
+        await prisma.notificationCampaign.create({
+          data: {
+            title: `${source.title} (کپی)`,
+            description: source.description,
+            type: source.type,
+            notificationType: source.notificationType,
+            pushTitle: source.pushTitle,
+            pushBody: source.pushBody,
+            data: source.data,
+            targetRule: source.targetRule,
+
+            status: "draft",
+            scheduledAt: null,
+            sentAt: null,
+            targetCount: null,
+
+            createdById: req.admin.id,
+          },
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            type: true,
+            notificationType: true,
+            pushTitle: true,
+            pushBody: true,
+            data: true,
+            status: true,
+            scheduledAt: true,
+            sentAt: true,
+            targetRule: true,
+            targetCount: true,
+            createdAt: true,
+            updatedAt: true,
+            createdBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+              },
+            },
+          },
+        });
+
+      return res.json({
+        ok: true,
+        item: duplicated,
+      });
+    } catch (e) {
+      console.error(
+        "admin/notification-campaigns DUPLICATE error:",
+        e?.message || e,
+      );
+
+      return res.status(500).json({
+        ok: false,
+        error: "internal_error",
+      });
+    }
+  },
+);
+/**
  * GET /api/admin/notification-campaigns/:id/stats
  *
  * آمار ارسال کمپین
