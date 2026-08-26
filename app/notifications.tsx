@@ -5,6 +5,7 @@ import {
   getNotifications,
   markNotificationRead,
 } from "../api/notifications";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -78,6 +79,25 @@ export default function NotificationsScreen() {
     void load();
   };
 
+  const markAsRead = useCallback(async (notificationId: string) => {
+    setItems((prev) =>
+      prev.map((notification) =>
+        notification.id === notificationId
+          ? {
+              ...notification,
+              readAt: notification.readAt || new Date().toISOString(),
+            }
+          : notification,
+      ),
+    );
+
+    try {
+      await markNotificationRead(notificationId);
+    } catch (error) {
+      console.warn("[notifications] mark read failed:", error);
+    }
+  }, []);
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
@@ -143,34 +163,55 @@ export default function NotificationsScreen() {
                   pressed && { opacity: 0.8 },
                 ]}
                 onPress={async () => {
-                  try {
-                    await markNotificationRead(item.id);
-                    setItems((prev) =>
-                      prev.map((notification) =>
-                        notification.id === item.id
-                          ? {
-                              ...notification,
-                              readAt:
-                                notification.readAt || new Date().toISOString(),
-                            }
-                          : notification,
-                      ),
-                    );
-                  } catch (error) {
-                    console.warn("[notifications] mark read failed:", error);
-                  }
+                  await markAsRead(item.id);
 
                   if (route) {
-                    router.push(route as any);
+                    requestAnimationFrame(() => {
+                      router.push(route as any);
+                    });
                   }
                 }}
               >
                 <View style={styles.cardHeader}>
-                  {!item.readAt ? (
-                    <View style={styles.unreadBadge}>
-                      <Text style={styles.unreadBadgeText}>جدید</Text>
+                  <View style={styles.statusRow}>
+                    <View>
+                      {!item.readAt ? (
+                        <Pressable
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            void markAsRead(item.id);
+                          }}
+                          style={styles.readButtonTop}
+                        >
+                          <Ionicons
+                            name="checkmark-circle-outline"
+                            size={14}
+                            color="#D4AF37"
+                          />
+
+                          <Text style={styles.readButtonTopText}>خواندم</Text>
+                        </Pressable>
+                      ) : (
+                        <View style={styles.readBadge}>
+                          <Ionicons
+                            name="checkmark-done-outline"
+                            size={13}
+                            color="#6B7280"
+                          />
+
+                          <Text style={styles.readBadgeText}>خوانده‌شده</Text>
+                        </View>
+                      )}
                     </View>
-                  ) : null}
+
+                    <View>
+                      {!item.readAt ? (
+                        <View style={styles.unreadBadge}>
+                          <Text style={styles.unreadBadgeText}>جدید</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
 
                   <Text style={styles.title}>{item.title}</Text>
 
@@ -343,7 +384,6 @@ const styles = StyleSheet.create({
   },
 
   unreadBadge: {
-    alignSelf: "flex-end",
     paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: 999,
@@ -356,5 +396,47 @@ const styles = StyleSheet.create({
     color: "#D4AF37",
     fontSize: 10,
     fontWeight: "900",
+  },
+  
+  statusRow: {
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+
+  readBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: "rgba(107,114,128,.10)",
+    borderWidth: 1,
+    borderColor: "rgba(107,114,128,.25)",
+  },
+
+  readBadgeText: {
+    color: "#6B7280",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  readButtonTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(212,175,55,.12)",
+    borderWidth: 1,
+    borderColor: "rgba(212,175,55,.35)",
+  },
+
+  readButtonTopText: {
+    color: "#D4AF37",
+    fontSize: 10,
+    fontWeight: "800",
   },
 });

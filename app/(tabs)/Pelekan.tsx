@@ -39,6 +39,7 @@ import TopBanner from "../../components/TopBanner";
 import { useAuth } from "../../hooks/useAuth";
 import { useUser } from "../../hooks/useUser";
 import { getUnreadNotificationCount } from "../../api/notifications";
+import * as Notifications from "expo-notifications";
 
 /* ----------------------------- Types ----------------------------- */
 type PlanStatus = "free" | "pro" | "expired" | "expiring";
@@ -176,6 +177,17 @@ export default function PelekanTab() {
       console.warn("[pelekan] unread notifications failed:", error);
     }
   }, []);
+
+  useEffect(() => {
+  const subscription =
+    Notifications.addNotificationReceivedListener(() => {
+      void loadUnreadNotifications();
+    });
+
+  return () => {
+    subscription.remove();
+  };
+}, [loadUnreadNotifications]);
 
   /* ----------------------------- Fetch State ----------------------------- */
   const fetchState = useCallback(
