@@ -118,13 +118,29 @@ useEffect(() => {
   const subscription =
     Notifications.addNotificationResponseReceivedListener(
       (response) => {
-        const data = response.notification.request.content.data;
-
+        const data =
+          response.notification.request.content.data as {
+            type?: string;
+            ticketId?: string;
+            route?: string;
+          };
         if (
           data?.type === "ticket_reply" &&
           data?.ticketId
         ) {
-          router.push(`/support/tickets/${data.ticketId}`);
+          router.push(
+            `/support/tickets/${data.ticketId}`
+          );
+
+          return;
+        }
+
+        // مقصد عمومی نوتیفیکیشن
+        if (
+          typeof data?.route === "string" &&
+          data.route.trim()
+        ) {
+          router.push(data.route as any);
         }
       }
     );

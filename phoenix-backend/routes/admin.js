@@ -1968,6 +1968,11 @@ if (
           notificationType,
           pushTitle,
           pushBody,
+          data:
+  body.data &&
+  typeof body.data === "object"
+    ? body.data
+    : null,
           status: scheduledAt
           ? "scheduled"
           : "draft",

@@ -139,8 +139,16 @@ if (testUserId) {
           title: campaign.pushTitle,
           body: campaign.pushBody,
           data: {
-            campaignId: campaign.id,
-          },
+  ...(
+    campaign.data &&
+    typeof campaign.data === "object" &&
+    !Array.isArray(campaign.data)
+      ? campaign.data
+      : {}
+  ),
+
+  campaignId: campaign.id,
+},
           campaignId: campaign.id,
         });
 
