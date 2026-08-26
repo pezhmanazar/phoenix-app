@@ -35,69 +35,76 @@ export async function sendCampaignById(
 
   let users = [];
 
-
-  if (testUserId) {
+if (testUserId) {
   users = await prisma.user.findMany({
-  where: {
-    id: testUserId,
+    where: {
+      id: testUserId,
+      deviceTokens: {
+        some: {
+          isActive: true,
+        },
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+} else {
+  const now = new Date();
+
+  const sevenDaysFromNow = new Date(
+    now.getTime() + 7 * 24 * 60 * 60 * 1000
+  );
+
+  const where = {
     deviceTokens: {
       some: {
         isActive: true,
       },
     },
-  },
-  select: {
-    id: true,
-  },
-});
+  };
 
-} else if (rule.plan === "free") {
-    users = await prisma.user.findMany({
-  where: {
-    plan: "free",
-    deviceTokens: {
-      some: {
-        isActive: true,
-      },
-    },
-  },
-  select: {
-    id: true,
-  },
-});
-
-  } else if (rule.plan === "pro") {
-
-    users = await prisma.user.findMany({
-  where: {
-    plan: "pro",
-    deviceTokens: {
-      some: {
-        isActive: true,
-      },
-    },
-  },
-  select: {
-    id: true,
-  },
-});
-
-  } else {
-
-    users = await prisma.user.findMany({
-  where: {
-    deviceTokens: {
-      some: {
-        isActive: true,
-      },
-    },
-  },
-  select: {
-    id: true,
-  },
-});
-
+  if (rule.plan === "free") {
+    where.plan = "free";
   }
+
+  if (rule.plan === "pro") {
+    where.plan = "pro";
+    where.planExpiresAt = {
+      gt: now,
+    };
+  }
+
+  if (rule.plan === "expiring") {
+    where.plan = "pro";
+    where.planExpiresAt = {
+      gt: now,
+      lte: sevenDaysFromNow,
+    };
+  }
+
+  if (rule.plan === "expired") {
+    where.plan = "pro";
+    where.planExpiresAt = {
+      lte: now,
+    };
+  }
+
+  if (
+    rule.appProvider === "bazaar" ||
+    rule.appProvider === "direct"
+  ) {
+    where.appProvider = rule.appProvider;
+  }
+
+  users = await prisma.user.findMany({
+    where,
+    select: {
+      id: true,
+    },
+  });
+}
 
 
   await prisma.notificationCampaign.update({
