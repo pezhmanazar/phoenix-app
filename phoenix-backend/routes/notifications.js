@@ -263,6 +263,104 @@ router.post("/:id/read", authUser, async (req, res) => {
   }
 });
 
+router.post("/:id/open", authUser, async (req, res) => {
+  try {
+    const userPhone = req.user?.phone;
+    const notificationId = String(req.params.id || "").trim();
+
+    if (!userPhone) {
+      return res.status(401).json({
+        ok: false,
+        error: "UNAUTHORIZED",
+      });
+    }
+
+    if (!notificationId) {
+      return res.status(400).json({
+        ok: false,
+        error: "NOTIFICATION_ID_REQUIRED",
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: {
+        phone: userPhone,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        ok: false,
+        error: "USER_NOT_FOUND",
+      });
+    }
+
+    // مهم: فقط نوتیفیکیشن متعلق به همین کاربر
+    const notification = await prisma.notification.findFirst({
+      where: {
+        id: notificationId,
+        userId: user.id,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!notification) {
+      return res.status(404).json({
+        ok: false,
+        error: "NOTIFICATION_NOT_FOUND",
+      });
+    }
+
+    const now = new Date();
+
+    // باز کردن Push را هم به معنی خواندن اعلان در Inbox در نظر می‌گیریم
+    await prisma.notification.update({
+      where: {
+        id: notification.id,
+      },
+      data: {
+        readAt: now,
+      },
+    });
+
+    // ممکن است کاربر چند device token داشته باشد.
+    // deliveryهای همین Notification را که هنوز opened نشده‌اند ثبت می‌کنیم.
+    const result = await prisma.notificationDelivery.updateMany({
+      where: {
+        notificationId: notification.id,
+        openedAt: null,
+      },
+      data: {
+        status: "opened",
+        openedAt: now,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      data: {
+        opened: true,
+        deliveriesUpdated: result.count,
+      },
+    });
+  } catch (e) {
+    console.error(
+      "[notifications.open]",
+      e?.message || e,
+    );
+
+    return res.status(500).json({
+      ok: false,
+      error: "SERVER_ERROR",
+    });
+  }
+});
+
 router.post("/debug-send/:userId", async (req, res) => {
   const result = await sendPushToUser(req.params.userId, {
     title: "تست ققنوس",

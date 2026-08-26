@@ -29,13 +29,14 @@ export async function createAndSendNotification({
 
 try {
   pushResult = await sendPushToUser(userId, {
-    title,
-    body,
-    data: {
-      ...data,
-      type,
-    },
-  });
+  title,
+  body,
+  data: {
+    ...data,
+    type,
+    notificationId: notification.id,
+  },
+});
 } catch (error) {
   console.error("[NOTIFICATION_PUSH_ERROR]", error?.message || error);
 

@@ -20,6 +20,7 @@ import * as PlanModule from "../hooks/usePlanStatus";
 import * as UserModule from "../hooks/useUser";
 import { registerDeviceToken } from "../lib/notifications/registerDevice";
 import { getPaymentProvider } from "../lib/payments/getPaymentProvider";
+import { markNotificationOpened } from "../api/notifications";
 
 
 Notifications.setNotificationHandler({
@@ -116,16 +117,54 @@ export default function RootLayout() {
 }, []);
 
 useEffect(() => {
-  const handleNotificationResponse = (
+  const handledResponseIds = new Set<string>();
+
+  const handleNotificationResponse = async (
     response: Notifications.NotificationResponse
   ) => {
+    const requestId =
+      response.notification.request.identifier;
+
+    // جلوگیری از پردازش دوباره همان tap
+    if (
+      requestId &&
+      handledResponseIds.has(requestId)
+    ) {
+      return;
+    }
+
+    if (requestId) {
+      handledResponseIds.add(requestId);
+    }
+
     const data =
       response.notification.request.content.data as {
         type?: string;
         ticketId?: string;
         route?: string;
+        notificationId?: string;
       };
 
+    // ثبت Open واقعی Push
+    if (
+      typeof data?.notificationId === "string" &&
+      data.notificationId.trim()
+    ) {
+      try {
+        await markNotificationOpened(
+          data.notificationId.trim()
+        );
+      } catch (error) {
+        console.warn(
+          "[notifications] mark opened failed:",
+          error instanceof Error
+            ? error.message
+            : error
+        );
+      }
+    }
+
+    // پاسخ درمانگر
     if (
       data?.type === "ticket_reply" &&
       data?.ticketId
@@ -133,9 +172,11 @@ useEffect(() => {
       router.push(
         `/support/tickets/${data.ticketId}`
       );
+
       return;
     }
 
+    // مقصد عمومی
     if (
       typeof data?.route === "string" &&
       data.route.trim()
@@ -146,19 +187,23 @@ useEffect(() => {
 
   const subscription =
     Notifications.addNotificationResponseReceivedListener(
-      handleNotificationResponse
+      (response) => {
+        void handleNotificationResponse(response);
+      }
     );
 
   Notifications.getLastNotificationResponseAsync()
     .then((response) => {
       if (response) {
-        handleNotificationResponse(response);
+        void handleNotificationResponse(response);
       }
     })
     .catch((error) => {
       console.warn(
         "[notifications] last response failed:",
-        error?.message || error
+        error instanceof Error
+          ? error.message
+          : error
       );
     });
 

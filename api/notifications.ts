@@ -106,3 +106,28 @@ export async function markNotificationRead(
     );
   }
 }
+
+export async function markNotificationOpened(
+  notificationId: string
+): Promise<void> {
+  const result = await doJson<{
+    opened: boolean;
+    deliveriesUpdated: number;
+  }>(
+    toAppApi(
+      `/api/notifications/${encodeURIComponent(notificationId)}/open`
+    ),
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  if (!result.ok) {
+    throw new Error(
+      result.error || "MARK_NOTIFICATION_OPENED_FAILED"
+    );
+  }
+}
