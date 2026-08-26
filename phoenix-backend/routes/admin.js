@@ -1716,6 +1716,20 @@ router.get(
       const type =
         typeof req.query.type === "string" ? req.query.type.trim() : "";
 
+      const archive =
+        typeof req.query.archive === "string"
+          ? req.query.archive.trim()
+          : "active";
+
+      const allowedArchiveModes = ["active", "archived", "all"];
+
+      if (!allowedArchiveModes.includes(archive)) {
+        return res.status(400).json({
+          ok: false,
+          error: "invalid_archive_mode",
+        });
+      }
+
       const page = Math.max(1, Number(req.query.page || 1) || 1);
       const limitRaw = Number(req.query.limit || 50) || 50;
       const limit = Math.min(200, Math.max(10, limitRaw));
@@ -1746,6 +1760,21 @@ router.get(
       }
 
       const AND = [];
+
+      if (archive === "active") {
+        AND.push({
+          archivedAt: null,
+        });
+      }
+
+      if (archive === "archived") {
+        AND.push({
+          archivedAt: {
+            not: null,
+          },
+        });
+      }
+
       if (status) {
         AND.push({ status });
       }
@@ -1799,9 +1828,11 @@ router.get(
             notificationType: true,
             pushTitle: true,
             pushBody: true,
+            data: true,
             status: true,
             scheduledAt: true,
             sentAt: true,
+            archivedAt: true,
             targetRule: true,
             targetCount: true,
             createdAt: true,
@@ -1897,53 +1928,42 @@ router.post(
           : "marketing";
       let scheduledAt = null;
 
-if (
-  body.scheduledAt !== undefined &&
-  body.scheduledAt !== null &&
-  body.scheduledAt !== ""
-) {
-  const raw = String(body.scheduledAt).trim();
+      if (
+        body.scheduledAt !== undefined &&
+        body.scheduledAt !== null &&
+        body.scheduledAt !== ""
+      ) {
+        const raw = String(body.scheduledAt).trim();
 
-  // datetime-local از پنل: 2026-08-25T17:37
-  const iranDateMatch =
-    raw.match(
-      /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/
-    );
+        // datetime-local از پنل: 2026-08-25T17:37
+        const iranDateMatch = raw.match(
+          /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/,
+        );
 
-  if (iranDateMatch) {
-    const [
-      ,
-      year,
-      month,
-      day,
-      hour,
-      minute,
-    ] = iranDateMatch;
+        if (iranDateMatch) {
+          const [, year, month, day, hour, minute] = iranDateMatch;
 
-    // ساعت ورودی را تهران فرض می‌کنیم
-    scheduledAt = new Date(
-      Date.UTC(
-        Number(year),
-        Number(month) - 1,
-        Number(day),
-        Number(hour) - 3,
-        Number(minute) - 30,
-      ),
-    );
-  } else {
-    scheduledAt = new Date(raw);
-  }
-}
+          // ساعت ورودی را تهران فرض می‌کنیم
+          scheduledAt = new Date(
+            Date.UTC(
+              Number(year),
+              Number(month) - 1,
+              Number(day),
+              Number(hour) - 3,
+              Number(minute) - 30,
+            ),
+          );
+        } else {
+          scheduledAt = new Date(raw);
+        }
+      }
 
-if (
-  scheduledAt &&
-  Number.isNaN(scheduledAt.getTime())
-) {
-  return res.status(400).json({
-    ok: false,
-    error: "invalid_scheduledAt",
-  });
-}
+      if (scheduledAt && Number.isNaN(scheduledAt.getTime())) {
+        return res.status(400).json({
+          ok: false,
+          error: "invalid_scheduledAt",
+        });
+      }
       if (scheduledAt && Number.isNaN(scheduledAt.getTime())) {
         return res.status(400).json({
           ok: false,
@@ -1968,14 +1988,8 @@ if (
           notificationType,
           pushTitle,
           pushBody,
-          data:
-  body.data &&
-  typeof body.data === "object"
-    ? body.data
-    : null,
-          status: scheduledAt
-          ? "scheduled"
-          : "draft",
+          data: body.data && typeof body.data === "object" ? body.data : null,
+          status: scheduledAt ? "scheduled" : "draft",
           scheduledAt,
           targetRule,
           createdById: req.admin.id,
@@ -2035,13 +2049,11 @@ router.post(
   async (req, res) => {
     try {
       const targetRule =
-        req.body?.targetRule &&
-        typeof req.body.targetRule === "object"
+        req.body?.targetRule && typeof req.body.targetRule === "object"
           ? req.body.targetRule
           : {};
 
-      const where =
-        buildCampaignTargetWhere(targetRule);
+      const where = buildCampaignTargetWhere(targetRule);
 
       const count = await prisma.user.count({
         where,
@@ -2084,23 +2096,22 @@ router.post(
         });
       }
 
-      const source =
-        await prisma.notificationCampaign.findUnique({
-          where: {
-            id: campaignId,
-          },
-          select: {
-            id: true,
-            title: true,
-            description: true,
-            type: true,
-            notificationType: true,
-            pushTitle: true,
-            pushBody: true,
-            data: true,
-            targetRule: true,
-          },
-        });
+      const source = await prisma.notificationCampaign.findUnique({
+        where: {
+          id: campaignId,
+        },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          type: true,
+          notificationType: true,
+          pushTitle: true,
+          pushBody: true,
+          data: true,
+          targetRule: true,
+        },
+      });
 
       if (!source) {
         return res.status(404).json({
@@ -2109,51 +2120,50 @@ router.post(
         });
       }
 
-      const duplicated =
-        await prisma.notificationCampaign.create({
-          data: {
-            title: `${source.title} (کپی)`,
-            description: source.description,
-            type: source.type,
-            notificationType: source.notificationType,
-            pushTitle: source.pushTitle,
-            pushBody: source.pushBody,
-            data: source.data,
-            targetRule: source.targetRule,
+      const duplicated = await prisma.notificationCampaign.create({
+        data: {
+          title: `${source.title} (کپی)`,
+          description: source.description,
+          type: source.type,
+          notificationType: source.notificationType,
+          pushTitle: source.pushTitle,
+          pushBody: source.pushBody,
+          data: source.data,
+          targetRule: source.targetRule,
 
-            status: "draft",
-            scheduledAt: null,
-            sentAt: null,
-            targetCount: null,
+          status: "draft",
+          scheduledAt: null,
+          sentAt: null,
+          targetCount: null,
 
-            createdById: req.admin.id,
-          },
-          select: {
-            id: true,
-            title: true,
-            description: true,
-            type: true,
-            notificationType: true,
-            pushTitle: true,
-            pushBody: true,
-            data: true,
-            status: true,
-            scheduledAt: true,
-            sentAt: true,
-            targetRule: true,
-            targetCount: true,
-            createdAt: true,
-            updatedAt: true,
-            createdBy: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                role: true,
-              },
+          createdById: req.admin.id,
+        },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          type: true,
+          notificationType: true,
+          pushTitle: true,
+          pushBody: true,
+          data: true,
+          status: true,
+          scheduledAt: true,
+          sentAt: true,
+          targetRule: true,
+          targetCount: true,
+          createdAt: true,
+          updatedAt: true,
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
             },
           },
-        });
+        },
+      });
 
       return res.json({
         ok: true,
@@ -2192,12 +2202,11 @@ router.patch(
         });
       }
 
-      const existing =
-        await prisma.notificationCampaign.findUnique({
-          where: {
-            id: campaignId,
-          },
-        });
+      const existing = await prisma.notificationCampaign.findUnique({
+        where: {
+          id: campaignId,
+        },
+      });
 
       if (!existing) {
         return res.status(404).json({
@@ -2215,20 +2224,13 @@ router.patch(
 
       const body = req.body || {};
 
-      const title =
-        typeof body.title === "string"
-          ? body.title.trim()
-          : "";
+      const title = typeof body.title === "string" ? body.title.trim() : "";
 
       const pushTitle =
-        typeof body.pushTitle === "string"
-          ? body.pushTitle.trim()
-          : "";
+        typeof body.pushTitle === "string" ? body.pushTitle.trim() : "";
 
       const pushBody =
-        typeof body.pushBody === "string"
-          ? body.pushBody.trim()
-          : "";
+        typeof body.pushBody === "string" ? body.pushBody.trim() : "";
 
       if (!title) {
         return res.status(400).json({
@@ -2244,17 +2246,9 @@ router.patch(
         });
       }
 
-      const type =
-        typeof body.type === "string"
-          ? body.type.trim()
-          : "";
+      const type = typeof body.type === "string" ? body.type.trim() : "";
 
-      const allowedTypes = [
-        "therapeutic",
-        "sales",
-        "system",
-        "motivational",
-      ];
+      const allowedTypes = ["therapeutic", "sales", "system", "motivational"];
 
       if (!allowedTypes.includes(type)) {
         return res.status(400).json({
@@ -2264,8 +2258,7 @@ router.patch(
       }
 
       const targetRule =
-        body.targetRule &&
-        typeof body.targetRule === "object"
+        body.targetRule && typeof body.targetRule === "object"
           ? body.targetRule
           : null;
 
@@ -2276,41 +2269,35 @@ router.patch(
         });
       }
 
-      const updated =
-        await prisma.notificationCampaign.update({
-          where: {
-            id: campaignId,
-          },
-          data: {
-            title,
-            description:
-              body.description !== undefined &&
-              body.description !== null
-                ? String(body.description).trim() || null
-                : null,
+      const updated = await prisma.notificationCampaign.update({
+        where: {
+          id: campaignId,
+        },
+        data: {
+          title,
+          description:
+            body.description !== undefined && body.description !== null
+              ? String(body.description).trim() || null
+              : null,
 
-            type,
+          type,
 
-            notificationType:
-              typeof body.notificationType === "string"
-                ? body.notificationType.trim()
-                : "marketing",
+          notificationType:
+            typeof body.notificationType === "string"
+              ? body.notificationType.trim()
+              : "marketing",
 
-            pushTitle,
-            pushBody,
+          pushTitle,
+          pushBody,
 
-            data:
-              body.data &&
-              typeof body.data === "object"
-                ? body.data
-                : null,
+          data: body.data && typeof body.data === "object" ? body.data : null,
 
-            targetRule,
+          targetRule,
 
-            // ویرایش Draft نباید خودکار scheduled شود.
-            scheduledAt: null,
-          },
-        });
+          // ویرایش Draft نباید خودکار scheduled شود.
+          scheduledAt: null,
+        },
+      });
 
       return res.json({
         ok: true,
@@ -2349,14 +2336,13 @@ router.post(
         });
       }
 
-      const campaign =
-        await prisma.notificationCampaign.findUnique({
-          where: { id: campaignId },
-          select: {
-            id: true,
-            status: true,
-          },
-        });
+      const campaign = await prisma.notificationCampaign.findUnique({
+        where: { id: campaignId },
+        select: {
+          id: true,
+          status: true,
+        },
+      });
 
       if (!campaign) {
         return res.status(404).json({
@@ -2415,15 +2401,14 @@ router.post(
         });
       }
 
-      const campaign =
-        await prisma.notificationCampaign.findUnique({
-          where: { id: campaignId },
-          select: {
-            id: true,
-            status: true,
-            archivedAt: true,
-          },
-        });
+      const campaign = await prisma.notificationCampaign.findUnique({
+        where: { id: campaignId },
+        select: {
+          id: true,
+          status: true,
+          archivedAt: true,
+        },
+      });
 
       if (!campaign) {
         return res.status(404).json({
@@ -2432,31 +2417,25 @@ router.post(
         });
       }
 
-      if (
-        campaign.status !== "completed" &&
-        campaign.status !== "failed"
-      ) {
+      if (campaign.status !== "completed" && campaign.status !== "failed") {
         return res.status(400).json({
           ok: false,
           error: "campaign_cannot_be_archived",
         });
       }
 
-      const updated =
-        await prisma.notificationCampaign.update({
-          where: {
-            id: campaign.id,
-          },
-          data: {
-            archivedAt: campaign.archivedAt
-              ? null
-              : new Date(),
-          },
-          select: {
-            id: true,
-            archivedAt: true,
-          },
-        });
+      const updated = await prisma.notificationCampaign.update({
+        where: {
+          id: campaign.id,
+        },
+        data: {
+          archivedAt: campaign.archivedAt ? null : new Date(),
+        },
+        select: {
+          id: true,
+          archivedAt: true,
+        },
+      });
 
       return res.json({
         ok: true,
@@ -2495,8 +2474,7 @@ router.get(
         });
       }
 
-      const stats =
-        await getCampaignStats(campaignId);
+      const stats = await getCampaignStats(campaignId);
 
       return res.json({
         ok: true,
@@ -2542,18 +2520,14 @@ router.post(
         });
       }
 
-      const result = await sendCampaignById(
-  campaignId,
-  {
-    testUserId: req.body?.testUserId,
-  },
-);
+      const result = await sendCampaignById(campaignId, {
+        testUserId: req.body?.testUserId,
+      });
 
       return res.json({
         ok: true,
         result,
       });
-
     } catch (e) {
       console.error(
         "admin/notification-campaigns SEND error:",
