@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   FlatList,
   InteractionManager,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -676,12 +677,29 @@ for (let stageIndex = 0; stageIndex < stages.length; stageIndex++) {
         </View>
 
         <View style={[styles.topCol, styles.colRight]}>
-          <View style={styles.xpPill}>
-            <Ionicons name="flash" size={14} color="#D4AF37" />
-            <Text style={styles.xpText}>{xpText}</Text>
-            <Text style={styles.xpLabel}>XP</Text>
-          </View>
-        </View>
+  <View style={styles.headerActions}>
+  <View style={styles.xpPill}>
+    <Ionicons name="flash" size={14} color="#D4AF37" />
+    <Text style={styles.xpText}>{xpText}</Text>
+    <Text style={styles.xpLabel}>XP</Text>
+  </View>
+
+  <Pressable
+    onPress={() => router.push("/notifications" as any)}
+    style={({ pressed }) => [
+      styles.notificationButton,
+      pressed && { opacity: 0.65 },
+    ]}
+    hitSlop={8}
+  >
+    <Ionicons
+      name="notifications-outline"
+      size={21}
+      color="#D4AF37"
+    />
+  </Pressable>
+</View>
+</View>
       </View>
 
       <TopBanner enabled headerHeight={headerHeight} />
@@ -818,6 +836,23 @@ const styles = StyleSheet.create({
   colLeft: { alignItems: "flex-start", justifyContent: "center" },
   colCenter: { alignItems: "center", justifyContent: "center" },
   colRight: { alignItems: "flex-end", justifyContent: "center" },
+
+  headerActions: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+},
+
+notificationButton: {
+  width: 34,
+  height: 34,
+  borderRadius: 17,
+  alignItems: "center",
+  justifyContent: "center",
+  borderWidth: 1,
+  borderColor: "rgba(255,255,255,.12)",
+  backgroundColor: "rgba(255,255,255,.04)",
+},
 
   xpPill: {
     flexDirection: "row",

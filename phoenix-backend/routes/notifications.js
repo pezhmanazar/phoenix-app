@@ -75,6 +75,71 @@ router.post("/register-device", authUser, async (req, res) => {
     });
   }
 });
+router.get("/", authUser, async (req, res) => {
+  try {
+    const userPhone = req.user?.phone;
+
+    if (!userPhone) {
+      return res.status(401).json({
+        ok: false,
+        error: "UNAUTHORIZED",
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: {
+        phone: userPhone,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        ok: false,
+        error: "USER_NOT_FOUND",
+      });
+    }
+
+    const notifications = await prisma.notification.findMany({
+      where: {
+        userId: user.id,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 100,
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        body: true,
+        data: true,
+        campaignId: true,
+        createdAt: true,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      data: {
+        items: notifications,
+      },
+    });
+  } catch (e) {
+    console.error(
+      "[notifications.list]",
+      e?.message || e,
+    );
+
+    return res.status(500).json({
+      ok: false,
+      error: "SERVER_ERROR",
+    });
+  }
+});
+
 router.post("/debug-send/:userId", async (req, res) => {
   const result = await sendPushToUser(
     req.params.userId,

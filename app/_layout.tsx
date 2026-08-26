@@ -114,41 +114,59 @@ export default function RootLayout() {
   useEffect(() => {
   registerDeviceToken();
 }, []);
+
 useEffect(() => {
+  const handleNotificationResponse = (
+    response: Notifications.NotificationResponse
+  ) => {
+    const data =
+      response.notification.request.content.data as {
+        type?: string;
+        ticketId?: string;
+        route?: string;
+      };
+
+    if (
+      data?.type === "ticket_reply" &&
+      data?.ticketId
+    ) {
+      router.push(
+        `/support/tickets/${data.ticketId}`
+      );
+      return;
+    }
+
+    if (
+      typeof data?.route === "string" &&
+      data.route.trim()
+    ) {
+      router.push(data.route as any);
+    }
+  };
+
   const subscription =
     Notifications.addNotificationResponseReceivedListener(
-      (response) => {
-        const data =
-          response.notification.request.content.data as {
-            type?: string;
-            ticketId?: string;
-            route?: string;
-          };
-        if (
-          data?.type === "ticket_reply" &&
-          data?.ticketId
-        ) {
-          router.push(
-            `/support/tickets/${data.ticketId}`
-          );
-
-          return;
-        }
-
-        // مقصد عمومی نوتیفیکیشن
-        if (
-          typeof data?.route === "string" &&
-          data.route.trim()
-        ) {
-          router.push(data.route as any);
-        }
-      }
+      handleNotificationResponse
     );
+
+  Notifications.getLastNotificationResponseAsync()
+    .then((response) => {
+      if (response) {
+        handleNotificationResponse(response);
+      }
+    })
+    .catch((error) => {
+      console.warn(
+        "[notifications] last response failed:",
+        error?.message || error
+      );
+    });
 
   return () => {
     subscription.remove();
   };
 }, []);
+
   useEffect(() => {
     if (!fontsLoaded) return;
     const pickFamily = (style: any) => {
