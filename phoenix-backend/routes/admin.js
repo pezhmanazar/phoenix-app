@@ -2329,6 +2329,153 @@ router.patch(
     }
   },
 );
+
+/**
+ * POST /api/admin/notification-campaigns/:id/delete
+ *
+ * حذف فقط Draft
+ */
+router.post(
+  "/notification-campaigns/:id/delete",
+  allow("manager", "owner"),
+  async (req, res) => {
+    try {
+      const campaignId = String(req.params.id || "").trim();
+
+      if (!campaignId) {
+        return res.status(400).json({
+          ok: false,
+          error: "campaign_id_required",
+        });
+      }
+
+      const campaign =
+        await prisma.notificationCampaign.findUnique({
+          where: { id: campaignId },
+          select: {
+            id: true,
+            status: true,
+          },
+        });
+
+      if (!campaign) {
+        return res.status(404).json({
+          ok: false,
+          error: "campaign_not_found",
+        });
+      }
+
+      if (campaign.status !== "draft") {
+        return res.status(400).json({
+          ok: false,
+          error: "only_draft_can_be_deleted",
+        });
+      }
+
+      await prisma.notificationCampaign.delete({
+        where: {
+          id: campaign.id,
+        },
+      });
+
+      return res.json({
+        ok: true,
+        deleted: true,
+      });
+    } catch (e) {
+      console.error(
+        "admin/notification-campaigns DELETE error:",
+        e?.message || e,
+      );
+
+      return res.status(500).json({
+        ok: false,
+        error: "internal_error",
+      });
+    }
+  },
+);
+
+/**
+ * POST /api/admin/notification-campaigns/:id/archive
+ *
+ * آرشیو کمپین ارسال‌شده یا ناموفق
+ */
+router.post(
+  "/notification-campaigns/:id/archive",
+  allow("manager", "owner"),
+  async (req, res) => {
+    try {
+      const campaignId = String(req.params.id || "").trim();
+
+      if (!campaignId) {
+        return res.status(400).json({
+          ok: false,
+          error: "campaign_id_required",
+        });
+      }
+
+      const campaign =
+        await prisma.notificationCampaign.findUnique({
+          where: { id: campaignId },
+          select: {
+            id: true,
+            status: true,
+            archivedAt: true,
+          },
+        });
+
+      if (!campaign) {
+        return res.status(404).json({
+          ok: false,
+          error: "campaign_not_found",
+        });
+      }
+
+      if (
+        campaign.status !== "completed" &&
+        campaign.status !== "failed"
+      ) {
+        return res.status(400).json({
+          ok: false,
+          error: "campaign_cannot_be_archived",
+        });
+      }
+
+      const updated =
+        await prisma.notificationCampaign.update({
+          where: {
+            id: campaign.id,
+          },
+          data: {
+            archivedAt: campaign.archivedAt
+              ? null
+              : new Date(),
+          },
+          select: {
+            id: true,
+            archivedAt: true,
+          },
+        });
+
+      return res.json({
+        ok: true,
+        archived: !!updated.archivedAt,
+        archivedAt: updated.archivedAt,
+      });
+    } catch (e) {
+      console.error(
+        "admin/notification-campaigns ARCHIVE error:",
+        e?.message || e,
+      );
+
+      return res.status(500).json({
+        ok: false,
+        error: "internal_error",
+      });
+    }
+  },
+);
 /**
  * GET /api/admin/notification-campaigns/:id/stats
  *

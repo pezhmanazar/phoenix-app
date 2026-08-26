@@ -1003,6 +1003,7 @@ model NotificationCampaign {
 
   scheduledAt DateTime?
   sentAt      DateTime?
+  archivedAt  DateTime?
 
   // قوانین هدف‌گیری کاربران
   targetRule Json?
