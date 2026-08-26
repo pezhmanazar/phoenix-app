@@ -38,6 +38,7 @@ import PlanStatusBadge from "../../components/PlanStatusBadge";
 import TopBanner from "../../components/TopBanner";
 import { useAuth } from "../../hooks/useAuth";
 import { useUser } from "../../hooks/useUser";
+import { getUnreadNotificationCount } from "../../api/notifications";
 
 /* ----------------------------- Types ----------------------------- */
 type PlanStatus = "free" | "pro" | "expired" | "expiring";
@@ -115,6 +116,7 @@ export default function PelekanTab() {
   const [refreshing, setRefreshing] = useState(false);
   const [state, setState] = useState<PelekanState>(initialState);
   const [headerHeight, setHeaderHeight] = useState(0);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   const [forceView, setForceView] = useState<null | "review">(null);
   const [forceTab, setForceTab] = useState<null | TabState>(null);
@@ -164,6 +166,15 @@ export default function PelekanTab() {
     return () => {
       alive = false;
     };
+  }, []);
+
+  const loadUnreadNotifications = useCallback(async () => {
+    try {
+      const count = await getUnreadNotificationCount();
+      setUnreadNotifications(count);
+    } catch (error) {
+      console.warn("[pelekan] unread notifications failed:", error);
+    }
   }, []);
 
   /* ----------------------------- Fetch State ----------------------------- */
@@ -235,13 +246,12 @@ export default function PelekanTab() {
 
         const progressFromApi = data?.progress ?? null;
 
-const progressActiveDayIdRaw =
-  progressFromApi?.activeDayId == null
-    ? null
-    : String(progressFromApi.activeDayId).trim();
+        const progressActiveDayIdRaw =
+          progressFromApi?.activeDayId == null
+            ? null
+            : String(progressFromApi.activeDayId).trim();
 
-const activeDayIdFinal = progressActiveDayIdRaw || null;
-
+        const activeDayIdFinal = progressActiveDayIdRaw || null;
 
         const safeProgress = progressFromApi
           ? { ...progressFromApi, activeDayId: activeDayIdFinal }
@@ -285,11 +295,27 @@ const activeDayIdFinal = progressActiveDayIdRaw || null;
 
   useFocusEffect(
     useCallback(() => {
-      if (initialLoading || authLoading || !token) {
+      if (authLoading || !token) {
         return;
       }
-      fetchState({ initial: false, reason: "focus" });
-    }, [fetchState, initialLoading, authLoading, token]),
+
+      void loadUnreadNotifications();
+
+      if (initialLoading) {
+        return;
+      }
+
+      fetchState({
+        initial: false,
+        reason: "focus",
+      });
+    }, [
+      fetchState,
+      initialLoading,
+      authLoading,
+      token,
+      loadUnreadNotifications,
+    ]),
   );
 
   // ✅ one-shot param cleanup
@@ -421,52 +447,50 @@ const activeDayIdFinal = progressActiveDayIdRaw || null;
     } as any);
 
     const progressActiveDayId = String(
-  state?.progress?.activeDayId || "",
-).trim();
+      state?.progress?.activeDayId || "",
+    ).trim();
 
-const activeStageIndex = progressActiveDayId
-  ? stages.findIndex((s: any) =>
-      (s?.days || []).some(
-        (d: any) => String(d?.id || "") === progressActiveDayId,
-      ),
-    )
-  : -1;
+    const activeStageIndex = progressActiveDayId
+      ? stages.findIndex((s: any) =>
+          (s?.days || []).some(
+            (d: any) => String(d?.id || "") === progressActiveDayId,
+          ),
+        )
+      : -1;
 
-for (let stageIndex = 0; stageIndex < stages.length; stageIndex++) {
-  const st = stages[stageIndex];
-  const code = String(st?.code || "").trim();
+    for (let stageIndex = 0; stageIndex < stages.length; stageIndex++) {
+      const st = stages[stageIndex];
+      const code = String(st?.code || "").trim();
 
-  const isActive = activeStageIndex >= 0 && stageIndex === activeStageIndex;
-  const isPast = activeStageIndex >= 0 && stageIndex < activeStageIndex;
+      const isActive = activeStageIndex >= 0 && stageIndex === activeStageIndex;
+      const isPast = activeStageIndex >= 0 && stageIndex < activeStageIndex;
 
-  const zig: "L" | "R" = zigCounter++ % 2 === 0 ? "L" : "R";
+      const zig: "L" | "R" = zigCounter++ % 2 === 0 ? "L" : "R";
 
-  list.push({
-    kind: "stage_node",
-    id: `sn-${st.id}`,
-    zig,
-    stage: st,
-    done: isPast,
-    active: isActive,
-  } as any);
-
-  if (isPast || isActive || code === "bastan") {
-    for (const d of st.days || []) {
-      const z2: "L" | "R" = zigCounter++ % 2 === 0 ? "L" : "R";
       list.push({
-        kind: "day",
-        id: `d-${d.id}`,
-        day: d as PelekanDay,
+        kind: "stage_node",
+        id: `sn-${st.id}`,
+        zig,
         stage: st,
-        zig: z2,
-      });
+        done: isPast,
+        active: isActive,
+      } as any);
+
+      if (isPast || isActive || code === "bastan") {
+        for (const d of st.days || []) {
+          const z2: "L" | "R" = zigCounter++ % 2 === 0 ? "L" : "R";
+          list.push({
+            kind: "day",
+            id: `d-${d.id}`,
+            day: d as PelekanDay,
+            stage: st,
+            zig: z2,
+          });
+        }
+      }
+
+      list.push({ kind: "spacer", id: `sp-${st.id}` } as any);
     }
-  }
-
-  list.push({ kind: "spacer", id: `sp-${st.id}` } as any);
-}
-
-
 
     return list;
   }, [
@@ -560,8 +584,6 @@ for (let stageIndex = 0; stageIndex < stages.length; stageIndex++) {
   const onTapStart = useCallback(() => {
     router.push("/pelekan/bastan" as any);
   }, [router]);
-
-  
 
   const onTapActiveDay = useCallback(
     (day: PelekanDay, opts?: { mode: "active" | "preview" }) => {
@@ -677,29 +699,36 @@ for (let stageIndex = 0; stageIndex < stages.length; stageIndex++) {
         </View>
 
         <View style={[styles.topCol, styles.colRight]}>
-  <View style={styles.headerActions}>
-  <View style={styles.xpPill}>
-    <Ionicons name="flash" size={14} color="#D4AF37" />
-    <Text style={styles.xpText}>{xpText}</Text>
-    <Text style={styles.xpLabel}>XP</Text>
-  </View>
+          <View style={styles.headerActions}>
+            <View style={styles.xpPill}>
+              <Ionicons name="flash" size={14} color="#D4AF37" />
+              <Text style={styles.xpText}>{xpText}</Text>
+              <Text style={styles.xpLabel}>XP</Text>
+            </View>
 
-  <Pressable
-    onPress={() => router.push("/notifications" as any)}
-    style={({ pressed }) => [
-      styles.notificationButton,
-      pressed && { opacity: 0.65 },
-    ]}
-    hitSlop={8}
-  >
-    <Ionicons
-      name="notifications-outline"
-      size={21}
-      color="#D4AF37"
-    />
-  </Pressable>
-</View>
-</View>
+            <Pressable
+              onPress={() => router.push("/notifications" as any)}
+              style={({ pressed }) => [
+                styles.notificationButton,
+                pressed && { opacity: 0.65 },
+              ]}
+              hitSlop={8}
+            >
+              <Ionicons
+                name="notifications-outline"
+                size={21}
+                color="#D4AF37"
+              />
+              {unreadNotifications > 0 ? (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                  </Text>
+                </View>
+              ) : null}
+            </Pressable>
+          </View>
+        </View>
       </View>
 
       <TopBanner enabled headerHeight={headerHeight} />
@@ -838,21 +867,42 @@ const styles = StyleSheet.create({
   colRight: { alignItems: "flex-end", justifyContent: "center" },
 
   headerActions: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 8,
-},
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
 
-notificationButton: {
-  width: 34,
-  height: 34,
-  borderRadius: 17,
-  alignItems: "center",
-  justifyContent: "center",
-  borderWidth: 1,
-  borderColor: "rgba(255,255,255,.12)",
-  backgroundColor: "rgba(255,255,255,.04)",
-},
+  notificationButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.12)",
+    backgroundColor: "rgba(255,255,255,.04)",
+  },
+
+  notificationBadge: {
+    position: "absolute",
+    top: -5,
+    right: -5,
+    minWidth: 17,
+    height: 17,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#dc2626",
+    borderWidth: 1,
+    borderColor: "#0b0f14",
+  },
+
+  notificationBadgeText: {
+    color: "#fff",
+    fontSize: 9,
+    fontWeight: "900",
+  },
 
   xpPill: {
     flexDirection: "row",

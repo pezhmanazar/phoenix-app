@@ -3,13 +3,10 @@
 import {
   AppNotification,
   getNotifications,
+  markNotificationRead,
 } from "../api/notifications";
 import { router } from "expo-router";
-import React, {
-  useCallback,
-  useEffect,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -29,61 +26,43 @@ function formatNotificationDate(value: string) {
   }
 
   try {
-    return new Intl.DateTimeFormat(
-      "fa-IR-u-ca-persian",
-      {
-        timeZone: "Asia/Tehran",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      }
-    ).format(date);
+    return new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
+      timeZone: "Asia/Tehran",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
   } catch {
     return "";
   }
 }
 
-function getRoute(
-  notification: AppNotification
-): string | null {
+function getRoute(notification: AppNotification): string | null {
   const route = notification.data?.route;
 
-  return typeof route === "string" &&
-    route.trim()
-    ? route.trim()
-    : null;
+  return typeof route === "string" && route.trim() ? route.trim() : null;
 }
 
 export default function NotificationsScreen() {
-  const [items, setItems] = useState<
-    AppNotification[]
-  >([]);
+  const [items, setItems] = useState<AppNotification[]>([]);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [loading, setLoading] = useState(true);
 
-  const [refreshing, setRefreshing] =
-    useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const [error, setError] =
-    useState("");
+  const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     try {
       setError("");
 
-      const result =
-        await getNotifications();
+      const result = await getNotifications();
 
       setItems(result);
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "خطا در دریافت اعلان‌ها"
-      );
+      setError(e instanceof Error ? e.message : "خطا در دریافت اعلان‌ها");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -102,18 +81,11 @@ export default function NotificationsScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
-        <Pressable
-          onPress={() => router.back()}
-          style={styles.backButton}
-        >
-          <Text style={styles.backText}>
-            بازگشت
-          </Text>
+        <Pressable onPress={() => router.back()} style={styles.backButton}>
+          <Text style={styles.backText}>بازگشت</Text>
         </Pressable>
 
-        <Text style={styles.headerTitle}>
-          اعلان‌های ققنوس
-        </Text>
+        <Text style={styles.headerTitle}>اعلان‌های ققنوس</Text>
 
         <View style={styles.headerSpacer} />
       </View>
@@ -122,20 +94,13 @@ export default function NotificationsScreen() {
         <View style={styles.center}>
           <ActivityIndicator size="large" />
 
-          <Text style={styles.loadingText}>
-            در حال دریافت اعلان‌ها...
-          </Text>
+          <Text style={styles.loadingText}>در حال دریافت اعلان‌ها...</Text>
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={
-            styles.content
-          }
+          contentContainerStyle={styles.content}
           refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={refresh}
-            />
+            <RefreshControl refreshing={refreshing} onRefresh={refresh} />
           }
         >
           {error ? (
@@ -151,22 +116,17 @@ export default function NotificationsScreen() {
                 }}
                 style={styles.retryButton}
               >
-                <Text style={styles.retryText}>
-                  تلاش دوباره
-                </Text>
+                <Text style={styles.retryText}>تلاش دوباره</Text>
               </Pressable>
             </View>
           ) : null}
 
           {!error && items.length === 0 ? (
             <View style={styles.emptyBox}>
-              <Text style={styles.emptyTitle}>
-                هنوز اعلانی نداری
-              </Text>
+              <Text style={styles.emptyTitle}>هنوز اعلانی نداری</Text>
 
               <Text style={styles.emptyText}>
-                پیام‌ها و اطلاع‌رسانی‌های ققنوس
-                اینجا نگهداری می‌شوند.
+                پیام‌ها و اطلاع‌رسانی‌های ققنوس اینجا نگهداری می‌شوند.
               </Text>
             </View>
           ) : null}
@@ -175,55 +135,58 @@ export default function NotificationsScreen() {
             const route = getRoute(item);
 
             return (
-              <View
+              <Pressable
                 key={item.id}
-                style={styles.card}
-              >
-                <View
-                  style={
-                    styles.cardHeader
+                style={({ pressed }) => [
+                  styles.card,
+                  !item.readAt && styles.unreadCard,
+                  pressed && { opacity: 0.8 },
+                ]}
+                onPress={async () => {
+                  try {
+                    await markNotificationRead(item.id);
+                    setItems((prev) =>
+                      prev.map((notification) =>
+                        notification.id === item.id
+                          ? {
+                              ...notification,
+                              readAt:
+                                notification.readAt || new Date().toISOString(),
+                            }
+                          : notification,
+                      ),
+                    );
+                  } catch (error) {
+                    console.warn("[notifications] mark read failed:", error);
                   }
-                >
-                  <Text
-                    style={styles.title}
-                  >
-                    {item.title}
-                  </Text>
 
-                  <Text
-                    style={styles.date}
-                  >
-                    {formatNotificationDate(
-                      item.createdAt
-                    )}
+                  if (route) {
+                    router.push(route as any);
+                  }
+                }}
+              >
+                <View style={styles.cardHeader}>
+                  {!item.readAt ? (
+                    <View style={styles.unreadBadge}>
+                      <Text style={styles.unreadBadgeText}>جدید</Text>
+                    </View>
+                  ) : null}
+
+                  <Text style={styles.title}>{item.title}</Text>
+
+                  <Text style={styles.date}>
+                    {formatNotificationDate(item.createdAt)}
                   </Text>
                 </View>
 
-                <Text style={styles.body}>
-                  {item.body}
-                </Text>
+                <Text style={styles.body}>{item.body}</Text>
 
                 {route ? (
-                  <Pressable
-                    onPress={() =>
-                      router.push(
-                        route as any
-                      )
-                    }
-                    style={
-                      styles.routeButton
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.routeText
-                      }
-                    >
-                      رفتن به بخش مرتبط
-                    </Text>
-                  </Pressable>
+                  <View style={styles.routeButton}>
+                    <Text style={styles.routeText}>رفتن به بخش مرتبط</Text>
+                  </View>
                 ) : null}
-              </View>
+              </Pressable>
             );
           })}
         </ScrollView>
@@ -373,5 +336,25 @@ const styles = StyleSheet.create({
   retryText: {
     color: "#e5bd76",
     fontWeight: "700",
+  },
+  unreadCard: {
+    borderColor: "rgba(212,175,55,.55)",
+    backgroundColor: "#151b21",
+  },
+
+  unreadBadge: {
+    alignSelf: "flex-end",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: "rgba(212,175,55,.14)",
+    borderWidth: 1,
+    borderColor: "rgba(212,175,55,.35)",
+  },
+
+  unreadBadgeText: {
+    color: "#D4AF37",
+    fontSize: 10,
+    fontWeight: "900",
   },
 });

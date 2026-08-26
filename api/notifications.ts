@@ -36,6 +36,7 @@ export type AppNotification = {
   data: Record<string, unknown> | null;
 
   campaignId: string | null;
+  readAt: string | null;
 
   createdAt: string;
 };
@@ -61,4 +62,47 @@ export async function getNotifications(): Promise<
   }
 
   return result.data?.items || [];
+}
+
+export async function getUnreadNotificationCount(): Promise<number> {
+  const result = await doJson<{
+    count: number;
+  }>(
+    toAppApi("/api/notifications/unread-count"),
+    {
+      method: "GET",
+    }
+  );
+
+  if (!result.ok) {
+    throw new Error(
+      result.error || "UNREAD_COUNT_FAILED"
+    );
+  }
+
+  return Number(result.data?.count || 0);
+}
+
+export async function markNotificationRead(
+  notificationId: string
+): Promise<void> {
+  const result = await doJson<{
+    read: boolean;
+  }>(
+    toAppApi(
+      `/api/notifications/${encodeURIComponent(notificationId)}/read`
+    ),
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  if (!result.ok) {
+    throw new Error(
+      result.error || "MARK_NOTIFICATION_READ_FAILED"
+    );
+  }
 }
