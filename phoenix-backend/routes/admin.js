@@ -7,6 +7,7 @@ import { createAndSendNotification } from "../services/notifications/notificatio
 import {
   sendCampaignById,
   buildCampaignTargetWhere,
+  getCampaignStats,
 } from "../services/notifications/campaignService.js";
 import prisma from "../utils/prisma.js";
 import {
@@ -2050,6 +2051,53 @@ router.post(
         "admin/notification-campaigns PREVIEW error:",
         e?.message || e,
       );
+
+      return res.status(500).json({
+        ok: false,
+        error: "internal_error",
+      });
+    }
+  },
+);
+
+/**
+ * GET /api/admin/notification-campaigns/:id/stats
+ *
+ * آمار ارسال کمپین
+ */
+router.get(
+  "/notification-campaigns/:id/stats",
+  allow("agent", "manager", "owner"),
+  async (req, res) => {
+    try {
+      const campaignId = String(req.params.id || "").trim();
+
+      if (!campaignId) {
+        return res.status(400).json({
+          ok: false,
+          error: "campaign_id_required",
+        });
+      }
+
+      const stats =
+        await getCampaignStats(campaignId);
+
+      return res.json({
+        ok: true,
+        stats,
+      });
+    } catch (e) {
+      console.error(
+        "admin/notification-campaigns STATS error:",
+        e?.message || e,
+      );
+
+      if (e?.message === "campaign_not_found") {
+        return res.status(404).json({
+          ok: false,
+          error: "campaign_not_found",
+        });
+      }
 
       return res.status(500).json({
         ok: false,

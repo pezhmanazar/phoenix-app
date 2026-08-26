@@ -184,3 +184,104 @@ if (testUserId) {
     failed,
   };
 }
+
+export async function getCampaignStats(campaignId) {
+  const campaign =
+    await prisma.notificationCampaign.findUnique({
+      where: {
+        id: campaignId,
+      },
+      select: {
+        id: true,
+        targetCount: true,
+        status: true,
+        sentAt: true,
+      },
+    });
+
+  if (!campaign) {
+    throw new Error("campaign_not_found");
+  }
+
+  const successStatuses = [
+    "sent",
+    "delivered",
+    "opened",
+  ];
+
+  const [
+    attemptedUsers,
+    successfulUsers,
+    successfulDevices,
+    failedDevices,
+  ] = await Promise.all([
+    prisma.notification.count({
+      where: {
+        campaignId,
+      },
+    }),
+
+    prisma.notification.count({
+      where: {
+        campaignId,
+        deliveries: {
+          some: {
+            status: {
+              in: successStatuses,
+            },
+          },
+        },
+      },
+    }),
+
+    prisma.notificationDelivery.count({
+      where: {
+        notification: {
+          campaignId,
+        },
+        status: {
+          in: successStatuses,
+        },
+      },
+    }),
+
+    prisma.notificationDelivery.count({
+      where: {
+        notification: {
+          campaignId,
+        },
+        status: "failed",
+      },
+    }),
+  ]);
+
+  const failedUsers =
+    attemptedUsers - successfulUsers;
+
+  const successRate =
+    attemptedUsers > 0
+      ? Math.round(
+          (successfulUsers / attemptedUsers) *
+            10000
+        ) / 100
+      : 0;
+
+  return {
+    campaignId,
+    status: campaign.status,
+
+    targetUsers:
+      campaign.targetCount ?? 0,
+
+    attemptedUsers,
+    successfulUsers,
+    failedUsers,
+
+    successRate,
+
+    successfulDevices,
+    failedDevices,
+
+    sentAt: campaign.sentAt,
+  };
+}
