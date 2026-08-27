@@ -18,7 +18,6 @@ import * as Notifications from "expo-notifications";
 import * as AuthModule from "../hooks/useAuth";
 import * as PlanModule from "../hooks/usePlanStatus";
 import * as UserModule from "../hooks/useUser";
-import { registerDeviceToken } from "../lib/notifications/registerDevice";
 import { getPaymentProvider } from "../lib/payments/getPaymentProvider";
 import { markNotificationOpened } from "../api/notifications";
 import NotificationPermissionGate from "../components/notifications/NotificationPermissionGate";
@@ -109,9 +108,6 @@ export default function RootLayout() {
     (async () => {
       await getPaymentProvider();
     })();
-  }, []);
-  useEffect(() => {
-    registerDeviceToken();
   }, []);
 
   useEffect(() => {
