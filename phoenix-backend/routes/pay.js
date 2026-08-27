@@ -39,12 +39,16 @@ const ZP_CURRENCY = (
 
 const PAY_CALLBACK_URL = (process.env.PAY_CALLBACK_URL || "").trim();
 const PAY_RESULT_URL = (process.env.PAY_RESULT_URL || "").trim();
-const PAY_RESULT_BASE = (process.env.PAY_RESULT_BASE || "https://qoqnoos.app/pay").trim();
+const PAY_RESULT_BASE = (
+  process.env.PAY_RESULT_BASE || "https://qoqnoos.app/pay"
+).trim();
 
 // باید با app.json یکی باشد (scheme)
 const APP_SCHEME = (process.env.APP_SCHEME || "phoenixapp").trim();
 // پکیج اندروید (برای intent)
-const ANDROID_PACKAGE = (process.env.ANDROID_PACKAGE || "com.pezhman.phoenix").trim();
+const ANDROID_PACKAGE = (
+  process.env.ANDROID_PACKAGE || "com.pezhman.phoenix"
+).trim();
 
 function setCORS(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -68,7 +72,9 @@ function buildResultUrl({ ok, authority }) {
     authority: authority || "",
   }).toString();
 
-  const base = (PAY_RESULT_URL || `${PAY_RESULT_BASE.replace(/\/+$/, "")}/pay-result`).replace(/\/+$/, "");
+  const base = (
+    PAY_RESULT_URL || `${PAY_RESULT_BASE.replace(/\/+$/, "")}/pay-result`
+  ).replace(/\/+$/, "");
   return `${base}?${params}`;
 }
 
@@ -84,7 +90,7 @@ function buildDeepLink({ ok, authority }) {
 function buildAndroidIntentLink({ ok, authority }) {
   const pathAndQuery = `pay?authority=${encodeURIComponent(authority || "")}&status=${ok ? "success" : "failed"}`;
   return `intent://${pathAndQuery}#Intent;scheme=${encodeURIComponent(APP_SCHEME)};package=${encodeURIComponent(
-    ANDROID_PACKAGE
+    ANDROID_PACKAGE,
   )};end`;
 }
 
@@ -126,7 +132,6 @@ router.post("/start", async (req, res) => {
     const expiresAt = new Date();
     expiresAt.setMonth(expiresAt.getMonth() + months);
 
-
     if (!amount || amount < 1000) {
       return res.status(400).json({
         ok: false,
@@ -140,10 +145,13 @@ router.post("/start", async (req, res) => {
 
     const callback = PAY_REAL
       ? PAY_CALLBACK_URL
-      : String(body.callback || "") || `${req.protocol}://${req.get("host")}/api/pay/verify`;
+      : String(body.callback || "") ||
+        `${req.protocol}://${req.get("host")}/api/pay/verify`;
 
     if (PAY_REAL && !callback) {
-      return res.status(500).json({ ok: false, error: "PAY_CALLBACK_URL_MISSING" });
+      return res
+        .status(500)
+        .json({ ok: false, error: "PAY_CALLBACK_URL_MISSING" });
     }
 
     const user = await prisma.user.upsert({
@@ -206,19 +214,18 @@ router.post("/start", async (req, res) => {
     if (!zpRes.ok || !json) {
       console.error(
         "[pay/start] ZARINPAL_REQUEST_FAILED:",
-        `status=${zpRes.status}`
+        `status=${zpRes.status}`,
       );
-      return res.status(502).json({ ok: false, error: "ZARINPAL_REQUEST_FAILED" });
+      return res
+        .status(502)
+        .json({ ok: false, error: "ZARINPAL_REQUEST_FAILED" });
     }
 
     const { data, errors } = json;
 
     if (!data || data.code !== 100) {
       const code = data?.code ?? errors?.code ?? "UNKNOWN";
-      console.error(
-        "[pay/start] ZARINPAL_ERROR:",
-        `code=${code}`
-      );
+      console.error("[pay/start] ZARINPAL_ERROR:", `code=${code}`);
       return res.status(502).json({ ok: false, error: `ZP_ERROR_${code}` });
     }
 
@@ -226,19 +233,19 @@ router.post("/start", async (req, res) => {
     const gatewayUrl = `${ZP_GATEWAY_BASE}${authority}`;
 
     await prisma.subscription.create({
-  data: {
-    userId: user.id,
-    phone,
-    authority,
-    refId: "PENDING",
-    amount,
-    months,
-    expiresAt,
-    plan,
-    status: "pending",
-    provider: "zarinpal",
-  },
-});
+      data: {
+        userId: user.id,
+        phone,
+        authority,
+        refId: "PENDING",
+        amount,
+        months,
+        expiresAt,
+        plan,
+        status: "pending",
+        provider: "zarinpal",
+      },
+    });
 
     return res.json({
       ok: true,
@@ -270,7 +277,6 @@ router.get("/pricing", async (_req, res) => {
     });
   }
 });
-
 
 router.get("/verify", async (req, res) => {
   setCORS(res);
@@ -305,7 +311,9 @@ router.get("/verify", async (req, res) => {
     });
 
     if (!sub) {
-      return res.status(404).json({ ok: false, error: "SUBSCRIPTION_NOT_FOUND" });
+      return res
+        .status(404)
+        .json({ ok: false, error: "SUBSCRIPTION_NOT_FOUND" });
     }
 
     if (sub.status === "active") {
@@ -316,11 +324,11 @@ router.get("/verify", async (req, res) => {
       return res.redirect(302, buildResultUrl({ ok: false, authority }));
     }
 
-        if (sub.status !== "pending") {
+    if (sub.status !== "pending") {
       console.error(
         "[pay/verify] INVALID_SUBSCRIPTION_STATE",
         `subId=${sub.id || "unknown"}`,
-        `status=${sub.status || "unknown"}`
+        `status=${sub.status || "unknown"}`,
       );
       return res.redirect(302, buildResultUrl({ ok: false, authority }));
     }
@@ -330,10 +338,10 @@ router.get("/verify", async (req, res) => {
     const months = sub.months || 1;
     const phone = normalizeIranPhone(sub.phone || sub.user?.phone || "");
 
-        if (!phone) {
+    if (!phone) {
       console.error(
         "[pay/verify] PHONE_MISSING_FOR_SUBSCRIPTION",
-        `subId=${sub.id || "unknown"}`
+        `subId=${sub.id || "unknown"}`,
       );
       return res.redirect(302, buildResultUrl({ ok: false, authority }));
     }
@@ -359,30 +367,32 @@ router.get("/verify", async (req, res) => {
       const refId = `TEST-${Date.now()}`;
 
       const result = await finalizeSubscription(prisma, {
-  phone,
-  provider: "zarinpal",
-  authority,
-  refId,
-  amount,
-  months,
-  plan,
-  now,
-  metaJson: {
-    mode: "mock",
-    authority,
-  },
-});
+        phone,
+        provider: "zarinpal",
+        authority,
+        refId,
+        amount,
+        months,
+        plan,
+        now,
+        metaJson: {
+          mode: "mock",
+          authority,
+        },
+      });
 
-await createAndSendNotification({
-  userId: result.userId,
-  type: "subscription",
-  title: "اشتراک ققنوس فعال شد",
-  body: "اشتراک PRO شما با موفقیت فعال شد.",
-  data: {
-    screen: "subscription",
-  },
-});
-
+      await createAndSendNotification({
+        userId: result.userId,
+        type: "subscription",
+        title: "اشتراک ققنوس فعال شد",
+        body: "اشتراک PRO شما با موفقیت فعال شد.",
+        data: {
+          screen: "subscription",
+          route: "/(tabs)/Subscription",
+          reason: "subscription_activated",
+          provider: "zarinpal",
+        },
+      });
 
       return res.redirect(302, buildResultUrl({ ok: true, authority }));
     }
@@ -406,11 +416,11 @@ await createAndSendNotification({
 
     const json = await zpRes.json().catch(() => null);
 
-        if (!zpRes.ok || !json) {
+    if (!zpRes.ok || !json) {
       console.error(
         "[pay/verify] ZARINPAL_VERIFY_FAILED",
         `status=${zpRes.status}`,
-        `hasBody=${json ? "yes" : "no"}`
+        `hasBody=${json ? "yes" : "no"}`,
       );
 
       await prisma.subscription.updateMany({
@@ -429,12 +439,12 @@ await createAndSendNotification({
 
     const { data, errors } = json;
 
-        if (!data || (data.code !== 100 && data.code !== 101)) {
+    if (!data || (data.code !== 100 && data.code !== 101)) {
       const code = data?.code ?? errors?.code ?? "UNKNOWN";
       console.error(
         "[pay/verify] ZARINPAL_VERIFY_ERROR",
         `code=${code}`,
-        `hasBody=${json ? "yes" : "no"}`
+        `hasBody=${json ? "yes" : "no"}`,
       );
 
       await prisma.subscription.updateMany({
@@ -463,29 +473,32 @@ await createAndSendNotification({
     };
 
     const result = await finalizeSubscription(prisma, {
-  phone,
-  provider: "zarinpal",
-  authority,
-  refId,
-  amount,
-  months,
-  plan,
-  now,
-  metaJson,
-});
+      phone,
+      provider: "zarinpal",
+      authority,
+      refId,
+      amount,
+      months,
+      plan,
+      now,
+      metaJson,
+    });
 
-await createAndSendNotification({
-  userId: result.userId,
-  type: "subscription",
-  title: "اشتراک ققنوس فعال شد",
-  body: "اشتراک پرو شما با موفقیت فعال شد.",
-  data: {
-    screen: "subscription",
-  },
-});
+    await createAndSendNotification({
+      userId: result.userId,
+      type: "subscription",
+      title: "اشتراک ققنوس فعال شد",
+      body: "اشتراک پرو شما با موفقیت فعال شد.",
+      data: {
+        screen: "subscription",
+        route: "/(tabs)/Subscription",
+        reason: "subscription_activated",
+        provider: "zarinpal",
+      },
+    });
 
-return res.redirect(302, buildResultUrl({ ok: true, authority }));
-    } catch (e) {
+    return res.redirect(302, buildResultUrl({ ok: true, authority }));
+  } catch (e) {
     console.error("VERIFY_ERR", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
@@ -659,22 +672,24 @@ router.get("/status", async (req, res) => {
     });
 
     if (!sub) {
-      return res.status(404).json({ ok: false, error: "SUBSCRIPTION_NOT_FOUND" });
+      return res
+        .status(404)
+        .json({ ok: false, error: "SUBSCRIPTION_NOT_FOUND" });
     }
 
     return res.json({
-  ok: true,
-  authority: sub.authority,
-  status: sub.status,
-  refId: sub.refId,
-  amount: sub.amount,
-  plan: sub.plan,
-  months: sub.months,
-  expiresAt: sub.expiresAt ? new Date(sub.expiresAt).toISOString() : null,
-  paidAt: sub.paidAt ? new Date(sub.paidAt).toISOString() : null,
-  provider: sub.provider || null,
-});
-    } catch (e) {
+      ok: true,
+      authority: sub.authority,
+      status: sub.status,
+      refId: sub.refId,
+      amount: sub.amount,
+      plan: sub.plan,
+      months: sub.months,
+      expiresAt: sub.expiresAt ? new Date(sub.expiresAt).toISOString() : null,
+      paidAt: sub.paidAt ? new Date(sub.paidAt).toISOString() : null,
+      provider: sub.provider || null,
+    });
+  } catch (e) {
     console.error("PAY_STATUS_ERR", e?.message || "unknown_error");
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }

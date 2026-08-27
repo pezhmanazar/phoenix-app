@@ -80,29 +80,29 @@ export async function sendIncompleteBaselineReminders() {
        * در هر 24 ساعت بیشتر از یک بار
        * Reminder ارسال نکن.
        */
-      const alreadySent =
-  await prisma.notification.findFirst({
-    where: {
-      userId: user.id,
-      type: "subscription",
+      const alreadySent = await prisma.notification.findFirst({
+        where: {
+          userId: session.userId,
+          type: "assessment",
 
-      AND: [
-        {
           data: {
             path: ["reason"],
-            equals:
-              "subscription_expiring_3_days",
+            equals: "baseline_incomplete",
+          },
+
+          createdAt: {
+            gte: oneDayAgo,
+          },
+
+          deliveries: {
+            some: {
+              status: {
+                in: ["sent", "delivered", "opened"],
+              },
+            },
           },
         },
-        {
-          data: {
-            path: ["expiryKey"],
-            equals: expiryKey,
-          },
-        },
-      ],
-    },
-  });
+      });
 
       if (alreadySent) {
         skipped++;
@@ -481,13 +481,9 @@ export async function sendTreatmentStartReminders() {
 export async function sendSubscriptionExpiryReminders() {
   const now = new Date();
 
-  const threeDaysFromNow = new Date(
-    now.getTime() + 3 * 24 * 60 * 60 * 1000
-  );
+  const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
 
-  const fourDaysFromNow = new Date(
-    now.getTime() + 4 * 24 * 60 * 60 * 1000
-  );
+  const fourDaysFromNow = new Date(now.getTime() + 4 * 24 * 60 * 60 * 1000);
 
   const users = await prisma.user.findMany({
     where: {
@@ -517,70 +513,75 @@ export async function sendSubscriptionExpiryReminders() {
 
   for (const user of users) {
     try {
-      const expiryKey =
-        user.planExpiresAt.toISOString();
+      const expiryKey = user.planExpiresAt.toISOString();
 
-      const alreadySent =
-        await prisma.notification.findFirst({
-          where: {
-            userId: user.id,
-            type: "subscription",
+      const alreadySent = await prisma.notification.findFirst({
+        where: {
+          userId: user.id,
+          type: "subscription",
 
-            data: {
-              path: ["expiryKey"],
-              equals: expiryKey,
+          AND: [
+            {
+              data: {
+                path: ["reason"],
+                equals: "subscription_expiring_3_days",
+              },
+            },
+            {
+              data: {
+                path: ["expiryKey"],
+                equals: expiryKey,
+              },
+            },
+          ],
+
+          deliveries: {
+            some: {
+              status: {
+                in: ["sent", "delivered", "opened"],
+              },
             },
           },
-        });
+        },
+      });
 
       if (alreadySent) {
         skipped++;
         continue;
       }
 
-      const result =
-        await createAndSendNotification({
-          userId: user.id,
-          type: "subscription",
+      const result = await createAndSendNotification({
+        userId: user.id,
+        type: "subscription",
 
-          title: "۳ روز از اشتراکت باقی مونده",
+        title: "۳ روز از اشتراکت باقی مونده",
 
-          body:
-            "اشتراک ققنوس تو تا ۳ روز دیگه به پایان می‌رسه. اگه می‌خوای مسیر درمانت بدون وقفه ادامه پیدا کنه، می‌تونی اشتراکت رو تمدید کنی.",
+        body: "اشتراک ققنوس تو تا ۳ روز دیگه به پایان می‌رسه. اگه می‌خوای مسیر درمانت بدون وقفه ادامه پیدا کنه، می‌تونی اشتراکت رو تمدید کنی.",
 
-          data: {
-            reason: "subscription_expiring_3_days",
-            expiryKey,
-            route: "/(tabs)/Subscription",
-          },
-        });
+        data: {
+          reason: "subscription_expiring_3_days",
+          expiryKey,
+          route: "/(tabs)/Subscription",
+        },
+      });
 
-      if (
-        result.pushResult?.ok &&
-        result.pushResult.successCount > 0
-      ) {
+      if (result.pushResult?.ok && result.pushResult.successCount > 0) {
         sent++;
       } else {
         failed++;
 
-        console.log(
-          "[SUBSCRIPTION_3_DAY_REMINDER_FAILED]",
-          {
-            userId: user.id,
-            pushResult: result.pushResult,
-          }
-        );
+        console.log("[SUBSCRIPTION_3_DAY_REMINDER_FAILED]", {
+          userId: user.id,
+          pushResult: result.pushResult,
+        });
       }
     } catch (error) {
       failed++;
 
-      console.error(
-        "[SUBSCRIPTION_3_DAY_REMINDER_ERROR]",
-        {
-          userId: user.id,
-          error: error?.message || error,
-        }
-      );
+      console.error("[SUBSCRIPTION_3_DAY_REMINDER_ERROR]", {
+        userId: user.id,
+        error: error?.message || error,
+      });
     }
   }
 
@@ -595,13 +596,9 @@ export async function sendSubscriptionExpiryReminders() {
 export async function sendSubscriptionOneDayReminders() {
   const now = new Date();
 
-  const oneDayFromNow = new Date(
-    now.getTime() + 1 * 24 * 60 * 60 * 1000,
-  );
+  const oneDayFromNow = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);
 
-  const twoDaysFromNow = new Date(
-    now.getTime() + 2 * 24 * 60 * 60 * 1000,
-  );
+  const twoDaysFromNow = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
 
   const users = await prisma.user.findMany({
     where: {
@@ -631,82 +628,74 @@ export async function sendSubscriptionOneDayReminders() {
 
   for (const user of users) {
     try {
-      const expiryKey =
-        user.planExpiresAt.toISOString();
+      const expiryKey = user.planExpiresAt.toISOString();
 
-      const alreadySent =
-  await prisma.notification.findFirst({
-    where: {
-      userId: user.id,
-      type: "subscription",
+      const alreadySent = await prisma.notification.findFirst({
+        where: {
+          userId: user.id,
+          type: "subscription",
 
-      AND: [
-        {
-          data: {
-            path: ["reason"],
-            equals:
-              "subscription_expiring_1_day",
+          AND: [
+            {
+              data: {
+                path: ["reason"],
+                equals: "subscription_expiring_1_day",
+              },
+            },
+            {
+              data: {
+                path: ["expiryKey"],
+                equals: expiryKey,
+              },
+            },
+          ],
+          deliveries: {
+            some: {
+              status: {
+                in: ["sent", "delivered", "opened"],
+              },
+            },
           },
         },
-        {
-          data: {
-            path: ["expiryKey"],
-            equals: expiryKey,
-          },
-        },
-      ],
-    },
-  });
+      });
 
       if (alreadySent) {
         skipped++;
         continue;
       }
 
-      const result =
-        await createAndSendNotification({
-          userId: user.id,
-          type: "subscription",
+      const result = await createAndSendNotification({
+        userId: user.id,
+        type: "subscription",
 
-          title: "فقط ۱ روز از اشتراکت مونده",
+        title: "فقط ۱ روز از اشتراکت مونده",
 
-          body:
-            "اشتراک ققنوس تو فردا به پایان می‌رسه. اگه می‌خوای مسیر درمانت بدون وقفه ادامه پیدا کنه، الان می‌تونی اشتراکت رو تمدید کنی.",
+        body: "اشتراک ققنوس تو فردا به پایان می‌رسه. اگه می‌خوای مسیر درمانت بدون وقفه ادامه پیدا کنه، الان می‌تونی اشتراکت رو تمدید کنی.",
 
-          data: {
-            reason:
-              "subscription_expiring_1_day",
-            expiryKey,
-            route: "/(tabs)/Subscription",
-          },
-        });
+        data: {
+          reason: "subscription_expiring_1_day",
+          expiryKey,
+          route: "/(tabs)/Subscription",
+        },
+      });
 
-      if (
-        result.pushResult?.ok &&
-        result.pushResult.successCount > 0
-      ) {
+      if (result.pushResult?.ok && result.pushResult.successCount > 0) {
         sent++;
       } else {
         failed++;
 
-        console.log(
-          "[SUBSCRIPTION_1_DAY_REMINDER_FAILED]",
-          {
-            userId: user.id,
-            pushResult: result.pushResult,
-          },
-        );
+        console.log("[SUBSCRIPTION_1_DAY_REMINDER_FAILED]", {
+          userId: user.id,
+          pushResult: result.pushResult,
+        });
       }
     } catch (error) {
       failed++;
 
-      console.error(
-        "[SUBSCRIPTION_1_DAY_REMINDER_ERROR]",
-        {
-          userId: user.id,
-          error: error?.message || error,
-        },
-      );
+      console.error("[SUBSCRIPTION_1_DAY_REMINDER_ERROR]", {
+        userId: user.id,
+        error: error?.message || error,
+      });
     }
   }
 
@@ -753,82 +742,74 @@ export async function sendSubscriptionExpiredReminders() {
         continue;
       }
 
-      const expiryKey =
-        user.planExpiresAt.toISOString();
+      const expiryKey = user.planExpiresAt.toISOString();
 
-      const alreadySent =
-        await prisma.notification.findFirst({
-          where: {
-            userId: user.id,
-            type: "subscription",
+      const alreadySent = await prisma.notification.findFirst({
+        where: {
+          userId: user.id,
+          type: "subscription",
 
-            AND: [
-              {
-                data: {
-                  path: ["reason"],
-                  equals:
-                    "subscription_expired",
-                },
+          AND: [
+            {
+              data: {
+                path: ["reason"],
+                equals: "subscription_expired",
               },
-              {
-                data: {
-                  path: ["expiryKey"],
-                  equals: expiryKey,
-                },
+            },
+            {
+              data: {
+                path: ["expiryKey"],
+                equals: expiryKey,
               },
-            ],
+            },
+          ],
+          deliveries: {
+            some: {
+              status: {
+                in: ["sent", "delivered", "opened"],
+              },
+            },
           },
-        });
+        },
+      });
 
       if (alreadySent) {
         skipped++;
         continue;
       }
 
-      const result =
-        await createAndSendNotification({
-          userId: user.id,
-          type: "subscription",
+      const result = await createAndSendNotification({
+        userId: user.id,
+        type: "subscription",
 
-          title: "اشتراک ققنوست به پایان رسید",
+        title: "اشتراک ققنوست به پایان رسید",
 
-          body:
-            "اشتراک پرو ققنوس به پایان رسیده. اگه می‌خوای مسیر درمانت بدون وقفه ادامه پیدا کنه، می‌تونی دوباره اشتراکت رو فعال کنی.",
+        body: "اشتراک پرو ققنوس به پایان رسیده. اگه می‌خوای مسیر درمانت بدون وقفه ادامه پیدا کنه، می‌تونی دوباره اشتراکت رو فعال کنی.",
 
-          data: {
-            reason:
-              "subscription_expired",
-            expiryKey,
-            route: "/(tabs)/Subscription",
-          },
-        });
+        data: {
+          reason: "subscription_expired",
+          expiryKey,
+          route: "/(tabs)/Subscription",
+        },
+      });
 
-      if (
-        result.pushResult?.ok &&
-        result.pushResult.successCount > 0
-      ) {
+      if (result.pushResult?.ok && result.pushResult.successCount > 0) {
         sent++;
       } else {
         failed++;
 
-        console.log(
-          "[SUBSCRIPTION_EXPIRED_REMINDER_FAILED]",
-          {
-            userId: user.id,
-            pushResult: result.pushResult,
-          },
-        );
+        console.log("[SUBSCRIPTION_EXPIRED_REMINDER_FAILED]", {
+          userId: user.id,
+          pushResult: result.pushResult,
+        });
       }
     } catch (error) {
       failed++;
 
-      console.error(
-        "[SUBSCRIPTION_EXPIRED_REMINDER_ERROR]",
-        {
-          userId: user.id,
-          error: error?.message || error,
-        },
-      );
+      console.error("[SUBSCRIPTION_EXPIRED_REMINDER_ERROR]", {
+        userId: user.id,
+        error: error?.message || error,
+      });
     }
   }
 

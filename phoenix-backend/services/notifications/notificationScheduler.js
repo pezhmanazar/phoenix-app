@@ -65,55 +65,52 @@ async function runNotificationJobs() {
     );
 
     console.log(
-  "[NOTIFICATION_SCHEDULER] subscription expiry reminder job started",
-);
+      "[NOTIFICATION_SCHEDULER] subscription expiry reminder job started",
+    );
 
-const subscriptionExpiryResult =
-  await sendSubscriptionExpiryReminders();
+    const subscriptionExpiryResult = await sendSubscriptionExpiryReminders();
 
-console.log(
-  "[NOTIFICATION_SCHEDULER] subscription expiry reminder job finished",
-  {
-    found: subscriptionExpiryResult.found,
-    sent: subscriptionExpiryResult.sent,
-    skipped: subscriptionExpiryResult.skipped,
-    failed: subscriptionExpiryResult.failed,
-  },
-);
+    console.log(
+      "[NOTIFICATION_SCHEDULER] subscription expiry reminder job finished",
+      {
+        found: subscriptionExpiryResult.found,
+        sent: subscriptionExpiryResult.sent,
+        skipped: subscriptionExpiryResult.skipped,
+        failed: subscriptionExpiryResult.failed,
+      },
+    );
 
-console.log(
-  "[NOTIFICATION_SCHEDULER] subscription one-day reminder job started",
-);
+    console.log(
+      "[NOTIFICATION_SCHEDULER] subscription one-day reminder job started",
+    );
 
-const subscriptionOneDayResult =
-  await sendSubscriptionOneDayReminders();
+    const subscriptionOneDayResult = await sendSubscriptionOneDayReminders();
 
-console.log(
-  "[NOTIFICATION_SCHEDULER] subscription one-day reminder job finished",
-  {
-    found: subscriptionOneDayResult.found,
-    sent: subscriptionOneDayResult.sent,
-    skipped: subscriptionOneDayResult.skipped,
-    failed: subscriptionOneDayResult.failed,
-  },
-);
+    console.log(
+      "[NOTIFICATION_SCHEDULER] subscription one-day reminder job finished",
+      {
+        found: subscriptionOneDayResult.found,
+        sent: subscriptionOneDayResult.sent,
+        skipped: subscriptionOneDayResult.skipped,
+        failed: subscriptionOneDayResult.failed,
+      },
+    );
 
-console.log(
-  "[NOTIFICATION_SCHEDULER] subscription expired reminder job started",
-);
+    console.log(
+      "[NOTIFICATION_SCHEDULER] subscription expired reminder job started",
+    );
 
-const subscriptionExpiredResult =
-  await sendSubscriptionExpiredReminders();
+    const subscriptionExpiredResult = await sendSubscriptionExpiredReminders();
 
-console.log(
-  "[NOTIFICATION_SCHEDULER] subscription expired reminder job finished",
-  {
-    found: subscriptionExpiredResult.found,
-    sent: subscriptionExpiredResult.sent,
-    skipped: subscriptionExpiredResult.skipped,
-    failed: subscriptionExpiredResult.failed,
-  },
-);
+    console.log(
+      "[NOTIFICATION_SCHEDULER] subscription expired reminder job finished",
+      {
+        found: subscriptionExpiredResult.found,
+        sent: subscriptionExpiredResult.sent,
+        skipped: subscriptionExpiredResult.skipped,
+        failed: subscriptionExpiredResult.failed,
+      },
+    );
   } catch (error) {
     console.error(
       "[NOTIFICATION_SCHEDULER] reminder jobs error:",

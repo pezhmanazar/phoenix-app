@@ -85,7 +85,9 @@ router.get("/status", async (req, res) => {
     });
 
     if (!sub) {
-      return res.status(404).json({ ok: false, error: "SUBSCRIPTION_NOT_FOUND" });
+      return res
+        .status(404)
+        .json({ ok: false, error: "SUBSCRIPTION_NOT_FOUND" });
     }
 
     return res.json({
@@ -95,7 +97,9 @@ router.get("/status", async (req, res) => {
         status: sub.status,
         plan: sub.plan,
         months: sub.months,
-        planExpiresAt: sub.expiresAt ? new Date(sub.expiresAt).toISOString() : null,
+        planExpiresAt: sub.expiresAt
+          ? new Date(sub.expiresAt).toISOString()
+          : null,
         provider: sub.provider,
         metaJson: sub.metaJson ?? null,
         userPlan: sub.user?.plan ?? null,
@@ -106,7 +110,9 @@ router.get("/status", async (req, res) => {
     });
   } catch (e) {
     console.error("[payBazaar.status] error:", e?.message || "unknown_error");
-    return res.status(500).json({ ok: false, error: e?.message || "SERVER_ERROR" });
+    return res
+      .status(500)
+      .json({ ok: false, error: e?.message || "SERVER_ERROR" });
   }
 });
 
@@ -136,7 +142,9 @@ router.post("/verify", async (req, res) => {
     }
 
     if (!purchaseToken) {
-      return res.status(400).json({ ok: false, error: "PURCHASE_TOKEN_REQUIRED" });
+      return res
+        .status(400)
+        .json({ ok: false, error: "PURCHASE_TOKEN_REQUIRED" });
     }
 
     const months = resolveMonthsFromBazaarProductId(productId);
@@ -150,7 +158,8 @@ router.post("/verify", async (req, res) => {
     if ((!orderId || orderId === purchaseToken) && !purchaseTime) {
       return res.status(400).json({
         ok: false,
-        error: "PURCHASE_TIME_REQUIRED_WHEN_ORDER_ID_IS_MISSING_OR_EQUALS_TOKEN",
+        error:
+          "PURCHASE_TIME_REQUIRED_WHEN_ORDER_ID_IS_MISSING_OR_EQUALS_TOKEN",
       });
     }
 
@@ -186,18 +195,20 @@ router.post("/verify", async (req, res) => {
       metaJson,
     });
     if (result.userId && !result.alreadyFinalized) {
-  await createAndSendNotification({
-    userId: result.userId,
-    type: "subscription",
-    title: "اشتراک ققنوس فعال شد",
-    body: `اشتراک پرو شما به مدت ${months} ماه فعال شد.`,
-    data: {
-      type: "subscription",
-      provider: "bazaar",
-      subscriptionId: result.subscriptionId,
-    },
-  });
-}
+      await createAndSendNotification({
+        userId: result.userId,
+        type: "subscription",
+        title: "اشتراک ققنوس فعال شد",
+        body: `اشتراک پرو شما به مدت ${months} ماه فعال شد.`,
+        data: {
+          type: "subscription",
+          provider: "bazaar",
+          subscriptionId: result.subscriptionId,
+          reason: "subscription_activated",
+          route: "/(tabs)/Subscription",
+        },
+      });
+    }
 
     return res.json({
       ok: true,
@@ -220,7 +231,9 @@ router.post("/verify", async (req, res) => {
     });
   } catch (e) {
     console.error("[payBazaar.verify] error:", e?.message || "unknown_error");
-    return res.status(500).json({ ok: false, error: e?.message || "SERVER_ERROR" });
+    return res
+      .status(500)
+      .json({ ok: false, error: e?.message || "SERVER_ERROR" });
   }
 });
 
