@@ -45,7 +45,7 @@ export function buildCampaignTargetWhere(rule = {}) {
     where.appProvider = rule.appProvider;
   }
 
-    /*
+  /*
    * Journey segment
    *
    * baseline_incomplete:
@@ -85,6 +85,8 @@ export function buildCampaignTargetWhere(rule = {}) {
   }
 
   if (rule.journey === "treatment_not_started") {
+    delete where.plan;
+    delete where.planExpiresAt;
     where.pelekanProgress = {
       is: {
         bastanIntroAudioCompletedAt: {
