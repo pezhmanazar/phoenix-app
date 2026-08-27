@@ -21,6 +21,7 @@ import * as UserModule from "../hooks/useUser";
 import { registerDeviceToken } from "../lib/notifications/registerDevice";
 import { getPaymentProvider } from "../lib/payments/getPaymentProvider";
 import { markNotificationOpened } from "../api/notifications";
+import NotificationPermissionGate from "../components/notifications/NotificationPermissionGate";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -253,6 +254,7 @@ export default function RootLayout() {
         <AuthProviderWrapper>
           <UserProviderWrapper>
             <PlanStatusProviderWrapper>
+              <NotificationPermissionGate />
               <ThemeBridge />
             </PlanStatusProviderWrapper>
           </UserProviderWrapper>

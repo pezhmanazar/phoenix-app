@@ -1,23 +1,68 @@
-//phoenix-app\lib\notifications\notificationService.ts
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 
-export async function requestNotificationPermission() {
+export type NotificationPermissionState = {
+  granted: boolean;
+  canAskAgain: boolean;
+  status: Notifications.PermissionStatus;
+};
+
+export async function getNotificationPermissionState(): Promise<NotificationPermissionState> {
   if (!Device.isDevice) {
-    return false;
+    return {
+      granted: false,
+      canAskAgain: false,
+      status:
+        Notifications.PermissionStatus.UNDETERMINED,
+    };
   }
 
-  const { status: existingStatus } =
+  const settings =
     await Notifications.getPermissionsAsync();
 
-  if (existingStatus === "granted") {
-    return true;
+  const granted =
+    settings.granted ||
+    settings.ios?.status ===
+      Notifications.IosAuthorizationStatus.AUTHORIZED;
+
+  return {
+    granted,
+    canAskAgain:
+      typeof settings.canAskAgain === "boolean"
+        ? settings.canAskAgain
+        : true,
+    status: settings.status,
+  };
+}
+
+export async function requestNotificationPermission(): Promise<NotificationPermissionState> {
+  const current =
+    await getNotificationPermissionState();
+
+  if (current.granted) {
+    return current;
   }
 
-  const { status } =
+  if (!current.canAskAgain) {
+    return current;
+  }
+
+  const result =
     await Notifications.requestPermissionsAsync();
 
-  return status === "granted";
+  const granted =
+    result.granted ||
+    result.ios?.status ===
+      Notifications.IosAuthorizationStatus.AUTHORIZED;
+
+  return {
+    granted,
+    canAskAgain:
+      typeof result.canAskAgain === "boolean"
+        ? result.canAskAgain
+        : true,
+    status: result.status,
+  };
 }
 
 export async function getFCMToken() {
@@ -26,18 +71,25 @@ export async function getFCMToken() {
   }
 
   try {
-    const token = await Notifications.getDevicePushTokenAsync();
+    const token =
+      await Notifications.getDevicePushTokenAsync();
 
     return token.data;
   } catch (error) {
-    console.log("FCM TOKEN ERROR:", error);
+    console.log(
+      "FCM TOKEN ERROR:",
+      error,
+    );
+
     return null;
   }
 }
-export async function setupNotifications() {
-  const permission = await requestNotificationPermission();
 
-  if (!permission) {
+export async function setupNotifications() {
+  const permission =
+    await requestNotificationPermission();
+
+  if (!permission.granted) {
     return null;
   }
 
