@@ -70,6 +70,72 @@ router.post("/register-device", authUser, async (req, res) => {
     });
   }
 });
+
+router.post("/unregister-device", authUser, async (req, res) => {
+  try {
+    const userPhone = req.user?.phone;
+
+    if (!userPhone) {
+      return res.status(401).json({
+        ok: false,
+        error: "UNAUTHORIZED",
+      });
+    }
+
+    const { token } = req.body || {};
+
+    if (!token) {
+      return res.status(400).json({
+        ok: false,
+        error: "TOKEN_REQUIRED",
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: {
+        phone: userPhone,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        ok: false,
+        error: "USER_NOT_FOUND",
+      });
+    }
+
+    const result = await prisma.deviceToken.updateMany({
+      where: {
+        token,
+        userId: user.id,
+        isActive: true,
+      },
+      data: {
+        isActive: false,
+        lastUsedAt: new Date(),
+      },
+    });
+
+    return res.json({
+      ok: true,
+      deactivated: result.count > 0,
+    });
+  } catch (e) {
+    console.error(
+      "[notifications.unregister-device]",
+      e?.message || e,
+    );
+
+    return res.status(500).json({
+      ok: false,
+      error: "SERVER_ERROR",
+    });
+  }
+});
+
 router.get("/", authUser, async (req, res) => {
   try {
     const userPhone = req.user?.phone;

@@ -22,7 +22,6 @@ import { registerDeviceToken } from "../lib/notifications/registerDevice";
 import { getPaymentProvider } from "../lib/payments/getPaymentProvider";
 import { markNotificationOpened } from "../api/notifications";
 
-
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
@@ -63,29 +62,28 @@ const PlanStatusProviderWrapper: React.FC<{ children: React.ReactNode }> = ({
 /* ---------------- Navigation ---------------- */
 function RootStack() {
   return (
-  <Stack screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="splash" options={{ animation: "none" }} />
-    <Stack.Screen name="gate" options={{ animation: "fade" }} />
-    <Stack.Screen name="onboarding" options={{ animation: "fade" }} />
-    <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
-    <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
-    <Stack.Screen name="modal" options={{ presentation: "modal" }} />
-  </Stack>
-);
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="splash" options={{ animation: "none" }} />
+      <Stack.Screen name="gate" options={{ animation: "fade" }} />
+      <Stack.Screen name="onboarding" options={{ animation: "fade" }} />
+      <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
+      <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
+      <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+    </Stack>
+  );
 }
 function ThemeBridge() {
   const { navTheme, isDark } = usePhoenix();
   const theme: Theme = useMemo(
     () => navTheme ?? (isDark ? DarkTheme : DefaultTheme),
-    [navTheme, isDark]
+    [navTheme, isDark],
   );
   return (
-  <ThemeProvider value={theme}>
-    <StatusBar style="auto" />
-    <RootStack />
-  </ThemeProvider>
-);
-
+    <ThemeProvider value={theme}>
+      <StatusBar style="auto" />
+      <RootStack />
+    </ThemeProvider>
+  );
 }
 /* ---------------- Root Layout ---------------- */
 export default function RootLayout() {
@@ -94,16 +92,15 @@ export default function RootLayout() {
     "Anjoman-Medium": require("../assets/fonts/Anjoman-Medium.ttf"),
     "Anjoman-Bold": require("../assets/fonts/Anjoman-Bold.ttf"),
   });
-  
+
   useEffect(() => {
-  if (I18nManager.isRTL) {
-    I18nManager.allowRTL(false);
-    I18nManager.forceRTL(false);
-  }
-}, []);
+    if (I18nManager.isRTL) {
+      I18nManager.allowRTL(false);
+      I18nManager.forceRTL(false);
+    }
+  }, []);
 
-
-    useEffect(() => {
+  useEffect(() => {
     SplashScreen.preventAutoHideAsync().catch(() => {});
   }, []);
 
@@ -113,104 +110,99 @@ export default function RootLayout() {
     })();
   }, []);
   useEffect(() => {
-  registerDeviceToken();
-}, []);
+    registerDeviceToken();
+  }, []);
 
-useEffect(() => {
-  const handledResponseIds = new Set<string>();
+  useEffect(() => {
+    const subscription = Notifications.addPushTokenListener(() => {
+      registerDeviceToken().catch((error) => {
+        console.warn(
+          "[notifications] push token refresh register failed:",
+          error?.message || error,
+        );
+      });
+    });
 
-  const handleNotificationResponse = async (
-    response: Notifications.NotificationResponse
-  ) => {
-    const requestId =
-      response.notification.request.identifier;
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
-    // جلوگیری از پردازش دوباره همان tap
-    if (
-      requestId &&
-      handledResponseIds.has(requestId)
-    ) {
-      return;
-    }
+  useEffect(() => {
+    const handledResponseIds = new Set<string>();
 
-    if (requestId) {
-      handledResponseIds.add(requestId);
-    }
+    const handleNotificationResponse = async (
+      response: Notifications.NotificationResponse,
+    ) => {
+      const requestId = response.notification.request.identifier;
 
-    const data =
-      response.notification.request.content.data as {
+      // جلوگیری از پردازش دوباره همان tap
+      if (requestId && handledResponseIds.has(requestId)) {
+        return;
+      }
+
+      if (requestId) {
+        handledResponseIds.add(requestId);
+      }
+
+      const data = response.notification.request.content.data as {
         type?: string;
         ticketId?: string;
         route?: string;
         notificationId?: string;
       };
 
-    // ثبت Open واقعی Push
-    if (
-      typeof data?.notificationId === "string" &&
-      data.notificationId.trim()
-    ) {
-      try {
-        await markNotificationOpened(
-          data.notificationId.trim()
-        );
-      } catch (error) {
-        console.warn(
-          "[notifications] mark opened failed:",
-          error instanceof Error
-            ? error.message
-            : error
-        );
+      // ثبت Open واقعی Push
+      if (
+        typeof data?.notificationId === "string" &&
+        data.notificationId.trim()
+      ) {
+        try {
+          await markNotificationOpened(data.notificationId.trim());
+        } catch (error) {
+          console.warn(
+            "[notifications] mark opened failed:",
+            error instanceof Error ? error.message : error,
+          );
+        }
       }
-    }
 
-    // پاسخ درمانگر
-    if (
-      data?.type === "ticket_reply" &&
-      data?.ticketId
-    ) {
-      router.push(
-        `/support/tickets/${data.ticketId}`
-      );
+      // پاسخ درمانگر
+      if (data?.type === "ticket_reply" && data?.ticketId) {
+        router.push(`/support/tickets/${data.ticketId}`);
 
-      return;
-    }
+        return;
+      }
 
-    // مقصد عمومی
-    if (
-      typeof data?.route === "string" &&
-      data.route.trim()
-    ) {
-      router.push(data.route as any);
-    }
-  };
+      // مقصد عمومی
+      if (typeof data?.route === "string" && data.route.trim()) {
+        router.push(data.route as any);
+      }
+    };
 
-  const subscription =
-    Notifications.addNotificationResponseReceivedListener(
+    const subscription = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         void handleNotificationResponse(response);
-      }
+      },
     );
 
-  Notifications.getLastNotificationResponseAsync()
-    .then((response) => {
-      if (response) {
-        void handleNotificationResponse(response);
-      }
-    })
-    .catch((error) => {
-      console.warn(
-        "[notifications] last response failed:",
-        error instanceof Error
-          ? error.message
-          : error
-      );
-    });
+    Notifications.getLastNotificationResponseAsync()
+      .then((response) => {
+        if (response) {
+          void handleNotificationResponse(response);
+        }
+      })
+      .catch((error) => {
+        console.warn(
+          "[notifications] last response failed:",
+          error instanceof Error ? error.message : error,
+        );
+      });
 
-  return () => {
-    subscription.remove();
-  };
-}, []);
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (!fontsLoaded) return;
@@ -218,14 +210,18 @@ useEffect(() => {
       const s = StyleSheet.flatten(style) || {};
       const fw = String(s.fontWeight ?? "").trim();
       // اگر جایی fontFamily دستی ست شده، دست نزن
-      if (s.fontFamily) return { family: s.fontFamily, forceNormalWeight: false };
+      if (s.fontFamily)
+        return { family: s.fontFamily, forceNormalWeight: false };
       const w = parseInt(fw, 10);
       if (!Number.isNaN(w)) {
-        if (w >= 700) return { family: "Anjoman-Bold", forceNormalWeight: true };
-        if (w >= 500) return { family: "Anjoman-Medium", forceNormalWeight: true };
+        if (w >= 700)
+          return { family: "Anjoman-Bold", forceNormalWeight: true };
+        if (w >= 500)
+          return { family: "Anjoman-Medium", forceNormalWeight: true };
         return { family: "Anjoman-Regular", forceNormalWeight: true };
       }
-      if (fw === "bold") return { family: "Anjoman-Bold", forceNormalWeight: true };
+      if (fw === "bold")
+        return { family: "Anjoman-Bold", forceNormalWeight: true };
       return { family: "Anjoman-Regular", forceNormalWeight: true };
     };
     const patchRender = (Comp: any) => {

@@ -15,6 +15,10 @@ import React, {
   useState,
 } from "react";
 import { syncAppProvider } from "../api/appProvider";
+import {
+  registerDeviceToken,
+  unregisterDeviceToken,
+} from "../lib/notifications/registerDevice";
 
 /* ==============================
    🔹 TYPES
@@ -48,9 +52,7 @@ type AuthContextValue = AuthState & {
   setPhone: (p: string | null) => Promise<void>;
   signOut: (opts?: { keepPhone?: boolean }) => Promise<void>;
   refreshFromStore: () => Promise<void>;
-  requestCode: (
-    phone: string
-  ) => Promise<{
+  requestCode: (phone: string) => Promise<{
     ok: true;
     expiresInSec?: number;
     devHint?: string;
@@ -156,7 +158,7 @@ function isJwtExpired(payload: JwtPayload | null) {
 function deriveAuthStateFromToken(
   token: string | null,
   storedPhone: string | null,
-  loading: boolean
+  loading: boolean,
 ): AuthState {
   const payload = parseJwtPayload(token);
 
@@ -183,9 +185,7 @@ function deriveAuthStateFromToken(
     cleanString(payload?.mobile) ||
     cleanString(storedPhone);
 
-  const name =
-    cleanString(payload?.name) ||
-    cleanString(payload?.fullName);
+  const name = cleanString(payload?.name) || cleanString(payload?.fullName);
 
   return {
     loading,
@@ -264,13 +264,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (token) {
-  syncAppProvider(token).catch((error) => {
-    console.warn(
-      "[auth] app provider sync failed:",
-      error?.message || error
-    );
-  });
-}
+        syncAppProvider(token).catch((error) => {
+          console.warn(
+            "[auth] app provider sync failed:",
+            error?.message || error,
+          );
+        });
+
+        registerDeviceToken().catch((error) => {
+          console.warn(
+            "[auth] device token register on boot failed:",
+            error?.message || error,
+          );
+        });
+      }
 
       if (!mountedRef.current) return;
 
@@ -298,6 +305,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await AsyncStorage.removeItem("session_v1");
       } catch {
         // intentionally ignored
+      }
+      if (token) {
+        registerDeviceToken().catch((error) => {
+          console.warn(
+            "[auth] device token register after refresh failed:",
+            error?.message || error,
+          );
+        });
       }
     }
 
@@ -341,22 +356,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (nextToken) {
-  syncAppProvider(nextToken).catch((error) => {
-    console.warn(
-      "[auth] app provider sync failed:",
-      error?.message || error
-    );
-  });
-}
+      syncAppProvider(nextToken).catch((error) => {
+        console.warn(
+          "[auth] app provider sync failed:",
+          error?.message || error,
+        );
+      });
+
+      registerDeviceToken().catch((error) => {
+        console.warn(
+          "[auth] device token register failed:",
+          error?.message || error,
+        );
+      });
+    }
 
     if (!mountedRef.current) return;
 
     setState((s) => {
-      const derived = deriveAuthStateFromToken(
-        nextToken,
-        s.phone,
-        false
-      );
+      const derived = deriveAuthStateFromToken(nextToken, s.phone, false);
 
       return {
         ...s,
@@ -396,6 +414,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const keepPhone = opts?.keepPhone === true;
 
     try {
+      try {
+        await unregisterDeviceToken();
+      } catch (error) {
+        console.warn(
+          "[auth] device token unregister failed:",
+          error instanceof Error ? error.message : error,
+        );
+      }
       await Promise.all([
         safeDel(SECURE_KEYS.SESSION),
 
@@ -467,7 +493,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const v = await withTimeout(
         apiVerifyCode(String(phone), String(code)),
-        15000
+        15000,
       );
 
       if (!v?.ok) {
@@ -492,11 +518,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log("VERIFY_OTP_ERROR_RAW:", e);
       console.log("VERIFY_OTP_ERROR_MESSAGE:", e?.message);
 
-      const raw = String(
-        e?.message ||
-          e?.error ||
-          "VERIFY_FAILED"
-      );
+      const raw = String(e?.message || e?.error || "VERIFY_FAILED");
 
       if (
         raw === "INVALID_CODE" ||
@@ -508,10 +530,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error("INVALID_CODE");
       }
 
-      if (
-        raw === "TOKEN_INVALID_OR_EXPIRED" ||
-        /expired/i.test(raw)
-      ) {
+      if (raw === "TOKEN_INVALID_OR_EXPIRED" || /expired/i.test(raw)) {
         throw new Error("TOKEN_INVALID_OR_EXPIRED");
       }
 
@@ -523,10 +542,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error("NO_SESSION_FROM_BACKEND");
       }
 
-      if (
-        raw === "REQUEST_TIMEOUT" ||
-        /timeout/i.test(raw)
-      ) {
+      if (raw === "REQUEST_TIMEOUT" || /timeout/i.test(raw)) {
         throw new Error("REQUEST_TIMEOUT");
       }
 
@@ -539,14 +555,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const value: AuthContextValue = {
-  ...state,
-  setToken,
-  setPhone,
-  signOut,
-  refreshFromStore,
-  requestCode,
-  verifyOtp,
-};
+    ...state,
+    setToken,
+    setPhone,
+    signOut,
+    refreshFromStore,
+    requestCode,
+    verifyOtp,
+  };
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 }
 
