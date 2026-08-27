@@ -3,6 +3,7 @@ import {
   sendPelekanIntroReminders,
   sendTreatmentStartReminders,
   sendSubscriptionExpiryReminders,
+  sendSubscriptionOneDayReminders,
   sendScheduledCampaigns,
 } from "./notificationJobs.js";
 
@@ -77,6 +78,23 @@ console.log(
     sent: subscriptionExpiryResult.sent,
     skipped: subscriptionExpiryResult.skipped,
     failed: subscriptionExpiryResult.failed,
+  },
+);
+
+console.log(
+  "[NOTIFICATION_SCHEDULER] subscription one-day reminder job started",
+);
+
+const subscriptionOneDayResult =
+  await sendSubscriptionOneDayReminders();
+
+console.log(
+  "[NOTIFICATION_SCHEDULER] subscription one-day reminder job finished",
+  {
+    found: subscriptionOneDayResult.found,
+    sent: subscriptionOneDayResult.sent,
+    skipped: subscriptionOneDayResult.skipped,
+    failed: subscriptionOneDayResult.failed,
   },
 );
   } catch (error) {

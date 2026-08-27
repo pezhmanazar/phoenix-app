@@ -80,26 +80,29 @@ export async function sendIncompleteBaselineReminders() {
        * در هر 24 ساعت بیشتر از یک بار
        * Reminder ارسال نکن.
        */
-      const alreadySent = await prisma.notification.findFirst({
-        where: {
-          userId: session.userId,
-          type: "assessment",
+      const alreadySent =
+  await prisma.notification.findFirst({
+    where: {
+      userId: user.id,
+      type: "subscription",
+
+      AND: [
+        {
           data: {
             path: ["reason"],
-            equals: "baseline_incomplete",
-          },
-          createdAt: {
-            gte: oneDayAgo,
-          },
-          deliveries: {
-            some: {
-              status: {
-                in: ["sent", "delivered", "opened"],
-              },
-            },
+            equals:
+              "subscription_expiring_3_days",
           },
         },
-      });
+        {
+          data: {
+            path: ["expiryKey"],
+            equals: expiryKey,
+          },
+        },
+      ],
+    },
+  });
 
       if (alreadySent) {
         skipped++;
@@ -577,6 +580,132 @@ export async function sendSubscriptionExpiryReminders() {
           userId: user.id,
           error: error?.message || error,
         }
+      );
+    }
+  }
+
+  return {
+    found: users.length,
+    sent,
+    skipped,
+    failed,
+  };
+}
+
+export async function sendSubscriptionOneDayReminders() {
+  const now = new Date();
+
+  const oneDayFromNow = new Date(
+    now.getTime() + 1 * 24 * 60 * 60 * 1000,
+  );
+
+  const twoDaysFromNow = new Date(
+    now.getTime() + 2 * 24 * 60 * 60 * 1000,
+  );
+
+  const users = await prisma.user.findMany({
+    where: {
+      plan: "pro",
+
+      planExpiresAt: {
+        gt: oneDayFromNow,
+        lte: twoDaysFromNow,
+      },
+
+      deviceTokens: {
+        some: {
+          isActive: true,
+        },
+      },
+    },
+
+    select: {
+      id: true,
+      planExpiresAt: true,
+    },
+  });
+
+  let sent = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const user of users) {
+    try {
+      const expiryKey =
+        user.planExpiresAt.toISOString();
+
+      const alreadySent =
+  await prisma.notification.findFirst({
+    where: {
+      userId: user.id,
+      type: "subscription",
+
+      AND: [
+        {
+          data: {
+            path: ["reason"],
+            equals:
+              "subscription_expiring_1_day",
+          },
+        },
+        {
+          data: {
+            path: ["expiryKey"],
+            equals: expiryKey,
+          },
+        },
+      ],
+    },
+  });
+
+      if (alreadySent) {
+        skipped++;
+        continue;
+      }
+
+      const result =
+        await createAndSendNotification({
+          userId: user.id,
+          type: "subscription",
+
+          title: "فقط ۱ روز از اشتراکت مونده",
+
+          body:
+            "اشتراک ققنوس تو فردا به پایان می‌رسه. اگه می‌خوای مسیر درمانت بدون وقفه ادامه پیدا کنه، الان می‌تونی اشتراکت رو تمدید کنی.",
+
+          data: {
+            reason:
+              "subscription_expiring_1_day",
+            expiryKey,
+            route: "/(tabs)/Subscription",
+          },
+        });
+
+      if (
+        result.pushResult?.ok &&
+        result.pushResult.successCount > 0
+      ) {
+        sent++;
+      } else {
+        failed++;
+
+        console.log(
+          "[SUBSCRIPTION_1_DAY_REMINDER_FAILED]",
+          {
+            userId: user.id,
+            pushResult: result.pushResult,
+          },
+        );
+      }
+    } catch (error) {
+      failed++;
+
+      console.error(
+        "[SUBSCRIPTION_1_DAY_REMINDER_ERROR]",
+        {
+          userId: user.id,
+          error: error?.message || error,
+        },
       );
     }
   }
