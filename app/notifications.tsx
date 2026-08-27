@@ -282,7 +282,7 @@ export default function NotificationsScreen() {
               >
                 <View style={styles.cardHeader}>
                   <View style={styles.statusRow}>
-                    <View>
+                    <View style={styles.readStatusWrap}>
                       {!item.readAt ? (
                         <Pressable
                           onPress={(event) => {
@@ -300,15 +300,42 @@ export default function NotificationsScreen() {
                           <Text style={styles.readButtonTopText}>خواندم</Text>
                         </Pressable>
                       ) : (
-                        <View style={styles.readBadge}>
-                          <Ionicons
-                            name="checkmark-done-outline"
-                            size={13}
-                            color="#6B7280"
-                          />
+                        <>
+                          <Pressable
+                            disabled={deletingId === item.id}
+                            onPress={(event) => {
+                              event.stopPropagation();
+                              setDeleteTargetId(item.id);
+                            }}
+                            style={({ pressed }) => [
+                              styles.deleteButton,
+                              pressed && { opacity: 0.7 },
+                              deletingId === item.id && {
+                                opacity: 0.45,
+                              },
+                            ]}
+                          >
+                            {deletingId === item.id ? (
+                              <ActivityIndicator size="small" color="#9CA3AF" />
+                            ) : (
+                              <Ionicons
+                                name="trash-outline"
+                                size={14}
+                                color="#9CA3AF"
+                              />
+                            )}
+                          </Pressable>
 
-                          <Text style={styles.readBadgeText}>خوانده‌شده</Text>
-                        </View>
+                          <View style={styles.readBadge}>
+                            <Ionicons
+                              name="checkmark-done-outline"
+                              size={13}
+                              color="#6B7280"
+                            />
+
+                            <Text style={styles.readBadgeText}>خوانده‌شده</Text>
+                          </View>
+                        </>
                       )}
                     </View>
 
