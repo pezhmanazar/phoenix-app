@@ -4,9 +4,9 @@ import {
   sendTreatmentStartReminders,
   sendSubscriptionExpiryReminders,
   sendSubscriptionOneDayReminders,
+  sendSubscriptionExpiredReminders,
   sendScheduledCampaigns,
 } from "./notificationJobs.js";
-
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const CAMPAIGN_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -95,6 +95,23 @@ console.log(
     sent: subscriptionOneDayResult.sent,
     skipped: subscriptionOneDayResult.skipped,
     failed: subscriptionOneDayResult.failed,
+  },
+);
+
+console.log(
+  "[NOTIFICATION_SCHEDULER] subscription expired reminder job started",
+);
+
+const subscriptionExpiredResult =
+  await sendSubscriptionExpiredReminders();
+
+console.log(
+  "[NOTIFICATION_SCHEDULER] subscription expired reminder job finished",
+  {
+    found: subscriptionExpiredResult.found,
+    sent: subscriptionExpiredResult.sent,
+    skipped: subscriptionExpiredResult.skipped,
+    failed: subscriptionExpiredResult.failed,
   },
 );
   } catch (error) {
