@@ -15,67 +15,56 @@ let isRunning = false;
 async function runNotificationJobs() {
   if (isRunning) {
     console.log(
-      "[NOTIFICATION_SCHEDULER] skipped because previous run is still active"
+      "[NOTIFICATION_SCHEDULER] skipped because previous run is still active",
     );
     return;
   }
 
   isRunning = true;
 
-  console.log(
-    "[NOTIFICATION_SCHEDULER] baseline reminder job started"
-  );
+  console.log("[NOTIFICATION_SCHEDULER] baseline reminder job started");
 
   try {
     const result = await sendIncompleteBaselineReminders();
 
+    console.log("[NOTIFICATION_SCHEDULER] baseline reminder job finished", {
+      found: result.found,
+      sent: result.sent,
+      skipped: result.skipped,
+      failed: result.failed,
+    });
+    console.log("[NOTIFICATION_SCHEDULER] pelekan intro reminder job started");
+
+    const pelekanIntroResult = await sendPelekanIntroReminders();
+
     console.log(
-      "[NOTIFICATION_SCHEDULER] baseline reminder job finished",
+      "[NOTIFICATION_SCHEDULER] pelekan intro reminder job finished",
       {
-        found: result.found,
-        sent: result.sent,
-        skipped: result.skipped,
-        failed: result.failed,
-      }
+        found: pelekanIntroResult.found,
+        sent: pelekanIntroResult.sent,
+        skipped: pelekanIntroResult.skipped,
+        failed: pelekanIntroResult.failed,
+      },
     );
     console.log(
-  "[NOTIFICATION_SCHEDULER] pelekan intro reminder job started"
-);
+      "[NOTIFICATION_SCHEDULER] treatment start reminder job started",
+    );
 
-const pelekanIntroResult = await sendPelekanIntroReminders();
+    const treatmentStartResult = await sendTreatmentStartReminders();
 
-console.log(
-  "[NOTIFICATION_SCHEDULER] pelekan intro reminder job finished",
-  {
-    found: pelekanIntroResult.found,
-    sent: pelekanIntroResult.sent,
-    skipped: pelekanIntroResult.skipped,
-    failed: pelekanIntroResult.failed,
-  }
-);
-console.log(
-  "[NOTIFICATION_SCHEDULER] treatment start reminder job started"
-);
-
-const treatmentStartResult =
-  await sendTreatmentStartReminders();
-
-console.log(
-  "[NOTIFICATION_SCHEDULER] treatment start reminder job finished",
-  {
-    found: treatmentStartResult.found,
-    sent: treatmentStartResult.sent,
-    skipped: treatmentStartResult.skipped,
-    failed: treatmentStartResult.failed,
-  }
-);
-
-const scheduledCampaignResult =
-  await sendScheduledCampaigns();
+    console.log(
+      "[NOTIFICATION_SCHEDULER] treatment start reminder job finished",
+      {
+        found: treatmentStartResult.found,
+        sent: treatmentStartResult.sent,
+        skipped: treatmentStartResult.skipped,
+        failed: treatmentStartResult.failed,
+      },
+    );
   } catch (error) {
     console.error(
-      "[NOTIFICATION_SCHEDULER] baseline reminder job error:",
-      error?.message || error
+      "[NOTIFICATION_SCHEDULER] reminder jobs error:",
+      error?.message || error,
     );
   } finally {
     isRunning = false;
@@ -94,7 +83,7 @@ export function startNotificationScheduler() {
   runNotificationJobs().catch((error) => {
     console.error(
       "[NOTIFICATION_SCHEDULER] initial run error:",
-      error?.message || error
+      error?.message || error,
     );
   });
 
@@ -103,29 +92,26 @@ export function startNotificationScheduler() {
     runNotificationJobs().catch((error) => {
       console.error(
         "[NOTIFICATION_SCHEDULER] interval run error:",
-        error?.message || error
+        error?.message || error,
       );
     });
   }, ONE_HOUR_MS);
 
   campaignTimer = setInterval(async () => {
-  try {
-    console.log(
-      "[NOTIFICATION_SCHEDULER] scheduled campaign check started"
-    );
+    try {
+      console.log("[NOTIFICATION_SCHEDULER] scheduled campaign check started");
 
-    const result = await sendScheduledCampaigns();
+      const result = await sendScheduledCampaigns();
 
-    console.log(
-      "[NOTIFICATION_SCHEDULER] scheduled campaign check finished",
-      result
-    );
-
-  } catch (error) {
-    console.error(
-      "[NOTIFICATION_SCHEDULER] scheduled campaign error:",
-      error?.message || error
-    );
-  }
-}, CAMPAIGN_INTERVAL_MS);
+      console.log(
+        "[NOTIFICATION_SCHEDULER] scheduled campaign check finished",
+        result,
+      );
+    } catch (error) {
+      console.error(
+        "[NOTIFICATION_SCHEDULER] scheduled campaign error:",
+        error?.message || error,
+      );
+    }
+  }, CAMPAIGN_INTERVAL_MS);
 }
