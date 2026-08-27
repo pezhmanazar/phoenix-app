@@ -475,6 +475,120 @@ export async function sendTreatmentStartReminders() {
   };
 }
 
+export async function sendSubscriptionExpiryReminders() {
+  const now = new Date();
+
+  const threeDaysFromNow = new Date(
+    now.getTime() + 3 * 24 * 60 * 60 * 1000
+  );
+
+  const fourDaysFromNow = new Date(
+    now.getTime() + 4 * 24 * 60 * 60 * 1000
+  );
+
+  const users = await prisma.user.findMany({
+    where: {
+      plan: "pro",
+
+      planExpiresAt: {
+        gt: threeDaysFromNow,
+        lte: fourDaysFromNow,
+      },
+
+      deviceTokens: {
+        some: {
+          isActive: true,
+        },
+      },
+    },
+
+    select: {
+      id: true,
+      planExpiresAt: true,
+    },
+  });
+
+  let sent = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const user of users) {
+    try {
+      const expiryKey =
+        user.planExpiresAt.toISOString();
+
+      const alreadySent =
+        await prisma.notification.findFirst({
+          where: {
+            userId: user.id,
+            type: "subscription",
+
+            data: {
+              path: ["expiryKey"],
+              equals: expiryKey,
+            },
+          },
+        });
+
+      if (alreadySent) {
+        skipped++;
+        continue;
+      }
+
+      const result =
+        await createAndSendNotification({
+          userId: user.id,
+          type: "subscription",
+
+          title: "۳ روز از اشتراکت باقی مونده",
+
+          body:
+            "اشتراک ققنوس تو تا ۳ روز دیگه به پایان می‌رسه. اگه می‌خوای مسیر درمانت بدون وقفه ادامه پیدا کنه، می‌تونی اشتراکت رو تمدید کنی.",
+
+          data: {
+            reason: "subscription_expiring_3_days",
+            expiryKey,
+            route: "/(tabs)/Subscription",
+          },
+        });
+
+      if (
+        result.pushResult?.ok &&
+        result.pushResult.successCount > 0
+      ) {
+        sent++;
+      } else {
+        failed++;
+
+        console.log(
+          "[SUBSCRIPTION_3_DAY_REMINDER_FAILED]",
+          {
+            userId: user.id,
+            pushResult: result.pushResult,
+          }
+        );
+      }
+    } catch (error) {
+      failed++;
+
+      console.error(
+        "[SUBSCRIPTION_3_DAY_REMINDER_ERROR]",
+        {
+          userId: user.id,
+          error: error?.message || error,
+        }
+      );
+    }
+  }
+
+  return {
+    found: users.length,
+    sent,
+    skipped,
+    failed,
+  };
+}
+
 export async function sendScheduledCampaigns() {
   const now = new Date();
   const campaigns = await prisma.notificationCampaign.findMany({

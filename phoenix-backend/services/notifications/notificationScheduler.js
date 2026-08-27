@@ -2,6 +2,7 @@ import {
   sendIncompleteBaselineReminders,
   sendPelekanIntroReminders,
   sendTreatmentStartReminders,
+  sendSubscriptionExpiryReminders,
   sendScheduledCampaigns,
 } from "./notificationJobs.js";
 
@@ -61,6 +62,23 @@ async function runNotificationJobs() {
         failed: treatmentStartResult.failed,
       },
     );
+
+    console.log(
+  "[NOTIFICATION_SCHEDULER] subscription expiry reminder job started",
+);
+
+const subscriptionExpiryResult =
+  await sendSubscriptionExpiryReminders();
+
+console.log(
+  "[NOTIFICATION_SCHEDULER] subscription expiry reminder job finished",
+  {
+    found: subscriptionExpiryResult.found,
+    sent: subscriptionExpiryResult.sent,
+    skipped: subscriptionExpiryResult.skipped,
+    failed: subscriptionExpiryResult.failed,
+  },
+);
   } catch (error) {
     console.error(
       "[NOTIFICATION_SCHEDULER] reminder jobs error:",
