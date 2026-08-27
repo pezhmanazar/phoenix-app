@@ -5,7 +5,6 @@ import { Router } from "express";
 import multer from "multer";
 import { allowAdmin, authAdmin } from "../middleware/authAdmin.js";
 import authUser from "../middleware/authUser.js";
-import { sendPushToUser } from "../services/notifications/pushService.js";
 import { isUserPro } from "../services/planStatus.js";
 import { getS3ObjectStream, uploadBufferToS3 } from "../utils/s3.js";
 import {
@@ -413,47 +412,9 @@ router.post(
       if (!exists) {
         return res.status(404).json({ ok: false, error: "not_found" });
       }
-      console.log("[ADMIN_REPLY_ROUTE] reached");
-
       const message = await prisma.message.create({
         data: { ticketId: id, sender: "admin", text },
       });
-
-      console.log("[MESSAGE_CREATED] before push");
-
-      // ارسال نوتیفیکیشن به کاربر
-      let targetUserId = exists.openedById;
-
-      if (!targetUserId && exists.contact) {
-        const user = await prisma.user.findUnique({
-          where: {
-            phone: exists.contact,
-          },
-          select: {
-            id: true,
-          },
-        });
-
-        targetUserId = user?.id;
-      }
-      console.log("[TICKET_PUSH_TARGET]", {
-        openedById: exists.openedById,
-        contact: exists.contact,
-        targetUserId,
-      });
-
-      if (targetUserId) {
-        await sendPushToUser(targetUserId, {
-          type: "ticket_reply",
-          title: "پاسخ جدید در پناه",
-          body: text.slice(0, 120),
-          data: {
-            screen: "panah",
-            ticketId: id,
-          },
-        });
-      }
-
       const ticket = await prisma.ticket.findUnique({
         where: { id },
         include: { messages: { orderBy: { createdAt: "asc" } } },

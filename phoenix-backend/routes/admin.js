@@ -3180,6 +3180,7 @@ router.post(
           body: text.trim(),
           data: {
             ticketId: id,
+            route: `/support/tickets/${id}`,
           },
         });
 
@@ -3347,6 +3348,7 @@ router.post(
                 : "یک فایل جدید دریافت کردی",
           data: {
             ticketId: id,
+            route: `/support/tickets/${id}`,
           },
         });
 
