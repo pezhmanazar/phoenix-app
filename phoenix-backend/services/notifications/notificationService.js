@@ -4,6 +4,38 @@ import {
   sendPushToUser,
 } from "./pushService.js";
 
+function normalizePushData(data = {}) {
+  const normalized = {};
+
+  for (const [key, value] of Object.entries(data || {})) {
+    if (value === undefined || value === null) {
+      continue;
+    }
+
+    if (typeof value === "string") {
+      normalized[key] = value;
+      continue;
+    }
+
+    if (
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      typeof value === "bigint"
+    ) {
+      normalized[key] = String(value);
+      continue;
+    }
+
+    try {
+      normalized[key] = JSON.stringify(value);
+    } catch {
+      normalized[key] = String(value);
+    }
+  }
+
+  return normalized;
+}
+
 export async function createAndSendNotification({
   userId,
   type = "system",
@@ -31,11 +63,11 @@ try {
   pushResult = await sendPushToUser(userId, {
   title,
   body,
-  data: {
+  data: normalizePushData({
     ...data,
     type,
     notificationId: notification.id,
-  },
+  }),
 });
 } catch (error) {
   console.error("[NOTIFICATION_PUSH_ERROR]", error?.message || error);
