@@ -106,6 +106,7 @@ type TodayItem = {
   time: string;
   done: boolean;
   createdAt: number;
+  notificationId?: string;
 };
 
 type ReminderItem = {
@@ -301,6 +302,8 @@ function TodayBlock({
   onAdd,
   editingId,
   onEditItem,
+  onToggleItem,
+  onRemoveItem,
 }: {
   rtl: boolean;
   items: TodayItem[];
@@ -312,17 +315,9 @@ function TodayBlock({
   onAdd: () => void;
   editingId: string | null;
   onEditItem: (it: TodayItem) => void;
+  onToggleItem: (id: string) => void;
+  onRemoveItem: (id: string) => void;
 }) {
-  const toggle = (id: string) =>
-    setItems((list) =>
-      sortToday(
-        list.map((it) => (it.id === id ? { ...it, done: !it.done } : it)),
-      ),
-    );
-
-  const remove = (id: string) =>
-    setItems((list) => list.filter((it) => it.id !== id));
-
   return (
     <View style={styles.card}>
       <Text style={styles.helperText}>برنامه امروزت رو اینجا اضافه کن</Text>
@@ -377,7 +372,7 @@ function TodayBlock({
           {items.map((item) => (
             <View key={item.id} style={styles.rowCard}>
               <TouchableOpacity
-                onPress={() => toggle(item.id)}
+                onPress={() => onToggleItem(item.id)}
                 activeOpacity={0.85}
                 style={[
                   styles.checkBox,
@@ -423,7 +418,7 @@ function TodayBlock({
               </TouchableOpacity>
 
               <TouchableOpacity
-                onPress={() => remove(item.id)}
+                onPress={() => onRemoveItem(item.id)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <Ionicons name="trash-outline" size={18} color={UI.DANGER} />
@@ -918,39 +913,83 @@ export default function Rooznegar() {
     return granted;
   };
 
-  const scheduleForReminder = async (
-    it: ReminderItem,
-  ): Promise<string | undefined> => {
-    if (!(await ensureNotifPermission())) return undefined;
+  const debugScheduledNotifications = async () => {
+    try {
+      const scheduled = await Notifications.getAllScheduledNotificationsAsync();
 
-    const triggerDate = new Date(it.when);
-    const diffMs = triggerDate.getTime() - Date.now();
-    if (diffMs <= 0) return undefined;
+      console.log(
+        "[ROOZNEGAR_SCHEDULED_NOTIFICATIONS]",
+        scheduled.map((item) => ({
+          identifier: item.identifier,
+          title: item.content.title,
+          body: item.content.body,
+          data: item.content.data,
+          trigger: item.trigger,
+        })),
+      );
+    } catch (error) {
+      console.log("[ROOZNEGAR_SCHEDULED_NOTIFICATIONS_ERROR]", error);
+    }
+  };
+
+  const scheduleLocalNotification = async ({
+    id,
+    title,
+    when,
+  }: {
+    id: string;
+    title: string;
+    when: number;
+  }): Promise<string | undefined> => {
+    if (!(await ensureNotifPermission())) {
+      return undefined;
+    }
+
+    const triggerDate = new Date(when);
+
+    if (triggerDate.getTime() <= Date.now()) {
+      return undefined;
+    }
 
     const content: Notifications.NotificationContentInput & {
       categoryIdentifier?: string;
       data?: any;
     } = {
       title: "یادآور",
-      body: it.title,
+      body: title,
       sound: "default",
       categoryIdentifier:
         Platform.OS === "ios" ? "reminder_actions" : undefined,
-      data: { rid: it.id },
+      data: {
+        rid: id,
+      },
     };
 
-    const seconds = Math.max(1, Math.floor(diffMs / 1000));
-
-    const id = await Notifications.scheduleNotificationAsync({
+    const notificationId = await Notifications.scheduleNotificationAsync({
       content,
+
       trigger: {
-        type: "timeInterval",
-        seconds,
-        repeats: false,
-      } as Notifications.NotificationTriggerInput,
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: triggerDate,
+
+        ...(Platform.OS === "android"
+          ? {
+              channelId: "reminders",
+            }
+          : {}),
+      },
     });
 
-    return id;
+    console.log("[ROOZNEGAR_NOTIFICATION_SCHEDULED]", {
+      notificationId,
+      title,
+      when,
+      triggerDate: triggerDate.toISOString(),
+    });
+
+    await debugScheduledNotifications();
+
+    return notificationId;
   };
 
   const cancelNotif = async (id?: string) => {
@@ -1002,9 +1041,11 @@ export default function Rooznegar() {
     saveReminders(remItems).catch(() => {});
   }, [remItems]);
 
-  const addTodayItem = () => {
+  const addTodayItem = async () => {
     const t = todayTitle.trim();
+
     if (!t) return;
+
     if (!todayTime) {
       showTAlert(
         "انتخاب ساعت",
@@ -1013,31 +1054,192 @@ export default function Rooznegar() {
       return;
     }
 
+    /*
+     * زمان واقعی امروز را می‌سازیم.
+     * todayTime فقط ساعت/دقیقه انتخاب‌شده را برای ما نگه می‌دارد.
+     */
+    const now = new Date();
+
+    const when = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      todayTime.getHours(),
+      todayTime.getMinutes(),
+      0,
+      0,
+    );
+
+    /*
+     * -------------------------
+     * EDIT
+     * -------------------------
+     */
     if (todayEditingId) {
+      const existing = todayItems.find((it) => it.id === todayEditingId);
+
+      /*
+       * نوتیفیکیشن قبلی این برنامه را لغو می‌کنیم
+       * چون ممکن است ساعت یا عنوان تغییر کرده باشد.
+       */
+      if (existing?.notificationId) {
+        await cancelNotif(existing.notificationId);
+      }
+
+      let notificationId: string | undefined;
+
+      /*
+       * اگر کار هنوز Done نشده و زمانش هم نگذشته،
+       * نوتیفیکیشن جدید Schedule می‌کنیم.
+       */
+      if (!existing?.done && when.getTime() > Date.now()) {
+        notificationId = await scheduleLocalNotification({
+          id: todayEditingId,
+          title: t,
+          when: when.getTime(),
+        });
+      }
+
       setTodayItems((list) =>
         sortToday(
           list.map((it) =>
             it.id === todayEditingId
-              ? { ...it, title: t, time: timeLabel(todayTime) }
+              ? {
+                  ...it,
+                  title: t,
+                  time: timeLabel(todayTime),
+                  notificationId,
+                }
               : it,
           ),
         ),
       );
+
       setTodayEditingId(null);
     } else {
+      /*
+       * -------------------------
+       * CREATE
+       * -------------------------
+       */
+      const id = uid();
+
+      const notificationId =
+        when.getTime() > Date.now()
+          ? await scheduleLocalNotification({
+              id,
+              title: t,
+              when: when.getTime(),
+            })
+          : undefined;
+
       const item: TodayItem = {
-        id: uid(),
+        id,
         title: t,
         time: timeLabel(todayTime),
         done: false,
         createdAt: Date.now(),
+        notificationId,
       };
+
       setTodayItems((list) => sortToday([...list, item]));
     }
 
     setTodayTitle("");
     setTodayTime(null);
     Keyboard.dismiss();
+  };
+
+  const handleToggleTodayItem = async (id: string) => {
+    const target = todayItems.find((it) => it.id === id);
+    if (!target) return;
+
+    const nextDone = !target.done;
+
+    /*
+     * اگر کار انجام شد:
+     * نوتیفیکیشن آینده را لغو کن.
+     */
+    if (nextDone) {
+      if (target.notificationId) {
+        await cancelNotif(target.notificationId);
+      }
+
+      setTodayItems((list) =>
+        sortToday(
+          list.map((it) =>
+            it.id === id
+              ? {
+                  ...it,
+                  done: true,
+                  notificationId: undefined,
+                }
+              : it,
+          ),
+        ),
+      );
+
+      return;
+    }
+
+    /*
+     * اگر کاربر دوباره از Done خارجش کرد،
+     * ساعت امروز را از روی item.time می‌سازیم.
+     */
+    const [hh, mm] = target.time.split(":").map((x) => parseInt(x, 10));
+
+    const now = new Date();
+
+    const when = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      hh || 0,
+      mm || 0,
+      0,
+      0,
+    );
+
+    /*
+     * فقط اگر ساعت هنوز نگذشته باشد
+     * دوباره Notification بساز.
+     */
+    const notificationId =
+      when.getTime() > Date.now()
+        ? await scheduleLocalNotification({
+            id: target.id,
+            title: target.title,
+            when: when.getTime(),
+          })
+        : undefined;
+
+    setTodayItems((list) =>
+      sortToday(
+        list.map((it) =>
+          it.id === id
+            ? {
+                ...it,
+                done: false,
+                notificationId,
+              }
+            : it,
+        ),
+      ),
+    );
+  };
+
+  const handleRemoveTodayItem = async (id: string) => {
+    const target = todayItems.find((it) => it.id === id);
+
+    /*
+     * قبل از حذف آیتم،
+     * Notification زمان‌بندی‌شده را هم حذف کن.
+     */
+    if (target?.notificationId) {
+      await cancelNotif(target.notificationId);
+    }
+
+    setTodayItems((list) => sortToday(list.filter((it) => it.id !== id)));
   };
 
   const addReminder = async () => {
@@ -1082,12 +1284,10 @@ export default function Rooznegar() {
         return sortReminders(mapped);
       });
 
-      updatedNotificationId = await scheduleForReminder({
+      updatedNotificationId = await scheduleLocalNotification({
         id: remEditingId,
         title: t,
         when: when.getTime(),
-        createdAt: Date.now(),
-        done: false,
       });
 
       setRemItems((list) =>
@@ -1108,7 +1308,11 @@ export default function Rooznegar() {
         done: false,
       };
 
-      const notificationId = await scheduleForReminder(base);
+      const notificationId = await scheduleLocalNotification({
+        id: base.id,
+        title: base.title,
+        when: base.when,
+      });
       const item: ReminderItem = { ...base, notificationId };
       setRemItems((list) => sortReminders([...list, item]));
     }
@@ -1139,14 +1343,22 @@ export default function Rooznegar() {
         ),
       );
     } else {
-      const notificationId = await scheduleForReminder({
-        ...target,
-        done: false,
+      const notificationId = await scheduleLocalNotification({
+        id: target.id,
+        title: target.title,
+        when: target.when,
       });
+
       setRemItems((list) =>
         sortReminders(
           list.map((r) =>
-            r.id === id ? { ...r, done: false, notificationId } : r,
+            r.id === id
+              ? {
+                  ...r,
+                  done: false,
+                  notificationId,
+                }
+              : r,
           ),
         ),
       );
@@ -1160,14 +1372,31 @@ export default function Rooznegar() {
     const base = Math.max(Date.now(), target.when);
     const nextWhen = base + 10 * 60 * 1000;
 
-    if (target.notificationId) await cancelNotif(target.notificationId);
-    const next: ReminderItem = { ...target, when: nextWhen, done: false };
-    const newNotif = await scheduleForReminder(next);
+    if (target.notificationId) {
+      await cancelNotif(target.notificationId);
+    }
+
+    const next: ReminderItem = {
+      ...target,
+      when: nextWhen,
+      done: false,
+    };
+
+    const newNotif = await scheduleLocalNotification({
+      id: next.id,
+      title: next.title,
+      when: next.when,
+    });
 
     setRemItems((list) =>
       sortReminders(
         list.map((r) =>
-          r.id === id ? { ...next, notificationId: newNotif } : r,
+          r.id === id
+            ? {
+                ...next,
+                notificationId: newNotif,
+              }
+            : r,
         ),
       ),
     );
@@ -1269,6 +1498,8 @@ export default function Rooznegar() {
                   d.setHours(hh || 0, mm || 0, 0, 0);
                   setTodayTime(d);
                 }}
+                onToggleItem={handleToggleTodayItem}
+                onRemoveItem={handleRemoveTodayItem}
               />
             ) : (
               <ReminderBlock
