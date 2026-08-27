@@ -115,21 +115,6 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    const subscription = Notifications.addPushTokenListener(() => {
-      registerDeviceToken().catch((error) => {
-        console.warn(
-          "[notifications] push token refresh register failed:",
-          error?.message || error,
-        );
-      });
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, []);
-
-  useEffect(() => {
     const handledResponseIds = new Set<string>();
 
     const handleNotificationResponse = async (
