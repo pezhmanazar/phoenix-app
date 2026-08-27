@@ -1,5 +1,7 @@
 import AppBannerModal from "../ui/AppBannerModal";
 import { useAuth } from "../../hooks/useAuth";
+import { useUser } from "../../hooks/useUser";
+import { useSegments } from "expo-router";
 import {
   getNotificationPermissionState,
   requestNotificationPermission,
@@ -27,6 +29,13 @@ export default function NotificationPermissionGate() {
     isAuthenticated,
   } = useAuth();
 
+  const {
+  me,
+  refreshing: userRefreshing,
+} = useUser();
+
+const segments = useSegments();
+
   const [mode, setMode] =
     useState<Mode>(null);
 
@@ -48,68 +57,93 @@ export default function NotificationPermissionGate() {
     useRef(false);
 
   useEffect(() => {
-    if (loading) {
-      return;
-    }
+  if (loading || userRefreshing) {
+    return;
+  }
 
-    /*
-     * Logout شد:
-     * برای Login بعدی دوباره اجازه بررسی بده.
-     */
-    if (!isAuthenticated) {
-      checkedForCurrentLogin.current = false;
-      dismissedThisSession.current = false;
-      setMode(null);
-      return;
-    }
+  /*
+   * Logout:
+   * برای Login بعدی Gate را Reset می‌کنیم.
+   */
+  if (!isAuthenticated) {
+    checkedForCurrentLogin.current = false;
+    dismissedThisSession.current = false;
+    setMode(null);
+    return;
+  }
 
-    if (
-      checkedForCurrentLogin.current ||
-      dismissedThisSession.current
-    ) {
-      return;
-    }
+  /*
+   * هنوز User از سرور مشخص نشده.
+   *
+   * برای کاربر جدید ممکن است USER_NOT_FOUND باشد
+   * و قرار است Profile Wizard باز شود.
+   * در این وضعیت به هیچ وجه Permission Modal نشان نده.
+   */
+  if (!me) {
+    return;
+  }
 
-    checkedForCurrentLogin.current = true;
+  /*
+   * پروفایل ناقص است:
+   * اول Profile Wizard باید تکمیل شود.
+   */
+  if (me.profileCompleted !== true) {
+    return;
+  }
 
-    void (async () => {
-      try {
-        const permission =
-          await getNotificationPermissionState();
+  /*
+   * حتی اگر me در لحظات پایانی Wizard refresh شده باشد،
+   * تا وقتی هنوز داخل routeهای auth هستیم
+   * Modal نوتیفیکیشن را روی Wizard نمایش نده.
+   */
+  const insideAuthFlow =
+    segments.some(
+      (segment) => String(segment) === "(auth)",
+    );
 
-        /*
-         * قبلاً اجازه داده:
-         * هیچ Modal لازم نیست.
-         * فقط مطمئن شو Device ثبت شده.
-         */
-        if (permission.granted) {
-          await registerDeviceToken();
-          return;
-        }
+  if (insideAuthFlow) {
+    return;
+  }
 
-        /*
-         * هنوز می‌شود Permission خواست.
-         */
-        if (permission.canAskAgain) {
-          setMode("ask");
-          return;
-        }
+  if (
+    checkedForCurrentLogin.current ||
+    dismissedThisSession.current
+  ) {
+    return;
+  }
 
-        /*
-         * دیگر System Prompt قابل نمایش نیست.
-         */
-        setMode("settings");
-      } catch (error) {
-        console.warn(
-          "[NotificationPermissionGate] check failed:",
-          error,
-        );
+  checkedForCurrentLogin.current = true;
+
+  void (async () => {
+    try {
+      const permission =
+        await getNotificationPermissionState();
+
+      if (permission.granted) {
+        await registerDeviceToken();
+        return;
       }
-    })();
-  }, [
-    loading,
-    isAuthenticated,
-  ]);
+
+      if (permission.canAskAgain) {
+        setMode("ask");
+        return;
+      }
+
+      setMode("settings");
+    } catch (error) {
+      console.warn(
+        "[NotificationPermissionGate] check failed:",
+        error,
+      );
+    }
+  })();
+}, [
+  loading,
+  isAuthenticated,
+  me,
+  userRefreshing,
+  segments,
+]);
 
   const closeForNow = () => {
     dismissedThisSession.current = true;
