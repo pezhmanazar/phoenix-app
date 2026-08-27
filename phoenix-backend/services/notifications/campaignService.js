@@ -45,6 +45,70 @@ export function buildCampaignTargetWhere(rule = {}) {
     where.appProvider = rule.appProvider;
   }
 
+    /*
+   * Journey segment
+   *
+   * baseline_incomplete:
+   * کاربر Baseline را شروع کرده ولی کامل نکرده.
+   *
+   * pelekan_intro_not_started:
+   * Baseline کامل شده ولی Intro مرحله بستن را هنوز شروع نکرده.
+   *
+   * treatment_not_started:
+   * Intro را کامل کرده ولی درمان را شروع نکرده
+   * و اشتراک فعال هم ندارد.
+   */
+
+  if (rule.journey === "baseline_incomplete") {
+    where.assessmentSessions = {
+      some: {
+        kind: "hb_baseline",
+        status: "in_progress",
+      },
+    };
+  }
+
+  if (rule.journey === "pelekan_intro_not_started") {
+    where.assessmentSessions = {
+      some: {
+        kind: "hb_baseline",
+        status: "completed",
+      },
+    };
+
+    where.pelekanProgress = {
+      is: {
+        bastanIntroAudioStartedAt: null,
+        bastanIntroAudioCompletedAt: null,
+      },
+    };
+  }
+
+  if (rule.journey === "treatment_not_started") {
+    where.pelekanProgress = {
+      is: {
+        bastanIntroAudioCompletedAt: {
+          not: null,
+        },
+        bastanUnlockedAt: null,
+      },
+    };
+
+    where.OR = [
+      {
+        plan: {
+          not: "pro",
+        },
+      },
+      {
+        plan: "pro",
+        planExpiresAt: {
+          lte: now,
+        },
+      },
+    ];
+  }
+
   return where;
 }
 
