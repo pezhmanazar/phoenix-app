@@ -2677,7 +2677,15 @@ router.get("/tickets", async (req, res) => {
       where: whereFinal,
       orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
       include: {
-        messages: { orderBy: { createdAt: "asc" } },
+        messages: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: {
+            id: true,
+            createdAt: true,
+            sender: true,
+          },
+        },
         assignedAdmin: {
           select: {
             id: true,
