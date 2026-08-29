@@ -6,8 +6,24 @@ const K_TODAY = "phoenix.today.v1";
 const K_REMS  = "phoenix.reminders.v1";
 
 /** انواع ساده مطابق فایل Rooznegar */
-type TodayItem = { id: string; title: string; time: string; done: boolean; createdAt: number };
-type ReminderItem = { id: string; title: string; when: number; createdAt: number; done?: boolean };
+type TodayItem = {
+  id: string;
+  title: string;
+  time?: string;
+  done: boolean;
+  createdAt: number;
+  scheduledDate?: string;
+  notificationId?: string;
+};
+
+type ReminderItem = {
+  id: string;
+  title: string;
+  when: number;
+  createdAt: number;
+  done?: boolean;
+  notificationId?: string;
+};
 
 /** ---- TODAY ---- */
 export async function loadToday(): Promise<TodayItem[]> {

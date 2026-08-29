@@ -56,6 +56,41 @@ const timeLabel = (date: Date) =>
 const uid = () =>
   Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
 
+const localDateKey = (date: Date) =>
+  `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+
+const todayDateKey = () => localDateKey(new Date());
+
+const getItemDateKey = (item: TodayItem) => {
+  if (item.scheduledDate) return item.scheduledDate;
+
+  return localDateKey(new Date(item.createdAt));
+};
+
+const jalaliShortLabelFromKey = (key: string) => {
+  const [year, month, day] = key.split("-").map(Number);
+
+  const d = new Date(year, month - 1, day);
+  const { jy, jm, jd } = toJalaali(d);
+
+  const months = [
+    "فروردین",
+    "اردیبهشت",
+    "خرداد",
+    "تیر",
+    "مرداد",
+    "شهریور",
+    "مهر",
+    "آبان",
+    "آذر",
+    "دی",
+    "بهمن",
+    "اسفند",
+  ];
+
+  return `${toFa(jd)} ${months[jm - 1]} ${toFa(jy)}`;
+};
+
 /** jalaali-js تابع طول ماه نداره؛ این helper جایگزینه */
 const jalaaliMonthLength = (jy: number, jm: number) => {
   if (jm <= 6) return 31;
@@ -103,9 +138,10 @@ const jalaliLabel = (d: Date) => {
 type TodayItem = {
   id: string;
   title: string;
-  time: string;
+  time?: string;
   done: boolean;
   createdAt: number;
+  scheduledDate?: string;
   notificationId?: string;
 };
 
@@ -347,7 +383,7 @@ function TodayBlock({
             style={[styles.timeBtn, { flex: 1 }]}
           >
             <Text style={{ color: UI.TEXT, fontWeight: "900" }}>
-              {time ? toFa(timeLabel(time)) : "انتخاب ساعت"}
+              {time ? toFa(timeLabel(time)) : "ساعت (اختیاری)"}
             </Text>
           </TouchableOpacity>
 
@@ -366,7 +402,7 @@ function TodayBlock({
       </View>
 
       {items.length === 0 ? (
-        <Text style={styles.emptyText}>هنوز کاری در این برنامه ثبت.</Text>
+        <Text style={styles.emptyText}>هنوز کاری در این برنامه ثبت نشده.</Text>
       ) : (
         <View style={{ marginTop: 4 }}>
           {items.map((item) => (
@@ -397,18 +433,35 @@ function TodayBlock({
                 >
                   {item.title}
                 </Text>
+
+                {!item.done && getItemDateKey(item) !== todayDateKey() ? (
+                  <Text
+                    style={{
+                      color: UI.DANGER,
+                      fontSize: 11,
+                      fontWeight: "800",
+                      textAlign: "right",
+                      marginTop: 3,
+                    }}
+                  >
+                    انجام‌نشده از{" "}
+                    {jalaliShortLabelFromKey(getItemDateKey(item))}
+                  </Text>
+                ) : null}
               </View>
 
-              <Text
-                style={{
-                  color: UI.MUTED,
-                  width: 52,
-                  textAlign: "center",
-                  fontWeight: "900",
-                }}
-              >
-                {toFa(item.time)}
-              </Text>
+              {item.time ? (
+                <Text
+                  style={{
+                    color: UI.MUTED,
+                    width: 52,
+                    textAlign: "center",
+                    fontWeight: "900",
+                  }}
+                >
+                  {toFa(item.time)}
+                </Text>
+              ) : null}
 
               <TouchableOpacity
                 onPress={() => onEditItem(item)}
@@ -537,7 +590,7 @@ function ReminderBlock({
       </View>
 
       {items.length === 0 ? (
-        <Text style={styles.emptyText}>هنوز یادآوری ثبت نشده.</Text>
+        <Text style={styles.emptyText}>هنوز هیچ یادآوری اینجا ثبت نشده.</Text>
       ) : (
         <View style={{ marginTop: 4 }}>
           {items.map((item) => {
@@ -999,10 +1052,35 @@ export default function Rooznegar() {
     } catch {}
   };
 
+  const visibleTodayItems = useMemo(() => {
+    const todayKey = todayDateKey();
+
+    return todayItems.filter((item) => {
+      const itemDate = getItemDateKey(item);
+
+      // برنامه‌های امروز همیشه نمایش داده شوند
+      if (itemDate === todayKey) {
+        return true;
+      }
+
+      // از روزهای قبل فقط انجام‌نشده‌ها باقی بمانند
+      return !item.done;
+    });
+  }, [todayItems]);
+
   const todayProgress = useMemo(() => {
-    const total = todayItems.length;
+    const todayKey = todayDateKey();
+
+    const todaysItems = todayItems.filter(
+      (item) => getItemDateKey(item) === todayKey,
+    );
+
+    const total = todaysItems.length;
+
     if (!total) return 0;
-    const done = todayItems.filter((i) => i.done).length;
+
+    const done = todaysItems.filter((item) => item.done).length;
+
     return Math.round((done / total) * 100);
   }, [todayItems]);
 
@@ -1046,29 +1124,25 @@ export default function Rooznegar() {
 
     if (!t) return;
 
-    if (!todayTime) {
-      showTAlert(
-        "انتخاب ساعت",
-        "برای ثبت کارِ امروز، حتماً ساعت انجامش رو انتخاب کن.",
-      );
-      return;
-    }
-
     /*
-     * زمان واقعی امروز را می‌سازیم.
-     * todayTime فقط ساعت/دقیقه انتخاب‌شده را برای ما نگه می‌دارد.
+     * ساعت برای برنامه امروز اختیاری است.
+     * فقط اگر ساعت انتخاب شده باشد، زمان واقعی امروز ساخته می‌شود.
      */
-    const now = new Date();
+    let when: Date | null = null;
 
-    const when = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      todayTime.getHours(),
-      todayTime.getMinutes(),
-      0,
-      0,
-    );
+    if (todayTime) {
+      const now = new Date();
+
+      when = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        todayTime.getHours(),
+        todayTime.getMinutes(),
+        0,
+        0,
+      );
+    }
 
     /*
      * -------------------------
@@ -1079,8 +1153,8 @@ export default function Rooznegar() {
       const existing = todayItems.find((it) => it.id === todayEditingId);
 
       /*
-       * نوتیفیکیشن قبلی این برنامه را لغو می‌کنیم
-       * چون ممکن است ساعت یا عنوان تغییر کرده باشد.
+       * نوتیفیکیشن قبلی را همیشه لغو می‌کنیم؛
+       * چون ممکن است ساعت حذف یا تغییر کرده باشد.
        */
       if (existing?.notificationId) {
         await cancelNotif(existing.notificationId);
@@ -1089,10 +1163,14 @@ export default function Rooznegar() {
       let notificationId: string | undefined;
 
       /*
-       * اگر کار هنوز Done نشده و زمانش هم نگذشته،
-       * نوتیفیکیشن جدید Schedule می‌کنیم.
+       * فقط وقتی:
+       * 1. ساعت انتخاب شده
+       * 2. کار هنوز انجام نشده
+       * 3. ساعت در آینده است
+       *
+       * نوتیفیکیشن ساخته می‌شود.
        */
-      if (!existing?.done && when.getTime() > Date.now()) {
+      if (todayTime && when && !existing?.done && when.getTime() > Date.now()) {
         notificationId = await scheduleLocalNotification({
           id: todayEditingId,
           title: t,
@@ -1107,7 +1185,7 @@ export default function Rooznegar() {
               ? {
                   ...it,
                   title: t,
-                  time: timeLabel(todayTime),
+                  time: todayTime ? timeLabel(todayTime) : undefined,
                   notificationId,
                 }
               : it,
@@ -1124,21 +1202,27 @@ export default function Rooznegar() {
        */
       const id = uid();
 
-      const notificationId =
-        when.getTime() > Date.now()
-          ? await scheduleLocalNotification({
-              id,
-              title: t,
-              when: when.getTime(),
-            })
-          : undefined;
+      let notificationId: string | undefined;
+
+      /*
+       * فقط اگر ساعت انتخاب شده و هنوز نگذشته باشد
+       * Notification می‌سازیم.
+       */
+      if (todayTime && when && when.getTime() > Date.now()) {
+        notificationId = await scheduleLocalNotification({
+          id,
+          title: t,
+          when: when.getTime(),
+        });
+      }
 
       const item: TodayItem = {
         id,
         title: t,
-        time: timeLabel(todayTime),
+        time: todayTime ? timeLabel(todayTime) : undefined,
         done: false,
         createdAt: Date.now(),
+        scheduledDate: todayDateKey(),
         notificationId,
       };
 
@@ -1158,7 +1242,7 @@ export default function Rooznegar() {
 
     /*
      * اگر کار انجام شد:
-     * نوتیفیکیشن آینده را لغو کن.
+     * نوتیفیکیشن احتمالی را لغو کن.
      */
     if (nextDone) {
       if (target.notificationId) {
@@ -1183,8 +1267,30 @@ export default function Rooznegar() {
     }
 
     /*
-     * اگر کاربر دوباره از Done خارجش کرد،
-     * ساعت امروز را از روی item.time می‌سازیم.
+     * اگر دوباره از حالت انجام‌شده خارج شد
+     * ولی ساعت ندارد:
+     * فقط Done را false کن و هیچ نوتیفیکیشنی نساز.
+     */
+    if (!target.time) {
+      setTodayItems((list) =>
+        sortToday(
+          list.map((it) =>
+            it.id === id
+              ? {
+                  ...it,
+                  done: false,
+                  notificationId: undefined,
+                }
+              : it,
+          ),
+        ),
+      );
+
+      return;
+    }
+
+    /*
+     * اگر ساعت دارد، زمان امروز را می‌سازیم.
      */
     const [hh, mm] = target.time.split(":").map((x) => parseInt(x, 10));
 
@@ -1202,7 +1308,7 @@ export default function Rooznegar() {
 
     /*
      * فقط اگر ساعت هنوز نگذشته باشد
-     * دوباره Notification بساز.
+     * نوتیفیکیشن دوباره ساخته می‌شود.
      */
     const notificationId =
       when.getTime() > Date.now()
@@ -1480,7 +1586,7 @@ export default function Rooznegar() {
             {tab === "today" ? (
               <TodayBlock
                 rtl={false}
-                items={todayItems}
+                items={visibleTodayItems}
                 setItems={setTodayItems}
                 title={todayTitle}
                 setTitle={setTodayTitle}
@@ -1491,12 +1597,18 @@ export default function Rooznegar() {
                 onEditItem={(it) => {
                   setTodayEditingId(it.id);
                   setTodayTitle(it.title);
-                  const [hh, mm] = it.time
-                    .split(":")
-                    .map((x) => parseInt(x, 10));
-                  const d = new Date();
-                  d.setHours(hh || 0, mm || 0, 0, 0);
-                  setTodayTime(d);
+
+                  if (it.time) {
+                    const [hh, mm] = it.time
+                      .split(":")
+                      .map((x) => parseInt(x, 10));
+
+                    const d = new Date();
+                    d.setHours(hh || 0, mm || 0, 0, 0);
+                    setTodayTime(d);
+                  } else {
+                    setTodayTime(null);
+                  }
                 }}
                 onToggleItem={handleToggleTodayItem}
                 onRemoveItem={handleRemoveTodayItem}
@@ -1585,9 +1697,30 @@ export default function Rooznegar() {
 
 function sortToday(arr: TodayItem[]) {
   return [...arr].sort((a, b) => {
-    if (a.done !== b.done) return a.done ? 1 : -1;
-    if (a.time !== b.time) return a.time < b.time ? -1 : 1;
-    if (a.title !== b.title) return a.title.localeCompare(b.title, "fa");
+    // انجام‌نشده‌ها اول
+    if (a.done !== b.done) {
+      return a.done ? 1 : -1;
+    }
+
+    // اگر هر دو ساعت دارند، بر اساس ساعت مرتب شوند
+    if (a.time && b.time && a.time !== b.time) {
+      return a.time < b.time ? -1 : 1;
+    }
+
+    // آیتم دارای ساعت قبل از آیتم بدون ساعت
+    if (a.time && !b.time) {
+      return -1;
+    }
+
+    if (!a.time && b.time) {
+      return 1;
+    }
+
+    // اگر وضعیت ساعت برابر بود، عنوان
+    if (a.title !== b.title) {
+      return a.title.localeCompare(b.title, "fa");
+    }
+
     return a.createdAt - b.createdAt;
   });
 }

@@ -127,12 +127,15 @@ function FullWidthFeatureCard({
           <Text style={styles.fullCardTitle}>{title}</Text>
         </View>
 
-        <Ionicons
-          name="chevron-forward"
-          size={18}
-          color="#E5E7EB"
-          style={{ opacity: 0.7, transform: [{ scaleX: -1 }] }}
-        />
+        <Text
+          style={{
+            color: "#9CA3AF",
+            fontSize: 12,
+            fontWeight: "800",
+          }}
+        >
+          بزودی
+        </Text>
       </View>
     </GlassCard>
   );
@@ -196,41 +199,38 @@ export default function Phoenix() {
   const [, setLatestVersion] = useState<string | null>(null);
   const [updateUrl, setUpdateUrl] = useState<string | null>(null);
 
-
   // ✅ from pelekan/state
-const [completedDays, setCompletedDays] = useState<number>(0);
-const [xpTotal, setXpTotal] = useState<number>(0);
-const [statsLoading, setStatsLoading] = useState<boolean>(false);
-
+  const [completedDays, setCompletedDays] = useState<number>(0);
+  const [xpTotal, setXpTotal] = useState<number>(0);
+  const [statsLoading, setStatsLoading] = useState<boolean>(false);
 
   const apiBase = "https://api.qoqnoos.app";
 
   const fetchProgressStats = useCallback(async () => {
     const phone = String(me?.phone || "").trim();
     if (!phone) {
-    setCompletedDays(0);
-    setXpTotal(0);
-    return;
+      setCompletedDays(0);
+      setXpTotal(0);
+      return;
     }
     setStatsLoading(true);
     try {
-     const url = `${apiBase}/api/pelekan/state`;
-  const sessionToken = await AsyncStorage.getItem("session_v1");
+      const url = `${apiBase}/api/pelekan/state`;
+      const sessionToken = await AsyncStorage.getItem("session_v1");
 
-const res = await fetch(url, {
-  headers: {
-    "Cache-Control": "no-store",
-    Pragma: "no-cache",
-    Accept: "application/json",
-    ...(sessionToken
-      ? {
-          Authorization: `Bearer ${sessionToken}`,
-          "x-session-token": sessionToken,
-        }
-      : {}),
-  },
-});
-
+      const res = await fetch(url, {
+        headers: {
+          "Cache-Control": "no-store",
+          Pragma: "no-cache",
+          Accept: "application/json",
+          ...(sessionToken
+            ? {
+                Authorization: `Bearer ${sessionToken}`,
+                "x-session-token": sessionToken,
+              }
+            : {}),
+        },
+      });
 
       let json: any = null;
       try {
@@ -240,26 +240,27 @@ const res = await fetch(url, {
       }
 
       if (!res.ok || !json?.ok) {
-     setCompletedDays(0);
-     setXpTotal(0);
-     return;
-     }
+        setCompletedDays(0);
+        setXpTotal(0);
+        return;
+      }
 
       const data = json?.data || {};
 
       const dp = Array.isArray(data?.progress?.dayProgress)
         ? data.progress.dayProgress
         : [];
-      const doneCount = dp.filter((d: any) => String(d?.status) === "completed")
-        .length;
+      const doneCount = dp.filter(
+        (d: any) => String(d?.status) === "completed",
+      ).length;
       setCompletedDays(Number.isFinite(doneCount) ? doneCount : 0);
 
       const xp = Number(data?.progress?.xpTotal ?? 0);
       setXpTotal(Number.isFinite(xp) ? xp : 0);
     } catch {
-  setCompletedDays(0);
-  setXpTotal(0);
-   } finally {
+      setCompletedDays(0);
+      setXpTotal(0);
+    } finally {
       setStatsLoading(false);
     }
   }, [apiBase, me?.phone]);
@@ -270,27 +271,27 @@ const res = await fetch(url, {
   }, [refresh, fetchProgressStats]);
 
   useEffect(() => {
-  const run = async () => {
-    try {
-      const result = await checkAppUpdate();
-      setHasAppUpdate(!!result.hasUpdate);
-      setLatestVersion(result.latestVersion || null);
-      setUpdateUrl(result.updateUrl || null);
-    } catch {
-      setHasAppUpdate(false);
-      setLatestVersion(null);
-    }
-  };
+    const run = async () => {
+      try {
+        const result = await checkAppUpdate();
+        setHasAppUpdate(!!result.hasUpdate);
+        setLatestVersion(result.latestVersion || null);
+        setUpdateUrl(result.updateUrl || null);
+      } catch {
+        setHasAppUpdate(false);
+        setLatestVersion(null);
+      }
+    };
 
-  run();
-}, []);
+    run();
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       refresh?.().catch(() => {});
       fetchProgressStats().catch(() => {});
       return () => {};
-    }, [refresh, fetchProgressStats])
+    }, [refresh, fetchProgressStats]),
   );
 
   // سینک نام/آواتار با سرور
@@ -361,6 +362,7 @@ const res = await fetch(url, {
 
   const openTerms = () => Linking.openURL("https://qoqnoos.app/terms.html");
   const openSite = () => Linking.openURL("https://qoqnoos.app/");
+  const openContact = () => Linking.openURL("https://qoqnoos.app/contact.html");
 
   const version = useMemo(() => {
     return (
@@ -383,33 +385,33 @@ const res = await fetch(url, {
       <View pointerEvents="none" style={styles.bgGlow2} />
 
       <Screen
-  backgroundColor="#0b0f14"
-  contentContainerStyle={{
-    rowGap: 12,
-    direction: "ltr",
-    paddingBottom: 18,
-  }}
->
-{hasAppUpdate && (
-  <TouchableOpacity
-    activeOpacity={0.9}
-    onPress={() => setAboutOpen(true)}
-    style={styles.updateBanner}
-  >
-    <Ionicons name="arrow-up-circle" size={20} color="#0b0f14" />
+        backgroundColor="#0b0f14"
+        contentContainerStyle={{
+          rowGap: 12,
+          direction: "ltr",
+          paddingBottom: 18,
+        }}
+      >
+        {hasAppUpdate && (
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => setAboutOpen(true)}
+            style={styles.updateBanner}
+          >
+            <Ionicons name="arrow-up-circle" size={20} color="#0b0f14" />
 
-    <Text style={styles.updateBannerText}>
-      نسخه جدید ققنوس منتشر شده
-    </Text>
+            <Text style={styles.updateBannerText}>
+              نسخه جدید ققنوس منتشر شده
+            </Text>
 
-    <Ionicons
-      name="chevron-forward"
-      size={18}
-      color="#0b0f14"
-      style={{ transform: [{ scaleX: -1 }] }}
-    />
-  </TouchableOpacity>
-)}
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color="#0b0f14"
+              style={{ transform: [{ scaleX: -1 }] }}
+            />
+          </TouchableOpacity>
+        )}
 
         {/* کارت پروفایل */}
         <View style={styles.profileCard}>
@@ -439,13 +441,12 @@ const res = await fetch(url, {
           rightVariant={isProActive ? "gold" : "danger"}
         />
 
-
-       {/* مدال‌ها و تندیس‌ها */}
-       <FullWidthFeatureCard
-       title="مدال‌ها و تندیس‌ها"
-       icon="trophy"
-      iconColor="#D4AF37"
-       />
+        {/* مدال‌ها و تندیس‌ها */}
+        <FullWidthFeatureCard
+          title="مدال‌ها و تندیس‌ها"
+          icon="trophy"
+          iconColor="#D4AF37"
+        />
 
         {/* ✅ Row: (Right) روزهای تکمیل‌شده  |  (Left) امتیازها */}
         <View style={styles.halfRow}>
@@ -470,7 +471,7 @@ const res = await fetch(url, {
           />
         </View>
 
-                {/* نمودار حال روزانه */}
+        {/* نمودار حال روزانه */}
         <TouchableOpacity
           activeOpacity={0.9}
           onPress={() => router.push("/(tabs)/mood-chart")}
@@ -517,25 +518,25 @@ const res = await fetch(url, {
           <GlassCard>
             <View style={styles.linkRow}>
               <View style={styles.linkRight}>
-               <Ionicons name="information-circle" size={18} color="#E5E7EB" />
+                <Ionicons name="information-circle" size={18} color="#E5E7EB" />
 
                 <Text style={styles.linkTitle}>درباره ققنوس</Text>
 
                 {hasAppUpdate && (
-    <View
-      style={{
-        width: 16,
-        height: 16,
-        borderRadius: 8,
-        backgroundColor: "#D4AF37",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <Ionicons name="arrow-up" size={10} color="#0b0f14" />
-    </View>
-  )}
-</View>
+                  <View
+                    style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: 8,
+                      backgroundColor: "#D4AF37",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Ionicons name="arrow-up" size={10} color="#0b0f14" />
+                  </View>
+                )}
+              </View>
 
               <Ionicons
                 name="chevron-forward"
@@ -576,39 +577,45 @@ const res = await fetch(url, {
 
           <View style={styles.sheetCard}>
             <View style={styles.sheetRow}>
-  <Ionicons
-    name="information-circle-outline"
-    size={18}
-    color="#E5E7EB"
-  />
+              <Ionicons
+                name="information-circle-outline"
+                size={18}
+                color="#E5E7EB"
+              />
 
-  <Text style={styles.sheetRowText}>
-  {hasAppUpdate ? "ققنوس رو الان به‌روزرسانی کن" : "نسخه اپ"}
-  </Text>
+              <Text style={styles.sheetRowText}>
+                {hasAppUpdate ? "ققنوس رو الان به‌روزرسانی کن" : "نسخه اپ"}
+              </Text>
 
-  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 6 }}>
-    {/* نسخه فعلی */}
-    <Text style={styles.sheetRowRight}>
-      {toPersianDigits(version)}
-    </Text>
+              <View
+                style={{
+                  flexDirection: "row-reverse",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                {/* نسخه فعلی */}
+                <Text style={styles.sheetRowRight}>
+                  {toPersianDigits(version)}
+                </Text>
 
-    {/* بج طلایی برای آپدیت */}
-    {hasAppUpdate && (
-      <View
-        style={{
-          width: 16,
-          height: 16,
-          borderRadius: 8,
-          backgroundColor: "#D4AF37",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Ionicons name="arrow-up" size={10} color="#0b0f14" />
-      </View>
-    )}
-  </View>
-</View>
+                {/* بج طلایی برای آپدیت */}
+                {hasAppUpdate && (
+                  <View
+                    style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: 8,
+                      backgroundColor: "#D4AF37",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Ionicons name="arrow-up" size={10} color="#0b0f14" />
+                  </View>
+                )}
+              </View>
+            </View>
 
             <TouchableOpacity
               activeOpacity={0.9}
@@ -627,7 +634,7 @@ const res = await fetch(url, {
 
             <TouchableOpacity
               activeOpacity={0.9}
-              onPress={openSite}
+              onPress={openContact}
               style={styles.sheetRowBtn}
             >
               <Ionicons name="call-outline" size={18} color="#FBBF24" />
@@ -643,10 +650,10 @@ const res = await fetch(url, {
             <TouchableOpacity
               activeOpacity={0.9}
               onPress={() => {
-  if (updateUrl) {
-    Linking.openURL(updateUrl);
-  }
-}}
+                if (updateUrl) {
+                  Linking.openURL(updateUrl);
+                }
+              }}
               style={styles.sheetRowBtn}
             >
               <Ionicons
@@ -655,28 +662,28 @@ const res = await fetch(url, {
                 color="#D4AF37"
               />
               <Text
-               style={[
-                 styles.sheetRowText,
-                 hasAppUpdate && { color: "#60A5FA" },
-                 ]}
-                >
+                style={[
+                  styles.sheetRowText,
+                  hasAppUpdate && { color: "#60A5FA" },
+                ]}
+              >
                 به‌روزرسانی اپ
               </Text>
 
               {hasAppUpdate && (
-  <View
-    style={{
-      width: 16,
-      height: 16,
-      borderRadius: 8,
-      backgroundColor: "#D4AF37",
-      alignItems: "center",
-      justifyContent: "center",
-    }}
-  >
-    <Ionicons name="arrow-up" size={10} color="#0b0f14" />
-  </View>
-)}
+                <View
+                  style={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 8,
+                    backgroundColor: "#D4AF37",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Ionicons name="arrow-up" size={10} color="#0b0f14" />
+                </View>
+              )}
               <Ionicons
                 name="chevron-forward"
                 size={18}
@@ -688,7 +695,9 @@ const res = await fetch(url, {
         </View>
       </Modal>
 
-      {editVisible && <EditProfileModal onClose={() => setEditVisible(false)} />}
+      {editVisible && (
+        <EditProfileModal onClose={() => setEditVisible(false)} />
+      )}
     </View>
   );
 }
@@ -986,7 +995,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: "left",
   },
-    updateBanner: {
+  updateBanner: {
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "space-between",
