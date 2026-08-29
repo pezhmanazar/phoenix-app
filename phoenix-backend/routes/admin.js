@@ -820,7 +820,6 @@ router.get(
       const [
         baselineInProgress,
         baselineCompleted,
-        ,
         reviewInProgress,
         reviewCompleted,
         treatingUsers,
