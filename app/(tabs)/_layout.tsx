@@ -3,13 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Tabs, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import {
-  AppState,
-  AppStateStatus,
-  Image,
-  Text,
-  View,
-} from "react-native";
+import { AppState, Image, Text, View } from "react-native";
 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BACKEND_URL } from "../../constants/backend";
@@ -34,15 +28,17 @@ type TicketWithMessages = {
   messages: Message[];
 };
 
-function getOpenedById(me: any) {
-  const phone = me?.phone;
-  const id = me?.id;
-  return String(phone || id || "").trim();
+type CurrentUser = {
+  id?: string | null;
+};
+
+function getOpenedById(me: CurrentUser | null | undefined) {
+  return String(me?.id || "").trim();
 }
 
 function countUnreadFromTicket(
   ticket: TicketWithMessages | null | undefined,
-  lastSeenId: string | null
+  lastSeenId: string | null,
 ): number {
   if (!ticket) return 0;
 
@@ -58,21 +54,35 @@ function countUnreadFromTicket(
   return Math.max(0, adminMsgs.length - (idx + 1));
 }
 
+type OpenBatchResponse = {
+  ok?: boolean;
+  tickets?: {
+    therapy?: TicketWithMessages | null;
+    tech?: TicketWithMessages | null;
+  };
+};
+
 async function countUnreadBatch(
-  openedById: string
+  openedById: string,
+  token: string,
 ): Promise<{ therapy: number; tech: number }> {
   try {
-    if (!openedById) {
+    if (!openedById || !token) {
       return { therapy: 0, tech: 0 };
     }
 
     const url = `${BACKEND_URL}/api/public/tickets/open-batch?openedById=${encodeURIComponent(
-      openedById
+      openedById,
     )}`;
 
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Cache-Control": "no-store",
+      },
+    });
 
-    let json: any = null;
+    let json: OpenBatchResponse | null = null;
     try {
       json = await res.json();
     } catch {
@@ -88,8 +98,8 @@ async function countUnreadBatch(
       AsyncStorage.getItem(SEEN_KEY("tech")),
     ]);
 
-    const therapyTicket = json.tickets.therapy as TicketWithMessages | null;
-    const techTicket = json.tickets.tech as TicketWithMessages | null;
+    const therapyTicket = json.tickets?.therapy ?? null;
+    const techTicket = json.tickets?.tech ?? null;
 
     return {
       therapy: countUnreadFromTicket(therapyTicket, therapyLastSeenId),
@@ -173,7 +183,9 @@ function TabIconBox({
         borderRadius: 17,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: focused ? "rgba(212,175,55,0.14)" : "rgba(255,255,255,0.025)",
+        backgroundColor: focused
+          ? "rgba(212,175,55,0.14)"
+          : "rgba(255,255,255,0.025)",
         borderWidth: focused ? 1 : 0,
         borderColor: focused ? "rgba(212,175,55,0.28)" : "transparent",
         position: "relative",
@@ -197,9 +209,8 @@ function TabIconBox({
 export default function TabsLayout() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { phone, isAuthenticated } = useAuth();
+  const { phone, isAuthenticated, token } = useAuth();
   const { me, refreshing, refresh } = useUser();
-
 
   const [unreadCount, setUnreadCount] = useState(0);
   const [hasAppUpdate, setHasAppUpdate] = useState(false);
@@ -207,72 +218,70 @@ export default function TabsLayout() {
   const isRefreshingRef = useRef(false);
 
   useEffect(() => {
-  if (!isAuthenticated) {
-    router.replace("/(auth)/login");
-    return;
-  }
-
-  if (!phone) {
-    router.replace("/(auth)/login");
-    return;
-  }
-
-  if (!me && !refreshing) {
-    refresh({ force: true }).catch(() => {});
-  }
-  
-}, [isAuthenticated, phone, me, refreshing, refresh, router]);
-
-
-useEffect(() => {
-  let cancelled = false;
-
-  const checkForcedWizard = async () => {
-    try {
-      const forced = await AsyncStorage.getItem("force_profile_wizard_v1");
-      const forcedPhone =
-        (await AsyncStorage.getItem("force_profile_phone_v1")) || phone;
-
-      if (cancelled) return;
-
-      if (forced === "1") {
-        router.replace({
-          pathname: "/(auth)/profile-wizard",
-          params: { phone: forcedPhone || "" },
-        });
-      }
-    } catch {
-      // ignore storage read failures
+    if (!isAuthenticated) {
+      router.replace("/(auth)/login");
+      return;
     }
-  };
 
-  checkForcedWizard();
+    if (!phone) {
+      router.replace("/(auth)/login");
+      return;
+    }
 
-  return () => {
-    cancelled = true;
-  };
-}, [phone, router]);
+    if (!me && !refreshing) {
+      refresh({ force: true }).catch(() => {});
+    }
+  }, [isAuthenticated, phone, me, refreshing, refresh, router]);
 
-useEffect(() => {
-  if (!isAuthenticated) return;
-  if (!phone) return;
-  if (!me) return;
+  useEffect(() => {
+    let cancelled = false;
 
-  const profileCompleted = me.profileCompleted === true;
+    const checkForcedWizard = async () => {
+      try {
+        const forced = await AsyncStorage.getItem("force_profile_wizard_v1");
+        const forcedPhone =
+          (await AsyncStorage.getItem("force_profile_phone_v1")) || phone;
 
-  if (!profileCompleted) {
-    AsyncStorage.multiSet([
-      ["force_profile_wizard_v1", "1"],
-      ["force_profile_phone_v1", phone],
+        if (cancelled) return;
+
+        if (forced === "1") {
+          router.replace({
+            pathname: "/(auth)/profile-wizard",
+            params: { phone: forcedPhone || "" },
+          });
+        }
+      } catch {
+        // ignore storage read failures
+      }
+    };
+
+    checkForcedWizard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [phone, router]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (!phone) return;
+    if (!me) return;
+
+    const profileCompleted = me.profileCompleted === true;
+
+    if (!profileCompleted) {
+      AsyncStorage.multiSet([
+        ["force_profile_wizard_v1", "1"],
+        ["force_profile_phone_v1", phone],
+      ]).catch(() => {});
+      return;
+    }
+
+    AsyncStorage.multiRemove([
+      "force_profile_wizard_v1",
+      "force_profile_phone_v1",
     ]).catch(() => {});
-    return;
-  }
-
-  AsyncStorage.multiRemove([
-    "force_profile_wizard_v1",
-    "force_profile_phone_v1",
-  ]).catch(() => {});
-}, [isAuthenticated, phone, me]);
+  }, [isAuthenticated, phone, me]);
 
   const refreshUnread = useCallback(async () => {
     if (isRefreshingRef.current) return;
@@ -281,12 +290,13 @@ useEffect(() => {
 
     try {
       const openedById = getOpenedById(me);
-      if (!openedById) {
+
+      if (!openedById || !token) {
         setUnreadCount(0);
         return;
       }
 
-      const unread = await countUnreadBatch(openedById);
+      const unread = await countUnreadBatch(openedById, token);
       const total = unread.therapy + unread.tech;
 
       setUnreadCount((prev) => (prev !== total ? total : prev));
@@ -295,7 +305,7 @@ useEffect(() => {
     } finally {
       isRefreshingRef.current = false;
     }
-  }, [me]);
+  }, [me, token]);
 
   const refreshAppUpdate = useCallback(async () => {
     if (isCheckingUpdateRef.current) return;
@@ -314,53 +324,27 @@ useEffect(() => {
 
   useEffect(() => {
     let cancelled = false;
-    let intervalId: ReturnType<typeof setInterval> | null = null;
-    const appState = { current: AppState.currentState as AppStateStatus };
 
     const run = async () => {
       if (cancelled) return;
       await refreshUnread();
     };
 
-    const stopInterval = () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-        intervalId = null;
-      }
-    };
+    // یک بار هنگام ورود به تب‌ها
+    run();
 
-    const startInterval = () => {
-      stopInterval();
-      intervalId = setInterval(run, 20000);
-    };
-
-    if (appState.current === "active") {
-      run();
-      startInterval();
-    }
-
+    // یک بار هر وقت اپ از پس‌زمینه برمی‌گردد
     const sub = AppState.addEventListener("change", (nextState) => {
-      appState.current = nextState;
-
       if (nextState === "active") {
         run();
-        startInterval();
-      } else {
-        stopInterval();
       }
     });
 
     return () => {
       cancelled = true;
-      stopInterval();
       sub.remove();
     };
   }, [refreshUnread]);
-
-  useEffect(() => {
-    if (!me) return;
-    refreshUnread();
-  }, [me, refreshUnread]);
 
   useEffect(() => {
     refreshAppUpdate();
@@ -381,11 +365,11 @@ useEffect(() => {
       initialRouteName="Pelekan"
       screenOptions={{
         headerShown: false,
-        tabBarHideOnKeyboard: true, 
+        tabBarHideOnKeyboard: true,
         tabBarShowLabel: true, // متن تب بارها
         tabBarLabelStyle: {
-       fontSize: 11,
-      },
+          fontSize: 11,
+        },
         tabBarActiveTintColor: "#ffffff",
         tabBarInactiveTintColor: "rgba(255,255,255,0.45)",
         tabBarBackground: () => <TabBarGlassBackground />,
@@ -561,11 +545,11 @@ useEffect(() => {
         }}
       />
       <Tabs.Screen
-      name="mood-chart"
-      options={{
-      href: null,
-      }}
-     />
+        name="mood-chart"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }
