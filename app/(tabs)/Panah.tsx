@@ -1,10 +1,9 @@
 // app/(tabs)/Panah.tsx
 
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useFocusEffect, useNavigation, useTheme } from "@react-navigation/native";
+import { useTheme } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -18,81 +17,9 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import PlanStatusBadge from "../../components/PlanStatusBadge";
-import { BACKEND_URL } from "../../constants/backend";
-import { useAuth } from "../../hooks/useAuth";
 import { useUser } from "../../hooks/useUser";
 
 const { height } = Dimensions.get("window");
-
-type Message = {
-  id: string;
-  sender: "user" | "admin";
-  text?: string | null;
-  createdAt?: string;
-};
-
-type TicketWithMessages = {
-  id: string;
-  type: "tech" | "therapy";
-  updatedAt: string;
-  messages: Message[];
-};
-
-const SEEN_KEY = (type: "tech" | "therapy") => `support:lastSeenAdmin:${type}`;
-
-function getOpenedById(me: any) {
-  const id = me?.id;
-  return String(id || "").trim();
-}
-async function countUnreadForType(
-  type: "tech" | "therapy",
-  openedById: string,
-  token: string
-): Promise<number> {
-  try {
-    if (!openedById || !token) return 0;
-
-    const qs: string[] = [];
-    qs.push(`type=${encodeURIComponent(type)}`);
-    qs.push(`openedById=${encodeURIComponent(openedById)}`);
-    qs.push(`ts=${Date.now()}`);
-
-    const url = `${BACKEND_URL}/api/public/tickets/open?${qs.join("&")}`;
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Cache-Control": "no-store",
-      },
-    });
-
-    let json: any = null;
-    try {
-      json = await res.json();
-    } catch {
-      json = null;
-    }
-
-    if (!res.ok || !json?.ok || !json.ticket) return 0;
-
-    const t: TicketWithMessages = json.ticket;
-    const msgs = Array.isArray(t.messages) ? t.messages : [];
-    const adminMsgs = msgs.filter((m) => m.sender === "admin");
-    if (!adminMsgs.length) return 0;
-
-    const lastSeenId = await AsyncStorage.getItem(SEEN_KEY(type));
-
-    if (!lastSeenId) return adminMsgs.length;
-
-    const idx = adminMsgs.findIndex((m) => m.id === lastSeenId);
-
-    if (idx === -1) return adminMsgs.length;
-
-    return Math.max(0, adminMsgs.length - (idx + 1));
-  } catch {
-    return 0;
-  }
-}
-
 
 /* ------------------------------ Modal تم‌دار (بدون Alert) ------------------------------ */
 
@@ -147,77 +74,13 @@ function ThemedSoonModal({
 export default function Panah() {
 const { colors } = useTheme();
 const router = useRouter();
-const navigation = useNavigation();
 const insets = useSafeAreaInsets();
 const { me } = useUser();
-const { token, loading: authLoading } = useAuth();
-const [unreadCount, setUnreadCount] = useState(0);
 
 
   // ✅ NEW: مودال تم‌دار برای AI
   const [soonOpen, setSoonOpen] = useState(false);
-
-  /** هر بار فوکوس → تعداد پیام‌های نخوانده (ادمین) را حساب کن و در unreadCount بگذار */
-  useFocusEffect(
-    useCallback(() => {
-      let cancelled = false;
-      const loadUnread = async () => {
-        const openedById = getOpenedById(me);
-        if (!openedById) {
-          if (!cancelled) setUnreadCount(0);
-          return;
-        }
-        if (authLoading || !token) {
-  if (!cancelled) setUnreadCount(0);
-  return;
-}
-
-const [therapyUnread, techUnread] = await Promise.all([
-  countUnreadForType("therapy", openedById, token),
-  countUnreadForType("tech", openedById, token),
-]);
-        if (!cancelled) {
-          setUnreadCount(therapyUnread + techUnread);
-        }
-      };
-
-      loadUnread();
-      return () => {
-        cancelled = true;
-      };
-    }, [me, token, authLoading])
-  );
-
-  useEffect(() => {
-  if (authLoading || !token) return;
-
-  const openedById = getOpenedById(me);
-  if (!openedById) return;
-
-  const interval = setInterval(async () => {
-    try {
-      const [therapyUnread, techUnread] = await Promise.all([
-        countUnreadForType("therapy", openedById, token),
-        countUnreadForType("tech", openedById, token),
-      ]);
-
-      setUnreadCount(therapyUnread + techUnread);
-    } catch {
-      // intentionally ignored
-    }
-  }, 20000);
-
-  return () => clearInterval(interval);
-}, [me, token, authLoading]);
-
-
-  /** تنظیم بج تب پناه بر اساس unreadCount */
-  useEffect(() => {
-    (navigation as any)?.setOptions?.({
-      tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
-    });
-  }, [navigation, unreadCount]);
-
+  
   // ✅ اگر هنوز me نیومده، یک لودینگ سبک
   if (!me) {
     return (

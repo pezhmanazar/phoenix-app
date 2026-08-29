@@ -6,6 +6,7 @@ import { Stack, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  DeviceEventEmitter,
   ScrollView,
   StyleSheet,
   Text,
@@ -225,17 +226,31 @@ const res = await fetch(url, {
     }, [fetchSummaryForType, loadSeenIds, authLoading])
   );
 
-  const markSeenAndOpen = async (type: "tech" | "therapy", summary?: TicketSummary | null) => {
-    if (summary?.lastAdminMsgId) {
-      try {
-        await AsyncStorage.setItem(SEEN_KEY(type), summary.lastAdminMsgId);
-        setLastSeenAdminIds((prev) => ({ ...prev, [type]: summary.lastAdminMsgId }));
-      } catch {
-        // silent fail
-      }
+  const markSeenAndOpen = async (
+  type: "tech" | "therapy",
+  summary?: TicketSummary | null,
+) => {
+  if (summary?.lastAdminMsgId) {
+    try {
+      await AsyncStorage.setItem(
+        SEEN_KEY(type),
+        summary.lastAdminMsgId,
+      );
+
+      setLastSeenAdminIds((prev) => ({
+        ...prev,
+        [type]: summary.lastAdminMsgId,
+      }));
+
+      // به tab layout خبر بده unread تغییر کرده
+      DeviceEventEmitter.emit("supportUnreadChanged");
+    } catch {
+      // silent fail
     }
-    goTo(type);
-  };
+  }
+
+  goTo(type);
+};
 
   const Cell = ({
     type,

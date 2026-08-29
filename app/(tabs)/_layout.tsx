@@ -3,7 +3,13 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Tabs, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { AppState, Image, Text, View } from "react-native";
+import {
+  AppState,
+  DeviceEventEmitter,
+  Image,
+  Text,
+  View,
+} from "react-native";
 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BACKEND_URL } from "../../constants/backend";
@@ -345,6 +351,19 @@ export default function TabsLayout() {
       sub.remove();
     };
   }, [refreshUnread]);
+
+  useEffect(() => {
+  const sub = DeviceEventEmitter.addListener(
+    "supportUnreadChanged",
+    () => {
+      void refreshUnread();
+    },
+  );
+
+  return () => {
+    sub.remove();
+  };
+}, [refreshUnread]);
 
   useEffect(() => {
     refreshAppUpdate();
