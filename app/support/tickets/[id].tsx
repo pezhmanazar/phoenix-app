@@ -1,7 +1,12 @@
 //phoenix-app\app\support\tickets\[id].tsx
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Notifications from "expo-notifications";
 import { useFocusEffect } from "@react-navigation/native";
+import {
+  getNotifications,
+  markNotificationRead,
+} from "../../../api/notifications";
 import {
   RecordingPresets,
   requestRecordingPermissionsAsync,
@@ -30,6 +35,7 @@ import {
   ActivityIndicator,
   Animated,
   BackHandler,
+  DeviceEventEmitter,
   Easing,
   FlatList,
   Image,
@@ -99,6 +105,8 @@ type Ticket = {
 };
 
 type PlanView = "free" | "pro" | "expiring" | "expired";
+const SUPPORT_SEEN_KEY = (type: "tech" | "therapy") =>
+  `support:lastSeenAdmin:${type}`;
 
 /* ===== پاک کردن تاریخچه فقط سمت کلاینت (برای هر تیکت جدا) ===== */
 const clearKey = (ticketId: string) => `chat_cleared_at:${ticketId}`;
@@ -1239,6 +1247,7 @@ export default function TicketDetail() {
   const scrollRef = useRef<FlatList<Message> | null>(null);
   const didInitialScroll = useRef(false);
   const lastMessageIdRef = useRef<string | null>(null);
+  const lastMarkedAdminMessageRef = useRef<string | null>(null);
   const msgPositions = useRef<Record<string, number>>({});
   const [pins, setPins] = useState<string[]>([]);
 
@@ -1401,6 +1410,126 @@ export default function TicketDetail() {
       .catch(() => setClearedAtMs(0));
   }, [id]);
 
+  const markCurrentSupportConversationRead = useCallback(
+  async (currentTicket: Ticket) => {
+    const currentType = currentTicket.type;
+
+    if (currentType !== "tech" && currentType !== "therapy") {
+      return;
+    }
+
+    const messages = Array.isArray(currentTicket.messages)
+      ? currentTicket.messages
+      : [];
+
+    const lastAdminMessage =
+      [...messages].reverse().find(
+        (message) => message.sender === "admin",
+      ) ?? null;
+
+    if (!lastAdminMessage?.id) {
+      return;
+    }
+
+    if (
+      lastMarkedAdminMessageRef.current ===
+      lastAdminMessage.id
+    ) {
+      return;
+    }
+
+    lastMarkedAdminMessageRef.current =
+      lastAdminMessage.id;
+
+    try {
+      /*
+       * 1) unread پناه
+       */
+      await AsyncStorage.setItem(
+        `support:lastSeenAdmin:${currentType}`,
+        lastAdminMessage.id,
+      );
+
+      DeviceEventEmitter.emit(
+        "supportUnreadChanged",
+      );
+
+      /*
+       * 2) Notification Center داخل اپ
+       *
+       * تمام اعلان‌های unread مربوط به همین ticket
+       * را خوانده‌شده می‌کنیم.
+       */
+      try {
+        const notifications =
+          await getNotifications();
+
+        const relatedUnreadNotifications =
+          notifications.filter((notification) => {
+            const notificationTicketId =
+              notification.data?.ticketId;
+
+            return (
+              notification.type === "ticket_reply" &&
+              !notification.readAt &&
+              String(notificationTicketId || "") ===
+                String(currentTicket.id)
+            );
+          });
+
+        await Promise.all(
+          relatedUnreadNotifications.map(
+            (notification) =>
+              markNotificationRead(
+                notification.id,
+              ),
+          ),
+        );
+      } catch {
+        // خراب شدن notification center نباید چت را مختل کند
+      }
+
+      /*
+       * 3) Notification tray سیستم
+       *
+       * فقط اعلان‌های مربوط به همین ticket حذف شوند.
+       */
+      try {
+        const presented =
+          await Notifications.getPresentedNotificationsAsync();
+
+        const relatedPresented =
+          presented.filter((notification) => {
+            const data =
+              notification.request.content.data as {
+                type?: string;
+                ticketId?: string;
+              };
+
+            return (
+              data?.type === "ticket_reply" &&
+              String(data?.ticketId || "") ===
+                String(currentTicket.id)
+            );
+          });
+
+        await Promise.all(
+          relatedPresented.map((notification) =>
+            Notifications.dismissNotificationAsync(
+              notification.request.identifier,
+            ),
+          ),
+        );
+      } catch {
+        // پاک نشدن tray نباید چت را مختل کند
+      }
+    } catch {
+      // read-state failure نباید صفحه چت را خراب کند
+    }
+  },
+  [],
+);
+
   const fetchTicket = useCallback(
     async (silent: boolean = false) => {
       if (!id) return;
@@ -1446,8 +1575,89 @@ export default function TicketDetail() {
   );
 
   useEffect(() => {
+  const currentTicket = ticket;
+  if (!currentTicket) return;
+
+  const currentType = currentTicket.type;
+  if (currentType !== "tech" && currentType !== "therapy") return;
+
+  const messages = Array.isArray(currentTicket.messages)
+    ? currentTicket.messages
+    : [];
+
+  const lastAdminMessage =
+    [...messages].reverse().find((message) => message.sender === "admin") ??
+    null;
+
+  if (!lastAdminMessage?.id) return;
+
+  if (lastMarkedAdminMessageRef.current === lastAdminMessage.id) {
+    return;
+  }
+
+  lastMarkedAdminMessageRef.current = lastAdminMessage.id;
+
+  const markSupportSeen = async () => {
+    try {
+      await AsyncStorage.setItem(
+        SUPPORT_SEEN_KEY(currentType),
+        lastAdminMessage.id,
+      );
+
+      // badge تب پناه فوراً دوباره محاسبه شود
+      DeviceEventEmitter.emit("supportUnreadChanged");
+    } catch {
+      // silent fail
+    }
+  };
+
+  void markSupportSeen();
+}, [ticket]);
+
+useEffect(() => {
+  if (!ticket?.id) return;
+
+  const dismissPresentedTicketNotifications = async () => {
+    try {
+      const presented =
+        await Notifications.getPresentedNotificationsAsync();
+
+      const matching = presented.filter((notification) => {
+        const data = notification.request.content.data as {
+          type?: string;
+          ticketId?: string;
+        };
+
+        return (
+          data?.type === "ticket_reply" &&
+          String(data?.ticketId || "") === String(ticket.id)
+        );
+      });
+
+      await Promise.all(
+        matching.map((notification) =>
+          Notifications.dismissNotificationAsync(
+            notification.request.identifier,
+          ),
+        ),
+      );
+    } catch {
+      // پاک نشدن notification نباید چت را مختل کند
+    }
+  };
+
+  void dismissPresentedTicketNotifications();
+}, [ticket?.id]);
+
+  useEffect(() => {
     fetchTicket(false);
   }, [fetchTicket]);
+
+  useEffect(() => {
+  if (!ticket) return;
+
+  void markCurrentSupportConversationRead(ticket);
+}, [ticket, markCurrentSupportConversationRead]);
 
   useFocusEffect(
     useCallback(() => {

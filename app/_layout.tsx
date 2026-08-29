@@ -25,7 +25,10 @@ import * as AuthModule from "../hooks/useAuth";
 import * as PlanModule from "../hooks/usePlanStatus";
 import * as UserModule from "../hooks/useUser";
 import { getPaymentProvider } from "../lib/payments/getPaymentProvider";
-import { markNotificationOpened } from "../api/notifications";
+import {
+  markNotificationOpened,
+  markNotificationRead,
+} from "../api/notifications";
 import NotificationPermissionGate from "../components/notifications/NotificationPermissionGate";
 
 Notifications.setNotificationHandler({
@@ -142,19 +145,24 @@ export default function RootLayout() {
       };
 
       // ثبت Open واقعی Push
-      if (
-        typeof data?.notificationId === "string" &&
-        data.notificationId.trim()
-      ) {
-        try {
-          await markNotificationOpened(data.notificationId.trim());
-        } catch (error) {
-          console.warn(
-            "[notifications] mark opened failed:",
-            error instanceof Error ? error.message : error,
-          );
-        }
-      }
+     if (
+  typeof data?.notificationId === "string" &&
+  data.notificationId.trim()
+) {
+  const notificationId = data.notificationId.trim();
+
+  try {
+    await Promise.all([
+      markNotificationOpened(notificationId),
+      markNotificationRead(notificationId),
+    ]);
+  } catch (error) {
+    console.warn(
+      "[notifications] mark opened/read failed:",
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
 
       // پاسخ درمانگر
       if (data?.type === "ticket_reply" && data?.ticketId) {
