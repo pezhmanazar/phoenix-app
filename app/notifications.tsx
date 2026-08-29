@@ -388,9 +388,11 @@ export default function NotificationsScreen() {
 
                 <Text style={styles.body}>{item.body}</Text>
 
-                {route ? (
+                {route || externalUrl ? (
                   <View style={styles.routeButton}>
-                    <Text style={styles.routeText}>رفتن به بخش مرتبط</Text>
+                    <Text style={styles.routeText}>
+                      {externalUrl ? "باز کردن لینک" : "رفتن به بخش مرتبط"}
+                    </Text>
                   </View>
                 ) : null}
               </Pressable>
