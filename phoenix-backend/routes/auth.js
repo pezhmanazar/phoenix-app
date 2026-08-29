@@ -212,7 +212,6 @@ const normalizedAppProvider =
 
     // موفق: OTP مصرف شود
 otpStore.delete(normalized);
-console.log("[auth.verify-otp] SUCCESS");
 
 const existingUser = await prisma.user.findUnique({
   where: {

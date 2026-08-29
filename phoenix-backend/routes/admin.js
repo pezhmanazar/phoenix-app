@@ -3165,12 +3165,6 @@ router.post(
         targetUserId = user?.id;
       }
 
-      console.log("[ADMIN_REPLY_PUSH_TARGET]", {
-        openedById: exists.openedById,
-        contact: exists.contact,
-        targetUserId,
-      });
-
       if (targetUserId) {
         const result = await createAndSendNotification({
           userId: targetUserId,
@@ -3182,8 +3176,6 @@ router.post(
             route: `/support/tickets/${id}`,
           },
         });
-
-        console.log("[ADMIN_REPLY_PUSH_RESULT]", result);
       }
 
       await prisma.ticket.update({
@@ -3327,13 +3319,6 @@ router.post(
         targetUserId = user?.id;
       }
 
-      console.log("[ADMIN_UPLOAD_REPLY_PUSH_TARGET]", {
-        openedById: exists.openedById,
-        contact: exists.contact,
-        targetUserId,
-        messageType,
-      });
-
       if (targetUserId) {
         const result = await createAndSendNotification({
           userId: targetUserId,
@@ -3350,8 +3335,6 @@ router.post(
             route: `/support/tickets/${id}`,
           },
         });
-
-        console.log("[ADMIN_UPLOAD_REPLY_PUSH_RESULT]", result);
       }
 
       return res.json({ ok: true, ticket, message: created });

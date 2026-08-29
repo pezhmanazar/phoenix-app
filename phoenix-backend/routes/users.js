@@ -278,8 +278,6 @@ router.post("/upsert", authUser, async (req, res) => {
       profileCompleted,
     } = req.body || {};
 
-    console.log("[users.upsert] HIT");
-
     const birthDateValue = parseDateOrNull(birthDate);
 
     const updateData = {};
@@ -303,7 +301,6 @@ router.post("/upsert", authUser, async (req, res) => {
     // اگر هیچ آپدیتی نیست، همان رکورد فعلی را برگردان
     if (Object.keys(updateData).length === 0) {
       const existing = await prisma.user.findUnique({ where: { phone } });
-      console.log("[users.upsert] NO_UPDATE");
       return res.json({ ok: true, data: existing });
     }
 
@@ -323,8 +320,6 @@ router.post("/upsert", authUser, async (req, res) => {
       },
       update: updateData,
     });
-
-    console.log("[users.upsert] UPSERT_RESULT success");
 
     return res.json({ ok: true, data: user });
   } catch (e) {
@@ -360,8 +355,6 @@ router.post("/", async (req, res) => {
       planExpiresAt,
     } = req.body || {};
 
-        console.log("[users.root-post] HIT");
-
     const birthDateValue = parseDateOrNull(birthDate);
     const planExpiresValue = parseDateOrNull(planExpiresAt);
 
@@ -386,8 +379,6 @@ router.post("/", async (req, res) => {
       updateData.planExpiresAt = planExpiresValue;
     }
 
-        console.log("[users.root-post] updateData prepared");
-
     const user = await prisma.user.upsert({
       where: { phone },
       create: {
@@ -404,8 +395,6 @@ router.post("/", async (req, res) => {
       },
       update: updateData,
     });
-
-    console.log("[users.root-post] UPSERT_RESULT success");
 
     return res.json({ ok: true, data: user });
     } catch (e) {
