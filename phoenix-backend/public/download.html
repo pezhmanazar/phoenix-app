@@ -530,6 +530,16 @@
         max-width: none;
       }
 
+      @media (min-width: 760px) {
+        .grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .grid .download-card:last-child {
+          grid-column: 1 / -1;
+        }
+      }
+
       .card {
         width: 100%;
         background: linear-gradient(
@@ -557,6 +567,80 @@
         font-weight: 900;
         letter-spacing: -0.2px;
       }
+
+      .download-card {
+        overflow: hidden;
+        padding: 0;
+      }
+
+      .download-card-body {
+        padding: 16px;
+      }
+
+      .download-head {
+        text-align: center;
+        padding: 12px 14px;
+        font-size: 15px;
+        font-weight: 900;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .download-head.direct {
+        color: #ffd27a;
+        background: linear-gradient(
+          135deg,
+          rgba(212, 175, 55, 0.16),
+          rgba(233, 138, 21, 0.1)
+        );
+      }
+
+      .download-head.bazaar {
+        color: #86efac;
+        background: linear-gradient(
+          135deg,
+          rgba(34, 197, 94, 0.15),
+          rgba(16, 185, 129, 0.08)
+        );
+      }
+
+      .download-head.ios {
+        color: #93c5fd;
+        background: linear-gradient(
+          135deg,
+          rgba(59, 130, 246, 0.13),
+          rgba(56, 189, 248, 0.07)
+        );
+      }
+
+      .benefit-box {
+        margin-top: 12px;
+        border-radius: 16px;
+        padding: 12px 14px;
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1.9;
+        text-align: center;
+      }
+
+      .benefit-box.direct {
+        color: #fde68a;
+        border: 1px solid rgba(212, 175, 55, 0.25);
+        background: rgba(212, 175, 55, 0.07);
+      }
+
+      .benefit-box.bazaar {
+        color: #86efac;
+        border: 1px solid rgba(34, 197, 94, 0.24);
+        background: rgba(34, 197, 94, 0.07);
+      }
+
+      .option-description {
+        margin: 0 0 12px;
+        color: var(--muted);
+        font-size: 12px;
+        text-align: center;
+      }
+
       .badge {
         font-size: 12px;
         color: rgba(232, 236, 241, 0.9);
@@ -605,12 +689,6 @@
       .label-muted {
         margin: 0 0 10px;
         color: var(--muted);
-      }
-
-      .benefit-text {
-        color: var(--green);
-        font-weight: 900;
-        text-shadow: 0 0 18px rgba(34, 197, 94, 0.14);
       }
 
       .direct-row {
@@ -749,70 +827,74 @@
           </div>
           <h1>دانلود ققنوس</h1>
           <p>
-            ققنوس رو می‌تونی به‌صورت مستقیم برای اندروید دریافت کنی، از
-            کافه‌بازار نصب کنی، یا منتظر نسخه آیفون باشی که به زودی منتشر میشه
+            ققنوس رو می‌تونی برای اندروید به‌صورت مستقیم دریافت کنی یا از
+            کافه‌بازار نصب کنی. نسخه آیفون هم در حال آماده‌سازیه و به‌زودی منتشر
             می‌شه.
           </p>
         </div>
 
         <div class="grid">
           <!-- Direct Download -->
-          <div class="card">
-            <div class="card-title">
-              <h2>دانلود مستقیم</h2>
-              <span class="badge">پیشنهاد ویژه</span>
-            </div>
+          <div class="card download-card">
+            <div class="download-head direct">دانلود مستقیم</div>
 
-            <p class="label label-muted benefit-text">
-              مزیت دانلود مستقیم: فعال‌سازی اشتراک پرو با قیمت مناسب‌تر و
-              برخورداری از تخفیف‌های بیشتر.
-            </p>
+            <div class="download-card-body">
+              <div class="direct-row">
+                <a
+                  id="directDownloadBtn"
+                  class="btn btn-primary cta-btn"
+                  href="https://dl.qoqnoos.app/downloads/qoqnoos-v1.0.0.apk"
+                  target="_blank"
+                  rel="noopener"
+                  aria-label="دانلود مستقیم فایل APK"
+                >
+                  دانلود مستقیم ققنوس
+                </a>
+              </div>
 
-            <div class="direct-row">
-              <a
-                id="directDownloadBtn"
-                class="btn btn-primary cta-btn"
-                href="https://dl.qoqnoos.app/downloads/qoqnoos-v1.0.0.apk"
-                target="_blank"
-                rel="noopener"
-                aria-label="دانلود مستقیم فایل APK"
-              >
-                دانلود مستقیم ققنوس
-              </a>
-            </div>
+              <div class="benefit-box direct">
+                مزیت دانلود مستقیم: فعال‌سازی اشتراک پرو با قیمت مناسب‌تر و
+                برخورداری از تخفیف‌های بیشتر.
+              </div>
 
-            <div class="note">
-              <strong>نکته:</strong> اگه بعد از دانلود مستقیم، گوشی برای نصب
-              هشدار داد یا اجازه خواست، کافیه به مرورگر اجازه نصب اپ بدی.
-              <br />
-              <a class="gold-link" href="/install-help.html"
-                >مشاهده راهنمای قدم‌به‌قدم نصب</a
-              >
+              <div class="note">
+                <strong>نکته:</strong>
+                اگه بعد از دانلود مستقیم، گوشی برای نصب هشدار داد یا اجازه
+                خواست، کافیه به مرورگر اجازه نصب اپ بدی.
+                <br />
+                <a class="gold-link" href="/install-help.html">
+                  مشاهده راهنمای قدم‌به‌قدم نصب
+                </a>
+              </div>
             </div>
           </div>
 
           <!-- Bazaar -->
-          <div class="card">
-            <div class="card-title">
-              <h2>دانلود از کافه‌بازار</h2>
+          <div class="card download-card">
+            <div class="download-head bazaar">دانلود از کافه‌بازار</div>
+
+            <div class="download-card-body">
+              <p class="option-description">
+                اگه ترجیح می‌دی از مارکت رسمی نصب کنی، ققنوس از طریق کافه‌بازار
+                در دسترسه.
+              </p>
+
+              <a
+                id="bazaarDownloadBtn"
+                class="store-btn"
+                href="https://cafebazaar.ir/app/com.pezhman.phoenix"
+                target="_blank"
+                rel="noopener"
+                aria-label="دانلود ققنوس از کافه‌بازار"
+              >
+                <img src="/static/img/bazaar.png" alt="دریافت از بازار" />
+                <div class="label">باز کردن صفحه ققنوس در کافه‌بازار</div>
+              </a>
+
+              <div class="benefit-box bazaar">
+                مزیت دانلود از بازار: امکان خرید اشتراک به‌صورت اقساطی.
+              </div>
             </div>
-
-            <p class="label label-muted">
-              اگه ترجیح می‌دی از مارکت رسمی نصب کنی، ققنوس از طریق کافه‌بازار در
-              دسترسه.
-            </p>
-
-            <a
-              id="bazaarDownloadBtn"
-              class="store-btn"
-              href="https://cafebazaar.ir/app/com.pezhman.phoenix"
-              target="_blank"
-              rel="noopener"
-              aria-label="دانلود ققنوس از کافه‌بازار"
-            >
-              <img src="/static/img/bazaar.png" alt="دریافت از بازار" />
-              <div class="label">باز کردن صفحه ققنوس در کافه‌بازار</div>
-            </a>
           </div>
 
           <!-- Bazaar -->
@@ -838,35 +920,38 @@
           -->
 
           <!-- iOS -->
-          <div class="card">
-            <div class="card-title">
-              <h2>نسخه آیفون</h2>
-            </div>
+          <div class="card download-card">
+            <div class="download-head ios">نسخه آیفون</div>
 
-            <p class="label label-muted">
-              نسخه مخصوص آیفون در حال آماده‌سازیه و تا چند ماه آینده در دسترس
-              قرار می‌گیره.
-            </p>
+            <div class="download-card-body">
+              <p class="option-description">
+                نسخه مخصوص آیفون در حال آماده‌سازیه و تا چند ماه آینده در دسترس
+                قرار می‌گیره.
+              </p>
 
-            <a
-              class="btn btn-soon cta-btn"
-              href="javascript:void(0)"
-              aria-disabled="true"
-              >به‌زودی…</a
-            >
+              <a
+                class="btn btn-soon cta-btn"
+                href="javascript:void(0)"
+                aria-disabled="true"
+              >
+                به‌زودی…
+              </a>
 
-            <div class="note">
-              اگه دوست داری از زمان انتشار نسخه آیفون باخبر بشی، از صفحه
-              <a class="gold-link" href="/contact.html">تماس با ما</a>
-              به ما پیام بده تا راه ارتباطیت ثبت بشه.
+              <div class="note">
+                اگه دوست داری از زمان انتشار نسخه آیفون باخبر بشی، از صفحه
+                <a class="gold-link" href="/contact.html">تماس با ما</a>
+                به ما پیام بده تا راه ارتباطیت ثبت بشه.
+              </div>
             </div>
           </div>
-        </div>
 
-        <div class="cta-row">
-          <a class="btn btn-ghost" href="/">بازگشت به صفحه اصلی</a>
+          <div class="cta-row">
+            <a class="btn btn-ghost" href="/">بازگشت به صفحه اصلی</a>
+          </div>
           <a class="btn btn-primary" href="/#inside">ویژگی‌های اشتراک ققنوس</a>
-          <a class="btn btn-ghost" href="/store.html">نحوه فعال‌سازی اشتراک</a>
+          <a class="btn btn-ghost" href="/store.html">
+            نحوه فعال‌سازی اشتراک
+          </a>
         </div>
       </section>
     </main>
