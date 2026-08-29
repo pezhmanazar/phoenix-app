@@ -503,7 +503,7 @@
         padding: 22px 18px;
         position: relative;
         overflow: hidden;
-        text-align: right;
+        text-align: center;
       }
       .hero::before {
         content: "";
@@ -530,6 +530,7 @@
         font-size: 26px;
         line-height: 1.5;
         letter-spacing: -0.2px;
+        text-align: center;
       }
       .hero p {
         margin: 0;
@@ -654,7 +655,20 @@
       .benefit-title {
         font-size: 13px;
         font-weight: 900;
-        margin-bottom: 4px;
+        margin-bottom: 8px;
+        padding-bottom: 8px;
+        position: relative;
+      }
+
+      .benefit-title::after {
+        content: "";
+        display: block;
+        width: 56px;
+        height: 1px;
+        margin: 7px auto 0;
+        background: currentColor;
+        opacity: 0.35;
+        border-radius: 999px;
       }
 
       .benefit-text {
@@ -741,6 +755,8 @@
         background: rgba(255, 255, 255, 0.02);
         border-radius: 16px;
         padding: 12px 12px;
+        text-align: center;
+        line-height: 1.9;
       }
       .note strong {
         color: rgba(212, 175, 55, 0.95);
@@ -916,10 +932,10 @@
             <div class="download-head bazaar">دانلود از کافه‌بازار</div>
 
             <div class="download-card-body">
-              <p class="option-description">
+              <!--p class="option-description">
                 اگه ترجیح می‌دی از مارکت رسمی نصب کنی، ققنوس از طریق کافه‌بازار
                 در دسترسه.
-              </p>
+              </p-->
 
               <a
                 id="bazaarDownloadBtn"
