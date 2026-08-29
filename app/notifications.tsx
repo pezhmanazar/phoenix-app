@@ -14,6 +14,7 @@ import { router } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -48,6 +49,22 @@ function getRoute(notification: AppNotification): string | null {
   const route = notification.data?.route;
 
   return typeof route === "string" && route.trim() ? route.trim() : null;
+}
+
+function getExternalUrl(notification: AppNotification): string | null {
+  const externalUrl = notification.data?.externalUrl;
+
+  if (typeof externalUrl !== "string" || !externalUrl.trim()) {
+    return null;
+  }
+
+  const normalized = externalUrl.trim();
+
+  if (!normalized.startsWith("https://") && !normalized.startsWith("http://")) {
+    return null;
+  }
+
+  return normalized;
 }
 
 export default function NotificationsScreen() {
@@ -261,6 +278,7 @@ export default function NotificationsScreen() {
 
           {items.map((item) => {
             const route = getRoute(item);
+            const externalUrl = getExternalUrl(item);
 
             return (
               <Pressable
@@ -272,6 +290,19 @@ export default function NotificationsScreen() {
                 ]}
                 onPress={async () => {
                   await markAsRead(item.id);
+
+                  if (externalUrl) {
+                    try {
+                      await Linking.openURL(externalUrl);
+                    } catch (error) {
+                      console.warn(
+                        "[notifications] external url open failed:",
+                        error,
+                      );
+                    }
+
+                    return;
+                  }
 
                   if (route) {
                     requestAnimationFrame(() => {

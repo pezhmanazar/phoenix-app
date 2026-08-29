@@ -10,7 +10,13 @@ import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useMemo } from "react";
-import { I18nManager, StyleSheet, Text, TextInput } from "react-native";
+import {
+  I18nManager,
+  StyleSheet,
+  Text,
+  TextInput,
+  Linking,
+} from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { PhoenixProvider, usePhoenix } from "../hooks/PhoenixContext";
 // 🔌 Context modules
@@ -131,6 +137,7 @@ export default function RootLayout() {
         type?: string;
         ticketId?: string;
         route?: string;
+        externalUrl?: string;
         notificationId?: string;
       };
 
@@ -154,6 +161,27 @@ export default function RootLayout() {
         router.push(`/support/tickets/${data.ticketId}`);
 
         return;
+      }
+
+      // لینک خارجی
+      if (typeof data?.externalUrl === "string" && data.externalUrl.trim()) {
+        const externalUrl = data.externalUrl.trim();
+
+        if (
+          externalUrl.startsWith("https://") ||
+          externalUrl.startsWith("http://")
+        ) {
+          try {
+            await Linking.openURL(externalUrl);
+          } catch (error) {
+            console.warn(
+              "[notifications] external url open failed:",
+              error instanceof Error ? error.message : error,
+            );
+          }
+
+          return;
+        }
       }
 
       // مقصد عمومی
