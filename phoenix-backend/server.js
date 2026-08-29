@@ -33,7 +33,9 @@ const app = express();
 app.set("etag", false);
 const PORT = process.env.PORT || 4000;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "https://qoqnoos.app";
-const ALLOWED_ORIGINS = ALLOWED_ORIGIN.split(",").map((s) => s.trim()).filter(Boolean);
+const ALLOWED_ORIGINS = ALLOWED_ORIGIN.split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 // پوشه‌ی سایت استاتیک ققنوس
 const PUBLIC_DIR = path.join(process.cwd(), "public");
@@ -45,10 +47,10 @@ app.set("trust proxy", true);
 // تابع کمکی برای اعتبارسنجی امن دامنه
 const checkOrigin = (origin, callback) => {
   if (!origin) return callback(null, true);
-  
+
   // ۱. اگر دامنه دقیقاً در لیست ALLOWED_ORIGINS تنظیم شده در .env باشد
   if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-  
+
   // ۲. اگر دامنه ققنوس یا زیردامنه‌های آن باشد (مثل www.qoqnoos.app)
   try {
     const hostname = new URL(origin).hostname;
@@ -56,7 +58,7 @@ const checkOrigin = (origin, callback) => {
       return callback(null, true);
     }
   } catch (_) {}
-  
+
   // اگر هیچ‌کدام نبود، بدون کرش کردن سرور، دسترسی مرورگر را مسدود کن
   return callback(null, false);
 };
@@ -66,13 +68,21 @@ app.use(
     origin: checkOrigin,
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "x-admin-token", "x-api-key"],
-  })
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "x-admin-token",
+      "x-api-key",
+    ],
+  }),
 );
-app.options("*", cors({
-  origin: checkOrigin,
-  credentials: true,
-}));
+app.options(
+  "*",
+  cors({
+    origin: checkOrigin,
+    credentials: true,
+  }),
+);
 app.use(morgan("dev"));
 
 // ---------- Static uploads ----------
@@ -85,7 +95,7 @@ if (!fs.existsSync(ROOT_UPLOAD_DIR)) {
 
 app.use(
   "/uploads",
-  express.static(ROOT_UPLOAD_DIR, { maxAge: "1y", index: false })
+  express.static(ROOT_UPLOAD_DIR, { maxAge: "1y", index: false }),
 );
 app.use("/api/payments", paymentsRouter);
 // ---------- Multer (store in /uploads/<YYYY>) ----------
@@ -105,7 +115,8 @@ const storage = multer.diskStorage({
   filename: (_, file, cb) => {
     const ext =
       mime.extension(file.mimetype) ||
-      (path.extname(file.originalname).slice(1) || "bin");
+      path.extname(file.originalname).slice(1) ||
+      "bin";
     cb(null, `${Date.now()}_${Math.random().toString(16).slice(2)}.${ext}`);
   },
 });
@@ -138,20 +149,50 @@ function getClientIp(req) {
 
 app.use(async (req, res, next) => {
   // فقط GET (برای صفحات) و POST (فقط برای مسیر ثبت بازدید) مجاز هستند
-  if (req.method !== "GET" && !(req.method === "POST" && req.path === "/api/page-view")) {
+  if (
+    req.method !== "GET" &&
+    !(req.method === "POST" && req.path === "/api/page-view")
+  ) {
     return next();
   }
 
   const body = req.body && typeof req.body === "object" ? req.body : {};
-  const pathName = req.method === "POST" ? (body.path || req.path) : req.path;
+  const pathName = req.method === "POST" ? body.path || req.path : req.path;
   const ua = String(req.headers["user-agent"] || "unknown");
 
   // فیلتر فایل‌های اضافی و ربات‌ها
-  const ignoredExtensions = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".css", ".js", ".ico", ".woff", ".woff2", ".ttf", ".eot", ".map", ".webp", ".avif", ".mp4", ".webm", ".mp3", ".wav", ".txt", ".xml", ".json"];
-  if (ignoredExtensions.some((ext) => pathName.toLowerCase().endsWith(ext))) return next();
-  if (pathName.startsWith("/api/") && req.path !== "/api/page-view") return next();
+  const ignoredExtensions = [
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".svg",
+    ".css",
+    ".js",
+    ".ico",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".eot",
+    ".map",
+    ".webp",
+    ".avif",
+    ".mp4",
+    ".webm",
+    ".mp3",
+    ".wav",
+    ".txt",
+    ".xml",
+    ".json",
+  ];
+  if (ignoredExtensions.some((ext) => pathName.toLowerCase().endsWith(ext)))
+    return next();
+  if (pathName.startsWith("/api/") && req.path !== "/api/page-view")
+    return next();
   if (pathName.startsWith("/uploads")) return next();
-  if (BOT_UA_REGEX.test(ua)) return next();
+  if (!ua || ua === "unknown" || BOT_UA_REGEX.test(ua)) {
+    return next();
+  }
 
   // اگر درخواست POST بود، همینجا جواب بدیم که کلاینت منتظر نمونه
   if (req.method === "POST" && req.path === "/api/page-view") {
@@ -162,22 +203,33 @@ app.use(async (req, res, next) => {
 
   try {
     const ip = getClientIp(req);
-    const visitorId = crypto.createHash("md5").update(`${ip}|${ua}`).digest("hex");
+    const visitorId = crypto
+      .createHash("md5")
+      .update(`${ip}|${ua}`)
+      .digest("hex");
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const isClick = req.method === "POST" && body.type === "EVENT_DIRECT_DOWNLOAD";
+    const eventType =
+      req.method === "POST" && typeof body.type === "string"
+        ? body.type.trim()
+        : "";
 
-    if (isClick) {
-      // ثبت کلیک در جدول جداگانه یا با یک ساختار خاص (فعلاً برای سادگی در PageViewEvent با یک مارک خاص ثبت می‌کنیم)
+    const DOWNLOAD_EVENTS = new Set([
+      "EVENT_DIRECT_DOWNLOAD",
+      "EVENT_BAZAAR_DOWNLOAD",
+    ]);
+
+    const isDownloadClick = DOWNLOAD_EVENTS.has(eventType);
+
+    if (isDownloadClick) {
       await prisma.pageViewEvent.create({
         data: {
-          path: "EVENT_DIRECT_DOWNLOAD", // یک مسیر قراردادی برای کلیک‌ها
+          path: eventType,
           visitorId,
           userAgent: ua,
           referrer: body.referrer || req.headers["referer"] || null,
         },
       });
-      // اینجا می‌تونی در آینده به PageViewSummary هم ستون directDownloadClicks رو اضافه کنی و increment کنی
     } else {
       // منطق قبلی برای بازدیدهای عادی
       const alreadyVisitedToday = await prisma.pageViewEvent.findFirst({
@@ -185,7 +237,12 @@ app.use(async (req, res, next) => {
       });
 
       await prisma.pageViewEvent.create({
-        data: { path: pathName, visitorId, userAgent: ua, referrer: req.headers["referer"] || null },
+        data: {
+          path: pathName,
+          visitorId,
+          userAgent: ua,
+          referrer: req.headers["referer"] || null,
+        },
       });
 
       const existingSummary = await prisma.pageViewSummary.findUnique({
@@ -194,14 +251,21 @@ app.use(async (req, res, next) => {
 
       if (!existingSummary) {
         await prisma.pageViewSummary.create({
-          data: { path: pathName, date: today, totalViews: 1, uniqueVisitors: 1 },
+          data: {
+            path: pathName,
+            date: today,
+            totalViews: 1,
+            uniqueVisitors: 1,
+          },
         });
       } else {
         await prisma.pageViewSummary.update({
           where: { path_date: { path: pathName, date: today } },
           data: {
             totalViews: { increment: 1 },
-            ...(!alreadyVisitedToday ? { uniqueVisitors: { increment: 1 } } : {}),
+            ...(!alreadyVisitedToday
+              ? { uniqueVisitors: { increment: 1 } }
+              : {}),
           },
         });
       }
@@ -263,8 +327,7 @@ const logUploadDebug = (_req, _res, next) => {
 };
 
 const guardNoContent = (req, res, next) => {
-  const hasFile =
-    (Array.isArray(req.files) && req.files.length) || !!req.file;
+  const hasFile = (Array.isArray(req.files) && req.files.length) || !!req.file;
   const hasText =
     typeof req.body?.text === "string" && req.body.text.trim().length > 0;
 
@@ -384,7 +447,6 @@ app.get("/mock-pay", (req, res) => {
   res.send(html);
 });
 
-
 // ---------- ✅ PING ----------
 app.get("/api/ping", (_req, res) => {
   res.json({ ok: true, service: "phoenix-backend", time: Date.now() });
@@ -401,13 +463,13 @@ app.use(
   withUploadAny,
   markParsed,
   logUploadDebug,
-  guardNoContent
+  guardNoContent,
 );
 app.use(
   "/api/public/tickets/:id/reply",
   maybeUpload,
   markParsed,
-  logUploadDebug
+  logUploadDebug,
 );
 
 // 🔹 مسیرهای یوزر (me / upsert)
@@ -436,7 +498,7 @@ app.use("/api/public", publicRouter);
 app.use("/api/admin", adminRouter);
 
 app.get("/api/admin/me", adminAuth, (req, res) =>
-  res.json({ ok: true, admin: req.admin })
+  res.json({ ok: true, admin: req.admin }),
 );
 
 app.use("/api/pelekan", pelekanRouter);
@@ -444,7 +506,10 @@ app.use("/api/pelekan/review", pelekanReviewRoutes);
 //------------------- version -----------
 
 app.get("/api/app/version", (_req, res) => {
-  res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
+  res.set(
+    "Cache-Control",
+    "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+  );
   res.set("Pragma", "no-cache");
   res.set("Expires", "0");
 
@@ -457,9 +522,7 @@ app.get("/api/app/version", (_req, res) => {
 });
 
 // ---------- 404 ----------
-app.use((req, res) =>
-  res.status(404).json({ ok: false, error: "not_found" })
-);
+app.use((req, res) => res.status(404).json({ ok: false, error: "not_found" }));
 
 // ---------- Error handler ----------
 app.use((err, _req, res, _next) => {

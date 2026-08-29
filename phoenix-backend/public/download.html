@@ -479,15 +479,15 @@
       }
 
       .hero {
-  background: linear-gradient(180deg, var(--glass), var(--glass2));
-  border: 1px solid var(--border2);
-  border-radius: 24px;
-  box-shadow: var(--shadow);
-  padding: 22px 18px;
-  position: relative;
-  overflow: hidden;
-  text-align: right;
-}
+        background: linear-gradient(180deg, var(--glass), var(--glass2));
+        border: 1px solid var(--border2);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+        padding: 22px 18px;
+        position: relative;
+        overflow: hidden;
+        text-align: right;
+      }
       .hero::before {
         content: "";
         position: absolute;
@@ -515,11 +515,11 @@
         letter-spacing: -0.2px;
       }
       .hero p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-  max-width: 100%;
-}
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        max-width: 100%;
+      }
 
       .grid {
         margin-top: 14px;
@@ -662,13 +662,13 @@
         margin-top: 10px;
       }
       .trust-logo {
-  cursor: pointer;
-}
+        cursor: pointer;
+      }
 
-.trust-logo img {
-  width: 92px;
-  display: block;
-}
+      .trust-logo img {
+        width: 92px;
+        display: block;
+      }
     </style>
   </head>
 
@@ -764,11 +764,13 @@
             </div>
 
             <p class="label label-muted benefit-text">
-              مزیت دانلود مستقیم: فعال‌سازی اشتراک پرو با قیمت مناسب‌تر و برخورداری از تخفیف‌های بیشتر.
+              مزیت دانلود مستقیم: فعال‌سازی اشتراک پرو با قیمت مناسب‌تر و
+              برخورداری از تخفیف‌های بیشتر.
             </p>
 
             <div class="direct-row">
               <a
+                id="directDownloadBtn"
                 class="btn btn-primary cta-btn"
                 href="https://dl.qoqnoos.app/downloads/qoqnoos-v1.0.0.apk"
                 target="_blank"
@@ -780,37 +782,41 @@
             </div>
 
             <div class="note">
-           <strong>نکته:</strong> اگه بعد از دانلود مستقیم، گوشی برای نصب
-           هشدار داد یا اجازه خواست، کافیه به مرورگر اجازه نصب اپ بدی.
-          <br>
-          <a class="gold-link" href="/install-help.html">مشاهده راهنمای قدم‌به‌قدم نصب</a>
-          </div>
+              <strong>نکته:</strong> اگه بعد از دانلود مستقیم، گوشی برای نصب
+              هشدار داد یا اجازه خواست، کافیه به مرورگر اجازه نصب اپ بدی.
+              <br />
+              <a class="gold-link" href="/install-help.html"
+                >مشاهده راهنمای قدم‌به‌قدم نصب</a
+              >
+            </div>
           </div>
 
           <!-- Bazaar -->
-<div class="card">
-  <div class="card-title">
-    <h2>دانلود از کافه‌بازار</h2>
-  </div>
+          <div class="card">
+            <div class="card-title">
+              <h2>دانلود از کافه‌بازار</h2>
+            </div>
 
-  <p class="label label-muted">
-    اگه ترجیح می‌دی از مارکت رسمی نصب کنی، ققنوس از طریق کافه‌بازار در دسترسه.
-  </p>
+            <p class="label label-muted">
+              اگه ترجیح می‌دی از مارکت رسمی نصب کنی، ققنوس از طریق کافه‌بازار در
+              دسترسه.
+            </p>
 
-  <a
-    class="store-btn"
-    href="https://cafebazaar.ir/app/com.pezhman.phoenix"
-    target="_blank"
-    rel="noopener"
-    aria-label="دانلود ققنوس از کافه‌بازار"
-  >
-    <img src="/static/img/bazaar.png" alt="دریافت از بازار">
-    <div class="label">باز کردن صفحه ققنوس در کافه‌بازار</div>
-  </a>
-</div>
+            <a
+              id="bazaarDownloadBtn"
+              class="store-btn"
+              href="https://cafebazaar.ir/app/com.pezhman.phoenix"
+              target="_blank"
+              rel="noopener"
+              aria-label="دانلود ققنوس از کافه‌بازار"
+            >
+              <img src="/static/img/bazaar.png" alt="دریافت از بازار" />
+              <div class="label">باز کردن صفحه ققنوس در کافه‌بازار</div>
+            </a>
+          </div>
 
           <!-- Bazaar -->
-           <!--
+          <!--
           <div class="card">
             <div class="card-title">
               <h2>دانلود از کافه‌بازار</h2>
@@ -830,7 +836,7 @@
             </a>
           </div>
           -->
-          
+
           <!-- iOS -->
           <div class="card">
             <div class="card-title">
@@ -838,7 +844,8 @@
             </div>
 
             <p class="label label-muted">
-              نسخه مخصوص آیفون در حال آماده‌سازیه و تا چند ماه آینده در دسترس قرار می‌گیره.
+              نسخه مخصوص آیفون در حال آماده‌سازیه و تا چند ماه آینده در دسترس
+              قرار می‌گیره.
             </p>
 
             <a
@@ -872,14 +879,26 @@
         </div>
 
         <div class="trust-row">
-  <a class="trust-logo" href="/trust.html" target="_blank" rel="noopener" aria-label="مشاهده گواهی زرین‌پال ققنوس">
-    <img src="/static/img/zarinpal-logo.png" alt="زرین پال">
-  </a>
+          <a
+            class="trust-logo"
+            href="/trust.html"
+            target="_blank"
+            rel="noopener"
+            aria-label="مشاهده گواهی زرین‌پال ققنوس"
+          >
+            <img src="/static/img/zarinpal-logo.png" alt="زرین پال" />
+          </a>
 
-  <a class="trust-logo" href="/trust.html" target="_blank" rel="noopener" aria-label="مشاهده نماد اعتماد ققنوس">
-    <img src="/static/img/enamad-logo.png" alt="اینماد">
-  </a>
-</div>
+          <a
+            class="trust-logo"
+            href="/trust.html"
+            target="_blank"
+            rel="noopener"
+            aria-label="مشاهده نماد اعتماد ققنوس"
+          >
+            <img src="/static/img/enamad-logo.png" alt="اینماد" />
+          </a>
+        </div>
       </div>
     </footer>
 
@@ -891,39 +910,49 @@
         setTimeout(() => el.remove(), 350);
       });
     </script>
-  <script>
-  window.addEventListener("DOMContentLoaded", function () {
-    const downloadBtn = document.querySelector(
-      'a[href="https://dl.qoqnoos.app/downloads/qoqnoos-v1.0.0.apk"]'
-    );
-    if (!downloadBtn) return;
+    <script>
+      window.addEventListener("DOMContentLoaded", function () {
+        function trackDownload(type) {
+          const payload = JSON.stringify({
+            type,
+            path: "/download.html",
+            referrer: document.referrer || "",
+            ts: Date.now(),
+          });
 
-    downloadBtn.addEventListener("click", function () {
-      const payload = JSON.stringify({
-        type: "EVENT_DIRECT_DOWNLOAD",
-        path: "/download.html",
-        referrer: document.referrer || "",
-        ts: Date.now()
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon(
+              "/api/page-view",
+              new Blob([payload], {
+                type: "application/json",
+              }),
+            );
+
+            return;
+          }
+
+          fetch("/api/page-view", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: payload,
+            keepalive: true,
+          }).catch(() => {});
+        }
+
+        const directDownloadBtn = document.getElementById("directDownloadBtn");
+
+        const bazaarDownloadBtn = document.getElementById("bazaarDownloadBtn");
+
+        directDownloadBtn?.addEventListener("click", function () {
+          trackDownload("EVENT_DIRECT_DOWNLOAD");
+        });
+
+        bazaarDownloadBtn?.addEventListener("click", function () {
+          trackDownload("EVENT_BAZAAR_DOWNLOAD");
+        });
       });
-
-      if (navigator.sendBeacon) {
-        navigator.sendBeacon(
-          "/api/page-view",
-          new Blob([payload], { type: "application/json" })
-        );
-        return;
-      }
-
-      fetch("/api/page-view", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: payload,
-        keepalive: true,
-      }).catch(() => {});
-    });
-  });
-</script>
+    </script>
   </body>
 </html>

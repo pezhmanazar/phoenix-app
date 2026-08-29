@@ -1096,7 +1096,9 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
       Math.min(90, Number(req.query.days || 7) || 7),
     );
     const startDate = new Date();
-    startDate.setDate(startDate.getDate() - daysRange);
+
+    startDate.setDate(startDate.getDate() - (daysRange - 1));
+
     startDate.setHours(0, 0, 0, 0);
 
     // ۱. دریافت خلاصه‌ها برای نمودار و جدول کل
@@ -1128,31 +1130,63 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
     // محاسبات دقیق از روی ایونت‌ها
     const landingUniqueVisitorsSet = new Set();
     let homeToDownloadCount = 0;
+
     let directDownloadClicks = 0;
+    let bazaarDownloadClicks = 0;
+
+    const downloadVisitorIds = new Set();
+    const homeToDownloadVisitorIds = new Set();
 
     recentEvents.forEach((ev) => {
       const p = normalize(ev.path);
       const r = normalize(ev.referrer);
 
-      // الف) یکتای لندینگ (صفحه اصلی)
-      if (p === "home") {
+      // بازدیدکننده یکتای صفحه اصلی
+      if (p === "home" && ev.visitorId) {
         landingUniqueVisitorsSet.add(ev.visitorId);
       }
-      // ب) ورود از خانه به دانلود
+
+      // ورود از صفحه اصلی به صفحه دانلود
       if (p === "download.html" && r === "home") {
         homeToDownloadCount++;
+
+        if (ev.visitorId) {
+          homeToDownloadVisitorIds.add(ev.visitorId);
+        }
       }
-      // ج) کلیک دانلود مستقیم
+
+      // دانلود مستقیم
       if (ev.path === "EVENT_DIRECT_DOWNLOAD") {
         directDownloadClicks++;
+
+        if (ev.visitorId) {
+          downloadVisitorIds.add(ev.visitorId);
+        }
+      }
+
+      // کافه‌بازار
+      if (ev.path === "EVENT_BAZAAR_DOWNLOAD") {
+        bazaarDownloadClicks++;
+
+        if (ev.visitorId) {
+          downloadVisitorIds.add(ev.visitorId);
+        }
       }
     });
 
     const landingUniqueVisitors = landingUniqueVisitorsSet.size;
+    const totalDownloadClicks = directDownloadClicks + bazaarDownloadClicks;
+
+    const uniqueDownloadVisitors = downloadVisitorIds.size;
+
+    const uniqueHomeToDownloadVisitors = homeToDownloadVisitorIds.size;
     const conversionRate =
-      homeToDownloadCount > 0
+      uniqueHomeToDownloadVisitors > 0
         ? Number(
-            ((directDownloadClicks / homeToDownloadCount) * 100).toFixed(1),
+            (
+              (uniqueDownloadVisitors / uniqueHomeToDownloadVisitors) *
+              100
+            ).toFixed(1),
           )
         : 0;
 
@@ -1204,10 +1238,18 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
       ok: true,
       data: {
         totalViews,
+
         homeToDownloadCount,
+        uniqueHomeToDownloadVisitors,
+
         directDownloadClicks,
+        bazaarDownloadClicks,
+        totalDownloadClicks,
+        uniqueDownloadVisitors,
+
         conversionRate,
         landingUniqueVisitors,
+
         pathStats: Object.values(pathStatsMap),
         chartData,
       },
