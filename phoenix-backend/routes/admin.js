@@ -1136,10 +1136,25 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
 
     const downloadVisitorIds = new Set();
     const homeToDownloadVisitorIds = new Set();
+    const pathUniqueVisitorsMap = {};
 
     recentEvents.forEach((ev) => {
       const p = normalize(ev.path);
       const r = normalize(ev.referrer);
+
+      // بازدیدکنندگان یکتای واقعی هر مسیر
+      // eventهای مصنوعی دانلود نباید به عنوان صفحه حساب شوند
+      if (
+        ev.visitorId &&
+        p !== "event_direct_download" &&
+        p !== "event_bazaar_download"
+      ) {
+        if (!pathUniqueVisitorsMap[p]) {
+          pathUniqueVisitorsMap[p] = new Set();
+        }
+
+        pathUniqueVisitorsMap[p].add(ev.visitorId);
+      }
 
       // بازدیدکننده یکتای صفحه اصلی
       if (p === "home" && ev.visitorId) {
@@ -1218,11 +1233,15 @@ router.get("/analytics/views", allow("manager", "owner"), async (req, res) => {
         pathStatsMap[p] = { path: p, totalViews: 0, uniqueVisitors: 0 };
       }
       pathStatsMap[p].totalViews += s.totalViews || 0;
-      pathStatsMap[p].uniqueVisitors += s.uniqueVisitors || 0;
 
       const dateKey = new Date(s.date).toLocaleDateString("en-CA");
       if (!chartMap[dateKey]) chartMap[dateKey] = { date: dateKey, views: 0 };
       chartMap[dateKey].views += s.totalViews || 0;
+    });
+
+    // جایگزینی uniqueVisitors با تعداد یکتای واقعی در کل بازه
+    Object.values(pathStatsMap).forEach((stat) => {
+      stat.uniqueVisitors = pathUniqueVisitorsMap[stat.path]?.size || 0;
     });
 
     // ساخت داده نهایی نمودار برای تمام روزها (حتی روزهای صفر)
