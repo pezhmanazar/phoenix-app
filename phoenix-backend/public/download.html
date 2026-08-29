@@ -472,6 +472,23 @@
         .menu-toggle:checked ~ .mobile-menu {
           display: block;
         }
+        .store-btn {
+          flex-direction: column;
+          gap: 8px;
+          text-align: center;
+          padding: 14px 12px;
+        }
+
+        .store-btn img {
+          height: 42px;
+          margin-inline: auto;
+        }
+
+        .store-btn .label {
+          width: 100%;
+          text-align: center;
+          line-height: 1.8;
+        }
       }
 
       .page {
@@ -535,7 +552,7 @@
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
-        .grid .download-card:last-child {
+        .ios-card {
           grid-column: 1 / -1;
         }
       }
@@ -634,10 +651,25 @@
         background: rgba(34, 197, 94, 0.07);
       }
 
+      .benefit-title {
+        font-size: 13px;
+        font-weight: 900;
+        margin-bottom: 4px;
+      }
+
+      .benefit-text {
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.9;
+        color: rgba(232, 236, 241, 0.88);
+      }
+
       .option-description {
-        margin: 0 0 12px;
+        margin: 0 auto 12px;
+        max-width: 520px;
         color: var(--muted);
         font-size: 12px;
+        line-height: 1.9;
         text-align: center;
       }
 
@@ -695,7 +727,7 @@
         display: flex;
         gap: 10px;
         flex-wrap: wrap;
-        margin-top: 10px;
+        margin-top: 0;
       }
       .direct-row .btn {
         flex: 1 1 180px;
@@ -746,6 +778,12 @@
       .trust-logo img {
         width: 92px;
         display: block;
+      }
+
+      .ios-card .download-card-body {
+        max-width: 680px;
+        width: 100%;
+        margin-inline: auto;
       }
     </style>
   </head>
@@ -822,15 +860,15 @@
     <main class="container">
       <section class="page">
         <div class="hero" id="get">
-          <div class="kicker">
+          <!--div class="kicker">
             سریع‌ترین راه شروع بازسازی بعد از جدایی و شکست عشقی
-          </div>
-          <h1>دانلود ققنوس</h1>
-          <p>
+          </div-->
+          <h1>دانلود اپلیکیشن ققنوس</h1>
+          <!--p>
             ققنوس رو می‌تونی برای اندروید به‌صورت مستقیم دریافت کنی یا از
             کافه‌بازار نصب کنی. نسخه آیفون هم در حال آماده‌سازیه و به‌زودی منتشر
             می‌شه.
-          </p>
+          </p-->
         </div>
 
         <div class="grid">
@@ -853,8 +891,12 @@
               </div>
 
               <div class="benefit-box direct">
-                مزیت دانلود مستقیم: فعال‌سازی اشتراک پرو با قیمت مناسب‌تر و
-                برخورداری از تخفیف‌های بیشتر.
+                <div class="benefit-title">مزیت دانلود مستقیم</div>
+
+                <div class="benefit-text">
+                  فعال‌سازی اشتراک پرو با قیمت مناسب‌تر و برخورداری از تخفیف‌های
+                  بیشتر
+                </div>
               </div>
 
               <div class="note">
@@ -892,7 +934,9 @@
               </a>
 
               <div class="benefit-box bazaar">
-                مزیت دانلود از بازار: امکان خرید اشتراک به‌صورت اقساطی.
+                <div class="benefit-title">مزیت دانلود از کافه‌بازار</div>
+
+                <div class="benefit-text">امکان خرید اشتراک به‌صورت اقساطی</div>
               </div>
             </div>
           </div>
@@ -920,7 +964,7 @@
           -->
 
           <!-- iOS -->
-          <div class="card download-card">
+          <div class="card download-card ios-card">
             <div class="download-head ios">نسخه آیفون</div>
 
             <div class="download-card-body">
@@ -944,11 +988,15 @@
               </div>
             </div>
           </div>
+        </div>
 
-          <div class="cta-row">
-            <a class="btn btn-ghost" href="/">بازگشت به صفحه اصلی</a>
-          </div>
-          <a class="btn btn-primary" href="/#inside">ویژگی‌های اشتراک ققنوس</a>
+        <div class="cta-row">
+          <a class="btn btn-ghost" href="/"> بازگشت به صفحه اصلی </a>
+
+          <a class="btn btn-primary" href="/#inside">
+            ویژگی‌های اشتراک ققنوس
+          </a>
+
           <a class="btn btn-ghost" href="/store.html">
             نحوه فعال‌سازی اشتراک
           </a>
