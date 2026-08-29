@@ -548,6 +548,34 @@
         max-width: none;
       }
 
+      .desktop-direct-note {
+        display: none;
+      }
+
+      .mobile-direct-note {
+        display: block;
+      }
+
+      @media (min-width: 760px) {
+        .desktop-direct-note {
+          display: block;
+          grid-column: 1 / -1;
+          margin-top: 0;
+        }
+
+        .mobile-direct-note {
+          display: none;
+        }
+      }
+      .direct-note {
+        border-color: rgba(212, 175, 55, 0.18);
+        background: rgba(212, 175, 55, 0.035);
+      }
+
+      .direct-note strong {
+        color: #fde68a;
+      }
+
       @media (min-width: 760px) {
         .grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -910,12 +938,11 @@
                 <div class="benefit-title">مزیت دانلود مستقیم</div>
 
                 <div class="benefit-text">
-                  فعال‌سازی اشتراک پرو با قیمت مناسب‌تر و برخورداری از تخفیف‌های
-                  بیشتر
+                  اشتراک‌های ارزان‌تر و تخفیف‌های بیشتر
                 </div>
               </div>
 
-              <div class="note">
+              <div class="note direct-note mobile-direct-note">
                 <strong>نکته:</strong>
                 اگه بعد از دانلود مستقیم، گوشی برای نصب هشدار داد یا اجازه
                 خواست، کافیه به مرورگر اجازه نصب اپ بدی.
@@ -978,6 +1005,16 @@
             </a>
           </div>
           -->
+
+          <div class="note direct-note desktop-direct-note">
+            <strong>نکته نصب دانلود مستقیم:</strong>
+            اگه بعد از دانلود مستقیم، گوشی برای نصب هشدار داد یا اجازه خواست،
+            کافیه به مرورگر اجازه نصب اپ بدی.
+            <br />
+            <a class="gold-link" href="/install-help.html">
+              مشاهده راهنمای قدم‌به‌قدم نصب
+            </a>
+          </div>
 
           <!-- iOS -->
           <div class="card download-card ios-card">
