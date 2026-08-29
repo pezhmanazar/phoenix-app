@@ -2640,151 +2640,469 @@ router.patch("/profile", async (req, res) => {
 
 router.get("/tickets", async (req, res) => {
   try {
-    const { status, type, q } = req.query;
-    const where = {};
-    if (
+    const {
+      status,
+      type,
+      q,
+      page: pageRaw,
+      pageSize: pageSizeRaw,
+      assignedAdminId,
+    } = req.query;
+
+    const page = Math.max(1, Number(pageRaw) || 1);
+
+    const pageSize = Math.max(
+      1,
+      Math.min(100, Number(pageSizeRaw) || 15),
+    );
+
+    const skip = (page - 1) * pageSize;
+
+    const whereParts = [];
+
+    /*
+     * فقط تیکت‌هایی که واقعاً محتوا دارند.
+     */
+    whereParts.push({
+      messages: {
+        some: {
+          OR: [
+            { text: { not: "" } },
+            { fileUrl: { not: null } },
+          ],
+        },
+      },
+    });
+
+    /*
+     * وضعیت
+     *
+     * unread یک status دیتابیس نیست؛
+     * یک فیلتر جدا روی unread است.
+     */
+    if (status === "unread") {
+      whereParts.push({
+        unread: true,
+      });
+    } else if (
       typeof status === "string" &&
       ["open", "pending", "closed"].includes(status)
     ) {
-      where.status = status;
+      whereParts.push({
+        status,
+      });
     }
-    if (typeof type === "string" && ["tech", "therapy"].includes(type)) {
-      where.type = type;
+
+    /*
+     * نوع تیکت
+     */
+    if (
+      typeof type === "string" &&
+      ["tech", "therapy"].includes(type)
+    ) {
+      whereParts.push({
+        type,
+      });
     }
+
+    /*
+     * ادمین مسئول
+     */
+    if (
+      typeof assignedAdminId === "string" &&
+      assignedAdminId.trim()
+    ) {
+      const adminId = assignedAdminId.trim();
+
+      if (adminId === "__unassigned__") {
+        whereParts.push({
+          assignedAdminId: null,
+        });
+      } else {
+        whereParts.push({
+          assignedAdminId: adminId,
+        });
+      }
+    }
+
+    /*
+     * جستجو
+     *
+     * علاوه بر اطلاعات خود Ticket،
+     * نام و شماره کاربران را هم پیدا می‌کنیم
+     * تا جستجوی نام کاربر بعد از pagination خراب نشود.
+     */
     if (typeof q === "string" && q.trim()) {
       const term = q.trim();
-      where.OR = [
-        { title: { contains: term, mode: "insensitive" } },
-        { description: { contains: term, mode: "insensitive" } },
-        { contact: { contains: term, mode: "insensitive" } },
-        { openedByName: { contains: term, mode: "insensitive" } },
+
+      const matchingUsers = await prisma.user.findMany({
+        where: {
+          OR: [
+            {
+              fullName: {
+                contains: term,
+                mode: "insensitive",
+              },
+            },
+            {
+              phone: {
+                contains: term,
+              },
+            },
+          ],
+        },
+        select: {
+          id: true,
+          phone: true,
+        },
+        take: 100,
+      });
+
+      const matchingUserIds = matchingUsers
+        .map((user) => user.id)
+        .filter(Boolean);
+
+      const matchingPhones = matchingUsers
+        .map((user) => user.phone)
+        .filter(Boolean);
+
+      const searchOr = [
         {
-          messages: { some: { text: { contains: term, mode: "insensitive" } } },
-        },
-      ];
-    }
-
-    const hasContentFilter = {
-      messages: {
-        some: {
-          OR: [{ text: { not: "" } }, { fileUrl: { not: null } }],
-        },
-      },
-    };
-    const whereFinal = { ...where, AND: [hasContentFilter] };
-
-    const tickets = await prisma.ticket.findMany({
-      where: whereFinal,
-      orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
-      include: {
-        messages: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: {
-            id: true,
-            createdAt: true,
-            sender: true,
+          title: {
+            contains: term,
+            mode: "insensitive",
           },
         },
-        assignedAdmin: {
+        {
+          description: {
+            contains: term,
+            mode: "insensitive",
+          },
+        },
+        {
+          contact: {
+            contains: term,
+            mode: "insensitive",
+          },
+        },
+        {
+          openedByName: {
+            contains: term,
+            mode: "insensitive",
+          },
+        },
+        {
+          messages: {
+            some: {
+              text: {
+                contains: term,
+                mode: "insensitive",
+              },
+            },
+          },
+        },
+      ];
+
+      if (matchingUserIds.length) {
+        searchOr.push({
+          openedById: {
+            in: matchingUserIds,
+          },
+        });
+      }
+
+      if (matchingPhones.length) {
+        searchOr.push(
+          {
+            openedById: {
+              in: matchingPhones,
+            },
+          },
+          {
+            contact: {
+              in: matchingPhones,
+            },
+          },
+        );
+      }
+
+      whereParts.push({
+        OR: searchOr,
+      });
+    }
+
+    const whereFinal = {
+      AND: whereParts,
+    };
+
+    /*
+     * سه query مستقل:
+     *
+     * 1. تعداد واقعی نتایج
+     * 2. فقط همان صفحه مورد نیاز
+     * 3. لیست کامل ادمین‌ها برای dropdown
+     */
+    const [totalItems, tickets, adminOptions] =
+      await Promise.all([
+        prisma.ticket.count({
+          where: whereFinal,
+        }),
+
+        prisma.ticket.findMany({
+          where: whereFinal,
+
+          orderBy: [
+            { pinned: "desc" },
+            { updatedAt: "desc" },
+            { createdAt: "desc" },
+          ],
+
+          skip,
+          take: pageSize,
+
+          include: {
+            /*
+             * برای صفحه لیست فقط آخرین پیام لازم است.
+             */
+            messages: {
+              orderBy: {
+                createdAt: "desc",
+              },
+              take: 1,
+              select: {
+                id: true,
+                createdAt: true,
+                sender: true,
+              },
+            },
+
+            assignedAdmin: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+              },
+            },
+          },
+        }),
+
+        prisma.admin.findMany({
+          orderBy: [
+            { name: "asc" },
+            { email: "asc" },
+          ],
           select: {
             id: true,
             name: true,
             email: true,
             role: true,
           },
-        },
-      },
-      take: 200,
-    });
+        }),
+      ]);
 
-    // جمع‌آوری شماره‌ها و userId ها
+    /*
+     * فقط کاربران مربوط به همین صفحه را می‌گیریم.
+     */
     const userIds = [];
     const phones = [];
 
-    for (const t of tickets) {
-      const openedByIdRaw = (t.openedById || "").trim();
-      const contactRaw = (t.contact || "").trim();
+    for (const ticket of tickets) {
+      const openedByIdRaw = String(
+        ticket.openedById || "",
+      ).trim();
 
-      if (openedByIdRaw && isUuid(openedByIdRaw)) {
+      const contactRaw = String(
+        ticket.contact || "",
+      ).trim();
+
+      if (
+        openedByIdRaw &&
+        isUuid(openedByIdRaw)
+      ) {
         userIds.push(openedByIdRaw);
       }
 
       const candidates = [
         contactRaw,
-        !isUuid(openedByIdRaw) ? openedByIdRaw : "",
+        !isUuid(openedByIdRaw)
+          ? openedByIdRaw
+          : "",
       ].filter(Boolean);
 
-      for (const p of candidates) {
-        const normalized = normalizePhone(p) || String(p).replace(/\D/g, "");
-        if (normalized) phones.push(normalized);
-        phones.push(p);
+      for (const candidate of candidates) {
+        const normalized =
+          normalizePhone(candidate) ||
+          String(candidate).replace(/\D/g, "");
+
+        if (normalized) {
+          phones.push(normalized);
+        }
+
+        phones.push(candidate);
       }
     }
 
-    // یکتا
-    const uniqUserIds = Array.from(new Set(userIds));
-    const uniqPhones = Array.from(new Set(phones));
+    const uniqUserIds = Array.from(
+      new Set(userIds),
+    );
 
-    // گرفتن همه کاربران مرتبط
-    const users = await prisma.user.findMany({
-      where: {
-        OR: [
-          ...(uniqUserIds.length ? [{ id: { in: uniqUserIds } }] : []),
-          ...(uniqPhones.length ? [{ phone: { in: uniqPhones } }] : []),
-        ],
-      },
-      select: {
-        id: true,
-        phone: true,
-        fullName: true,
-        gender: true,
-        birthDate: true,
-        plan: true,
-        planExpiresAt: true,
-      },
-    });
+    const uniqPhones = Array.from(
+      new Set(phones),
+    );
 
-    const mapped = tickets.map((t) => {
-      const openedByIdRaw = (t.openedById || "").trim();
-      const contactRaw = (t.contact || "").trim();
+    let users = [];
+
+    if (
+      uniqUserIds.length ||
+      uniqPhones.length
+    ) {
+      users = await prisma.user.findMany({
+        where: {
+          OR: [
+            ...(uniqUserIds.length
+              ? [
+                  {
+                    id: {
+                      in: uniqUserIds,
+                    },
+                  },
+                ]
+              : []),
+
+            ...(uniqPhones.length
+              ? [
+                  {
+                    phone: {
+                      in: uniqPhones,
+                    },
+                  },
+                ]
+              : []),
+          ],
+        },
+
+        select: {
+          id: true,
+          phone: true,
+          fullName: true,
+          gender: true,
+          birthDate: true,
+          plan: true,
+          planExpiresAt: true,
+        },
+      });
+    }
+
+    /*
+     * برای lookup سریع‌تر به‌جای users.find
+     * برای هر ticket، Map می‌سازیم.
+     */
+    const userById = new Map();
+    const userByPhone = new Map();
+
+    for (const user of users) {
+      userById.set(user.id, user);
+
+      if (user.phone) {
+        userByPhone.set(user.phone, user);
+
+        const normalized =
+          normalizePhone(user.phone) ||
+          String(user.phone).replace(/\D/g, "");
+
+        if (normalized) {
+          userByPhone.set(normalized, user);
+        }
+      }
+    }
+
+    const mapped = tickets.map((ticket) => {
+      const openedByIdRaw = String(
+        ticket.openedById || "",
+      ).trim();
+
+      const contactRaw = String(
+        ticket.contact || "",
+      ).trim();
 
       let user = null;
 
-      if (openedByIdRaw && isUuid(openedByIdRaw)) {
-        user = users.find((u) => u.id === openedByIdRaw) || null;
+      if (
+        openedByIdRaw &&
+        isUuid(openedByIdRaw)
+      ) {
+        user =
+          userById.get(openedByIdRaw) ||
+          null;
       }
 
       if (!user) {
         const candidates = [
           contactRaw,
-          !isUuid(openedByIdRaw) ? openedByIdRaw : "",
+          !isUuid(openedByIdRaw)
+            ? openedByIdRaw
+            : "",
         ].filter(Boolean);
 
-        const normalizedCandidates = candidates
-          .map((p) => normalizePhone(p) || String(p).replace(/\D/g, ""))
-          .filter(Boolean);
+        for (const candidate of candidates) {
+          const normalized =
+            normalizePhone(candidate) ||
+            String(candidate).replace(/\D/g, "");
 
-        user =
-          users.find(
-            (u) =>
-              candidates.includes(u.phone) ||
-              normalizedCandidates.includes(u.phone),
-          ) || null;
+          user =
+            userByPhone.get(candidate) ||
+            userByPhone.get(normalized) ||
+            null;
+
+          if (user) break;
+        }
       }
 
       return {
-        ...t,
-        title: t.openedByName || t.title,
-        displayTitle: t.openedByName || t.title,
+        ...ticket,
+
+        title:
+          ticket.openedByName ||
+          ticket.title,
+
+        displayTitle:
+          ticket.openedByName ||
+          ticket.title,
+
         user,
       };
     });
 
-    res.json({ ok: true, tickets: mapped });
+    const totalPages = Math.max(
+      1,
+      Math.ceil(totalItems / pageSize),
+    );
+
+    return res.json({
+      ok: true,
+
+      tickets: mapped,
+
+      pagination: {
+        page,
+        pageSize,
+        totalItems,
+        totalPages,
+      },
+
+      adminOptions,
+    });
   } catch (e) {
-    console.error("admin/tickets error:", e?.message || "unknown_error");
-    res.status(500).json({ ok: false, error: "internal_error" });
+    console.error(
+      "admin/tickets error:",
+      e?.message || "unknown_error",
+    );
+
+    return res.status(500).json({
+      ok: false,
+      error: "internal_error",
+    });
   }
 });
 
