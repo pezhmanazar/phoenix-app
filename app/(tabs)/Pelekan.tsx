@@ -124,6 +124,8 @@ export default function PelekanTab() {
 
   const lastFocusRef = useRef<string>("__init__");
 
+  const hasCompletedInitialLoadRef = useRef(false);
+
   // ✅ مهم: جلوگیری از چند fetch همزمان (ریشه‌ی گیر کردن روی لودینگ)
   const inFlightRef = useRef(false);
 
@@ -301,34 +303,45 @@ export default function PelekanTab() {
   );
 
   useEffect(() => {
-    if (authLoading) return;
-    fetchState({ initial: true, reason: "mount_or_token_change" });
-  }, [authLoading, token, fetchState]);
+  if (authLoading) return;
+
+  hasCompletedInitialLoadRef.current = false;
+
+  const runInitialLoad = async () => {
+    await fetchState({
+      initial: true,
+      reason: "mount_or_token_change",
+    });
+
+    hasCompletedInitialLoadRef.current = true;
+  };
+
+  void runInitialLoad();
+}, [authLoading, token, fetchState]);
 
   useFocusEffect(
-    useCallback(() => {
-      if (authLoading || !token) {
-        return;
-      }
+  useCallback(() => {
+    if (authLoading || !token) {
+      return;
+    }
 
-      void loadUnreadNotifications();
+    void loadUnreadNotifications();
 
-      if (initialLoading) {
-        return;
-      }
+    if (!hasCompletedInitialLoadRef.current) {
+      return;
+    }
 
-      fetchState({
-        initial: false,
-        reason: "focus",
-      });
-    }, [
-      fetchState,
-      initialLoading,
-      authLoading,
-      token,
-      loadUnreadNotifications,
-    ]),
-  );
+    void fetchState({
+      initial: false,
+      reason: "focus",
+    });
+  }, [
+    fetchState,
+    authLoading,
+    token,
+    loadUnreadNotifications,
+  ]),
+);
 
   // ✅ one-shot param cleanup
   useEffect(() => {
