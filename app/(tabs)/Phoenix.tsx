@@ -266,11 +266,6 @@ export default function Phoenix() {
   }, [apiBase, me?.phone]);
 
   useEffect(() => {
-    refresh?.().catch(() => {});
-    fetchProgressStats().catch(() => {});
-  }, [refresh, fetchProgressStats]);
-
-  useEffect(() => {
     const run = async () => {
       try {
         const result = await checkAppUpdate();
@@ -288,9 +283,8 @@ export default function Phoenix() {
 
   useFocusEffect(
     useCallback(() => {
-      refresh?.().catch(() => {});
-      fetchProgressStats().catch(() => {});
-      return () => {};
+      void refresh?.();
+      void fetchProgressStats();
     }, [refresh, fetchProgressStats]),
   );
 
