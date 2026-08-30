@@ -142,27 +142,14 @@ async function computeAchievementEligibility(userId) {
 
   const completedStages = new Set();
 
-  let previousStageCompleted = true;
-
   for (const stage of stages) {
     const code = String(stage.code);
 
-    let completed = false;
-
-    if (code === "bastan") {
-      completed = bastanCompleted;
-    } else {
-      const unlocked = previousStageCompleted === true;
-
-      completed =
-        unlocked && allDaysTerminal(stage.days || [], progressByDayId);
-    }
+    const completed = allDaysTerminal(stage.days || [], progressByDayId);
 
     if (completed) {
       completedStages.add(code);
     }
-
-    previousStageCompleted = completed;
   }
 
   const bestNoContactDays = Number(streak?.bestDays) || 0;
