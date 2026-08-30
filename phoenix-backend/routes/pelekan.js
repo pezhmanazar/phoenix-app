@@ -1760,8 +1760,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
 
     try {
       const achievementResult = await syncUserAchievements(user.id, {
-        // فعلاً تا زمان backfill کاربران قبلی Push نده
-        notifyNew: false,
+        notifyNew: true,
       });
 
       const bastanMedal = achievementResult.newlyUnlocked.find(

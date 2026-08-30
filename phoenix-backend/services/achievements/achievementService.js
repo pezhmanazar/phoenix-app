@@ -43,15 +43,7 @@ function allDaysTerminal(days, progressByDayId) {
 }
 
 async function computeAchievementEligibility(userId) {
-  const [
-    stages,
-    dayProgress,
-    bastanState,
-    bastanDefinitions,
-    bastanProgress,
-    streak,
-    xpAggregate,
-  ] = await Promise.all([
+  const [stages, dayProgress, streak, xpAggregate] = await Promise.all([
     prisma.pelekanStage.findMany({
       orderBy: {
         sortOrder: "asc",
@@ -71,32 +63,6 @@ async function computeAchievementEligibility(userId) {
       },
       select: {
         dayId: true,
-        status: true,
-      },
-    }),
-
-    prisma.bastanState.findUnique({
-      where: {
-        userId,
-      },
-      select: {
-        contractSignedAt: true,
-        lastSafetyCheckResult: true,
-      },
-    }),
-
-    prisma.bastanActionDefinition.findMany({
-      select: {
-        id: true,
-      },
-    }),
-
-    prisma.bastanActionProgress.findMany({
-      where: {
-        userId,
-      },
-      select: {
-        actionId: true,
         status: true,
       },
     }),
@@ -122,23 +88,6 @@ async function computeAchievementEligibility(userId) {
   ]);
 
   const progressByDayId = new Map(dayProgress.map((row) => [row.dayId, row]));
-
-  const bastanProgressByActionId = new Map(
-    bastanProgress.map((row) => [row.actionId, row]),
-  );
-
-  const allBastanActionsDone =
-    bastanDefinitions.length > 0 &&
-    bastanDefinitions.every((definition) => {
-      const progress = bastanProgressByActionId.get(definition.id);
-
-      return progress?.status === "done";
-    });
-
-  const bastanCompleted =
-    allBastanActionsDone &&
-    Boolean(bastanState?.contractSignedAt) &&
-    bastanState?.lastSafetyCheckResult === "none";
 
   const completedStages = new Set();
 
