@@ -1080,6 +1080,7 @@ enum NotificationType {
   assessment
   reminder
   marketing
+  achievement
   system
 }
 
