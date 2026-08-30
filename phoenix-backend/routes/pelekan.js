@@ -565,6 +565,76 @@ async function syncBastanActionsToDays(
   }
 }
 
+/* ---------- GET /api/pelekan/stats ---------- */
+/*
+ * Lightweight endpoint for Phoenix/profile statistics.
+ * فقط آمار خلاصه را برمی‌گرداند و engine/state کامل را اجرا نمی‌کند.
+ */
+router.get("/stats", authUser, async (req, res) => {
+  try {
+    noStore(res);
+
+    const phone = req.user?.phone;
+
+    if (!phone) {
+      return res.status(401).json({
+        ok: false,
+        error: "UNAUTHORIZED",
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        ok: false,
+        error: "USER_NOT_FOUND",
+      });
+    }
+
+    const [completedDays, xpAgg] = await Promise.all([
+      prisma.pelekanDayProgress.count({
+        where: {
+          userId: user.id,
+          status: "completed",
+        },
+      }),
+
+      prisma.xpLedger.aggregate({
+        where: {
+          userId: user.id,
+        },
+        _sum: {
+          amount: true,
+        },
+      }),
+    ]);
+
+    const xpTotal = xpAgg?._sum?.amount || 0;
+
+    return res.json({
+      ok: true,
+      data: {
+        completedDays,
+        xpTotal,
+      },
+    });
+  } catch (e) {
+    console.error(
+      "[pelekan.stats] error:",
+      e?.message || "unknown_error",
+    );
+
+    return res.status(500).json({
+      ok: false,
+      error: "SERVER_ERROR",
+    });
+  }
+});
+
 /* ---------- GET /api/pelekan/state ---------- */
 
 router.get("/state", authUser, async (req, res) => {

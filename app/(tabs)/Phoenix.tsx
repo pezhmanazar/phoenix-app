@@ -207,63 +207,62 @@ export default function Phoenix() {
   const apiBase = "https://api.qoqnoos.app";
 
   const fetchProgressStats = useCallback(async () => {
-    const phone = String(me?.phone || "").trim();
-    if (!phone) {
+  const phone = String(me?.phone || "").trim();
+
+  if (!phone) {
+    setCompletedDays(0);
+    setXpTotal(0);
+    return;
+  }
+
+  setStatsLoading(true);
+
+  try {
+    const url = `${apiBase}/api/pelekan/stats`;
+    const sessionToken = await AsyncStorage.getItem("session_v1");
+
+    const res = await fetch(url, {
+      headers: {
+        "Cache-Control": "no-store",
+        Pragma: "no-cache",
+        Accept: "application/json",
+        ...(sessionToken
+          ? {
+              Authorization: `Bearer ${sessionToken}`,
+              "x-session-token": sessionToken,
+            }
+          : {}),
+      },
+    });
+
+    let json: any = null;
+
+    try {
+      json = await res.json();
+    } catch {
+      json = null;
+    }
+
+    if (!res.ok || !json?.ok) {
       setCompletedDays(0);
       setXpTotal(0);
       return;
     }
-    setStatsLoading(true);
-    try {
-      const url = `${apiBase}/api/pelekan/state`;
-      const sessionToken = await AsyncStorage.getItem("session_v1");
 
-      const res = await fetch(url, {
-        headers: {
-          "Cache-Control": "no-store",
-          Pragma: "no-cache",
-          Accept: "application/json",
-          ...(sessionToken
-            ? {
-                Authorization: `Bearer ${sessionToken}`,
-                "x-session-token": sessionToken,
-              }
-            : {}),
-        },
-      });
+    setCompletedDays(
+      Number(json?.data?.completedDays ?? 0),
+    );
 
-      let json: any = null;
-      try {
-        json = await res.json();
-      } catch {
-        json = null;
-      }
-
-      if (!res.ok || !json?.ok) {
-        setCompletedDays(0);
-        setXpTotal(0);
-        return;
-      }
-
-      const data = json?.data || {};
-
-      const dp = Array.isArray(data?.progress?.dayProgress)
-        ? data.progress.dayProgress
-        : [];
-      const doneCount = dp.filter(
-        (d: any) => String(d?.status) === "completed",
-      ).length;
-      setCompletedDays(Number.isFinite(doneCount) ? doneCount : 0);
-
-      const xp = Number(data?.progress?.xpTotal ?? 0);
-      setXpTotal(Number.isFinite(xp) ? xp : 0);
-    } catch {
-      setCompletedDays(0);
-      setXpTotal(0);
-    } finally {
-      setStatsLoading(false);
-    }
-  }, [apiBase, me?.phone]);
+    setXpTotal(
+      Number(json?.data?.xpTotal ?? 0),
+    );
+  } catch {
+    setCompletedDays(0);
+    setXpTotal(0);
+  } finally {
+    setStatsLoading(false);
+  }
+}, [apiBase, me?.phone]);
 
   useEffect(() => {
     const run = async () => {
