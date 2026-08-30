@@ -10,6 +10,7 @@ import {
 } from "../services/pelekan/dayBasedStages.js";
 import engineModule from "../services/pelekan/engine.cjs";
 import prisma from "../utils/prisma.js";
+import { syncUserAchievements } from "../services/achievements/achievementService.js";
 
 const pelekanEngine = engineModule.default ?? engineModule;
 
@@ -623,10 +624,7 @@ router.get("/stats", authUser, async (req, res) => {
       },
     });
   } catch (e) {
-    console.error(
-      "[pelekan.stats] error:",
-      e?.message || "unknown_error",
-    );
+    console.error("[pelekan.stats] error:", e?.message || "unknown_error");
 
     return res.status(500).json({
       ok: false,
@@ -1501,6 +1499,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
             isProLocked: true,
             minRequiredSubtasks: true,
             totalSubtasks: true,
+            xpOnComplete: true,
           },
         },
       },
@@ -1600,6 +1599,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
     const xp = Math.max(0, Number(subtask.xpReward) || 0);
 
     let xpAwarded = 0;
+    let actionXpAwarded = 0;
     let medalAwarded = null;
 
     const effectiveMinRequiredSubtasks = Math.max(
@@ -1659,6 +1659,44 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         },
       });
 
+      // 2.6) Action completion XP bonus
+      const actionIsComplete =
+        effectiveMinRequiredSubtasks > 0 &&
+        doneCount >= effectiveMinRequiredSubtasks;
+
+      const actionXpOnComplete = Math.max(
+        0,
+        Number(subtask.action?.xpOnComplete) || 0,
+      );
+
+      if (actionIsComplete && actionXpOnComplete > 0) {
+        const existingActionXp = await tx.xpLedger.findFirst({
+          where: {
+            userId: user.id,
+            reason: "bastan_action_complete",
+            refType: "bastan_action",
+            refId: String(subtask.actionId),
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        if (!existingActionXp) {
+          await tx.xpLedger.create({
+            data: {
+              userId: user.id,
+              amount: actionXpOnComplete,
+              reason: "bastan_action_complete",
+              refType: "bastan_action",
+              refId: String(subtask.actionId),
+            },
+          });
+
+          actionXpAwarded = actionXpOnComplete;
+        }
+      }
+
       // 3) XP ledger (only if xpReward > 0)
       if (xp > 0) {
         await tx.xpLedger.create({
@@ -1673,7 +1711,7 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
         xpAwarded = xp;
       }
 
-      // 4) CC_3 safety logic + medal award
+      // 4) CC_3 safety logic
       if (subtask.key === "CC_3_24h_safety_check") {
         const safetyResult = String(rawGate);
 
@@ -1691,36 +1729,6 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
             gosastanUnlockedAt: now,
           },
         });
-
-        if (safetyResult === "none") {
-          const MEDAL_CODE = "BASTAN_COMPLETE";
-
-          const medal = await tx.medal.upsert({
-            where: { code: MEDAL_CODE },
-            create: {
-              code: MEDAL_CODE,
-              titleFa: "پایان مرحله بستن",
-              description: "تو مرحله بستن رو کامل کردی",
-              iconKey: "bastan_complete",
-            },
-            update: {},
-            select: { id: true, code: true, titleFa: true },
-          });
-
-          // اگر قبلاً گرفته، دوباره create نکن
-          const alreadyHas = await tx.userMedal.findUnique({
-            where: { userId_medalId: { userId: user.id, medalId: medal.id } },
-            select: { userId: true },
-          });
-
-          if (!alreadyHas) {
-            await tx.userMedal.create({
-              data: { userId: user.id, medalId: medal.id },
-            });
-
-            medalAwarded = { code: medal.code, titleFa: medal.titleFa };
-          }
-        }
       }
     });
 
@@ -1750,6 +1758,31 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
       // sync failure must NOT break completing the subtask
     }
 
+    try {
+      const achievementResult = await syncUserAchievements(user.id, {
+        // فعلاً تا زمان backfill کاربران قبلی Push نده
+        notifyNew: false,
+      });
+
+      const bastanMedal = achievementResult.newlyUnlocked.find(
+        (item) => item.kind === "medal" && item.code === "BASTAN_COMPLETE",
+      );
+
+      if (bastanMedal) {
+        medalAwarded = {
+          code: bastanMedal.code,
+          titleFa: bastanMedal.titleFa,
+        };
+      }
+    } catch (e) {
+      console.warn(
+        "[pelekan.bastan.subtask.complete] achievement sync failed:",
+        e?.message || "unknown_error",
+      );
+    }
+
+    const totalXpAwarded = xpAwarded + actionXpAwarded;
+
     return res.json({
       ok: true,
       data: {
@@ -1760,11 +1793,18 @@ router.post("/bastan/subtask/complete", authUser, async (req, res) => {
             ? {
                 safetyResult: rawGate,
                 gosastanUnlocked: true,
-                xpAwarded,
+
+                xpAwarded: totalXpAwarded,
+                subtaskXpAwarded: xpAwarded,
+                actionXpAwarded,
+
                 medalAwarded,
               }
             : {
-                xpAwarded,
+                xpAwarded: totalXpAwarded,
+                subtaskXpAwarded: xpAwarded,
+                actionXpAwarded,
+
                 medalAwarded: null,
               },
       },
