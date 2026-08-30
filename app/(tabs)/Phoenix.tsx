@@ -25,6 +25,7 @@ import { checkAppUpdate } from "../../lib/appUpdate";
 
 import PlanStatusBadge from "../../components/PlanStatusBadge";
 import { getPlanStatus } from "../../lib/plan";
+import HallOfFameCard from "../../components/achievements/HallOfFameCard";
 
 /* ---------- avatar helpers ---------- */
 const PRESET_AVATARS: { id: string; src: any }[] = [
@@ -106,49 +107,6 @@ function PrimarySplitButton({
   );
 }
 
-function FullWidthFeatureCard({
-  title,
-  icon,
-  iconColor = "#D4AF37",
-  onPress,
-}: {
-  title: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  iconColor?: string;
-  onPress?: () => void;
-}) {
-  const content = (
-    <GlassCard style={styles.fullCard}>
-      <View style={styles.fullCardTopRow}>
-        <View style={styles.fullCardTitleRow}>
-          <View style={styles.fullCardIconWrap}>
-            <Ionicons name={icon as any} size={18} color={iconColor} />
-          </View>
-          <Text style={styles.fullCardTitle}>{title}</Text>
-        </View>
-
-        <Text
-          style={{
-            color: "#9CA3AF",
-            fontSize: 12,
-            fontWeight: "800",
-          }}
-        >
-          بزودی
-        </Text>
-      </View>
-    </GlassCard>
-  );
-
-  if (!onPress) return content;
-
-  return (
-    <TouchableOpacity activeOpacity={0.9} onPress={onPress}>
-      {content}
-    </TouchableOpacity>
-  );
-}
-
 function HalfStatCard({
   title,
   icon,
@@ -207,62 +165,58 @@ export default function Phoenix() {
   const apiBase = "https://api.qoqnoos.app";
 
   const fetchProgressStats = useCallback(async () => {
-  const phone = String(me?.phone || "").trim();
+    const phone = String(me?.phone || "").trim();
 
-  if (!phone) {
-    setCompletedDays(0);
-    setXpTotal(0);
-    return;
-  }
-
-  setStatsLoading(true);
-
-  try {
-    const url = `${apiBase}/api/pelekan/stats`;
-    const sessionToken = await AsyncStorage.getItem("session_v1");
-
-    const res = await fetch(url, {
-      headers: {
-        "Cache-Control": "no-store",
-        Pragma: "no-cache",
-        Accept: "application/json",
-        ...(sessionToken
-          ? {
-              Authorization: `Bearer ${sessionToken}`,
-              "x-session-token": sessionToken,
-            }
-          : {}),
-      },
-    });
-
-    let json: any = null;
-
-    try {
-      json = await res.json();
-    } catch {
-      json = null;
-    }
-
-    if (!res.ok || !json?.ok) {
+    if (!phone) {
       setCompletedDays(0);
       setXpTotal(0);
       return;
     }
 
-    setCompletedDays(
-      Number(json?.data?.completedDays ?? 0),
-    );
+    setStatsLoading(true);
 
-    setXpTotal(
-      Number(json?.data?.xpTotal ?? 0),
-    );
-  } catch {
-    setCompletedDays(0);
-    setXpTotal(0);
-  } finally {
-    setStatsLoading(false);
-  }
-}, [apiBase, me?.phone]);
+    try {
+      const url = `${apiBase}/api/pelekan/stats`;
+      const sessionToken = await AsyncStorage.getItem("session_v1");
+
+      const res = await fetch(url, {
+        headers: {
+          "Cache-Control": "no-store",
+          Pragma: "no-cache",
+          Accept: "application/json",
+          ...(sessionToken
+            ? {
+                Authorization: `Bearer ${sessionToken}`,
+                "x-session-token": sessionToken,
+              }
+            : {}),
+        },
+      });
+
+      let json: any = null;
+
+      try {
+        json = await res.json();
+      } catch {
+        json = null;
+      }
+
+      if (!res.ok || !json?.ok) {
+        setCompletedDays(0);
+        setXpTotal(0);
+        return;
+      }
+
+      setCompletedDays(Number(json?.data?.completedDays ?? 0));
+
+      setXpTotal(Number(json?.data?.xpTotal ?? 0));
+    } catch {
+      setCompletedDays(0);
+      setXpTotal(0);
+    } finally {
+      setStatsLoading(false);
+    }
+  }, [apiBase, me?.phone]);
 
   useEffect(() => {
     const run = async () => {
@@ -433,13 +387,8 @@ export default function Phoenix() {
           onLeftPress={() => setEditVisible(true)}
           rightVariant={isProActive ? "gold" : "danger"}
         />
-
-        {/* مدال‌ها و تندیس‌ها */}
-        <FullWidthFeatureCard
-          title="مدال‌ها و تندیس‌ها"
-          icon="trophy"
-          iconColor="#D4AF37"
-        />
+        {/* تالار افتخارات */}
+        <HallOfFameCard onPress={() => router.push("/achievements")} />
 
         {/* ✅ Row: (Right) روزهای تکمیل‌شده  |  (Left) امتیازها */}
         <View style={styles.halfRow}>
