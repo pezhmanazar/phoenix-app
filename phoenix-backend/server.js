@@ -20,6 +20,7 @@ import payRouter from "./routes/pay.js"; // 🔹 روتر پرداخت / زری�
 import payBazaarRouter from "./routes/payBazaar.js"; // ✅ روتر پرداخت بازار (جدید)
 import paymentsRouter from "./routes/payments.js";
 import pelekanRouter from "./routes/pelekan.js";
+import achievementsRouter from "./routes/achievements.js";
 import pelekanReviewRoutes from "./routes/pelekanReview.js";
 import publicRouter from "./routes/public.js"; // فقط routeهای عمومی غیرتیکت (فعلاً AI / utility)
 import testNotificationsRouter from "./routes/testNotifications.js";
@@ -477,6 +478,9 @@ app.use("/api/users", usersRouter);
 
 // 🔹 مسیرهای نوتیفیکیشن
 app.use("/api/notifications", notificationsRouter);
+
+// 🏆 مدال‌ها و دستاوردها
+app.use("/api/achievements", achievementsRouter);
 
 // 🧪 تست موقت نوتیفیکیشن
 app.use("/api/test-notifications", testNotificationsRouter);
