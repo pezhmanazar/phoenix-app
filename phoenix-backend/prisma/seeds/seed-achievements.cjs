@@ -69,8 +69,7 @@ const BADGES = [
   {
     code: "PHOENIX_RESISTANCE",
     titleFa: "لوح مقاومت ققنوس",
-    description:
-      "برای رسیدن به ۵۰۰۰ امتیاز تجربه و تکمیل مرحله زیستن.",
+    description: "برای تکمیل مرحله زیستن و رسیدن به ۴۰ روز عدم تماس.",
     iconKey: "phoenix_resistance",
   },
   {
@@ -83,8 +82,7 @@ const BADGES = [
   {
     code: "GOLDEN_PHOENIX",
     titleFa: "تندیس زرین ققنوس",
-    description:
-      "بالاترین افتخار ققنوس؛ برای به پایان رساندن تمام مسیر پلکان.",
+    description: "بالاترین افتخار ققنوس؛ برای کسب تمام دستاوردهای اصلی مسیر.",
     iconKey: "golden_phoenix",
   },
 ];

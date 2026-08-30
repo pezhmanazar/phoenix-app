@@ -128,11 +128,11 @@ async function computeAchievementEligibility(userId) {
   }
 
   /*
-   * لوح مقاومت:
-   * هم زیستن تکمیل شده باشد
-   * هم XP به حداقل 5000 رسیده باشد.
+   * لوح مقاومت ققنوس:
+   * زیستن تکمیل شده باشد
+   * و کاربر حداقل یک‌بار به 40 روز عدم تماس رسیده باشد.
    */
-  if (completedStages.has("ziestan") && xpTotal >= 5000) {
+  if (completedStages.has("ziestan") && bestNoContactDays >= 40) {
     eligibleCodes.add("PHOENIX_RESISTANCE");
   }
 
@@ -145,10 +145,31 @@ async function computeAchievementEligibility(userId) {
   }
 
   /*
-   * تندیس زرین:
-   * پایان مرحله نهایی یعنی رستن.
+   * تندیس زرین ققنوس:
+   * بالاترین دستاورد سیستم.
+   * تنها زمانی داده می‌شود که تمام 12 دستاورد قبلی
+   * واجد شرایط شده باشند.
    */
-  if (completedStages.has("rastan")) {
+  const goldenPhoenixRequirements = [
+    "BASTAN_COMPLETE",
+    "NO_CONTACT_10",
+    "GOSASTAN_COMPLETE",
+    "NO_CONTACT_21",
+    "SOOKHTAN_COMPLETE",
+    "PHOENIX_RESISTANCE",
+    "SERESHTAN_COMPLETE",
+    "NO_CONTACT_40",
+    "ZIESTAN_COMPLETE",
+    "SAKHTAN_COMPLETE",
+    "STEEL_CONTINUITY",
+    "RASTAN_COMPLETE",
+  ];
+
+  const goldenPhoenixEligible = goldenPhoenixRequirements.every((code) =>
+    eligibleCodes.has(code),
+  );
+
+  if (goldenPhoenixEligible) {
     eligibleCodes.add("GOLDEN_PHOENIX");
   }
 
