@@ -35,6 +35,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const loadingRef = useRef(false);
   const lastLoadedPhoneRef = useRef<string | null>(null);
   const lastFetchAtRef = useRef<number>(0);
+  const meRef = useRef<Me | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -47,6 +48,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const resetUserState = useCallback(() => {
     lastLoadedPhoneRef.current = null;
     lastFetchAtRef.current = 0;
+    meRef.current = null;
 
     if (mountedRef.current) {
       setMe(null);
@@ -65,7 +67,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       const now = Date.now();
       const cacheFresh =
         lastLoadedPhoneRef.current === phone &&
-        !!me &&
+        !!meRef.current &&
         now - lastFetchAtRef.current < CACHE_TTL_MS;
 
       if (!force && cacheFresh) {
@@ -112,8 +114,12 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
+        const nextMe = resp.data || null;
+
+        meRef.current = nextMe;
+
         if (mountedRef.current) {
-          setMe(resp.data || null);
+          setMe(nextMe);
         }
 
         lastLoadedPhoneRef.current = phone;
@@ -128,7 +134,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         }
       }
     },
-    [phone, me, isAuthenticated, signOut, resetUserState]
+    [phone, isAuthenticated, signOut, resetUserState],
   );
 
   useEffect(() => {
