@@ -726,8 +726,23 @@ publicTicketsRouter.get("/open-batch", async (req, res) => {
           OR: orWhere,
         },
         orderBy: { createdAt: "desc" },
-        include: {
-          messages: { orderBy: { createdAt: "asc" } },
+        select: {
+          id: true,
+          type: true,
+          updatedAt: true,
+          messages: {
+            where: {
+              sender: "admin",
+            },
+            orderBy: {
+              createdAt: "asc",
+            },
+            select: {
+              id: true,
+              sender: true,
+              createdAt: true,
+            },
+          },
         },
       }),
       prisma.ticket.findFirst({
@@ -737,20 +752,32 @@ publicTicketsRouter.get("/open-batch", async (req, res) => {
           OR: orWhere,
         },
         orderBy: { createdAt: "desc" },
-        include: {
-          messages: { orderBy: { createdAt: "asc" } },
+        select: {
+          id: true,
+          type: true,
+          updatedAt: true,
+          messages: {
+            where: {
+              sender: "admin",
+            },
+            orderBy: {
+              createdAt: "asc",
+            },
+            select: {
+              id: true,
+              sender: true,
+              createdAt: true,
+            },
+          },
         },
       }),
     ]);
 
-    const techWithSignedUrls = await attachSignedUrlsToTicket(tech);
-    const therapyWithSignedUrls = await attachSignedUrlsToTicket(therapy);
-
     return res.json({
       ok: true,
       tickets: {
-        tech: withDisplayTitle(techWithSignedUrls),
-        therapy: withDisplayTitle(therapyWithSignedUrls),
+        tech,
+        therapy,
       },
     });
   } catch (e) {

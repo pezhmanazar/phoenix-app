@@ -24,7 +24,6 @@ type Message = {
   id: string;
   sender: "user" | "admin";
   createdAt?: string;
-  text?: string | null;
 };
 
 type TicketWithMessages = {
