@@ -39,11 +39,7 @@ function getUnlockedAccent(code: string) {
     return "#F6C453";
   }
 
-  if (code === "STEEL_CONTINUITY") {
-    return "#CBD5E1";
-  }
-
-  if (code === "PHOENIX_RESISTANCE") {
+  if (code === "STEEL_CONTINUITY" || code === "PHOENIX_RESISTANCE") {
     return "#F59E0B";
   }
 
