@@ -1,12 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 
 import type { AchievementItem } from "../../api/achievements";
+import { getAchievementImage } from "./AchievementImageMap";
 
 type Props = {
   item: AchievementItem;
@@ -14,10 +11,7 @@ type Props = {
 };
 
 function toPersianDigits(value: string | number) {
-  return String(value).replace(
-    /\d/g,
-    (d) => "۰۱۲۳۴۵۶۷۸۹"[Number(d)],
-  );
+  return String(value).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[Number(d)]);
 }
 
 function formatEarnedDate(value: string | null) {
@@ -30,41 +24,14 @@ function formatEarnedDate(value: string | null) {
   }
 
   try {
-    return new Intl.DateTimeFormat(
-      "fa-IR-u-ca-persian",
-      {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      },
-    ).format(date);
+    return new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(date);
   } catch {
-    return toPersianDigits(
-      date.toLocaleDateString(),
-    );
+    return toPersianDigits(date.toLocaleDateString());
   }
-}
-
-function getAchievementIcon(
-  code: string,
-): keyof typeof Ionicons.glyphMap {
-  if (code.startsWith("NO_CONTACT_")) {
-    return "shield-checkmark";
-  }
-
-  if (code === "PHOENIX_RESISTANCE") {
-    return "shield";
-  }
-
-  if (code === "STEEL_CONTINUITY") {
-    return "diamond";
-  }
-
-  if (code === "GOLDEN_PHOENIX") {
-    return "trophy";
-  }
-
-  return "medal";
 }
 
 function getUnlockedAccent(code: string) {
@@ -87,27 +54,20 @@ function getUnlockedAccent(code: string) {
   return "#D4AF37";
 }
 
-export default function AchievementCard({
-  item,
-  featured = false,
-}: Props) {
+export default function AchievementCard({ item, featured = false }: Props) {
   const unlocked = item.unlocked;
 
-  const accent = unlocked
-    ? getUnlockedAccent(item.code)
-    : "#60646C";
+  const achievementImage = getAchievementImage(item.code, unlocked);
 
-  const earnedDate = formatEarnedDate(
-    item.earnedAt,
-  );
+  const accent = unlocked ? getUnlockedAccent(item.code) : "#60646C";
+
+  const earnedDate = formatEarnedDate(item.earnedAt);
 
   return (
     <View
       style={[
         styles.card,
-        featured
-          ? styles.featuredCard
-          : styles.normalCard,
+        featured ? styles.featuredCard : styles.normalCard,
 
         unlocked
           ? {
@@ -123,73 +83,45 @@ export default function AchievementCard({
           styles.glow,
           featured && styles.featuredGlow,
           {
-            backgroundColor: unlocked
-              ? `${accent}18`
-              : "rgba(120,120,120,.07)",
+            backgroundColor: unlocked ? `${accent}18` : "rgba(120,120,120,.07)",
           },
         ]}
       />
 
-      <View
-        style={[
-          styles.medallionOuter,
-          featured &&
-            styles.featuredMedallionOuter,
-          {
-            borderColor: unlocked
-              ? `${accent}99`
-              : "rgba(255,255,255,.09)",
-          },
-        ]}
-      >
+      <View style={[styles.imageWrap, featured && styles.featuredImageWrap]}>
+        {achievementImage ? (
+          <Image
+            source={achievementImage}
+            resizeMode="contain"
+            style={[
+              styles.achievementImage,
+              featured && styles.featuredAchievementImage,
+            ]}
+          />
+        ) : (
+          <Ionicons
+            name="medal-outline"
+            size={featured ? 64 : 42}
+            color={unlocked ? accent : "#686D75"}
+          />
+        )}
+
         <View
           style={[
-            styles.medallionInner,
-            featured &&
-              styles.featuredMedallionInner,
-            {
-              backgroundColor: unlocked
-                ? `${accent}1F`
-                : "#25282D",
-            },
+            styles.stateBadge,
+            unlocked
+              ? {
+                  backgroundColor: accent,
+                  borderColor: "#111318",
+                }
+              : styles.lockedStateBadge,
           ]}
         >
           <Ionicons
-            name={getAchievementIcon(
-              item.code,
-            )}
-            size={featured ? 42 : 31}
-            color={
-              unlocked
-                ? accent
-                : "#686D75"
-            }
+            name={unlocked ? "checkmark" : "lock-closed"}
+            size={11}
+            color={unlocked ? "#111318" : "#B3B7BE"}
           />
-
-          {!unlocked ? (
-            <View style={styles.lockBadge}>
-              <Ionicons
-                name="lock-closed"
-                size={10}
-                color="#A3A7AE"
-              />
-            </View>
-          ) : (
-            <View
-              style={[
-                styles.unlockBadge,
-                {
-                  backgroundColor: accent,
-                },
-              ]}
-            >
-              <Ionicons
-                name="checkmark"
-                size={11}
-                color="#111318"
-              />
-            </View>
-          )}
         </View>
       </View>
 
@@ -197,8 +129,7 @@ export default function AchievementCard({
         style={[
           styles.title,
           featured && styles.featuredTitle,
-          !unlocked &&
-            styles.lockedTitle,
+          !unlocked && styles.lockedTitle,
         ]}
       >
         {item.titleFa}
@@ -206,54 +137,30 @@ export default function AchievementCard({
 
       {featured ? (
         <Text
-          style={[
-            styles.description,
-            !unlocked &&
-              styles.lockedDescription,
-          ]}
+          style={[styles.description, !unlocked && styles.lockedDescription]}
         >
-          {item.description ||
-            "بالاترین دستاورد مسیر ققنوس"}
+          {item.description || "بالاترین دستاورد مسیر ققنوس"}
         </Text>
       ) : null}
 
       <View style={styles.statusWrap}>
         {unlocked ? (
           <>
-            <Ionicons
-              name="checkmark-circle"
-              size={13}
-              color={accent}
-            />
+            <Ionicons name="checkmark-circle" size={13} color={accent} />
 
-            <Text
-              style={[
-                styles.statusText,
-                { color: accent },
-              ]}
-            >
-              کسب شده
-            </Text>
+            <Text style={[styles.statusText, { color: accent }]}>کسب شده</Text>
           </>
         ) : (
           <>
-            <Ionicons
-              name="lock-closed-outline"
-              size={12}
-              color="#737780"
-            />
+            <Ionicons name="lock-closed-outline" size={12} color="#737780" />
 
-            <Text style={styles.lockedStatus}>
-              قفل
-            </Text>
+            <Text style={styles.lockedStatus}>قفل</Text>
           </>
         )}
       </View>
 
       {unlocked && earnedDate ? (
-        <Text style={styles.dateText}>
-          {earnedDate}
-        </Text>
+        <Text style={styles.dateText}>{earnedDate}</Text>
       ) : null}
     </View>
   );
@@ -269,7 +176,7 @@ const styles = StyleSheet.create({
 
   normalCard: {
     width: "47.8%",
-    minHeight: 205,
+    minHeight: 245,
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 16,
@@ -277,7 +184,7 @@ const styles = StyleSheet.create({
 
   featuredCard: {
     width: "100%",
-    minHeight: 285,
+    minHeight: 360,
     borderRadius: 26,
     paddingHorizontal: 22,
     paddingVertical: 25,
@@ -302,66 +209,46 @@ const styles = StyleSheet.create({
     top: -100,
   },
 
-  medallionOuter: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
-    borderWidth: 2,
+  imageWrap: {
+    width: 112,
+    height: 112,
+    marginBottom: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,.25)",
-    marginBottom: 13,
+    position: "relative",
   },
 
-  featuredMedallionOuter: {
-    width: 118,
-    height: 118,
-    borderRadius: 59,
-    marginBottom: 18,
+  featuredImageWrap: {
+    width: 190,
+    height: 190,
+    marginBottom: 16,
   },
 
-  medallionInner: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor:
-      "rgba(255,255,255,.08)",
+  achievementImage: {
+    width: 108,
+    height: 108,
   },
 
-  featuredMedallionInner: {
-    width: 98,
-    height: 98,
-    borderRadius: 49,
+  featuredAchievementImage: {
+    width: 184,
+    height: 184,
   },
 
-  lockBadge: {
+  stateBadge: {
     position: "absolute",
-    right: -2,
-    bottom: -2,
+    right: 3,
+    bottom: 3,
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: "#383C43",
     borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  lockedStateBadge: {
+    backgroundColor: "#34383E",
     borderColor: "#171A1F",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  unlockBadge: {
-    position: "absolute",
-    right: -2,
-    bottom: -2,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: "#111318",
-    alignItems: "center",
-    justifyContent: "center",
   },
 
   title: {
