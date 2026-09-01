@@ -30,6 +30,7 @@ import {
   markNotificationRead,
 } from "../api/notifications";
 import NotificationPermissionGate from "../components/notifications/NotificationPermissionGate";
+import XpJourneyWatcher from "../components/xp/XpJourneyWatcher";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -145,24 +146,24 @@ export default function RootLayout() {
       };
 
       // ثبت Open واقعی Push
-     if (
-  typeof data?.notificationId === "string" &&
-  data.notificationId.trim()
-) {
-  const notificationId = data.notificationId.trim();
+      if (
+        typeof data?.notificationId === "string" &&
+        data.notificationId.trim()
+      ) {
+        const notificationId = data.notificationId.trim();
 
-  try {
-    await Promise.all([
-      markNotificationOpened(notificationId),
-      markNotificationRead(notificationId),
-    ]);
-  } catch (error) {
-    console.warn(
-      "[notifications] mark opened/read failed:",
-      error instanceof Error ? error.message : error,
-    );
-  }
-}
+        try {
+          await Promise.all([
+            markNotificationOpened(notificationId),
+            markNotificationRead(notificationId),
+          ]);
+        } catch (error) {
+          console.warn(
+            "[notifications] mark opened/read failed:",
+            error instanceof Error ? error.message : error,
+          );
+        }
+      }
 
       // پاسخ درمانگر
       if (data?.type === "ticket_reply" && data?.ticketId) {
@@ -272,6 +273,7 @@ export default function RootLayout() {
           <UserProviderWrapper>
             <PlanStatusProviderWrapper>
               <NotificationPermissionGate />
+              <XpJourneyWatcher />
               <ThemeBridge />
             </PlanStatusProviderWrapper>
           </UserProviderWrapper>

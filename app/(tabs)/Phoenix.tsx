@@ -23,6 +23,12 @@ import { usePhoenix } from "../../hooks/PhoenixContext";
 import { useUser } from "../../hooks/useUser";
 import { checkAppUpdate } from "../../lib/appUpdate";
 
+import { getXpJourneyState } from "../../lib/xpJourney";
+import {
+  getLastSeenXpLevel,
+  getXpJourneyIntroduced,
+} from "../../lib/xpJourneyState";
+
 import PlanStatusBadge from "../../components/PlanStatusBadge";
 import { getPlanStatus } from "../../lib/plan";
 import HallOfFameCard from "../../components/achievements/HallOfFameCard";
@@ -107,39 +113,81 @@ function PrimarySplitButton({
   );
 }
 
-function HalfStatCard({
+function StatCard({
   title,
+  subtitle,
   icon,
   value,
   valueSuffix,
   iconColor = "#D4AF37",
-  style,
+  onPress,
+  showBadge = false,
 }: {
   title: string;
+  subtitle?: string;
   icon: keyof typeof Ionicons.glyphMap;
-  value: number | string;
+  value?: number | string;
   valueSuffix?: string;
   iconColor?: string;
-  style?: any;
+  onPress?: () => void;
+  showBadge?: boolean;
 }) {
-  return (
-    <GlassCard style={[styles.halfCard, style]}>
-      <View style={styles.halfTopRow}>
-        <View style={styles.halfTitleRow}>
-          <View style={styles.halfIconWrap}>
-            <Ionicons name={icon as any} size={16} color={iconColor} />
+  const content = (
+    <GlassCard style={styles.statCard}>
+      <View style={styles.statCardRow}>
+        <View style={styles.statCardRight}>
+          <View
+            style={[
+              styles.statIconWrap,
+              {
+                borderColor: `${iconColor}35`,
+                backgroundColor: `${iconColor}12`,
+              },
+            ]}
+          >
+            <Ionicons name={icon as any} size={20} color={iconColor} />
+
+            {showBadge ? <View style={styles.statJourneyBadge} /> : null}
           </View>
-          <Text style={styles.halfTitle}>{title}</Text>
+
+          <View style={styles.statTexts}>
+            <Text style={styles.statTitle}>{title}</Text>
+
+            {subtitle ? (
+              <Text style={styles.statSubtitle}>{subtitle}</Text>
+            ) : null}
+          </View>
+        </View>
+
+        <View style={styles.statCardLeft}>
+          {value !== undefined ? (
+            <Text style={styles.statValue}>
+              {toPersianDigits(value)}
+
+              {!!valueSuffix ? (
+                <Text style={styles.statValueUnit}>
+                  {"   "}
+                  {valueSuffix}
+                </Text>
+              ) : null}
+            </Text>
+          ) : null}
+          {onPress ? (
+            <Ionicons name="chevron-back" size={17} color="#747A84" />
+          ) : null}
         </View>
       </View>
-
-      <Text style={styles.halfValue}>
-        {toPersianDigits(value)}
-        {!!valueSuffix ? (
-          <Text style={styles.halfValueUnit}> {valueSuffix}</Text>
-        ) : null}
-      </Text>
     </GlassCard>
+  );
+
+  if (!onPress) {
+    return content;
+  }
+
+  return (
+    <TouchableOpacity activeOpacity={0.82} onPress={onPress}>
+      {content}
+    </TouchableOpacity>
   );
 }
 
@@ -159,10 +207,29 @@ export default function Phoenix() {
 
   // ✅ from pelekan/state
   const [completedDays, setCompletedDays] = useState<number>(0);
-  const [xpTotal, setXpTotal] = useState<number>(0);
+  const [, setXpTotal] = useState<number>(0);
   const [statsLoading, setStatsLoading] = useState<boolean>(false);
+  const [showXpJourneyBadge, setShowXpJourneyBadge] = useState(false);
 
   const apiBase = "https://api.qoqnoos.app";
+
+  const refreshXpJourneyBadge = useCallback(async (xp: number) => {
+    try {
+      const journey = getXpJourneyState(xp);
+
+      const [introduced, lastSeenLevel] = await Promise.all([
+        getXpJourneyIntroduced(),
+        getLastSeenXpLevel(),
+      ]);
+
+      const shouldShow =
+        (xp > 0 && !introduced) || journey.current.level > lastSeenLevel;
+
+      setShowXpJourneyBadge(shouldShow);
+    } catch {
+      setShowXpJourneyBadge(false);
+    }
+  }, []);
 
   const fetchProgressStats = useCallback(async () => {
     const phone = String(me?.phone || "").trim();
@@ -170,6 +237,7 @@ export default function Phoenix() {
     if (!phone) {
       setCompletedDays(0);
       setXpTotal(0);
+      setShowXpJourneyBadge(false);
       return;
     }
 
@@ -204,19 +272,24 @@ export default function Phoenix() {
       if (!res.ok || !json?.ok) {
         setCompletedDays(0);
         setXpTotal(0);
+        setShowXpJourneyBadge(false);
         return;
       }
 
       setCompletedDays(Number(json?.data?.completedDays ?? 0));
 
-      setXpTotal(Number(json?.data?.xpTotal ?? 0));
+      const nextXpTotal = Number(json?.data?.xpTotal ?? 0);
+
+      setXpTotal(nextXpTotal);
+      await refreshXpJourneyBadge(nextXpTotal);
     } catch {
       setCompletedDays(0);
       setXpTotal(0);
+      setShowXpJourneyBadge(false);
     } finally {
       setStatsLoading(false);
     }
-  }, [apiBase, me?.phone]);
+  }, [apiBase, me?.phone, refreshXpJourneyBadge]);
 
   useEffect(() => {
     const run = async () => {
@@ -390,28 +463,23 @@ export default function Phoenix() {
         {/* تالار افتخارات */}
         <HallOfFameCard onPress={() => router.push("/achievements")} />
 
-        {/* ✅ Row: (Right) روزهای تکمیل‌شده  |  (Left) امتیازها */}
-        <View style={styles.halfRow}>
-          {/* RIGHT: روزهای تکمیل‌شده */}
-          <HalfStatCard
-            title="روزهای تکمیل‌شده"
-            icon="checkmark-done-circle"
-            iconColor="#34D399"
-            value={statsLoading ? "…" : completedDays}
-            valueSuffix={statsLoading ? "" : "روز "}
-            style={styles.halfRight}
-          />
-
-          {/* LEFT: امتیازها (XP) */}
-          <HalfStatCard
-            title="امتیازها"
-            icon="flash"
-            iconColor="#D4AF37"
-            value={statsLoading ? "…" : xpTotal}
-            valueSuffix={statsLoading ? "" : " XP"}
-            style={styles.halfLeft}
-          />
-        </View>
+        <StatCard
+          title="سفر ققنوس"
+          subtitle="مسیر دوباره برخاستن"
+          icon="flash"
+          iconColor="#D4AF37"
+          showBadge={showXpJourneyBadge}
+          onPress={() => router.push("/xp-journey" as any)}
+        />
+        {/* روزهای تکمیل‌شده */}
+        <StatCard
+          title="روزهای تکمیل‌شده"
+          subtitle="روزهایی که در مسیر درمان پشت سر گذاشته‌ای"
+          icon="checkmark-done-circle"
+          iconColor="#34D399"
+          value={statsLoading ? "…" : completedDays}
+          valueSuffix={statsLoading ? "" : "روز"}
+        />
 
         {/* نمودار حال روزانه */}
         <TouchableOpacity
@@ -778,62 +846,6 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
 
-  /* NEW: half row */
-  halfRow: {
-    flexDirection: "row-reverse",
-    gap: 10,
-  },
-  halfCard: {
-    flex: 1,
-    borderRadius: 20,
-    padding: 12, // کوچیک‌تر از full
-  },
-  halfRight: {
-    flex: 1,
-  },
-  halfLeft: {
-    flex: 1,
-  },
-  halfTopRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  halfTitleRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 8,
-    flex: 1,
-  },
-  halfIconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,.10)",
-    backgroundColor: "rgba(255,255,255,.04)",
-  },
-  halfTitle: {
-    color: "#F9FAFB",
-    fontWeight: "900",
-    fontSize: 13,
-    textAlign: "right",
-  },
-  halfValue: {
-    marginTop: 10,
-    color: "#F9FAFB",
-    fontWeight: "900",
-    fontSize: 22, // نصف-ish نسبت به 34
-    textAlign: "left",
-  },
-  halfValueUnit: {
-    fontSize: 14,
-    color: "rgba(231,238,247,.80)",
-    fontWeight: "900",
-  },
-
   /* links */
   linkRow: {
     flexDirection: "row-reverse",
@@ -954,5 +966,83 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     fontSize: 13,
     marginHorizontal: 8,
+  },
+  statCard: {
+    marginBottom: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+  },
+
+  statCardRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  statCardRight: {
+    flex: 1,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 11,
+  },
+
+  statIconWrap: {
+    position: "relative",
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statJourneyBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#F59E0B",
+    borderWidth: 2,
+    borderColor: "#0B0F14",
+  },
+  statTexts: {
+    flex: 1,
+    alignItems: "flex-end",
+  },
+
+  statTitle: {
+    color: "#F3F4F6",
+    fontSize: 13,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+
+  statSubtitle: {
+    marginTop: 3,
+    color: "#7E848E",
+    fontSize: 9,
+    fontWeight: "600",
+    lineHeight: 15,
+    textAlign: "right",
+  },
+
+  statCardLeft: {
+    marginRight: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+
+  statValue: {
+    color: "#F4F4F5",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+
+  statValueUnit: {
+    color: "#8E949D",
+    fontSize: 10,
+    fontWeight: "800",
   },
 });

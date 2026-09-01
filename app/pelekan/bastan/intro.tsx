@@ -573,7 +573,7 @@ export default function BastanIntroScreen() {
 
         {!isPro ? (
           <Text style={styles.warningText}>
-            برای ادامه‌ی مسیر، باید اشتراک پرو داشته باشی.
+            این ویس مسیر رو برات روشن میکنه.
           </Text>
         ) : null}
       </View>

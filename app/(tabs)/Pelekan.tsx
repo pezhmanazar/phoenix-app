@@ -40,6 +40,11 @@ import { useAuth } from "../../hooks/useAuth";
 import { useUser } from "../../hooks/useUser";
 import { getUnreadNotificationCount } from "../../api/notifications";
 import * as Notifications from "expo-notifications";
+import { getXpJourneyState } from "../../lib/xpJourney";
+import {
+  getLastSeenXpLevel,
+  getXpJourneyIntroduced,
+} from "../../lib/xpJourneyState";
 
 /* ----------------------------- Types ----------------------------- */
 type PlanStatus = "free" | "pro" | "expired" | "expiring";
@@ -118,6 +123,7 @@ export default function PelekanTab() {
   const [state, setState] = useState<PelekanState>(initialState);
   const [headerHeight, setHeaderHeight] = useState(0);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [showXpJourneyBadge, setShowXpJourneyBadge] = useState(false);
 
   const [forceView, setForceView] = useState<null | "review">(null);
   const [forceTab, setForceTab] = useState<null | TabState>(null);
@@ -179,17 +185,33 @@ export default function PelekanTab() {
       console.warn("[pelekan] unread notifications failed:", error);
     }
   }, []);
+  const refreshXpJourneyBadge = useCallback(async (xp: number) => {
+    try {
+      const journey = getXpJourneyState(xp);
+
+      const [introduced, lastSeenLevel] = await Promise.all([
+        getXpJourneyIntroduced(),
+        getLastSeenXpLevel(),
+      ]);
+
+      const shouldShow =
+        (xp > 0 && !introduced) || journey.current.level > lastSeenLevel;
+
+      setShowXpJourneyBadge(shouldShow);
+    } catch {
+      setShowXpJourneyBadge(false);
+    }
+  }, []);
 
   useEffect(() => {
-  const subscription =
-    Notifications.addNotificationReceivedListener(() => {
+    const subscription = Notifications.addNotificationReceivedListener(() => {
       void loadUnreadNotifications();
     });
 
-  return () => {
-    subscription.remove();
-  };
-}, [loadUnreadNotifications]);
+    return () => {
+      subscription.remove();
+    };
+  }, [loadUnreadNotifications]);
 
   /* ----------------------------- Fetch State ----------------------------- */
   const fetchState = useCallback(
@@ -303,45 +325,40 @@ export default function PelekanTab() {
   );
 
   useEffect(() => {
-  if (authLoading) return;
+    if (authLoading) return;
 
-  hasCompletedInitialLoadRef.current = false;
+    hasCompletedInitialLoadRef.current = false;
 
-  const runInitialLoad = async () => {
-    await fetchState({
-      initial: true,
-      reason: "mount_or_token_change",
-    });
+    const runInitialLoad = async () => {
+      await fetchState({
+        initial: true,
+        reason: "mount_or_token_change",
+      });
 
-    hasCompletedInitialLoadRef.current = true;
-  };
+      hasCompletedInitialLoadRef.current = true;
+    };
 
-  void runInitialLoad();
-}, [authLoading, token, fetchState]);
+    void runInitialLoad();
+  }, [authLoading, token, fetchState]);
 
   useFocusEffect(
-  useCallback(() => {
-    if (authLoading || !token) {
-      return;
-    }
+    useCallback(() => {
+      if (authLoading || !token) {
+        return;
+      }
 
-    void loadUnreadNotifications();
+      void loadUnreadNotifications();
 
-    if (!hasCompletedInitialLoadRef.current) {
-      return;
-    }
+      if (!hasCompletedInitialLoadRef.current) {
+        return;
+      }
 
-    void fetchState({
-      initial: false,
-      reason: "focus",
-    });
-  }, [
-    fetchState,
-    authLoading,
-    token,
-    loadUnreadNotifications,
-  ]),
-);
+      void fetchState({
+        initial: false,
+        reason: "focus",
+      });
+    }, [fetchState, authLoading, token, loadUnreadNotifications]),
+  );
 
   // ✅ one-shot param cleanup
   useEffect(() => {
@@ -433,6 +450,12 @@ export default function PelekanTab() {
 
   const xpTotal = Number(state?.progress?.xpTotal ?? 0);
   const xpText = String(xpTotal);
+
+  useFocusEffect(
+  useCallback(() => {
+    void refreshXpJourneyBadge(xpTotal);
+  }, [xpTotal, refreshXpJourneyBadge]),
+);
 
   /* ----------------------------- Treating List ----------------------------- */
   const pathItems: ListItem[] = useMemo(() => {
@@ -725,11 +748,22 @@ export default function PelekanTab() {
 
         <View style={[styles.topCol, styles.colRight]}>
           <View style={styles.headerActions}>
-            <View style={styles.xpPill}>
+            <Pressable
+              onPress={() => router.push("/xp-journey" as any)}
+              style={({ pressed }) => [
+                styles.xpPill,
+                pressed && { opacity: 0.72 },
+              ]}
+              hitSlop={8}
+            >
               <Ionicons name="flash" size={14} color="#D4AF37" />
               <Text style={styles.xpText}>{xpText}</Text>
               <Text style={styles.xpLabel}>XP</Text>
-            </View>
+
+              {showXpJourneyBadge ? (
+                <View style={styles.xpJourneyBadge} />
+              ) : null}
+            </Pressable>
 
             <Pressable
               onPress={() => router.push("/notifications" as any)}
@@ -951,5 +985,16 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     fontSize: 11,
     marginLeft: 2,
+  },
+  xpJourneyBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#F59E0B",
+    borderWidth: 2,
+    borderColor: "#0B0F14",
   },
 });
