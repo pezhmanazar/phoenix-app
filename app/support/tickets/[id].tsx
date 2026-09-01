@@ -72,7 +72,6 @@ import {
 } from "../../../utils/tickets/helpers";
 // ✅ مسیر را اگر متفاوت است فقط همین خط را اصلاح کن
 import AppBannerModal from "@/components/ui/AppBannerModal";
-import PlanStatusBadge from "../../../components/PlanStatusBadge";
 
 /* ===== انواع ===== */
 type MessageType = "text" | "voice" | "image" | "file";
@@ -657,7 +656,7 @@ function Composer({
   const planGuard = () => {
     if (!lockedForPlan) return false;
     onError(
-      "ارسال پیام به درمانگر فقط برای اعضای PRO فعاله. برای فعال‌سازی از تب «پرداخت» اقدام کن یا فعلاً از پشتیبانی فنی/هوشمند استفاده کن.",
+      "ارسال پیام به درمانگر فقط برای اعضای پرو فعاله. برای فعال‌سازی از تب اشتراک اقدام کن یا فعلاً از پشتیبانی فنی استفاده کن.",
     );
     return true;
   };
@@ -967,7 +966,7 @@ function Composer({
           setText(value);
           setTextClientMessageId(null);
         }}
-        placeholder="پیام خودت رو بفرست؛ در اسرع وقت بهت جواب می‌دیم…"
+        placeholder="پیام خودت رو بفرست…"
         placeholderTextColor="rgba(231,238,247,.55)"
         style={styles.composerInput}
         multiline
@@ -1034,10 +1033,6 @@ function Composer({
               gap: 10,
             }}
           >
-            {/* ✅ هنگام ضبط هم یادآوری کوتاه */}
-            <Text style={styles.recHint}>حداکثر ۵:۰۰</Text>
-
-            <Text style={styles.recTimer}>{fmt(recMs)}</Text>
             <TouchableOpacity
               onPress={() => stopRecording(false)}
               style={[
@@ -1048,13 +1043,17 @@ function Composer({
             >
               <Ionicons name="stop" size={18} color="#fff" />
             </TouchableOpacity>
+
+            <Text style={styles.recTimer}>{fmt(recMs)}</Text>
+
+            <Text style={styles.recHint}>حداکثر ۵:۰۰</Text>
           </View>
         ) : hasAttachment ? (
           <View
             style={{
-              flexDirection: "row-reverse",
+              flexDirection: "row",
               alignItems: "center",
-              gap: 8,
+              gap: 10,
             }}
           >
             {isUploadingAttachment ? (
@@ -1070,7 +1069,7 @@ function Composer({
                 }}
                 numberOfLines={2}
               >
-                صبور باش، پیامت در حال بارگذاریه…
+                پیامت در حال بارگذاریه…
               </Text>
             ) : null}
 
@@ -1083,7 +1082,7 @@ function Composer({
               {sending ? (
                 <ActivityIndicator color="#111827" />
               ) : (
-                <Text style={styles.sendBtnText}>ارسال ضمیمه</Text>
+                <Text style={styles.sendBtnText}>ارسال</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -1955,8 +1954,6 @@ export default function TicketDetail() {
 
             <View style={styles.headerLeft}>
               <View style={styles.headerLeftRow}>
-                <PlanStatusBadge me={me} showExpiringText />
-
                 <TouchableOpacity
                   onPress={() => setClearModal(true)}
                   activeOpacity={0.85}
@@ -1982,22 +1979,23 @@ export default function TicketDetail() {
               <Text style={styles.lockTitle}>
                 {isExpiredView
                   ? "اشتراکت منقضی شده"
-                  : "این بخش مخصوص اعضای PRO است"}
+                  : "این بخش مخصوص اعضای پرو است!"}
               </Text>
 
               <Text style={styles.lockBody}>
                 {isExpiredView
-                  ? "برای باز شدن دوباره‌ی چت درمانگر، اشتراک پرو رو تمدید کن. تا اون‌موقع می‌تونی از پشتیبانی فنی یا پشتیبان هوشمند استفاده کنی."
-                  : "برای ارسال پیام به درمانگر، باید اشتراک PRO را از تب «پرداخت» فعال کنی. در این فاصله می‌تونی از پشتیبانی فنی یا پشتیبان هوشمند استفاده کنی."}
+                  ? "برای باز شدن دوباره‌ی چت درمانگر، اشتراک پرو رو تمدید کن. تا اون‌موقع می‌تونی از پشتیبانی فنی استفاده کنی."
+                  : "برای ارسال پیام به درمانگر، باید اشتراک پرو رو از تب «اشتراک» فعال کنی. در این فاصله می‌تونی از پشتیبانی فنی استفاده کنی."}
               </Text>
 
               <TouchableOpacity
-                onPress={() => router.back()}
+                onPress={() => router.push("/(tabs)/Subscription")}
                 activeOpacity={0.9}
                 style={styles.lockBtn}
               >
-                <Text style={styles.lockBtnText}>برگشت</Text>
-                <Ionicons name="chevron-forward" size={18} color="#E5E7EB" />
+                <Text style={styles.lockBtnText}>خرید اشتراک</Text>
+
+                <Ionicons name="diamond-outline" size={18} color="#D4AF37" />
               </TouchableOpacity>
             </View>
           </View>
@@ -2141,8 +2139,6 @@ export default function TicketDetail() {
 
           <View style={styles.headerLeft}>
             <View style={styles.headerLeftRow}>
-              <PlanStatusBadge me={me} showExpiringText />
-
               <TouchableOpacity
                 onPress={() => setClearModal(true)}
                 activeOpacity={0.85}
@@ -2452,8 +2448,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
   },
-
-  /* ✅ Header دقیقاً مثل index */
   headerBar: {
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,.08)",
@@ -2462,7 +2456,6 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     flexDirection: "row-reverse",
     alignItems: "center",
-    justifyContent: "space-between",
   },
   backBtn: {
     width: 40,
@@ -2476,21 +2469,21 @@ const styles = StyleSheet.create({
   },
   headerCenter: {
     flex: 1,
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 10,
   },
+
   headerTitle: {
     color: "#F9FAFB",
     fontSize: 16,
     fontWeight: "900",
-    textAlign: "right",
-    alignSelf: "stretch",
+    textAlign: "center",
   },
   headerLeft: {
-    width: 160, // کمی بیشتر تا دکمه سطل جا شود
-    alignItems: "flex-start",
-    justifyContent: "flex-end",
+    width: 40,
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerLeftRow: {
     flexDirection: "row-reverse",

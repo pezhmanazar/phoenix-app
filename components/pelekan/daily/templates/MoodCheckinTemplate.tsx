@@ -24,23 +24,48 @@ type Props = {
 
 const STEPS = [
   { key: "score", label: "حال کلی", hint: "از یک تا ده بگو حالت چطوره" },
-  { key: "fear", label: "ترس", hint: "ترس‌های امروزت رو بنویس", color: "#ff4d4d" },
-  { key: "anger", label: "خشم", hint: "الان از چی عصبانی هستی؟", color: "#ff944d" },
-  { key: "sadness", label: "غم", hint: "الان چه غمی روی دلته؟", color: "#4d94ff" },
-  { key: "hope", label: "امید", hint: "امروز به چی امیدواری؟", color: palette.gold },
+  {
+    key: "fear",
+    label: "ترس",
+    hint: "ترس‌های امروزت رو بنویس",
+    color: "#ff4d4d",
+  },
+  {
+    key: "anger",
+    label: "خشم",
+    hint: "الان از چی عصبانی هستی؟",
+    color: "#ff944d",
+  },
+  {
+    key: "sadness",
+    label: "غم",
+    hint: "الان چه غمی روی دلته؟",
+    color: "#4d94ff",
+  },
+  {
+    key: "hope",
+    label: "امید",
+    hint: "امروز به چی امیدواری؟",
+    color: palette.gold,
+  },
   { key: "summary", label: "مرور نهایی", hint: "اطلاعات وارد شده را چک کن" },
 ] as const;
 
+const toFaDigits = (value: number | string) =>
+  String(value).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[Number(d)]);
+
 type EmotionKey = "fear" | "anger" | "sadness" | "hope";
 
-
-export default function MoodCheckinTemplate({ dayCode, task, onComplete }: Props) {
+export default function MoodCheckinTemplate({
+  dayCode,
+  task,
+  onComplete,
+}: Props) {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
 
   const { loading, draft, setValue, markStepCompleted, saveDraft } =
-  useLocalTaskDraft(dayCode, task.config.code);
-
+    useLocalTaskDraft(dayCode, task.config.code);
 
   const [idx, setIdx] = useState(0);
   const [score, setScore] = useState<number | null>(null);
@@ -68,7 +93,10 @@ export default function MoodCheckinTemplate({ dayCode, task, onComplete }: Props
     });
 
     if (typeof values.currentStepIndex === "number") {
-      const safeIndex = Math.min(Math.max(values.currentStepIndex, 0), STEPS.length - 1);
+      const safeIndex = Math.min(
+        Math.max(values.currentStepIndex, 0),
+        STEPS.length - 1,
+      );
       setIdx(safeIndex);
     }
 
@@ -82,7 +110,6 @@ export default function MoodCheckinTemplate({ dayCode, task, onComplete }: Props
   const isEmotionStep = !isScoreStep && !isSummaryStep;
   const isLastStep = idx === STEPS.length - 1;
   const isTaskAlreadyCompleted = task.backendTask?.isDone === true;
-
 
   const currentEmotionValue =
     isEmotionStep && currentStep.key in emotions
@@ -115,7 +142,7 @@ export default function MoodCheckinTemplate({ dayCode, task, onComplete }: Props
     void setValue(emotionKey, txt);
   };
 
-    const goNext = async () => {
+  const goNext = async () => {
     Keyboard.dismiss();
 
     if (isLastStep && isTaskAlreadyCompleted) {
@@ -198,7 +225,6 @@ export default function MoodCheckinTemplate({ dayCode, task, onComplete }: Props
           ]}
           keyboardShouldPersistTaps="handled"
         >
-
           {isScoreStep && (
             <View style={styles.mainCard}>
               <View style={styles.headerSection}>
@@ -242,15 +268,22 @@ export default function MoodCheckinTemplate({ dayCode, task, onComplete }: Props
                   </View>
 
                   <View style={[styles.scoreGuideRow, styles.scoreGuideRowRed]}>
-                    <Text style={styles.scoreGuideRowText}>۱ تا ۳ = خیلی بد</Text>
+                    <Text style={styles.scoreGuideRowText}>
+                      ۱ تا ۳ = خیلی بد
+                    </Text>
                   </View>
 
-                  <View style={[styles.scoreGuideRow, styles.scoreGuideRowOrange]}>
+                  <View
+                    style={[styles.scoreGuideRow, styles.scoreGuideRowOrange]}
+                  >
                     <Text style={styles.scoreGuideRowText}>۴ تا ۵ = بد</Text>
                   </View>
 
                   <View
-                    style={[styles.scoreGuideRow, styles.scoreGuideRowLightGreen]}
+                    style={[
+                      styles.scoreGuideRow,
+                      styles.scoreGuideRowLightGreen,
+                    ]}
                   >
                     <Text style={styles.scoreGuideRowText}>
                       ۶ تا ۷ = معمولی تا خوب
@@ -273,7 +306,6 @@ export default function MoodCheckinTemplate({ dayCode, task, onComplete }: Props
             </View>
           )}
 
-
           {isSummaryStep && (
             <View style={styles.mainCard}>
               <View style={styles.headerSection}>
@@ -286,7 +318,9 @@ export default function MoodCheckinTemplate({ dayCode, task, onComplete }: Props
                 <View style={styles.summaryBox}>
                   <Text style={styles.summaryRow}>
                     وضعیت کلی:
-                    <Text style={styles.summaryScore}> {score} از ۱۰</Text>
+                    <Text style={styles.summaryScore}>
+                      {score !== null ? toFaDigits(score) : ""} از ۱۰
+                    </Text>
                   </Text>
 
                   {Object.entries(emotions).map(([key, value]) => {
@@ -306,13 +340,16 @@ export default function MoodCheckinTemplate({ dayCode, task, onComplete }: Props
             </View>
           )}
 
-            {isEmotionStep && (
+          {isEmotionStep && (
             <View style={styles.mainCard}>
               <View style={styles.headerSection}>
                 <Text
                   style={[
                     styles.cardTitle,
-                    { color: "color" in currentStep ? currentStep.color : "#7ED957" },
+                    {
+                      color:
+                        "color" in currentStep ? currentStep.color : "#7ED957",
+                    },
                   ]}
                 >
                   {currentStep.label}
@@ -348,11 +385,14 @@ export default function MoodCheckinTemplate({ dayCode, task, onComplete }: Props
           <TouchableOpacity
             style={[
               styles.nextBtn,
-              ((isScoreStep && !score) || (isLastStep && isTaskAlreadyCompleted)) &&
+              ((isScoreStep && !score) ||
+                (isLastStep && isTaskAlreadyCompleted)) &&
                 styles.disabledBtn,
             ]}
             onPress={goNext}
-            disabled={(isScoreStep && !score) || (isLastStep && isTaskAlreadyCompleted)}
+            disabled={
+              (isScoreStep && !score) || (isLastStep && isTaskAlreadyCompleted)
+            }
           >
             <Text style={styles.nextBtnText}>
               {isLastStep && isTaskAlreadyCompleted
@@ -392,7 +432,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
 
-    pill: {
+  pill: {
     flex: 1,
     height: 4,
     borderRadius: 2,
@@ -412,7 +452,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-    mainCard: {
+  mainCard: {
     width: "100%",
     backgroundColor: "rgba(255,255,255,0.05)",
     borderRadius: 24,
@@ -455,7 +495,6 @@ const styles = StyleSheet.create({
     padding: 20,
   },
 
-
   stepLabel: {
     fontSize: 22,
     fontWeight: "800",
@@ -477,7 +516,6 @@ const styles = StyleSheet.create({
     width: "100%",
   },
 
-
   scoreCircle: {
     width: 56,
     height: 56,
@@ -493,7 +531,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#7ED957",
     borderColor: "#7ED957",
   },
-
 
   scoreText: {
     color: palette.text,
@@ -568,7 +605,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-    bigInput: {
+  bigInput: {
     width: "100%",
     backgroundColor: "rgba(255,255,255,0.05)",
     borderRadius: 15,
@@ -582,7 +619,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.1)",
     textAlignVertical: "top",
   },
-
 
   footer: {
     position: "absolute",

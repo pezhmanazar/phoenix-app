@@ -13,6 +13,7 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   InteractionManager,
   Pressable,
@@ -124,6 +125,7 @@ export default function PelekanTab() {
   const [headerHeight, setHeaderHeight] = useState(0);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [showXpJourneyBadge, setShowXpJourneyBadge] = useState(false);
+  const [isPelekanFocused, setIsPelekanFocused] = useState(true);
 
   const [forceView, setForceView] = useState<null | "review">(null);
   const [forceTab, setForceTab] = useState<null | TabState>(null);
@@ -156,6 +158,7 @@ export default function PelekanTab() {
     }),
     [],
   );
+  const bellAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     let alive = true;
@@ -212,6 +215,59 @@ export default function PelekanTab() {
       subscription.remove();
     };
   }, [loadUnreadNotifications]);
+
+  useEffect(() => {
+    if (unreadNotifications <= 0 || !isPelekanFocused) {
+      bellAnim.stopAnimation();
+      bellAnim.setValue(0);
+      return;
+    }
+
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bellAnim, {
+          toValue: 1,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(bellAnim, {
+          toValue: -1,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(bellAnim, {
+          toValue: 0,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+
+        // شیک دوم
+        Animated.timing(bellAnim, {
+          toValue: 1,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(bellAnim, {
+          toValue: -1,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(bellAnim, {
+          toValue: 0,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+
+        Animated.delay(3000),
+      ]),
+    );
+
+    animation.start();
+
+    return () => {
+      animation.stop();
+    };
+  }, [unreadNotifications, isPelekanFocused, bellAnim]);
 
   /* ----------------------------- Fetch State ----------------------------- */
   const fetchState = useCallback(
@@ -343,21 +399,33 @@ export default function PelekanTab() {
 
   useFocusEffect(
     useCallback(() => {
+      setIsPelekanFocused(true);
+
       if (authLoading || !token) {
-        return;
+        return () => {
+          setIsPelekanFocused(false);
+        };
       }
 
       void loadUnreadNotifications();
 
       if (!hasCompletedInitialLoadRef.current) {
-        return;
+        return () => {
+          setIsPelekanFocused(false);
+        };
       }
 
       void fetchState({
         initial: false,
         reason: "focus",
       });
-    }, [fetchState, authLoading, token, loadUnreadNotifications]),
+
+      return () => {
+        setIsPelekanFocused(false);
+        bellAnim.stopAnimation();
+        bellAnim.setValue(0);
+      };
+    }, [fetchState, authLoading, token, loadUnreadNotifications, bellAnim]),
   );
 
   // ✅ one-shot param cleanup
@@ -452,10 +520,10 @@ export default function PelekanTab() {
   const xpText = String(xpTotal);
 
   useFocusEffect(
-  useCallback(() => {
-    void refreshXpJourneyBadge(xpTotal);
-  }, [xpTotal, refreshXpJourneyBadge]),
-);
+    useCallback(() => {
+      void refreshXpJourneyBadge(xpTotal);
+    }, [xpTotal, refreshXpJourneyBadge]),
+  );
 
   /* ----------------------------- Treating List ----------------------------- */
   const pathItems: ListItem[] = useMemo(() => {
@@ -737,13 +805,59 @@ export default function PelekanTab() {
         ]}
       >
         <View style={[styles.topCol, styles.colLeft]}>
-          <PlanStatusBadge me={me} showExpiringText />
+          <Pressable
+            onPress={() => router.push("/(tabs)/Subscription")}
+            hitSlop={8}
+            style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+          >
+            <PlanStatusBadge me={me} showExpiringText />
+          </Pressable>
         </View>
 
         <View style={[styles.topCol, styles.colCenter]}>
-          <Text style={{ color: palette.text, fontWeight: "900" }}>
-            پلکــــان
-          </Text>
+          <Pressable
+            onPress={() => router.push("/notifications" as any)}
+            style={styles.titleButton}
+            hitSlop={10}
+          >
+            {unreadNotifications > 0 ? (
+              <View style={styles.titleNotifyRight}>
+                <Animated.View
+                  style={{
+                    transform: [
+                      {
+                        rotateZ: bellAnim.interpolate({
+                          inputRange: [-1, 1],
+                          outputRange: ["-12deg", "12deg"],
+                        }),
+                      },
+                    ],
+                  }}
+                >
+                  <Ionicons name="notifications" size={14} color="#D4AF37" />
+                </Animated.View>
+              </View>
+            ) : null}
+
+            <Text
+              style={[
+                styles.headerTitle,
+                unreadNotifications > 0 && styles.headerTitleActive,
+              ]}
+            >
+              پلـکان
+            </Text>
+
+            {unreadNotifications > 0 ? (
+              <View style={styles.titleNotifyLeft}>
+                <View style={styles.notificationMiniBadge}>
+                  <Text style={styles.notificationMiniBadgeText}>
+                    {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+          </Pressable>
         </View>
 
         <View style={[styles.topCol, styles.colRight]}>
@@ -758,32 +872,10 @@ export default function PelekanTab() {
             >
               <Ionicons name="flash" size={14} color="#D4AF37" />
               <Text style={styles.xpText}>{xpText}</Text>
-              <Text style={styles.xpLabel}>XP</Text>
+              <Text style={styles.xpLabel}></Text>
 
               {showXpJourneyBadge ? (
                 <View style={styles.xpJourneyBadge} />
-              ) : null}
-            </Pressable>
-
-            <Pressable
-              onPress={() => router.push("/notifications" as any)}
-              style={({ pressed }) => [
-                styles.notificationButton,
-                pressed && { opacity: 0.65 },
-              ]}
-              hitSlop={8}
-            >
-              <Ionicons
-                name="notifications-outline"
-                size={21}
-                color="#D4AF37"
-              />
-              {unreadNotifications > 0 ? (
-                <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationBadgeText}>
-                    {unreadNotifications > 99 ? "99+" : unreadNotifications}
-                  </Text>
-                </View>
               ) : null}
             </Pressable>
           </View>
@@ -925,21 +1017,23 @@ const styles = StyleSheet.create({
   colCenter: { alignItems: "center", justifyContent: "center" },
   colRight: { alignItems: "flex-end", justifyContent: "center" },
 
+  headerTitle: {
+    color: "#F9FAFB",
+    fontSize: 17,
+    fontWeight: "900",
+  },
+
+  headerSubtitle: {
+    marginTop: 2,
+    color: "#777D87",
+    fontSize: 9,
+    fontWeight: "700",
+  },
+
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-  },
-
-  notificationButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,.12)",
-    backgroundColor: "rgba(255,255,255,.04)",
   },
 
   notificationBadge: {
@@ -966,13 +1060,16 @@ const styles = StyleSheet.create({
   xpPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
+    gap: 5,
+
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+
+    borderRadius: 999,
+
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,.12)",
-    backgroundColor: "rgba(255,255,255,.04)",
+    borderColor: "rgba(212,175,55,.28)",
+    backgroundColor: "rgba(212,175,55,.08)",
   },
   xpText: {
     color: "#F9FAFB",
@@ -996,5 +1093,62 @@ const styles = StyleSheet.create({
     backgroundColor: "#F59E0B",
     borderWidth: 2,
     borderColor: "#0B0F14",
+  },
+
+  titleNotifyRight: {
+    position: "absolute",
+    right: -16,
+    top: -1,
+
+    width: 18,
+    height: 18,
+
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  titleNotifyLeft: {
+    position: "absolute",
+    left: -10,
+    top: 7,
+  },
+
+  headerTitleActive: {
+    color: "#60A5FA",
+  },
+
+  notificationMiniWrap: {
+    position: "relative",
+    width: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  notificationMiniBadge: {
+    position: "absolute",
+    top: -8,
+    right: -12,
+
+    minWidth: 14,
+    height: 14,
+    paddingHorizontal: 3,
+
+    borderRadius: 7,
+
+    backgroundColor: "#EF4444",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  notificationMiniBadgeText: {
+    color: "#fff",
+    fontSize: 8,
+    fontWeight: "900",
+  },
+  titleButton: {
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

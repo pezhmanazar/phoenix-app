@@ -184,22 +184,16 @@ export async function uploadTicketReply(params: {
     } catch {
       // اگر حتی متن رو هم نتونست بخونه، می‌ذاریم خالی بمونه
     }
-
     let json: any = null;
     try {
       json = rawText ? JSON.parse(rawText) : null;
     } catch {
       json = null;
     }
-
-    console.log("UPLOAD_RESPONSE_STATUS", res.status);
-    console.log("UPLOAD_RESPONSE_RAW", rawText);
-
     // اگر status اوکی نیست یا پاسخ JSON درست با ok: true نیست
     if (!res.ok || !json?.ok) {
       throw new Error("NETWORK_UPLOAD_ERROR");
     }
-
     return json.ticket ?? null;
   } catch (err: any) {
     // اگر به خاطر abort (تایم‌اوت) یا هر خطای شبکه‌ای دیگه بود

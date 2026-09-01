@@ -12,15 +12,17 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import PlanStatusBadge from "../../../components/PlanStatusBadge";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { BACKEND_URL } from "../../../constants/backend";
 import { useAuth } from "../../../hooks/useAuth";
 import { useUser } from "../../../hooks/useUser";
 
 const DEFAULT_TITLES = {
-  tech: "پشتیبانی فنی ققنوس",
-  therapy: "پشتیبانی درمانی ققنوس",
+  tech: "پشتیبانی فـــنی ققنوس",
+  therapy: "پشتیبانی درمـــانی ققنوس",
 } as const;
 
 type Message = {
@@ -65,13 +67,14 @@ function formatTime(input?: string | null) {
 }
 
 export default function RealSupport() {
-const router = useRouter();
-const insets = useSafeAreaInsets();
-const { me } = useUser();
-const { token, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { me } = useUser();
+  const { token, loading: authLoading } = useAuth();
 
-
-  const [therapySummary, setTherapySummary] = useState<TicketSummary | null>(null);
+  const [therapySummary, setTherapySummary] = useState<TicketSummary | null>(
+    null,
+  );
   const [techSummary, setTechSummary] = useState<TicketSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [lastSeenAdminIds, setLastSeenAdminIds] = useState<{
@@ -84,9 +87,9 @@ const { token, loading: authLoading } = useAuth();
   };
 
   const getOpenedById = useCallback(() => {
-  const id = (me as any)?.id;
-  return String(id || "").trim();
-}, [me]);
+    const id = (me as any)?.id;
+    return String(id || "").trim();
+  }, [me]);
 
   const fetchSummaryForType = useCallback(
     async (type: "tech" | "therapy"): Promise<TicketSummary | null> => {
@@ -110,22 +113,22 @@ const { token, loading: authLoading } = useAuth();
         const url = `${BACKEND_URL}/api/public/tickets/open?${qs.join("&")}`;
 
         if (authLoading || !token) {
-  return {
-    hasTicket: false,
-    lastText: null,
-    lastFromAdmin: false,
-    lastAdminMsgId: null,
-    lastAdminMsgAt: null,
-    lastMsgAt: null,
-  };
-}
+          return {
+            hasTicket: false,
+            lastText: null,
+            lastFromAdmin: false,
+            lastAdminMsgId: null,
+            lastAdminMsgAt: null,
+            lastMsgAt: null,
+          };
+        }
 
-const res = await fetch(url, {
-  headers: {
-    Authorization: `Bearer ${token}`,
-    "Cache-Control": "no-store",
-  },
-});
+        const res = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Cache-Control": "no-store",
+          },
+        });
         let json: any = null;
         try {
           json = await res.json();
@@ -159,14 +162,18 @@ const res = await fetch(url, {
         }
 
         const last = msgs[msgs.length - 1];
-        const lastAdmin = [...msgs].reverse().find((m) => m.sender === "admin") || null;
+        const lastAdmin =
+          [...msgs].reverse().find((m) => m.sender === "admin") || null;
 
         const rawText = (last.text || "").trim();
         let baseSnippet: string;
         if (rawText.length > 0) {
           baseSnippet = rawText.length > 36 ? rawText.slice(0, 36) : rawText;
         } else {
-          baseSnippet = last.sender === "admin" ? "پیام جدید از پشتیبانی" : "پیام ارسال شده";
+          baseSnippet =
+            last.sender === "admin"
+              ? "پیام جدید از پشتیبانی"
+              : "پیام ارسال شده";
         }
 
         const snippet = baseSnippet + "…";
@@ -179,11 +186,11 @@ const res = await fetch(url, {
           lastAdminMsgAt: lastAdmin?.createdAt ?? null,
           lastMsgAt: last.createdAt ?? null,
         };
-           } catch {
+      } catch {
         return null;
       }
     },
-    [getOpenedById, token, authLoading]
+    [getOpenedById, token, authLoading],
   );
 
   const loadSeenIds = useCallback(async () => {
@@ -222,12 +229,12 @@ const res = await fetch(url, {
       return () => {
         cancelled = true;
       };
-    }, [fetchSummaryForType, loadSeenIds, authLoading])
+    }, [fetchSummaryForType, loadSeenIds, authLoading]),
   );
 
   const markSeenAndOpen = (type: "tech" | "therapy") => {
-  goTo(type);
-};
+    goTo(type);
+  };
 
   const Cell = ({
     type,
@@ -235,7 +242,6 @@ const res = await fetch(url, {
     iconName,
     iconBg,
     iconColor,
-    subtitleText,
     summary,
     lastSeenAdminId,
   }: {
@@ -244,7 +250,6 @@ const res = await fetch(url, {
     iconName: any;
     iconBg: string;
     iconColor: string;
-    subtitleText: string;
     summary?: TicketSummary | null;
     lastSeenAdminId: string | null;
   }) => {
@@ -259,7 +264,7 @@ const res = await fetch(url, {
 
     const timeLabel = summary?.lastMsgAt && formatTime(summary.lastMsgAt);
 
-    const rankLabel = rank === 1 ? "اولویت ۱" : "اولویت ۲";
+    const rankLabel = rank === 1 ? "ویژه کاربران پرو" : "همه کاربران";
     const rankBg = rank === 1 ? "rgba(168,85,247,.16)" : "rgba(245,158,11,.14)";
     const rankFg = rank === 1 ? "#C4B5FD" : "#FCD34D";
 
@@ -280,14 +285,24 @@ const res = await fetch(url, {
           pointerEvents="none"
           style={[
             styles.cardGlow,
-            { backgroundColor: rank === 1 ? "rgba(168,85,247,.14)" : "rgba(245,158,11,.12)" },
+            {
+              backgroundColor:
+                rank === 1 ? "rgba(168,85,247,.14)" : "rgba(245,158,11,.12)",
+            },
           ]}
         />
 
         {/* top row: rank chip + unread */}
         <View style={styles.topRow}>
-          <View style={[styles.rankChip, { backgroundColor: rankBg, borderColor: "rgba(255,255,255,.08)" }]}>
-            <Text style={[styles.rankText, { color: rankFg }]}>{rankLabel}</Text>
+          <View
+            style={[
+              styles.rankChip,
+              { backgroundColor: rankBg, borderColor: "rgba(255,255,255,.08)" },
+            ]}
+          >
+            <Text style={[styles.rankText, { color: rankFg }]}>
+              {rankLabel}
+            </Text>
           </View>
 
           {isUnread && (
@@ -299,32 +314,109 @@ const res = await fetch(url, {
         </View>
 
         {/* icon + title */}
-        <View style={styles.titleWrap}>
-          <View style={[styles.iconBubble, { backgroundColor: iconBg, borderColor: "rgba(255,255,255,.10)" }]}>
-            <Ionicons name={iconName} size={22} color={iconColor} />
+        {/* header box */}
+        <View
+          style={[
+            styles.headerBox,
+            {
+              borderColor:
+                type === "therapy"
+                  ? "rgba(168,85,247,.25)"
+                  : "rgba(59,130,246,.25)",
+            },
+          ]}
+        >
+          <View style={styles.heroSection}>
+            <View
+              style={[
+                styles.bigIconBubble,
+                {
+                  backgroundColor:
+                    type === "therapy"
+                      ? "rgba(168,85,247,.18)"
+                      : "rgba(59,130,246,.18)",
+                  borderColor:
+                    type === "therapy"
+                      ? "rgba(168,85,247,.45)"
+                      : "rgba(59,130,246,.45)",
+                },
+              ]}
+            >
+              <Ionicons
+                name={iconName}
+                size={32}
+                color={type === "therapy" ? "#D8B4FE" : "#93C5FD"}
+              />
+            </View>
+
+            <View style={styles.titleArea}>
+              <Text style={styles.cardTitle}>{title}</Text>
+
+              <Text
+                style={[
+                  styles.cardSubtitle,
+                  {
+                    color: type === "therapy" ? "#D8B4FE" : "#93C5FD",
+                  },
+                ]}
+              >
+                {type === "therapy"
+                  ? "ارتباط مستقیم با تیم روانشناسان"
+                  : "راهنمایی و حل مشکلات فنی"}
+              </Text>
+            </View>
           </View>
-          <Text style={styles.cardTitle} numberOfLines={1}>
-            {title}
-          </Text>
         </View>
 
-        {/* summary row */}
-        <View style={styles.summaryRow}>
-          <Text style={styles.subtitle} numberOfLines={1}>
+        {/* preview box */}
+        <View
+          style={[
+            styles.previewBox,
+            {
+              borderColor:
+                type === "therapy"
+                  ? "rgba(168,85,247,.25)"
+                  : "rgba(59,130,246,.25)",
+            },
+          ]}
+        >
+          <View style={styles.previewHeader}>
+            <View style={styles.previewTitleWrap}>
+              <Ionicons
+                name="chatbubble-ellipses-outline"
+                size={18}
+                color={type === "therapy" ? "#D8B4FE" : "#93C5FD"}
+              />
+
+              <Text style={styles.previewTitle}>آخرین گفتگو</Text>
+            </View>
+
+            {!!timeLabel && <Text style={styles.timeLabel}>{timeLabel}</Text>}
+          </View>
+
+          <Text style={styles.subtitle} numberOfLines={2}>
             {subtitleLine}
           </Text>
-
-          {!!timeLabel && <Text style={styles.timeLabel}>{timeLabel}</Text>}
         </View>
-
-        {/* description */}
-        <Text style={styles.description}>{subtitleText}</Text>
 
         {/* CTA */}
         <View style={styles.ctaRow}>
-          <View style={styles.ctaBtn}>
-            <Text style={styles.ctaText}>ورود به گفتگو</Text>
-            <Ionicons name="chevron-back" size={16} color="#E5E7EB" />
+          <View
+            style={[
+              styles.premiumButton,
+              {
+                backgroundColor:
+                  type === "therapy"
+                    ? "rgba(168,85,247,.75)"
+                    : "rgba(37,99,235,.85)",
+              },
+            ]}
+          >
+            <Text style={styles.ctaText}>
+              {type === "therapy" ? "شروع گفتگو" : "شروع گفتگو"}
+            </Text>
+
+            <Ionicons name="arrow-back" size={17} color="#fff" />
           </View>
         </View>
       </TouchableOpacity>
@@ -332,7 +424,10 @@ const res = await fetch(url, {
   };
 
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: "#0b0f14" }]} edges={["top", "left", "right", "bottom"]}>
+    <SafeAreaView
+      style={[styles.root, { backgroundColor: "#0b0f14" }]}
+      edges={["top", "left", "right", "bottom"]}
+    >
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* background glows (like onboarding) */}
@@ -341,22 +436,13 @@ const res = await fetch(url, {
 
       {/* Header (safe area respected) */}
       <View style={[styles.headerBar, { paddingTop: 10 }]}>
-        <TouchableOpacity style={styles.backBtn} activeOpacity={0.7} onPress={() => router.back()}>
-          <Ionicons name="arrow-forward" size={22} color="#E5E7EB" />
-        </TouchableOpacity>
+        <View style={styles.headerSide} />
 
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>پشتیبانی واقعی</Text>
+          <Text style={styles.headerTitle}>پنــــاه</Text>
         </View>
 
-        {/* plan badge top-left inside header */}
-        <View style={styles.headerLeft}>
-          <PlanStatusBadge
-            me={me}
-            showExpiringText
-            expiringText={(d) => ` ${String(d).replace(/\d/g, (x) => "۰۱۲۳۴۵۶۷۸۹"[Number(x)])} روز`}
-          />
-        </View>
+        <View style={styles.headerSide} />
       </View>
 
       {/* Body */}
@@ -379,10 +465,9 @@ const res = await fetch(url, {
         <Cell
           type="therapy"
           rank={1}
-          iconName="person"
+          iconName="heart"
           iconBg="rgba(168,85,247,.16)"
           iconColor="#C4B5FD"
-          subtitleText={"برای راهنمایی درمانی، پیام خودت رو اینجا بفرست.\n(پاسخ توسط تیم روانشناسان ارسال میشه)"}
           summary={therapySummary}
           lastSeenAdminId={lastSeenAdminIds.therapy}
         />
@@ -390,10 +475,9 @@ const res = await fetch(url, {
         <Cell
           type="tech"
           rank={2}
-          iconName="bug"
+          iconName="construct"
           iconBg="rgba(245,158,11,.14)"
           iconColor="#FCD34D"
-          subtitleText={"اگر مشکلی در اپ دیدی یا سوال فنی داری، اینجا پیام بده.\n(ترجیحاً اسکرین‌شات هم بفرست)"}
           summary={techSummary}
           lastSeenAdminId={lastSeenAdminIds.tech}
         />
@@ -426,14 +510,14 @@ const styles = StyleSheet.create({
   },
 
   headerBar: {
+    minHeight: 58,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,.08)",
     backgroundColor: "#030712",
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-    flexDirection: "row-reverse",
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
   },
   backBtn: {
     width: 40,
@@ -446,31 +530,16 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,.08)",
   },
   headerCenter: {
-  flex: 1,
-  alignItems: "flex-start",
-  justifyContent: "center", // ✅ این خط
-  paddingHorizontal: 10,
-},
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   headerTitle: {
-  color: "#F9FAFB",
-  fontSize: 16,
-  fontWeight: "900",
-  textAlign: "right",         // ✅ قبلاً center بود
-  alignSelf: "stretch",       // ✅ تا راست‌چین واقعی بشه
-},
-  headerSub: {
-    marginTop: 3,
-    color: "rgba(231,238,247,.70)",
-    fontSize: 11,
-    fontWeight: "700",
+    color: "#F9FAFB",
+    fontSize: 17,
+    fontWeight: "900",
     textAlign: "center",
   },
-  headerLeft: {
-    width: 140,
-    alignItems: "flex-start",
-    justifyContent: "flex-end",
-  },
-
   loadingRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
@@ -486,9 +555,9 @@ const styles = StyleSheet.create({
 
   card: {
     borderWidth: 1,
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderRadius: 24,
+    paddingHorizontal: 14,
+    paddingVertical: 16,
     overflow: "hidden",
   },
   cardGlow: {
@@ -553,15 +622,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
   },
-  cardTitle: {
-    color: "#E5E7EB",
-    fontSize: 16,
-    fontWeight: "900",
-    textAlign: "center",
-  },
 
   summaryRow: {
-    marginTop: 10,
+    marginTop: 15,
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "space-between",
@@ -594,20 +657,98 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  ctaBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "rgba(212,175,55,.14)",
-    borderWidth: 1,
-    borderColor: "rgba(212,175,55,.30)",
-  },
+
   ctaText: {
     color: "#E5E7EB",
     fontSize: 12,
     fontWeight: "900",
+  },
+
+  previewBox: {
+    marginTop: 10,
+    padding: 9,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,.035)",
+    borderWidth: 1,
+  },
+
+  previewHeader: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+
+  previewTitleWrap: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  previewTitle: {
+    color: "#E5E7EB",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+
+  premiumButton: {
+    width: "100%",
+    height: 48,
+    borderRadius: 16,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  messageRow: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  heroSection: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    gap: 12,
+  },
+
+  bigIconBubble: {
+    width: 63,
+    height: 63,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+
+  titleArea: {
+    flex: 1,
+    alignItems: "flex-end",
+  },
+
+  cardTitle: {
+    color: "#E5E7EB",
+    fontSize: 16,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+
+  cardSubtitle: {
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: "800",
+    textAlign: "right",
+  },
+  headerBox: {
+    marginTop: 10,
+    padding: 11,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,.035)",
+    borderWidth: 1,
+  },
+  headerSide: {
+    flex: 1,
+    minHeight: 38,
   },
 });

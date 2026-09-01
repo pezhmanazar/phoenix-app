@@ -12,10 +12,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 import SharedInlineAudioPlayer from "../../components/pelekan/SharedInlineAudioPlayer";
-import PlanStatusBadge from "../../components/PlanStatusBadge";
 import { AUDIO_KEYS, mediaUrl } from "../../constants/media";
 import { useUser } from "../../hooks/useUser";
 import { getPlanStatus, PRO_FLAG_KEY } from "../../lib/plan";
@@ -49,52 +51,132 @@ export default function Mashaal() {
 
   const isProPlan = planView === "pro";
 
-  const MASHAAL_INTRO_URL = useMemo(() => mediaUrl(AUDIO_KEYS.mashaal.intro), []);
+  const MASHAAL_INTRO_URL = useMemo(
+    () => mediaUrl(AUDIO_KEYS.mashaal.intro),
+    [],
+  );
 
-const mashaalLessons = useMemo(
-  () => [
-    { id: "21", key: AUDIO_KEYS.mashaal.lesson21, title: "این رابطه چرا تموم شد؟" },
-    { id: "22", key: AUDIO_KEYS.mashaal.lesson22, title: "امکان بازگشت؟" },
-    { id: "23", key: AUDIO_KEYS.mashaal.lesson23, title: "عشق سالم یا وابستگی؟" },
-    { id: "24", key: AUDIO_KEYS.mashaal.lesson24, title: "مرزهای رابطه سالم" },
-    { id: "25", key: AUDIO_KEYS.mashaal.lesson25, title: "تصمیم‌گیری برای مسیر پیش رو" },
+  const mashaalLessons = useMemo(
+    () =>
+      [
+        {
+          id: "21",
+          key: AUDIO_KEYS.mashaal.lesson21,
+          title: "این رابطه چرا تموم شد؟",
+        },
+        { id: "22", key: AUDIO_KEYS.mashaal.lesson22, title: "امکان بازگشت؟" },
+        {
+          id: "23",
+          key: AUDIO_KEYS.mashaal.lesson23,
+          title: "عشق سالم یا وابستگی؟",
+        },
+        {
+          id: "24",
+          key: AUDIO_KEYS.mashaal.lesson24,
+          title: "مرزهای رابطه سالم",
+        },
+        {
+          id: "25",
+          key: AUDIO_KEYS.mashaal.lesson25,
+          title: "تصمیم‌گیری برای مسیر پیش رو",
+        },
 
-    { id: "01", key: AUDIO_KEYS.mashaal.lesson01, title: "شکست عشقی چیست؟" },
-    { id: "02", key: AUDIO_KEYS.mashaal.lesson02, title: "نقش مغز در درد شکست عشقی" },
-    { id: "03", key: AUDIO_KEYS.mashaal.lesson03, title: "چه چیزی رو از دست دادم؟" },
-    { id: "04", key: AUDIO_KEYS.mashaal.lesson04, title: "مغز عاشق و مغز محروم" },
-    { id: "05", key: AUDIO_KEYS.mashaal.lesson05, title: "سوگ عاطفی" },
-    { id: "06", key: AUDIO_KEYS.mashaal.lesson06, title: "اعتیاد به رابطه" },
-    { id: "07", key: AUDIO_KEYS.mashaal.lesson07, title: "چرا نمی‌تونم رهایش کنم؟" },
-    { id: "08", key: AUDIO_KEYS.mashaal.lesson08, title: "انواع وابستگی" },
-    { id: "09", key: AUDIO_KEYS.mashaal.lesson09, title: "معرفی سبک‌های دلبستگی" },
-    { id: "10", key: AUDIO_KEYS.mashaal.lesson10, title: "نقش طرحواره‌ها در شکست عشقی" },
-    { id: "11", key: AUDIO_KEYS.mashaal.lesson11, title: "معرفی سایر طرحواره‌ها" },
-    { id: "12", key: AUDIO_KEYS.mashaal.lesson12, title: "چرا این رابطه برای من این‌قدر مهم بود؟" },
-    { id: "13", key: AUDIO_KEYS.mashaal.lesson13, title: "خطاهای شناختی" },
-    { id: "14", key: AUDIO_KEYS.mashaal.lesson14, title: "نشخوار فکری" },
-    { id: "15", key: AUDIO_KEYS.mashaal.lesson15, title: "چراهای بعد از شکست" },
-    { id: "16", key: AUDIO_KEYS.mashaal.lesson16, title: "باورهای اشتباه رایج" },
-    { id: "17", key: AUDIO_KEYS.mashaal.lesson17, title: "خیانت از نگاه روان‌شناختی" },
-    { id: "18", key: AUDIO_KEYS.mashaal.lesson18, title: "زخم طرد" },
-    { id: "19", key: AUDIO_KEYS.mashaal.lesson19, title: "شرم، مقایسه، خودسرزنشی" },
-    { id: "20", key: AUDIO_KEYS.mashaal.lesson20, title: "عزت‌نفس بعد از شکست" },
-  ].map((item) => ({
-    ...item,
-    url: mediaUrl(item.key),
-  })),
-  []
-);
+        {
+          id: "01",
+          key: AUDIO_KEYS.mashaal.lesson01,
+          title: "شکست عشقی چیست؟",
+        },
+        {
+          id: "02",
+          key: AUDIO_KEYS.mashaal.lesson02,
+          title: "نقش مغز در درد شکست عشقی",
+        },
+        {
+          id: "03",
+          key: AUDIO_KEYS.mashaal.lesson03,
+          title: "چه چیزی رو از دست دادم؟",
+        },
+        {
+          id: "04",
+          key: AUDIO_KEYS.mashaal.lesson04,
+          title: "مغز عاشق و مغز محروم",
+        },
+        { id: "05", key: AUDIO_KEYS.mashaal.lesson05, title: "سوگ عاطفی" },
+        {
+          id: "06",
+          key: AUDIO_KEYS.mashaal.lesson06,
+          title: "اعتیاد به رابطه",
+        },
+        {
+          id: "07",
+          key: AUDIO_KEYS.mashaal.lesson07,
+          title: "چرا نمی‌تونم رهایش کنم؟",
+        },
+        { id: "08", key: AUDIO_KEYS.mashaal.lesson08, title: "انواع وابستگی" },
+        {
+          id: "09",
+          key: AUDIO_KEYS.mashaal.lesson09,
+          title: "معرفی سبک‌های دلبستگی",
+        },
+        {
+          id: "10",
+          key: AUDIO_KEYS.mashaal.lesson10,
+          title: "نقش طرحواره‌ها در شکست عشقی",
+        },
+        {
+          id: "11",
+          key: AUDIO_KEYS.mashaal.lesson11,
+          title: "معرفی سایر طرحواره‌ها",
+        },
+        {
+          id: "12",
+          key: AUDIO_KEYS.mashaal.lesson12,
+          title: "چرا این رابطه برای من این‌قدر مهم بود؟",
+        },
+        { id: "13", key: AUDIO_KEYS.mashaal.lesson13, title: "خطاهای شناختی" },
+        { id: "14", key: AUDIO_KEYS.mashaal.lesson14, title: "نشخوار فکری" },
+        {
+          id: "15",
+          key: AUDIO_KEYS.mashaal.lesson15,
+          title: "چراهای بعد از شکست",
+        },
+        {
+          id: "16",
+          key: AUDIO_KEYS.mashaal.lesson16,
+          title: "باورهای اشتباه رایج",
+        },
+        {
+          id: "17",
+          key: AUDIO_KEYS.mashaal.lesson17,
+          title: "خیانت از نگاه روان‌شناختی",
+        },
+        { id: "18", key: AUDIO_KEYS.mashaal.lesson18, title: "زخم طرد" },
+        {
+          id: "19",
+          key: AUDIO_KEYS.mashaal.lesson19,
+          title: "شرم، مقایسه، خودسرزنشی",
+        },
+        {
+          id: "20",
+          key: AUDIO_KEYS.mashaal.lesson20,
+          title: "عزت‌نفس بعد از شکست",
+        },
+      ].map((item) => ({
+        ...item,
+        url: mediaUrl(item.key),
+      })),
+    [],
+  );
 
   const activateAudio = useCallback((key: string) => {
-  setActiveAudioKey(key);
-  setExpandedAudioKey(key);
-}, []);
+    setActiveAudioKey(key);
+    setExpandedAudioKey(key);
+  }, []);
 
-const deactivateAudio = useCallback((key: string) => {
-  setActiveAudioKey((prev) => (prev === key ? null : prev));
-  setExpandedAudioKey((prev) => (prev === key ? null : prev));
-}, []);
+  const deactivateAudio = useCallback((key: string) => {
+    setActiveAudioKey((prev) => (prev === key ? null : prev));
+    setExpandedAudioKey((prev) => (prev === key ? null : prev));
+  }, []);
 
   const syncPlan = useCallback(async () => {
     try {
@@ -127,15 +209,15 @@ const deactivateAudio = useCallback((key: string) => {
   }, [syncPlan]);
 
   useFocusEffect(
-  useCallback(() => {
-    syncPlan();
+    useCallback(() => {
+      syncPlan();
 
-    return () => {
-      setActiveAudioKey(null);
-      setExpandedAudioKey(null);
-    };
-  }, [syncPlan])
-);
+      return () => {
+        setActiveAudioKey(null);
+        setExpandedAudioKey(null);
+      };
+    }, [syncPlan]),
+  );
 
   const goToSubscription = () => {
     router.push("/Subscription");
@@ -161,21 +243,15 @@ const deactivateAudio = useCallback((key: string) => {
       <View pointerEvents="none" style={styles.bgGlowBottom} />
 
       <View style={[styles.headerBar, { paddingTop: 10 }]}>
-        <View style={styles.headerLeft}>
-          <PlanStatusBadge me={me} showExpiringText />
+        <View style={styles.headerSide} />
+
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            مـشعل
+          </Text>
         </View>
 
-        <View style={styles.headerCenter} pointerEvents="none">
-          <View style={styles.headerTitleBox}>
-            <Text style={styles.headerTitle} numberOfLines={1}>
-              مــــــشعل
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.headerActions}>
-          <View style={{ width: 120 }} />
-        </View>
+        <View style={styles.headerSide} />
       </View>
 
       <ScrollView
@@ -190,101 +266,157 @@ const deactivateAudio = useCallback((key: string) => {
           <View style={styles.lockCard}>
             {planView === "expired" ? (
               <>
-                <Text style={styles.lockTitle}>اشتراکت منقضی شده و مشعل فعلاً برات قفله.</Text>
+                <Text style={styles.lockTitle}>
+                  اشتراکت منقضی شده و مشعل فعلاً برات قفله.
+                </Text>
 
                 <Text style={styles.lockBody}>
-                  مشعل جاییه که ویدیوها و ویس‌های آموزشی عمیقِ شکست عشقی جمع شده؛ برای فهمیدن مغزت، الگوها، و ساختن
-                  مهارت‌های جدید.
+                  مشعل جاییه که ویدیوها و ویس‌های آموزشی عمیقِ شکست عشقی جمع
+                  شده؛ برای فهمیدن مغزت، الگوها، و ساختن مهارت‌های جدید.
                   {"\n\n"}
-                  برای این‌که دوباره به همهٔ درس‌ها و مسیرهای آموزشی دسترسی داشته باشی، پلن ققنوس رو تمدید کن و ادامه بده.
+                  برای این‌که دوباره به همهٔ درس‌ها و مسیرهای آموزشی دسترسی
+                  داشته باشی، پلن ققنوس رو تمدید کن و ادامه بده.
                 </Text>
 
                 <View style={{ height: 14 }} />
-                <Text style={styles.lockHintText}>معرفی کوتاه مشعل (صوتی):</Text>
+                <Text style={styles.lockHintText}>
+                  معرفی کوتاه مشعل (صوتی):
+                </Text>
                 <View style={{ height: 10 }} />
                 <SharedInlineAudioPlayer
-  url={MASHAAL_INTRO_URL}
-  storageKey={"mashaal:introLocked:v1"}
-  expanded={expandedAudioKey === "mashaal:introLocked:v1"}
-  isActive={activeAudioKey === "mashaal:introLocked:v1"}
-  onPlayRequest={() => activateAudio("mashaal:introLocked:v1")}
-  onPauseRequest={() => deactivateAudio("mashaal:introLocked:v1")}
-  onPlaybackFinish={() => deactivateAudio("mashaal:introLocked:v1")}
-  palette={{
-    border2: palette.border2,
-    text: palette.text,
-    sub2: palette.sub2,
-    gold: palette.gold,
-    glass2: palette.glass2,
-  }}
-/>
+                  url={MASHAAL_INTRO_URL}
+                  storageKey={"mashaal:introLocked:v1"}
+                  expanded={expandedAudioKey === "mashaal:introLocked:v1"}
+                  isActive={activeAudioKey === "mashaal:introLocked:v1"}
+                  onPlayRequest={() => activateAudio("mashaal:introLocked:v1")}
+                  onPauseRequest={() =>
+                    deactivateAudio("mashaal:introLocked:v1")
+                  }
+                  onPlaybackFinish={() =>
+                    deactivateAudio("mashaal:introLocked:v1")
+                  }
+                  palette={{
+                    border2: palette.border2,
+                    text: palette.text,
+                    sub2: palette.sub2,
+                    gold: palette.gold,
+                    glass2: palette.glass2,
+                  }}
+                />
                 <View style={{ height: 14 }} />
 
-                <TouchableOpacity activeOpacity={0.9} onPress={goToSubscription} style={styles.proBtn}>
-                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={goToSubscription}
+                  style={styles.proBtn}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row-reverse",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
                     <Ionicons name="card" size={18} color={palette.bg} />
-                    <Text style={styles.proBtnText}>تمدید / خرید اشتراک پرو</Text>
+                    <Text style={styles.proBtnText}>
+                      تمدید / خرید اشتراک پرو
+                    </Text>
                   </View>
                 </TouchableOpacity>
               </>
             ) : (
               <>
-                <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
+                <View
+                  style={{
+                    flexDirection: "row-reverse",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
                   <Ionicons name="school" size={22} color="#D4AF37" />
                   <Text style={styles.lockTitle}>
-                    اینجا «مشعل»ـه؛ جایی که ویدیوها و ویس‌های آموزشی عمیق و کاربردی‌ات قرار می‌گیره.
+                    اینجا «مشعل»ـه؛ جایی که ویدیوها و ویس‌های آموزشی عمیق و
+                    کاربردی‌ات قرار می‌گیره.
                   </Text>
                 </View>
 
                 <Text style={[styles.lockBody, { marginTop: 10 }]}>
-                  این تب برای این ساخته شده که فقط حالِت کمی بهتر نشه؛ واقعاً مهارت بسازی برای مدیریت احساس، وسواس فکری،
-                  ترس از تنهایی و بازسازی عزت‌نفس بعد از جدایی.
+                  این تب برای این ساخته شده که فقط حالِت کمی بهتر نشه؛ واقعاً
+                  مهارت بسازی برای مدیریت احساس، وسواس فکری، ترس از تنهایی و
+                  بازسازی عزت‌نفس بعد از جدایی.
                 </Text>
 
                 <View style={{ marginTop: 14, gap: 6 }}>
                   <View style={styles.bulletRow}>
                     <Ionicons name="play-outline" size={16} color="#D4AF37" />
-                    <Text style={styles.bulletText}>ویدیوهای کوتاه و کاربردی با مثال‌های واقعی از مراجعان</Text>
+                    <Text style={styles.bulletText}>
+                      ویدیوهای کوتاه و کاربردی با مثال‌های واقعی از مراجعان
+                    </Text>
                   </View>
                   <View style={styles.bulletRow}>
                     <Ionicons name="mic-outline" size={16} color="#D4AF37" />
-                    <Text style={styles.bulletText}>ویس‌هایی که هر وقت حوصله تصویر نداری، می‌تونی گوش کنی</Text>
+                    <Text style={styles.bulletText}>
+                      ویس‌هایی که هر وقت حوصله تصویر نداری، می‌تونی گوش کنی
+                    </Text>
                   </View>
                   <View style={styles.bulletRow}>
-                    <Ionicons name="trail-sign-outline" size={16} color="#D4AF37" />
-                    <Text style={styles.bulletText}>مسیرهای آموزشی مرحله‌به‌مرحله برای عبور سالم از شکست عشقی</Text>
+                    <Ionicons
+                      name="trail-sign-outline"
+                      size={16}
+                      color="#D4AF37"
+                    />
+                    <Text style={styles.bulletText}>
+                      مسیرهای آموزشی مرحله‌به‌مرحله برای عبور سالم از شکست عشقی
+                    </Text>
                   </View>
                 </View>
 
                 <View style={styles.lockHintBox}>
                   <Text style={styles.lockHintText}>
-                    برای باز شدن کامل «مشعل» و دسترسی به همه‌ی ویدیوها و ویس‌های آموزشی، باید پلن PRO را از تب پرداخت فعال کنی.
+                    برای باز شدن کامل «مشعل» و دسترسی به همه‌ی ویدیوها و ویس‌های
+                    آموزشی، باید پلن PRO را از تب پرداخت فعال کنی.
                   </Text>
                 </View>
 
                 <View style={{ height: 14 }} />
-                <Text style={styles.lockHintText}>قبل از تصمیم، این معرفی کوتاه رو گوش کن:</Text>
+                <Text style={styles.lockHintText}>
+                  قبل از تصمیم، این معرفی کوتاه رو گوش کن:
+                </Text>
                 <View style={{ height: 10 }} />
                 <SharedInlineAudioPlayer
-  url={MASHAAL_INTRO_URL}
-  storageKey={"mashaal:introLocked:v1"}
-  expanded={expandedAudioKey === "mashaal:introLocked:v1"}
-  isActive={activeAudioKey === "mashaal:introLocked:v1"}
-  onPlayRequest={() => activateAudio("mashaal:introLocked:v1")}
-  onPauseRequest={() => deactivateAudio("mashaal:introLocked:v1")}
-  onPlaybackFinish={() => deactivateAudio("mashaal:introLocked:v1")}
-  palette={{
-    border2: palette.border2,
-    text: palette.text,
-    sub2: palette.sub2,
-    gold: palette.gold,
-    glass2: palette.glass2,
-  }}
-/>
+                  url={MASHAAL_INTRO_URL}
+                  storageKey={"mashaal:introLocked:v1"}
+                  expanded={expandedAudioKey === "mashaal:introLocked:v1"}
+                  isActive={activeAudioKey === "mashaal:introLocked:v1"}
+                  onPlayRequest={() => activateAudio("mashaal:introLocked:v1")}
+                  onPauseRequest={() =>
+                    deactivateAudio("mashaal:introLocked:v1")
+                  }
+                  onPlaybackFinish={() =>
+                    deactivateAudio("mashaal:introLocked:v1")
+                  }
+                  palette={{
+                    border2: palette.border2,
+                    text: palette.text,
+                    sub2: palette.sub2,
+                    gold: palette.gold,
+                    glass2: palette.glass2,
+                  }}
+                />
                 <View style={{ height: 14 }} />
 
-                <TouchableOpacity activeOpacity={0.9} onPress={goToSubscription} style={styles.proBtn}>
-                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={goToSubscription}
+                  style={styles.proBtn}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row-reverse",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
                     <Ionicons name="rocket" size={18} color={palette.bg} />
                     <Text style={styles.proBtnText}>خرید اشتراک پرو</Text>
                   </View>
@@ -294,52 +426,58 @@ const deactivateAudio = useCallback((key: string) => {
           </View>
         ) : (
           <View style={[styles.lockCard, { marginTop: 6 }]}>
-  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
-    <Ionicons name="play-circle" size={22} color={palette.gold} />
-    <Text style={styles.lockTitle}>درس‌های مشعل</Text>
-  </View>
+            <View
+              style={{
+                flexDirection: "row-reverse",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Ionicons name="play-circle" size={22} color={palette.gold} />
+              <Text style={styles.lockTitle}>درس‌های مشعل</Text>
+            </View>
 
-  <View style={{ height: 12 }} />
+            <View style={{ height: 12 }} />
 
-  <View style={{ gap: 12 }}>
-    {mashaalLessons.map((lesson) => {
-      const audioKey = `mashaal:${lesson.id}:v1`;
+            <View style={{ gap: 12 }}>
+              {mashaalLessons.map((lesson) => {
+                const audioKey = `mashaal:${lesson.id}:v1`;
 
-      return (
-        <View key={lesson.id}>
-          <Text
-            style={{
-              color: palette.text,
-              fontSize: 13,
-              fontWeight: "800",
-              textAlign: "right",
-              marginBottom: 8,
-            }}
-          >
-            {lesson.title}
-          </Text>
+                return (
+                  <View key={lesson.id}>
+                    <Text
+                      style={{
+                        color: palette.text,
+                        fontSize: 13,
+                        fontWeight: "800",
+                        textAlign: "right",
+                        marginBottom: 8,
+                      }}
+                    >
+                      {lesson.title}
+                    </Text>
 
-          <SharedInlineAudioPlayer
-  url={lesson.url}
-  storageKey={audioKey}
-  expanded={expandedAudioKey === audioKey}
-  isActive={activeAudioKey === audioKey}
-  onPlayRequest={() => activateAudio(audioKey)}
-  onPauseRequest={() => deactivateAudio(audioKey)}
-  onPlaybackFinish={() => deactivateAudio(audioKey)}
-  palette={{
-    border2: palette.border2,
-    text: palette.text,
-    sub2: palette.sub2,
-    gold: palette.gold,
-    glass2: palette.glass2,
-  }}
-/>
-        </View>
-      );
-    })}
-  </View>
-</View>
+                    <SharedInlineAudioPlayer
+                      url={lesson.url}
+                      storageKey={audioKey}
+                      expanded={expandedAudioKey === audioKey}
+                      isActive={activeAudioKey === audioKey}
+                      onPlayRequest={() => activateAudio(audioKey)}
+                      onPauseRequest={() => deactivateAudio(audioKey)}
+                      onPlaybackFinish={() => deactivateAudio(audioKey)}
+                      palette={{
+                        border2: palette.border2,
+                        text: palette.text,
+                        sub2: palette.sub2,
+                        gold: palette.gold,
+                        glass2: palette.glass2,
+                      }}
+                    />
+                  </View>
+                );
+              })}
+            </View>
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -376,58 +514,6 @@ const styles = StyleSheet.create({
     color: "rgba(231,238,247,.72)",
     fontSize: 12,
     fontWeight: "800",
-  },
-
-  headerBar: {
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,.08)",
-    backgroundColor: "#030712",
-    paddingHorizontal: 12,
-    paddingBottom: 10,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  headerLeft: {
-    minWidth: 120,
-    alignItems: "flex-start",
-    justifyContent: "flex-end",
-  },
-
-  headerCenter: {
-    position: "absolute",
-    left: 12,
-    right: 12,
-    top: 10,
-    bottom: 10,
-    justifyContent: "center",
-    alignItems: "flex-end",
-    paddingRight: 0,
-  },
-
-  headerTitleBox: {
-    maxWidth: "92%",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 14,
-    backgroundColor: "transparent",
-    alignSelf: "flex-end",
-  },
-
-  headerTitle: {
-    color: "#F9FAFB",
-    fontSize: 15,
-    fontWeight: "900",
-    textAlign: "right",
-  },
-
-  headerActions: {
-    marginLeft: "auto",
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 8,
-    minWidth: 120,
-    justifyContent: "flex-end",
   },
 
   lockCard: {
@@ -513,5 +599,33 @@ const styles = StyleSheet.create({
     textAlign: "right",
     lineHeight: 18,
     fontWeight: "800",
+  },
+  headerBar: {
+    minHeight: 58,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,.08)",
+    backgroundColor: "#030712",
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  headerSide: {
+    flex: 1,
+    minHeight: 38,
+  },
+
+  headerCenter: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  headerTitle: {
+    color: "#F9FAFB",
+    fontSize: 17,
+    fontWeight: "900",
+    textAlign: "center",
   },
 });

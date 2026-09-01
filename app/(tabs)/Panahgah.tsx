@@ -9,7 +9,13 @@ import {
   type AudioStatus,
 } from "expo-audio";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -22,11 +28,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import AppBannerModal from "../../components/ui/AppBannerModal";
 
 import { allScenarios } from "@/lib/panahgah/registry";
-import PlanStatusBadge from "../../components/PlanStatusBadge";
 import { useUser } from "../../hooks/useUser";
 import { getPlanStatus, PRO_FLAG_KEY } from "../../lib/plan";
 
@@ -78,7 +86,9 @@ function InlineAudioPlayer({
 
   const [playing, setPlaying] = useState(false);
   const [loadingAudio, setLoadingAudio] = useState(false);
-  const [loadStatus, setLoadStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [loadStatus, setLoadStatus] = useState<
+    "idle" | "loading" | "ready" | "error"
+  >("idle");
   const [posMs, setPosMs] = useState(0);
   const [durMs, setDurMs] = useState(0);
 
@@ -99,17 +109,16 @@ function InlineAudioPlayer({
   };
 
   const unload = useCallback(async () => {
-  const p = playerRef.current;
-  playerRef.current = null;
+    const p = playerRef.current;
+    playerRef.current = null;
 
-  try {
-    statusSubscriptionRef.current?.remove?.();
-    statusSubscriptionRef.current = null;
-  } catch {}
+    try {
+      statusSubscriptionRef.current?.remove?.();
+      statusSubscriptionRef.current = null;
+    } catch {}
 
-  try {
-    if (p) {
-
+    try {
+      if (p) {
         try {
           p.pause();
         } catch {}
@@ -130,23 +139,26 @@ function InlineAudioPlayer({
 
   const attachStatusListener = useCallback((player: AudioPlayer) => {
     statusSubscriptionRef.current?.remove?.();
-    statusSubscriptionRef.current = player.addListener("playbackStatusUpdate", (st: AudioStatus) => {
-      if (!st?.isLoaded) return;
-      if (!mountedRef.current) return;
+    statusSubscriptionRef.current = player.addListener(
+      "playbackStatusUpdate",
+      (st: AudioStatus) => {
+        if (!st?.isLoaded) return;
+        if (!mountedRef.current) return;
 
-      setPlaying(!!st.playing);
-      setPosMs(Math.max(0, Math.floor((st.currentTime || 0) * 1000)));
-      setDurMs(Math.max(0, Math.floor((st.duration || 0) * 1000)));
+        setPlaying(!!st.playing);
+        setPosMs(Math.max(0, Math.floor((st.currentTime || 0) * 1000)));
+        setDurMs(Math.max(0, Math.floor((st.duration || 0) * 1000)));
 
-      if (st.isLoaded) {
-        setLoadStatus((prev) => (prev === "loading" ? "ready" : prev));
-      }
+        if (st.isLoaded) {
+          setLoadStatus((prev) => (prev === "loading" ? "ready" : prev));
+        }
 
-      if (st.didJustFinish) {
-        setPlaying(false);
-        setLoadStatus("idle");
-      }
-    });
+        if (st.didJustFinish) {
+          setPlaying(false);
+          setLoadStatus("idle");
+        }
+      },
+    );
   }, []);
 
   const ensureLoaded = useCallback(async () => {
@@ -154,7 +166,6 @@ function InlineAudioPlayer({
 
     setLoadingAudio(true);
     setLoadStatus("loading");
-
 
     await setAudioModeAsync({
       playsInSilentMode: true,
@@ -178,7 +189,7 @@ function InlineAudioPlayer({
     if (player.isLoaded) setLoadStatus("ready");
   }, [url, attachStatusListener]);
 
-    const togglePlayPause = useCallback(() => {
+  const togglePlayPause = useCallback(() => {
     return lock(async () => {
       if (!playerRef.current) {
         setLoadingAudio(true);
@@ -250,7 +261,7 @@ function InlineAudioPlayer({
         if (mountedRef.current) setPosMs(target);
       });
     },
-    [durMs]
+    [durMs],
   );
 
   useEffect(() => {
@@ -263,7 +274,12 @@ function InlineAudioPlayer({
 
   return (
     <View>
-      <View style={[styles.audioRow, { borderColor: palette.border2, backgroundColor: palette.glass2 }]}>
+      <View
+        style={[
+          styles.audioRow,
+          { borderColor: palette.border2, backgroundColor: palette.glass2 },
+        ]}
+      >
         <View style={styles.audioInnerRow}>
           <Text style={[styles.audioTimeInline, { color: palette.sub2 }]}>
             {formatMs(posMs)} / {formatMs(durMs)}
@@ -276,7 +292,10 @@ function InlineAudioPlayer({
           <Pressable
             style={({ pressed }) => [
               styles.audioPlayBtn,
-              { opacity: pressed ? 0.85 : 1, borderColor: "rgba(255,255,255,.10)" },
+              {
+                opacity: pressed ? 0.85 : 1,
+                borderColor: "rgba(255,255,255,.10)",
+              },
             ]}
             onPress={togglePlayPause}
             hitSlop={10}
@@ -285,7 +304,11 @@ function InlineAudioPlayer({
             {loadingAudio && !playing ? (
               <ActivityIndicator size="small" color={palette.text} />
             ) : (
-              <Ionicons name={playing ? "pause" : "play"} size={18} color={palette.text} />
+              <Ionicons
+                name={playing ? "pause" : "play"}
+                size={18}
+                color={palette.text}
+              />
             )}
           </Pressable>
         </View>
@@ -301,8 +324,10 @@ function InlineAudioPlayer({
           ]}
         >
           {loadStatus === "loading" && "در حال آماده‌سازی فایل... صبور باش"}
-          {loadStatus === "ready" && "فایل آماده شنیدنه؛ دوباره دکمه شروع رو بزن"}
-          {loadStatus === "error" && "خطا در دریافت فایل؛ اینترنت رو چک کن و دوباره بزن"}
+          {loadStatus === "ready" &&
+            "فایل آماده شنیدنه؛ دوباره دکمه شروع رو بزن"}
+          {loadStatus === "error" &&
+            "خطا در دریافت فایل؛ اینترنت رو چک کن و دوباره بزن"}
         </Text>
       )}
     </View>
@@ -331,7 +356,10 @@ function SeekBar({
     >
       <Pressable
         onPress={(e) => {
-          const x = Math.max(0, Math.min(wRef.current, e.nativeEvent.locationX || 0));
+          const x = Math.max(
+            0,
+            Math.min(wRef.current, e.nativeEvent.locationX || 0),
+          );
           onSeek(x / wRef.current);
         }}
       >
@@ -339,7 +367,10 @@ function SeekBar({
           <View
             style={[
               styles.audioBarFill,
-              { width: `${Math.round(progress * 100)}%`, backgroundColor: palette.gold },
+              {
+                width: `${Math.round(progress * 100)}%`,
+                backgroundColor: palette.gold,
+              },
             ]}
           />
         </View>
@@ -378,7 +409,7 @@ export default function Panahgah() {
   const showAppModal = (
     kind: "error" | "warning" | "success" | "info",
     title: string,
-    message: string
+    message: string,
   ) => {
     setAppModal({
       visible: true,
@@ -407,7 +438,8 @@ export default function Panahgah() {
           view = "expired";
           expDays = 0;
         } else if (status.isPro || flagIsPro) {
-          const d = typeof status.daysLeft === "number" ? status.daysLeft : null;
+          const d =
+            typeof status.daysLeft === "number" ? status.daysLeft : null;
           if (d != null && d > 0 && d <= 7) {
             view = "expiring";
             expDays = d;
@@ -428,7 +460,7 @@ export default function Panahgah() {
 
       setPlanView(view);
       setExpiringDaysLeft(expDays);
-       } catch {
+    } catch {
       setPlanView("free");
       setExpiringDaysLeft(null);
     }
@@ -447,33 +479,35 @@ export default function Panahgah() {
   useFocusEffect(
     useCallback(() => {
       syncPlanView();
-    }, [syncPlanView])
+    }, [syncPlanView]),
   );
 
   const data = useMemo(() => {
     const items = allScenarios();
     if (!q.trim()) return items;
     const qq = q.trim();
-    return items.filter((s) => s.title.includes(qq) || s.id.includes(qq.replace(/\s+/g, "-")));
+    return items.filter(
+      (s) => s.title.includes(qq) || s.id.includes(qq.replace(/\s+/g, "-")),
+    );
   }, [q]);
 
   /** هنگام تپ روی سناریو */
   const onTapScenario = (id: string) => {
-        if (planView === "expired") {
+    if (planView === "expired") {
       showAppModal(
         "warning",
         "اشتراک منقضی شده",
         "اشتراکت منقضی شده و پناهگاه فعلاً برات قفله.\n\n" +
           "پناهگاه جاییه برای وقتی که یهو حالت بد میشه یا وسوسه‌ می‌شی پیام بدی، یا احساساتت بهت هجوم میارن.\n\n" +
-          "برای اینکه دوباره به همه‌ی سناریوهای اورژانسی و مسیرهای نجات دسترسی داشته باشی، پلن ققنوس رو تمدید کن."
+          "برای اینکه دوباره به همه‌ی سناریوهای اورژانسی و مسیرهای نجات دسترسی داشته باشی، پلن ققنوس رو تمدید کن.",
       );
       return;
     }
-        if (!isProPlan) {
+    if (!isProPlan) {
       showAppModal(
         "info",
         "نسخه رایگان",
-        "برای باز شدن کامل پناهگاه و استفاده از سناریوهای اورژانسی باید پلن PRO رو فعال کنی."
+        "برای باز شدن کامل پناهگاه و استفاده از سناریوهای اورژانسی باید پلن PRO رو فعال کنی.",
       );
       return;
     }
@@ -484,11 +518,19 @@ export default function Panahgah() {
     <TouchableOpacity
       activeOpacity={0.9}
       onPress={() => onTapScenario(item.id)}
-      style={[styles.card, { borderColor: "rgba(255,255,255,.08)", backgroundColor: "rgba(255,255,255,.04)" }]}
+      style={[
+        styles.card,
+        {
+          borderColor: "rgba(255,255,255,.08)",
+          backgroundColor: "rgba(255,255,255,.04)",
+        },
+      ]}
     >
       <View style={styles.row}>
         <Ionicons name="shield-checkmark" size={18} color={palette.gold} />
-        <Text style={[styles.title, { color: palette.text }]}>{item.title}</Text>
+        <Text style={[styles.title, { color: palette.text }]}>
+          {item.title}
+        </Text>
         <Ionicons
           name="chevron-forward"
           size={18}
@@ -506,12 +548,17 @@ export default function Panahgah() {
   if (loading) {
     return (
       <>
-        <SafeAreaView style={[styles.root, { backgroundColor: palette.bg }]} edges={["top"]}>
+        <SafeAreaView
+          style={[styles.root, { backgroundColor: palette.bg }]}
+          edges={["top"]}
+        >
           <View pointerEvents="none" style={styles.bgGlowTop} />
           <View pointerEvents="none" style={styles.bgGlowBottom} />
           <View style={[styles.center, { paddingBottom: insets.bottom }]}>
             <ActivityIndicator color={palette.gold} />
-            <Text style={{ color: "#E5E7EB", marginTop: 8, fontSize: 12 }}>در حال آماده‌سازی پناهگاه…</Text>
+            <Text style={{ color: "#E5E7EB", marginTop: 8, fontSize: 12 }}>
+              در حال آماده‌سازی پناهگاه…
+            </Text>
           </View>
         </SafeAreaView>
 
@@ -532,35 +579,68 @@ export default function Panahgah() {
   }
 
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: palette.bg }]} edges={["top", "left", "right", "bottom"]}>
+    <SafeAreaView
+      style={[styles.root, { backgroundColor: palette.bg }]}
+      edges={["top", "left", "right", "bottom"]}
+    >
       <View pointerEvents="none" style={styles.bgGlowTop} />
       <View pointerEvents="none" style={styles.bgGlowBottom} />
 
-      <View style={[styles.header, { paddingTop: Math.max(10, insets.top * 0.15) }]}>
-        <Text style={styles.headerTitle}>پناهگاه</Text>
-        <PlanStatusBadge me={me} showExpiringText />
+      <View
+        style={[styles.header, { paddingTop: Math.max(10, insets.top * 0.15) }]}
+      >
+        <View style={styles.headerSide} />
+
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>پناهگاه</Text>
+        </View>
+
+        <View style={styles.headerSide} />
       </View>
 
       {!isProPlan ? (
-        <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16 + insets.bottom }}>
+        <View
+          style={{
+            flex: 1,
+            paddingHorizontal: 16,
+            paddingTop: 16,
+            paddingBottom: 16 + insets.bottom,
+          }}
+        >
           <View style={styles.lockCard}>
             {planView === "expired" ? (
               <>
-                <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
-                  <Ionicons name="lock-closed" size={20} color="rgba(231,238,247,.80)" />
-                  <Text style={styles.lockH1}>اشتراکت منقضی شده و پناهگاه فعلاً برات قفله.</Text>
+                <View
+                  style={{
+                    flexDirection: "row-reverse",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Ionicons
+                    name="lock-closed"
+                    size={20}
+                    color="rgba(231,238,247,.80)"
+                  />
+                  <Text style={styles.lockH1}>
+                    اشتراکت منقضی شده و پناهگاه فعلاً برات قفله.
+                  </Text>
                 </View>
 
                 <Text style={styles.lockP}>
                   پناهگاه فقط «یک لیست» نیست.
-                  {"\n"}اینجا برای لحظه‌هاییه که موج میاد: وسوسه‌ی پیام دادن، چک کردن، فروپاشی شبانه، یا حمله‌ی خاطره‌ها.
+                  {"\n"}اینجا برای لحظه‌هاییه که موج میاد: وسوسه‌ی پیام دادن، چک
+                  کردن، فروپاشی شبانه، یا حمله‌ی خاطره‌ها.
                   {"\n\n"}
-                  برای اینکه دوباره به سناریوهای اورژانسی و مسیرهای نجات دسترسی داشته باشی، باید اشتراک رو تمدید کنی.
+                  برای اینکه دوباره به سناریوهای اورژانسی و مسیرهای نجات دسترسی
+                  داشته باشی، باید اشتراک رو تمدید کنی.
                 </Text>
 
                 <View style={{ height: 12 }} />
 
-                <Text style={styles.lockSmall}>معرفی کوتاه پناهگاه (صوتی):</Text>
+                <Text style={styles.lockSmall}>
+                  معرفی کوتاه پناهگاه (صوتی):
+                </Text>
                 <View style={{ height: 10 }} />
                 <InlineAudioPlayer
                   url={AUDIO_URL}
@@ -575,27 +655,58 @@ export default function Panahgah() {
 
                 <View style={{ height: 14 }} />
 
-                <TouchableOpacity activeOpacity={0.9} onPress={goToSubscription} style={styles.proBtn}>
-                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={goToSubscription}
+                  style={styles.proBtn}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row-reverse",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
                     <Ionicons name="card" size={18} color={palette.bg} />
-                    <Text style={styles.proBtnText}>تمدید / خرید اشتراک پرو</Text>
+                    <Text style={styles.proBtnText}>
+                      تمدید / خرید اشتراک پرو
+                    </Text>
                   </View>
                 </TouchableOpacity>
 
                 {/* ✅ وسط‌چین طبق درخواست */}
-                <Text style={[styles.lockTiny, styles.centerText, { marginTop: 10 }]}>
+                <Text
+                  style={[
+                    styles.lockTiny,
+                    styles.centerText,
+                    { marginTop: 10 },
+                  ]}
+                >
                   این دکمه تو رو می‌بره به صفحه اشتراک: انتخاب پلن و فعال‌سازی.
                 </Text>
               </>
             ) : (
               <>
-                <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
-                  <Ionicons name="shield-checkmark" size={22} color={palette.gold} />
-                  <Text style={styles.lockH1}>پناهگاه مخصوص لحظه‌های اورژانسی بعد از جداییه</Text>
+                <View
+                  style={{
+                    flexDirection: "row-reverse",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Ionicons
+                    name="shield-checkmark"
+                    size={22}
+                    color={palette.gold}
+                  />
+                  <Text style={styles.lockH1}>
+                    پناهگاه مخصوص لحظه‌های اورژانسی بعد از جداییه
+                  </Text>
                 </View>
 
                 <Text style={styles.lockP}>
-                  اینجا جاییه که وقتی مغزت می‌گه «فقط یه پیام کوچیک بده»، تو به جای لغزش میای اینجا و یک مسیر نجات آماده رو انجام میدی.
+                  اینجا جاییه که وقتی مغزت می‌گه «فقط یه پیام کوچیک بده»، تو به
+                  جای لغزش میای اینجا و یک مسیر نجات آماده رو انجام میدی.
                   {"\n\n"}
                   پناهگاه چندتا سناریو داره که هر کدوم برای یک موقعیت طراحی شدن:
                   {"\n"}- شبِ تنهایی و فروپاشی
@@ -603,12 +714,15 @@ export default function Panahgah() {
                   {"\n"}- حمله‌ی خاطره‌ها و عکس‌ها
                   {"\n"}- اضطراب شدید و بی‌قراری
                   {"\n\n"}
-                  نسخه رایگان، فقط پیش‌نمایشه. برای باز شدن کامل، باید PRO رو فعال کنی.
+                  نسخه رایگان، فقط پیش‌نمایشه. برای باز شدن کامل، باید PRO رو
+                  فعال کنی.
                 </Text>
 
                 <View style={{ height: 12 }} />
 
-                <Text style={styles.lockSmall}>قبل از تصمیم، این معرفی کوتاه رو گوش کن:</Text>
+                <Text style={styles.lockSmall}>
+                  قبل از تصمیم، این معرفی کوتاه رو گوش کن:
+                </Text>
                 <View style={{ height: 10 }} />
                 <InlineAudioPlayer
                   url={AUDIO_URL}
@@ -623,16 +737,33 @@ export default function Panahgah() {
 
                 <View style={{ height: 14 }} />
 
-                <TouchableOpacity activeOpacity={0.9} onPress={goToSubscription} style={styles.proBtn}>
-                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={goToSubscription}
+                  style={styles.proBtn}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row-reverse",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
                     <Ionicons name="rocket" size={18} color={palette.bg} />
                     <Text style={styles.proBtnText}>خرید اشتراک پرو</Text>
                   </View>
                 </TouchableOpacity>
 
                 {/* ✅ وسط‌چین طبق درخواست */}
-                <Text style={[styles.lockTiny, styles.centerText, { marginTop: 10 }]}>
-                  بعد از فعال‌سازی PRO، همه سناریوها باز می‌شن {"\n"} و می‌تونی وارد همه موقعیت‌های اورژانسی بشی.
+                <Text
+                  style={[
+                    styles.lockTiny,
+                    styles.centerText,
+                    { marginTop: 10 },
+                  ]}
+                >
+                  بعد از فعال‌سازی PRO، همه سناریوها باز می‌شن {"\n"} و می‌تونی
+                  وارد همه موقعیت‌های اورژانسی بشی.
                 </Text>
               </>
             )}
@@ -647,7 +778,10 @@ export default function Panahgah() {
             animationType="fade"
             onRequestClose={() => setGuideOpen(false)}
           >
-            <Pressable style={styles.modalBackdrop} onPress={() => setGuideOpen(false)}>
+            <Pressable
+              style={styles.modalBackdrop}
+              onPress={() => setGuideOpen(false)}
+            >
               <Pressable style={styles.modalCard} onPress={() => {}}>
                 <View style={styles.modalHeader}>
                   <Text style={styles.modalTitle}>راهنما</Text>
@@ -661,18 +795,24 @@ export default function Panahgah() {
                 </View>
 
                 <ScrollView contentContainerStyle={{ paddingBottom: 6 }}>
-  {/* ✅ جمله اول بولدتر + رنگ طلایی/قرمز + فونت بزرگتر */}
-  <Text style={styles.modalLead}>این تکنیک‌ها یکبار مصرف نیستن.</Text>
+                  {/* ✅ جمله اول بولدتر + رنگ طلایی/قرمز + فونت بزرگتر */}
+                  <Text style={styles.modalLead}>
+                    این تکنیک‌ها یکبار مصرف نیستن.
+                  </Text>
 
-  {/* ✅ متن ادامه */}
-  <Text style={styles.modalText}>
-    {"\n"}
-    هر بار که در یک موقعیت مشابه قرار می‌گیری، باید دوباره وارد همون سناریو بشی و تمرین رو تکرار کنی.{"\n\n"}
-    مغز با «تکرار امن» یاد می‌گیره که اون موقعیت دیگه خطرناک نیست و هر بار اجرا کردن، شدت واکنش هیجانی رو کمتر می‌کنه.{"\n\n"}
-    اگر باز هم حالت بد شد، یعنی تمرین اشتباه نبوده بلکه یعنی مغزت هنوز نیاز به تکرار داره.{"\n\n"}
-    پس هر موجی که اومد، برگرد اینجا.
-  </Text>
-</ScrollView>
+                  {/* ✅ متن ادامه */}
+                  <Text style={styles.modalText}>
+                    {"\n"}
+                    هر بار که در یک موقعیت مشابه قرار می‌گیری، باید دوباره وارد
+                    همون سناریو بشی و تمرین رو تکرار کنی.{"\n\n"}
+                    مغز با «تکرار امن» یاد می‌گیره که اون موقعیت دیگه خطرناک
+                    نیست و هر بار اجرا کردن، شدت واکنش هیجانی رو کمتر می‌کنه.
+                    {"\n\n"}
+                    اگر باز هم حالت بد شد، یعنی تمرین اشتباه نبوده بلکه یعنی
+                    مغزت هنوز نیاز به تکرار داره.{"\n\n"}
+                    پس هر موجی که اومد، برگرد اینجا.
+                  </Text>
+                </ScrollView>
 
                 <TouchableOpacity
                   activeOpacity={0.9}
@@ -685,23 +825,45 @@ export default function Panahgah() {
             </Pressable>
           </Modal>
 
-          <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 }}>
+          <View
+            style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 }}
+          >
             <View style={styles.searchBox}>
-              <Ionicons name="search" size={18} color="#E5E7EB" style={{ opacity: 0.6 }} />
+              <Ionicons
+                name="search"
+                size={18}
+                color="#E5E7EB"
+                style={{ opacity: 0.6 }}
+              />
               <TextInput
                 value={q}
                 onChangeText={setQ}
                 placeholder="جست‌وجوی موقعیت…"
                 placeholderTextColor="rgba(231,238,247,.55)"
-                style={{ flex: 1, textAlign: "right", color: palette.text, fontWeight: "800" }}
+                style={{
+                  flex: 1,
+                  textAlign: "right",
+                  color: palette.text,
+                  fontWeight: "800",
+                }}
               />
             </View>
 
             {/* ✅ Guide block (مثل بقیه بلاک‌ها) */}
-            <TouchableOpacity activeOpacity={0.9} onPress={() => setGuideOpen(true)} style={styles.guideCard}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => setGuideOpen(true)}
+              style={styles.guideCard}
+            >
               <View style={styles.row}>
-                <Ionicons name="information-circle-outline" size={18} color={palette.gold} />
-                <Text style={[styles.title, { color: palette.text }]}>راهنما</Text>
+                <Ionicons
+                  name="information-circle-outline"
+                  size={18}
+                  color={palette.gold}
+                />
+                <Text style={[styles.title, { color: palette.text }]}>
+                  راهنما
+                </Text>
                 <Ionicons
                   name="chevron-forward"
                   size={18}
@@ -773,11 +935,29 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(3,7,18,.92)",
     paddingHorizontal: 16,
     paddingVertical: 14,
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    minHeight: 56,
   },
-  headerTitle: { fontSize: 18, fontWeight: "900", color: "#F9FAFB" },
+
+  headerSide: {
+    flex: 1,
+    minHeight: 28,
+  },
+
+  headerCenter: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  headerTitle: {
+    color: "#F9FAFB",
+    fontSize: 17,
+    fontWeight: "900",
+    textAlign: "center",
+  },
 
   searchBox: {
     flexDirection: "row",
@@ -990,17 +1170,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   modalLead: {
-  color: palette.gold, 
-  fontSize: 16,      
-  fontWeight: "900",
-  textAlign: "right",
-  lineHeight: 26,
-},
-modalText: {
-  color: "rgba(231,238,247,.82)",
-  fontSize: 13,
-  lineHeight: 22,
-  fontWeight: "700",
-  textAlign: "right",
-},
+    color: palette.gold,
+    fontSize: 16,
+    fontWeight: "900",
+    textAlign: "right",
+    lineHeight: 26,
+  },
+  modalText: {
+    color: "rgba(231,238,247,.82)",
+    fontSize: 13,
+    lineHeight: 22,
+    fontWeight: "700",
+    textAlign: "right",
+  },
 });
