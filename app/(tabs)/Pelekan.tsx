@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   Animated,
   FlatList,
+  ImageBackground,
   InteractionManager,
   Pressable,
   StyleSheet,
@@ -934,55 +935,62 @@ export default function PelekanTab() {
               </View>
             ) : null}
 
-            <FlatList
-              ref={listRef}
-              style={{ flex: 1, opacity: treatingBoot ? 0 : 1 }}
-              data={pathItems}
-              keyExtractor={(it) => it.id}
-              renderItem={({ item, index }) => (
-                <TreatmentView
-                  item={item}
-                  index={index}
-                  state={stateForView as unknown as TreatmentViewState}
-                  onTapActiveDay={onTapActiveDay}
-                  onTapResults={onTapResults}
-                  onTapStart={onTapStart}
-                />
-              )}
-              inverted
-              bounces={false}
-              overScrollMode="never"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{
-                paddingTop: listPaddingTop,
-                paddingBottom: listPaddingBottom,
-              }}
-              getItemLayout={getItemLayout}
-              initialScrollIndex={
-                activeIndex >= 0 && activeIndex < pathItems.length
-                  ? activeIndex
-                  : undefined
-              }
-              onScrollToIndexFailed={(info) => {
-                requestAnimationFrame(() => {
-                  try {
-                    const approxOffset =
-                      (info.averageItemLength || ITEM_H) * info.index;
-                    listRef.current?.scrollToOffset({
-                      offset: Math.max(0, approxOffset),
-                      animated: false,
-                    });
-                    requestAnimationFrame(() => {
-                      listRef.current?.scrollToIndex({
-                        index: info.index,
+            <ImageBackground
+              source={require("../../assets/images/pelekan/pelekan_bg.webp")}
+              style={{ flex: 1 }}
+              resizeMode="cover"
+            >
+              <View
+                style={{
+                  ...StyleSheet.absoluteFillObject,
+                  backgroundColor: "rgba(11,15,20,0.45)",
+                }}
+              />
+
+              <FlatList
+                ref={listRef}
+                style={{ flex: 1, opacity: treatingBoot ? 0 : 1 }}
+                data={pathItems}
+                keyExtractor={(it) => it.id}
+                renderItem={({ item, index }) => (
+                  <TreatmentView
+                    item={item}
+                    index={index}
+                    state={stateForView as unknown as TreatmentViewState}
+                    onTapActiveDay={onTapActiveDay}
+                    onTapResults={onTapResults}
+                    onTapStart={onTapStart}
+                  />
+                )}
+                inverted
+                bounces={false}
+                overScrollMode="never"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                  paddingTop: listPaddingTop,
+                  paddingBottom: listPaddingBottom,
+                }}
+                getItemLayout={getItemLayout}
+                initialScrollIndex={
+                  activeIndex >= 0 && activeIndex < pathItems.length
+                    ? activeIndex
+                    : undefined
+                }
+                onScrollToIndexFailed={(info) => {
+                  requestAnimationFrame(() => {
+                    try {
+                      const approxOffset =
+                        (info.averageItemLength || ITEM_H) * info.index;
+
+                      listRef.current?.scrollToOffset({
+                        offset: Math.max(0, approxOffset),
                         animated: false,
-                        viewPosition: 0.35,
                       });
-                    });
-                  } catch {}
-                });
-              }}
-            />
+                    } catch {}
+                  });
+                }}
+              />
+            </ImageBackground>
           </View>
         ) : (
           <View style={{ flex: 1, paddingBottom: bottomSafe }}>

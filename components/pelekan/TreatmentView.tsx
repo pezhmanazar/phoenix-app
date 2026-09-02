@@ -13,6 +13,7 @@ import {
   Animated,
   Dimensions,
   Easing,
+  Image,
   Modal,
   Pressable,
   StyleSheet,
@@ -21,6 +22,10 @@ import {
   View,
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
+import StageNode from "./map/StageNode";
+import ActionNode from "./map/ActionNode";
+import DayNode from "./map/DayNode";
+import PelekanPath from "./map/PelekanPath";
 
 /* ----------------------------- Types ----------------------------- */
 export type PlanStatus = "free" | "pro" | "expired" | "expiring";
@@ -161,9 +166,9 @@ const palette = {
   pathIdle: "rgba(226,232,240,.55)",
   pathDone: "rgba(34,197,94,.75)",
   node: {
-    availableBg: "#0B0F14",
-    availableBorder: "rgba(212,175,55,.55)",
-    availableIcon: "#D4AF37",
+    availableBg: "#17130A",
+    availableBorder: "#D4AF37",
+    availableIcon: "#F5D47A",
     availableLabel: "#F9FAFB",
 
     lockedBg: "#0B0F14",
@@ -171,28 +176,35 @@ const palette = {
     lockedIcon: "rgba(231,238,247,.55)",
     lockedLabel: "rgba(231,238,247,.55)",
 
-    doneBg: "#22C55E",
-    doneBorder: "#16A34A",
+    doneBg: "#0F6B45",
+    doneBorder: "#34D399",
     doneIcon: "#FFFFFF",
     doneLabel: "#FFFFFF",
   },
+};
+
+const stageIcons: Record<string, any> = {
+  bastan: require("../../assets/images/pelekan-icons/01_bastan_Icon.png"),
+  gosastan: require("../../assets/images/pelekan-icons/02_gosastan_Icon.png"),
+  sookhtan: require("../../assets/images/pelekan-icons/03_sookhtan_Icon.png"),
+  sereshtan: require("../../assets/images/pelekan-icons/04_sereshtan_Icon.png"),
+  ziestan: require("../../assets/images/pelekan-icons/05_ziestan_Icon.png"),
+  sakhtan: require("../../assets/images/pelekan-icons/06_sakhtan_Icon.png"),
+  rastan: require("../../assets/images/pelekan-icons/07_rastan_Icon.png"),
+};
+
+const pelekanIcons = {
+  action: require("../../assets/images/pelekan-icons/pelekan-action-active.png"),
+  day: require("../../assets/images/pelekan-icons/pelekan-day-active.png"),
+  assessment: require("../../assets/images/pelekan-icons/pelekan-assessment.png"),
+  done: require("../../assets/images/pelekan-icons/pelekan-done.png"),
+  locked: require("../../assets/images/pelekan-icons/pelekan-locked.png"),
 };
 
 // ✅ لوکال: ویس‌های استیج
 const KEY_BASTAN_STAGE_AUDIO_V1 = "pelekan:stage_intro:bastan:heard:v1";
 const KEY_GOSASTAN_STAGE_AUDIO_V1 = "pelekan:stage_intro:gosastan:heard:v1";
 const KEY_SOOKHTAN_STAGE_AUDIO_V1 = "pelekan:stage_intro:sookhtan:heard:v1";
-
-function stageIconName(code: string): keyof typeof Ionicons.glyphMap {
-  if (code === "bastan") return "folder";
-  if (code === "gosastan") return "link";
-  if (code === "sookhtan") return "bonfire";
-  if (code === "sereshtan") return "person";
-  if (code === "ziestan") return "leaf";
-  if (code === "sakhtan") return "hammer";
-  if (code === "rastan") return "sparkles";
-  return "ellipse-outline";
-}
 
 /* ----------------------------- Pulsing ----------------------------- */
 function Pulsing({
@@ -247,6 +259,10 @@ function isDoneRow(dp: DayProgressRow | undefined) {
   if (typeof dp.completionPercent === "number" && dp.completionPercent >= 100)
     return true;
   return false;
+}
+
+function toPersianNumber(value: number | string) {
+  return String(value).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[Number(d)]);
 }
 
 /* ----------------------------- Component (ONE ITEM) ----------------------------- */
@@ -348,6 +364,35 @@ export default function TreatmentView({
         {GuardModal}
 
         <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
+          {/* هاله طلایی */}
+          <Path
+            d={`M ${MID_X} ${CELL_H / 2} L ${MID_X} 0`}
+            stroke="#D6A94A"
+            strokeWidth={34}
+            fill="none"
+            strokeLinecap="round"
+            opacity={0.12}
+          />
+
+          {/* طلایی بیرونی */}
+          <Path
+            d={`M ${MID_X} ${CELL_H / 2} L ${MID_X} 0`}
+            stroke="#B8863B"
+            strokeWidth={24}
+            fill="none"
+            strokeLinecap="round"
+          />
+
+          {/* بدنه */}
+          <Path
+            d={`M ${MID_X} ${CELL_H / 2} L ${MID_X} 0`}
+            stroke="#121212"
+            strokeWidth={17}
+            fill="none"
+            strokeLinecap="round"
+          />
+
+          {/* پیشرفت */}
           <Path
             d={`M ${MID_X} ${CELL_H / 2} L ${MID_X} 0`}
             stroke={lineColor}
@@ -374,10 +419,13 @@ export default function TreatmentView({
             },
           ]}
         >
-          <Ionicons
-            name={done ? "checkmark-circle" : "star"}
-            size={22}
-            color={done ? palette.node.doneIcon : palette.node.availableIcon}
+          <Image
+            source={pelekanIcons.assessment}
+            style={{
+              width: 26,
+              height: 26,
+              resizeMode: "contain",
+            }}
           />
           <Text
             style={[
@@ -403,7 +451,6 @@ export default function TreatmentView({
 
     const bg = palette.node.availableBg;
     const border = palette.node.availableBorder;
-    const iconCol = palette.node.availableIcon;
     const labelCol = palette.node.availableLabel;
 
     return (
@@ -411,6 +458,35 @@ export default function TreatmentView({
         {GuardModal}
 
         <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
+          {/* هاله طلایی */}
+          <Path
+            d={`M ${MID_X} ${CELL_H} L ${MID_X} 0`}
+            stroke="#D6A94A"
+            strokeWidth={34}
+            fill="none"
+            strokeLinecap="round"
+            opacity={0.12}
+          />
+
+          {/* طلایی بیرونی */}
+          <Path
+            d={`M ${MID_X} ${CELL_H} L ${MID_X} 0`}
+            stroke="#B8863B"
+            strokeWidth={24}
+            fill="none"
+            strokeLinecap="round"
+          />
+
+          {/* بدنه */}
+          <Path
+            d={`M ${MID_X} ${CELL_H} L ${MID_X} 0`}
+            stroke="#121212"
+            strokeWidth={17}
+            fill="none"
+            strokeLinecap="round"
+          />
+
+          {/* پیشرفت */}
           <Path
             d={`M ${MID_X} ${CELL_H} L ${MID_X} 0`}
             stroke={lineColor}
@@ -420,29 +496,52 @@ export default function TreatmentView({
           />
         </Svg>
 
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => onTapStart?.()}
-          style={[
-            styles.node,
-            {
-              left: nodeX - NODE_R,
-              top: CELL_H / 2 - NODE_R,
-              backgroundColor: bg,
-              borderColor: border,
-            },
-          ]}
+        <View
+          style={{
+            position: "absolute",
+            left: nodeX - NODE_R,
+            top: CELL_H / 2 - NODE_R,
+          }}
         >
-          <Ionicons
-            name={"play"}
-            size={22}
-            color={iconCol}
-            style={{ marginLeft: 2 }}
-          />
-          <Text style={[styles.nodeText, { color: labelCol }]}>
-            {item.titleFa}
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => onTapStart?.()}
+            style={[
+              styles.node,
+              {
+                backgroundColor: bg,
+                borderColor: border,
+              },
+            ]}
+          >
+            <Ionicons
+              name="play"
+              size={22}
+              color={palette.node.availableIcon}
+            />
+          </TouchableOpacity>
+
+          <View
+            style={{
+              position: "absolute",
+              top: NODE_R * 0 + 9,
+              left: 80,
+              right: 0,
+              alignItems: "center",
+            }}
+          >
+            <Text
+              style={[
+                styles.nodeText,
+                {
+                  color: labelCol,
+                },
+              ]}
+            >
+              {item.titleFa}
+            </Text>
+          </View>
+        </View>
       </View>
     );
   }
@@ -491,21 +590,12 @@ export default function TreatmentView({
           ? palette.node.availableBorder
           : palette.node.lockedBorder;
 
-    const iconCol =
-      done || heard
-        ? palette.node.doneIcon
-        : stageAvailable
-          ? palette.node.availableIcon
-          : palette.node.lockedIcon;
-
     const labelCol =
       done || heard
         ? palette.node.doneLabel
         : stageAvailable
           ? palette.node.availableLabel
           : palette.node.lockedLabel;
-
-    const strokeCol = done || heard ? palette.pathDone : palette.pathIdle;
 
     const bottomY = CELL_H;
     const topY = 0;
@@ -515,9 +605,6 @@ export default function TreatmentView({
       C ${MID_X} ${bottomY - 30}, ${nodeX} ${CELL_H * 0.65}, ${nodeX} ${CELL_H * 0.5}
       C ${nodeX} ${CELL_H * 0.35}, ${MID_X} ${topY + 30}, ${MID_X} ${topY}
     `;
-
-    const NodeWrap: any = canOpenStageIntro ? TouchableOpacity : View;
-
     const wrapProps = isBastanStage
       ? {
           activeOpacity: 0.9,
@@ -551,31 +638,28 @@ export default function TreatmentView({
     };
 
     const stageNodeContent = (
-      <NodeWrap {...wrapProps} style={styles.nodeInner}>
-        <Ionicons
-          name={stageIconName(stageCode) as any}
-          size={22}
-          color={iconCol}
-        />
-        <Text style={[styles.nodeText, { color: labelCol }]}>
-          {stage.titleFa}
-        </Text>
-      </NodeWrap>
+      <StageNode
+        stage={stage}
+        stageIcon={stageIcons[stageCode]}
+        bg={bg}
+        border={border}
+        labelColor={labelCol}
+        status={done || heard ? "done" : stageAvailable ? "active" : "locked"}
+        disabled={!canOpenStageIntro}
+        onPress={wrapProps.onPress}
+      />
     );
 
     return (
       <View style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}>
         {GuardModal}
 
-        <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
-          <Path
-            d={pathD}
-            stroke={strokeCol}
-            strokeWidth={6}
-            fill="none"
-            strokeLinecap="round"
-          />
-        </Svg>
+        <PelekanPath
+          pathD={pathD}
+          done={done || heard}
+          idleColor={palette.pathIdle}
+          doneColor={palette.pathDone}
+        />
 
         {shouldPulseStageNode ? (
           <Pulsing playing style={[styles.node, nodePositionStyle]}>
@@ -637,15 +721,7 @@ export default function TreatmentView({
         : locked
           ? palette.node.lockedBorder
           : palette.node.availableBorder;
-  const iconCol = done
-    ? palette.node.doneIcon
-    : freeActiveLocked
-      ? "#F87171"
-      : available
-        ? palette.node.availableIcon
-        : locked
-          ? palette.node.lockedIcon
-          : palette.node.availableIcon;
+
   const labelCol = done
     ? palette.node.doneLabel
     : available
@@ -663,12 +739,13 @@ export default function TreatmentView({
     C ${nodeX} ${CELL_H * 0.35}, ${MID_X} ${topY + 30}, ${MID_X} ${topY}
   `;
 
-  const iconName = done
-    ? "checkmark-circle"
-    : available
-      ? "star"
-      : "lock-closed-outline";
-  const label = isBastan ? "اقدام" : "روز";
+  const nodeIcon = done
+    ? pelekanIcons.done
+    : locked || freeActiveLocked
+      ? pelekanIcons.locked
+      : isBastan
+        ? pelekanIcons.action
+        : pelekanIcons.day;
 
   const nodePositionStyle = {
     left: nodeX - NODE_R,
@@ -678,36 +755,48 @@ export default function TreatmentView({
     opacity: 1,
   };
 
-  const dayNodeContent = (
-    <TouchableOpacity
-      activeOpacity={0.9}
+  const dayNodeContent = isBastan ? (
+    <ActionNode
+      title={`اقدام ${toPersianNumber(day.dayNumberInStage)}`}
+      icon={nodeIcon}
+      bg={bg}
+      border={border}
+      textColor={labelCol}
       onPress={() => {
         if (!canPressDay) return;
 
-        onTapActiveDay?.(day, { mode: available ? "active" : "preview" });
+        onTapActiveDay?.(day, {
+          mode: available ? "active" : "preview",
+        });
       }}
-      style={styles.nodeInner}
-    >
-      <Ionicons name={iconName as any} size={22} color={iconCol} />
-      <Text style={[styles.nodeText, { color: labelCol }]}>
-        {label} {day.dayNumberInStage}
-      </Text>
-    </TouchableOpacity>
+    />
+  ) : (
+    <DayNode
+      title={`روز ${toPersianNumber(day.dayNumberInStage)}`}
+      icon={nodeIcon}
+      bg={bg}
+      border={border}
+      textColor={labelCol}
+      onPress={() => {
+        if (!canPressDay) return;
+
+        onTapActiveDay?.(day, {
+          mode: available ? "active" : "preview",
+        });
+      }}
+    />
   );
 
   return (
     <View style={{ height: CELL_H, width: PATH_W, alignSelf: "center" }}>
       {GuardModal}
 
-      <Svg width={PATH_W} height={CELL_H} style={{ position: "absolute" }}>
-        <Path
-          d={pathD}
-          stroke={done ? palette.pathDone : palette.pathIdle}
-          strokeWidth={6}
-          fill="none"
-          strokeLinecap="round"
-        />
-      </Svg>
+      <PelekanPath
+        pathD={pathD}
+        done={done}
+        idleColor={palette.pathIdle}
+        doneColor={palette.pathDone}
+      />
 
       {shouldPulseDayNode ? (
         <Pulsing playing style={[styles.node, nodePositionStyle]}>
@@ -796,5 +885,12 @@ const g = StyleSheet.create({
     color: "#0b0f14",
     fontWeight: "900",
     fontSize: 13,
+  },
+  startText: {
+    position: "absolute",
+    top: 48,
+    fontSize: 12,
+    fontWeight: "900",
+    color: "#F9FAFB",
   },
 });

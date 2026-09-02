@@ -10,7 +10,10 @@ import {
   Text,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 import PlanStatusBadge from "../PlanStatusBadge";
 
@@ -60,7 +63,10 @@ type PelekanStage = {
 };
 
 type PelekanState = {
-  user: { planStatus: "free" | "pro" | "expiring" | "expired"; daysLeft: number };
+  user: {
+    planStatus: "free" | "pro" | "expiring" | "expired";
+    daysLeft: number;
+  };
   stages: PelekanStage[];
   treatment: any; // شامل activeStage/activeDay...
   progress: { activeDayId: string | null };
@@ -104,13 +110,15 @@ function Pulsing({ children }: { children: React.ReactNode }) {
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
-      ])
+      ]),
     );
     loop.start();
     return () => loop.stop();
   }, [scale]);
 
-  return <Animated.View style={{ transform: [{ scale }] }}>{children}</Animated.View>;
+  return (
+    <Animated.View style={{ transform: [{ scale }] }}>{children}</Animated.View>
+  );
 }
 
 /* ============================ MAIN ============================ */
@@ -118,7 +126,6 @@ export default function TreatmentPelekan({ me, state }: Props) {
   const insets = useSafeAreaInsets();
   const stages = useMemo(() => state?.stages ?? [], [state?.stages]);
   const activeDayId = state?.progress?.activeDayId || null;
-
 
   // مهم: activeStageCode از backend (درست‌ترین)
   const activeStageCode = useMemo(() => {
@@ -188,11 +195,16 @@ export default function TreatmentPelekan({ me, state }: Props) {
   /* ---------- active index (در همین list فیلتر شده) ---------- */
   const activeIndex = useMemo(() => {
     if (!activeDayId) return -1;
-    return days.findIndex((it) => it.kind === "day" && it.day.id === activeDayId);
+    return days.findIndex(
+      (it) => it.kind === "day" && it.day.id === activeDayId,
+    );
   }, [days, activeDayId]);
 
   /* ---------- getItemLayout: ثابت و قابل اتکا ---------- */
-  const getItemLayout = (_: ArrayLike<FlattenItem> | null | undefined, index: number) => {
+  const getItemLayout = (
+    _: ArrayLike<FlattenItem> | null | undefined,
+    index: number,
+  ) => {
     let offset = 0;
     for (let i = 0; i < index; i++) {
       const it = days[i];
@@ -213,14 +225,14 @@ export default function TreatmentPelekan({ me, state }: Props) {
 
     const task = InteractionManager.runAfterInteractions(() => {
       requestAnimationFrame(() => {
-  try {
-    listRef.current?.scrollToIndex({
-      index: activeIndex,
-      animated: false,
-      viewPosition: 0.35,
-    });
-  } catch {}
-});
+        try {
+          listRef.current?.scrollToIndex({
+            index: activeIndex,
+            animated: false,
+            viewPosition: 0.35,
+          });
+        } catch {}
+      });
     });
 
     return () => task.cancel?.();
@@ -237,9 +249,12 @@ export default function TreatmentPelekan({ me, state }: Props) {
             {/* اگر stage بعد از active است، یک hint کوچک اضافه می‌کنیم (اختیاری) */}
             {activeStageCode &&
             String(item.stage.code || "").trim() !== activeStageCode &&
-            stages.findIndex((s) => String(s.code).trim() === activeStageCode) >= 0 &&
+            stages.findIndex(
+              (s) => String(s.code).trim() === activeStageCode,
+            ) >= 0 &&
             item.stage.sortOrder >
-              (stages.find((s) => String(s.code).trim() === activeStageCode)?.sortOrder || 0) ? (
+              (stages.find((s) => String(s.code).trim() === activeStageCode)
+                ?.sortOrder || 0) ? (
               <Text style={styles.headerSub}>بعداً باز می‌شود</Text>
             ) : null}
           </View>
@@ -265,14 +280,14 @@ export default function TreatmentPelekan({ me, state }: Props) {
     const iconName = isActive
       ? "star"
       : isPastStage
-      ? ("eye-outline" as any)
-      : "lock-closed-outline";
+        ? ("eye-outline" as any)
+        : "lock-closed-outline";
 
     const iconColor = isActive
       ? "#D4AF37"
       : isPastStage
-      ? "rgba(231,238,247,.75)"
-      : "rgba(231,238,247,.55)";
+        ? "rgba(231,238,247,.75)"
+        : "rgba(231,238,247,.55)";
 
     const NodeWrapper: any = isActive ? Pulsing : React.Fragment;
 
@@ -290,35 +305,39 @@ export default function TreatmentPelekan({ me, state }: Props) {
 
         <NodeWrapper {...(isActive ? {} : null)}>
           <View
-  style={[
-    styles.node,
-    {
-      left: nodeX - NODE_R,
-      top: CELL_H / 2 - NODE_R,
-      borderColor: isActive
-        ? "rgba(212,175,55,.70)"
-        : isPastStage
-        ? "rgba(255,255,255,.28)"
-        : "rgba(255,255,255,.20)",
-      opacity: isActive ? 1 : isPastStage ? 0.95 : 0.85,
-    },
-  ]}
->
-  <Ionicons name={iconName} size={22} color={iconColor} />
-  <Text style={styles.nodeText}>
-    {isActiveStage ? "روز " : ""} {day.dayNumberInStage}
-  </Text>
-</View>
-
+            style={[
+              styles.node,
+              {
+                left: nodeX - NODE_R,
+                top: CELL_H / 2 - NODE_R,
+                borderColor: isActive
+                  ? "rgba(212,175,55,.70)"
+                  : isPastStage
+                    ? "rgba(255,255,255,.28)"
+                    : "rgba(255,255,255,.20)",
+                opacity: isActive ? 1 : isPastStage ? 0.95 : 0.85,
+              },
+            ]}
+          >
+            <Ionicons name={iconName} size={22} color={iconColor} />
+            <Text style={styles.nodeText}>
+              {isActiveStage ? "روز " : ""} {day.dayNumberInStage}
+            </Text>
+          </View>
         </NodeWrapper>
       </View>
     );
   };
 
   return (
-    <SafeAreaView style={[styles.root, { paddingBottom: insets.bottom }]} edges={["top", "bottom"]}>
+    <SafeAreaView
+      style={[styles.root, { paddingBottom: insets.bottom }]}
+      edges={["top", "bottom"]}
+    >
       {/* ---------- HEADER (با me) ---------- */}
-      <View style={[styles.topBar, { paddingTop: Math.max(10, insets.top * 0.2) }]}>
+      <View
+        style={[styles.topBar, { paddingTop: Math.max(10, insets.top * 0.2) }]}
+      >
         <PlanStatusBadge me={me} showExpiringText />
       </View>
 
@@ -333,22 +352,21 @@ export default function TreatmentPelekan({ me, state }: Props) {
         contentContainerStyle={{ paddingBottom: 24, paddingTop: 16 }}
         showsVerticalScrollIndicator={false}
         onScrollToIndexFailed={(info) => {
-  requestAnimationFrame(() => {
-    try {
-      listRef.current?.scrollToOffset({
-        offset: Math.max(0, info.averageItemLength * info.index),
-        animated: false,
-      });
+          requestAnimationFrame(() => {
+            try {
+              listRef.current?.scrollToOffset({
+                offset: Math.max(0, info.averageItemLength * info.index),
+                animated: false,
+              });
 
-      listRef.current?.scrollToIndex({
-        index: info.index,
-        animated: false,
-        viewPosition: 0.35,
-      });
-    } catch {}
-  });
-}}
-
+              listRef.current?.scrollToIndex({
+                index: info.index,
+                animated: false,
+                viewPosition: 0.35,
+              });
+            } catch {}
+          });
+        }}
       />
     </SafeAreaView>
   );
@@ -367,7 +385,11 @@ const styles = StyleSheet.create({
   },
 
   // ارتفاع ثابت برای کمک به getItemLayout
-  headerWrap: { alignItems: "center", height: HEADER_H, justifyContent: "center" },
+  headerWrap: {
+    alignItems: "center",
+    height: HEADER_H,
+    justifyContent: "center",
+  },
   headerCard: {
     paddingHorizontal: 18,
     paddingVertical: 10,
