@@ -83,6 +83,11 @@ router.post("/unregister-device", authUser, async (req, res) => {
     }
 
     const { token } = req.body || {};
+    console.log("[UNREGISTER_DEVICE_REQUEST]", {
+  userId: req.user?.id,
+  phone: req.user?.phone,
+  token: token?.slice(0, 20),
+});
 
     if (!token) {
       return res.status(400).json({
@@ -118,6 +123,10 @@ router.post("/unregister-device", authUser, async (req, res) => {
         lastUsedAt: new Date(),
       },
     });
+
+    console.log("[UNREGISTER_DEVICE_RESULT]", {
+  count: result.count,
+});
 
     return res.json({
       ok: true,

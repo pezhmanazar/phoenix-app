@@ -270,7 +270,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             error?.message || error,
           );
         });
-
+        console.log("[AUTH] register from boot");
+        
         registerDeviceToken().catch((error) => {
           console.warn(
             "[auth] device token register on boot failed:",
@@ -307,6 +308,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // intentionally ignored
       }
       if (token) {
+        console.log("[AUTH] register from refresh");
         registerDeviceToken().catch((error) => {
           console.warn(
             "[auth] device token register after refresh failed:",
@@ -362,6 +364,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           error?.message || error,
         );
       });
+      console.log("[AUTH] register from refresh");
 
       registerDeviceToken().catch((error) => {
         console.warn(

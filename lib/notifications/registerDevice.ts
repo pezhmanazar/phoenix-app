@@ -11,11 +11,14 @@ export async function registerDeviceToken() {
       return;
     }
 
+    console.log("[DEVICE_REGISTER] called");
+
     const sessionToken = await AsyncStorage.getItem("session_v1");
 
-    if (!sessionToken) {
-      return;
-    }
+if (!sessionToken) {
+  console.log("[DEVICE_REGISTER] skipped: no session");
+  return;
+}
 
     const permission = await Notifications.getPermissionsAsync();
 
@@ -26,6 +29,7 @@ export async function registerDeviceToken() {
     const deviceToken = await Notifications.getDevicePushTokenAsync();
 
     const token = String(deviceToken.data);
+    console.log("[DEVICE_REGISTER] token:", token.slice(0, 20));
 
     const response = await fetch(
       `${API_URL}/api/notifications/register-device`,
@@ -56,6 +60,7 @@ export async function registerDeviceToken() {
 }
 
 export async function unregisterDeviceToken() {
+  console.log("[DEVICE_UNREGISTER] called");
   try {
     if (!Device.isDevice) {
       return;
@@ -79,6 +84,7 @@ export async function unregisterDeviceToken() {
       await Notifications.getDevicePushTokenAsync();
 
     const token = String(deviceToken.data);
+    console.log("[DEVICE_REGISTER] token:", token.slice(0, 20));
 
     const response = await fetch(
       `${API_URL}/api/notifications/unregister-device`,
@@ -95,6 +101,11 @@ export async function unregisterDeviceToken() {
     );
 
     const data = await response.json().catch(() => null);
+    console.log(
+  "[DEVICE_UNREGISTER_RESULT]",
+  response.status,
+  data,
+);
 
     if (!response.ok) {
       console.warn(
