@@ -519,7 +519,7 @@ app.get("/api/app/version", (_req, res) => {
 
   res.json({
     ok: true,
-    latestVersion: "1.0.0",
+    latestVersion: "1.0.1",
     updateUrl: "https://qoqnoos.app/download.html",
     forceUpdate: false,
   });
