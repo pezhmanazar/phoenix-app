@@ -3,22 +3,13 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Tabs, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import {
-  AppState,
-  DeviceEventEmitter,
-  Image,
-  Text,
-  View,
-} from "react-native";
+import { AppState, DeviceEventEmitter, Image, Text, View } from "react-native";
 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BACKEND_URL } from "../../constants/backend";
 import { useAuth } from "../../hooks/useAuth";
 import { useUser } from "../../hooks/useUser";
 import { checkAppUpdate } from "../../lib/appUpdate";
-
-/* ===== helpers برای unread ===== */
-const SEEN_KEY = (type: "tech" | "therapy") => `support:lastSeenAdmin:${type}`;
 
 type Message = {
   id: string;
@@ -30,6 +21,7 @@ type TicketWithMessages = {
   id: string;
   type: "tech" | "therapy";
   updatedAt: string;
+  userLastSeenAdminMessageId?: string | null;
   messages: Message[];
 };
 
@@ -51,7 +43,7 @@ function countUnreadFromTicket(
   const adminMsgs = msgs.filter((m) => m.sender === "admin");
 
   if (!adminMsgs.length) return 0;
-  if (!lastSeenId) return adminMsgs.length;
+  if (!lastSeenId) return 0;
 
   const idx = adminMsgs.findIndex((m) => m.id === lastSeenId);
   if (idx === -1) return adminMsgs.length;
@@ -97,12 +89,11 @@ async function countUnreadBatch(
     if (!res.ok || !json?.ok || !json?.tickets) {
       return { therapy: 0, tech: 0 };
     }
+    const therapyLastSeenId =
+      json.tickets?.therapy?.userLastSeenAdminMessageId ?? null;
 
-    const [therapyLastSeenId, techLastSeenId] = await Promise.all([
-      AsyncStorage.getItem(SEEN_KEY("therapy")),
-      AsyncStorage.getItem(SEEN_KEY("tech")),
-    ]);
-
+    const techLastSeenId =
+      json.tickets?.tech?.userLastSeenAdminMessageId ?? null;
     const therapyTicket = json.tickets?.therapy ?? null;
     const techTicket = json.tickets?.tech ?? null;
 
@@ -352,17 +343,14 @@ export default function TabsLayout() {
   }, [refreshUnread]);
 
   useEffect(() => {
-  const sub = DeviceEventEmitter.addListener(
-    "supportUnreadChanged",
-    () => {
+    const sub = DeviceEventEmitter.addListener("supportUnreadChanged", () => {
       void refreshUnread();
-    },
-  );
+    });
 
-  return () => {
-    sub.remove();
-  };
-}, [refreshUnread]);
+    return () => {
+      sub.remove();
+    };
+  }, [refreshUnread]);
 
   useEffect(() => {
     refreshAppUpdate();

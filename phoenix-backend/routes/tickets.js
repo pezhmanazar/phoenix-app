@@ -743,6 +743,7 @@ publicTicketsRouter.get("/open-batch", async (req, res) => {
           id: true,
           type: true,
           updatedAt: true,
+          userLastSeenAdminMessageId: true,
           messages: {
             where: {
               sender: "admin",
@@ -769,6 +770,7 @@ publicTicketsRouter.get("/open-batch", async (req, res) => {
           id: true,
           type: true,
           updatedAt: true,
+          userLastSeenAdminMessageId: true,
           messages: {
             where: {
               sender: "admin",
