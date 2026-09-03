@@ -1,6 +1,5 @@
 // app/support/real/index.tsx
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { Stack, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
@@ -36,6 +35,7 @@ type TicketWithMessages = {
   id: string;
   type: "tech" | "therapy";
   updatedAt: string;
+  userLastSeenAdminMessageId?: string | null;
   messages: Message[];
 };
 
@@ -46,9 +46,8 @@ type TicketSummary = {
   lastAdminMsgId: string | null;
   lastAdminMsgAt: string | null;
   lastMsgAt: string | null;
+  userLastSeenAdminMessageId?: string | null;
 };
-
-const SEEN_KEY = (type: "tech" | "therapy") => `support:lastSeenAdmin:${type}`;
 
 // HH:MM فارسی
 function formatTime(input?: string | null) {
@@ -77,10 +76,6 @@ export default function RealSupport() {
   );
   const [techSummary, setTechSummary] = useState<TicketSummary | null>(null);
   const [loading, setLoading] = useState(false);
-  const [lastSeenAdminIds, setLastSeenAdminIds] = useState<{
-    therapy: string | null;
-    tech: string | null;
-  }>({ therapy: null, tech: null });
 
   const goTo = (type: "tech" | "therapy") => {
     router.push(`/support/tickets/${type}`);
@@ -150,6 +145,8 @@ export default function RealSupport() {
         const t: TicketWithMessages = json.ticket;
         const msgs = Array.isArray(t.messages) ? t.messages : [];
 
+        const userLastSeenAdminMessageId = t.userLastSeenAdminMessageId ?? null;
+
         if (!msgs.length) {
           return {
             hasTicket: true,
@@ -158,6 +155,7 @@ export default function RealSupport() {
             lastAdminMsgId: null,
             lastAdminMsgAt: null,
             lastMsgAt: null,
+            userLastSeenAdminMessageId,
           };
         }
 
@@ -185,6 +183,7 @@ export default function RealSupport() {
           lastAdminMsgId: lastAdmin ? lastAdmin.id : null,
           lastAdminMsgAt: lastAdmin?.createdAt ?? null,
           lastMsgAt: last.createdAt ?? null,
+          userLastSeenAdminMessageId,
         };
       } catch {
         return null;
@@ -192,21 +191,6 @@ export default function RealSupport() {
     },
     [getOpenedById, token, authLoading],
   );
-
-  const loadSeenIds = useCallback(async () => {
-    try {
-      const [therapySeen, techSeen] = await Promise.all([
-        AsyncStorage.getItem(SEEN_KEY("therapy")),
-        AsyncStorage.getItem(SEEN_KEY("tech")),
-      ]);
-      setLastSeenAdminIds({
-        therapy: therapySeen || null,
-        tech: techSeen || null,
-      });
-    } catch {
-      // silent fail
-    }
-  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -218,7 +202,7 @@ export default function RealSupport() {
           fetchSummaryForType("therapy"),
           fetchSummaryForType("tech"),
         ]);
-        await loadSeenIds();
+
         if (!cancelled) {
           if (therapy) setTherapySummary(therapy);
           if (tech) setTechSummary(tech);
@@ -229,7 +213,7 @@ export default function RealSupport() {
       return () => {
         cancelled = true;
       };
-    }, [fetchSummaryForType, loadSeenIds, authLoading]),
+    }, [fetchSummaryForType, authLoading]),
   );
 
   const markSeenAndOpen = (type: "tech" | "therapy") => {
@@ -469,7 +453,7 @@ export default function RealSupport() {
           iconBg="rgba(168,85,247,.16)"
           iconColor="#C4B5FD"
           summary={therapySummary}
-          lastSeenAdminId={lastSeenAdminIds.therapy}
+          lastSeenAdminId={therapySummary?.userLastSeenAdminMessageId ?? null}
         />
 
         <Cell
@@ -479,7 +463,7 @@ export default function RealSupport() {
           iconBg="rgba(245,158,11,.14)"
           iconColor="#FCD34D"
           summary={techSummary}
-          lastSeenAdminId={lastSeenAdminIds.tech}
+          lastSeenAdminId={techSummary?.userLastSeenAdminMessageId ?? null}
         />
       </ScrollView>
     </SafeAreaView>
