@@ -35,6 +35,7 @@ model Ticket {
 
   pinned       Boolean @default(false)
   unread       Boolean @default(false)
+  userLastSeenAdminMessageId String?
   openedById   String?
   openedByName String?
 
