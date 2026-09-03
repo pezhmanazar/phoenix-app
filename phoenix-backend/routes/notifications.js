@@ -124,10 +124,6 @@ router.post("/unregister-device", authUser, async (req, res) => {
       },
     });
 
-    console.log("[UNREGISTER_DEVICE_RESULT]", {
-  count: result.count,
-});
-
     return res.json({
       ok: true,
       deactivated: result.count > 0,

@@ -161,10 +161,10 @@ export default function EditProfileModal({ onClose }: Props) {
   const [saving, setSaving] = useState(false);
 
   const [gender, setGender] = useState<Gender>(
-    ((me?.gender as any) ?? "male") as Gender
+    ((me?.gender as any) ?? "male") as Gender,
   );
   const [birthDate, setBirthDate] = useState<string | undefined>(
-    normalizeIsoDateOnly(me?.birthDate as any) ?? undefined
+    normalizeIsoDateOnly(me?.birthDate as any) ?? undefined,
   );
 
   // Dialog / Toast
@@ -247,11 +247,9 @@ export default function EditProfileModal({ onClose }: Props) {
     };
   }, [lastFocusKey]);
 
-  const onLayoutCapture =
-    (key: "name" | "birth") =>
-    (e: LayoutChangeEvent) => {
-      posRef.current[key] = e.nativeEvent.layout.y;
-    };
+  const onLayoutCapture = (key: "name" | "birth") => (e: LayoutChangeEvent) => {
+    posRef.current[key] = e.nativeEvent.layout.y;
+  };
 
   const onFocusScroll = (key: "name" | "birth") => () => {
     setLastFocusKey(key);
@@ -275,10 +273,9 @@ export default function EditProfileModal({ onClose }: Props) {
         return;
       }
 
-      const galleryMediaField =
-        (ImagePicker as any).MediaType
-          ? { mediaTypes: [(ImagePicker as any).MediaType.Image] }
-          : { mediaTypes: (ImagePicker as any).MediaTypeOptions.Images };
+      const galleryMediaField = (ImagePicker as any).MediaType
+        ? { mediaTypes: [(ImagePicker as any).MediaType.Image] }
+        : { mediaTypes: (ImagePicker as any).MediaTypeOptions.Images };
 
       const res = await ImagePicker.launchImageLibraryAsync({
         ...(galleryMediaField as any),
@@ -456,7 +453,7 @@ export default function EditProfileModal({ onClose }: Props) {
           avatarUrl: safeAvatar,
           gender,
           birthDate: safeBirth ?? null,
-        })
+        }),
       );
 
       await refresh({ force: true }).catch(() => {});
@@ -522,7 +519,11 @@ export default function EditProfileModal({ onClose }: Props) {
       // ✅ 1) ریست سمت سرور (آزمون‌ها/اینتروها/اقدامات/روزها/پیشرفت‌ها)
       const serverRes = await resetAllUserDataByPhone(p);
 
-      if (!serverRes || typeof serverRes !== "object" || (serverRes as any).ok !== true) {
+      if (
+        !serverRes ||
+        typeof serverRes !== "object" ||
+        (serverRes as any).ok !== true
+      ) {
         const err = (serverRes as any)?.error || "ریست سمت سرور ناموفق بود.";
         openDialog({
           tone: "danger",
@@ -581,18 +582,18 @@ export default function EditProfileModal({ onClose }: Props) {
       tone: "danger",
       title: "شروع از صفر",
       message:
-  "با انجام این کار، تمام پیشرفت‌های درمانیت حذف میشه.\n\n" +
-  "مواردی که پاک میشن:\n" +
-  "• آزمون‌ها و نتایج اون‌ها\n" +
-  "• امتیازها و مدال‌ها\n" +
-  "• اقدام‌ها و روزهای پلکان\n" +
-  "• عکس پروفایل فعلی\n\n" +
-  "مواردی که باقی می‌مونند:\n" +
-  "• اطلاعات پایه پروفایل\n" +
-  "• اشتراک فعال (در صورت داشتن)\n" +
-  "• پیام‌های بخش پشتیبانی\n\n" +
-  "پس از تأیید، مسیر درمان از ابتدا آغاز میشه.\n\n" +
-  "ادامه میدی؟",
+        "با انجام این کار، تمام پیشرفت‌های درمانیت حذف میشه.\n\n" +
+        "مواردی که پاک میشن:\n" +
+        "• آزمون‌ها و نتایج اون‌ها\n" +
+        "• امتیازها و مدال‌ها\n" +
+        "• اقدام‌ها و روزهای پلکان\n" +
+        "• عکس پروفایل فعلی\n\n" +
+        "مواردی که باقی می‌مونند:\n" +
+        "• اطلاعات پایه پروفایل\n" +
+        "• اشتراک فعال (در صورت داشتن)\n" +
+        "• پیام‌های بخش پشتیبانی\n\n" +
+        "پس از تأیید، مسیر درمان از ابتدا آغاز میشه.\n\n" +
+        "ادامه میدی؟",
       buttons: [
         { text: "انصراف", kind: "secondary", onPress: closeDialog },
         {
@@ -608,14 +609,20 @@ export default function EditProfileModal({ onClose }: Props) {
   };
 
   /* ---------------- Sign out only (NO DATA DELETE) ---------------- */
-  const AUTH_KEYS_TO_CLEAR = ["session_v1", "otp_phone_v1", "otp_token_v1"] as const;
+  const AUTH_KEYS_TO_CLEAR = [
+    "session_v1",
+    "otp_phone_v1",
+    "otp_token_v1",
+  ] as const;
 
   const clearAuthOnly = async () => {
     try {
       await AsyncStorage.multiRemove([...AUTH_KEYS_TO_CLEAR]);
     } catch {
       await Promise.all(
-        AUTH_KEYS_TO_CLEAR.map((k) => AsyncStorage.removeItem(k).catch(() => {}))
+        AUTH_KEYS_TO_CLEAR.map((k) =>
+          AsyncStorage.removeItem(k).catch(() => {}),
+        ),
       );
     }
   };
@@ -626,31 +633,21 @@ export default function EditProfileModal({ onClose }: Props) {
     try {
       setSaving(true);
 
-      // ✅ فقط خروج: هیچ چیز دیگری پاک نشود (نه phoenix_profile، نه profile_completed_flag، نه تمرین‌ها)
-      await clearAuthOnly();
-
-      // ✅ استیت auth هم null شود
+      // اول unregister device + پاک شدن session توسط useAuth
       await signOut().catch(() => {});
 
-      // ✅ استیت user هم به‌روز شود که جایی گیر نکند
+      // پاک‌سازی باقی کلیدهای auth
+      await clearAuthOnly();
+
       await refresh?.({ force: true }).catch(() => {});
 
       showToast("ok", "خارج شدی. ✅");
 
       onClose();
 
-      // ✅ مهم: بعد از خروج باید برود صفحه لاگین (نه onboarding)
-      // اگر روت شما متفاوت است این را مطابق پروژه‌ات عوض کن (مثلاً "/(auth)/login")
       setTimeout(() => {
         router.replace("/(auth)/login");
-      }, 200);
-    } catch (e: any) {
-      openDialog({
-        tone: "danger",
-        title: "خطا",
-        message: e?.message || "مشکل شبکه",
-        buttons: [{ text: "باشه", kind: "primary", onPress: closeDialog }],
-      });
+      }, 300);
     } finally {
       setSaving(false);
     }
@@ -713,30 +710,30 @@ export default function EditProfileModal({ onClose }: Props) {
       if (deleted === false) {
         showToast("danger", "حساب روی سرور پیدا نشد (یا قبلاً حذف شده).");
       }
-// داخل deleteAccount بعد از ok شدن res:
+      // داخل deleteAccount بعد از ok شدن res:
 
-// ✅ 1) اول سشن/توکن امن پاک شود (SecureStore داخل signOut)
-await signOut().catch(() => {});
+      // ✅ 1) اول سشن/توکن امن پاک شود (SecureStore داخل signOut)
+      await signOut().catch(() => {});
 
-// ✅ 2) بعد AsyncStorage کامل پاک شود
-await clearAllLocal();
+      // ✅ 2) بعد AsyncStorage کامل پاک شود
+      await clearAllLocal();
 
-// ✅ 3) استیت‌ها هم صفر شوند (اختیاری ولی تمیز)
-setPelekanProgress(0);
-setDayProgress(0);
-resetStreak();
-resetNoContact();
-if (typeof points === "number" && points !== 0) addPoints(-points);
+      // ✅ 3) استیت‌ها هم صفر شوند (اختیاری ولی تمیز)
+      setPelekanProgress(0);
+      setDayProgress(0);
+      resetStreak();
+      resetNoContact();
+      if (typeof points === "number" && points !== 0) addPoints(-points);
 
-// ✅ 4) refresh لازم نیست (چون لاگ‌اوت کردی). اگر می‌خوای بزن ولی اهمیتی نداره.
-await refresh?.({ force: true }).catch(() => {});
+      // ✅ 4) refresh لازم نیست (چون لاگ‌اوت کردی). اگر می‌خوای بزن ولی اهمیتی نداره.
+      await refresh?.({ force: true }).catch(() => {});
 
-showToast("ok", "حساب حذف شد.");
-onClose();
+      showToast("ok", "حساب حذف شد.");
+      onClose();
 
-setTimeout(() => {
-  router.replace("/(auth)/login"); // ✅ نصب تازه = ورود
-}, 200);
+      setTimeout(() => {
+        router.replace("/(auth)/login"); // ✅ نصب تازه = ورود
+      }, 200);
     } catch (e: any) {
       openDialog({
         tone: "danger",
@@ -760,11 +757,11 @@ setTimeout(() => {
       tone: "danger",
       title: "حذف حساب کاربری",
       message:
-  "این کار غیرقابل بازگشته و با حذف حساب، همهٔ اطلاعات و پیشرفت‌ها از روی این گوشی پاک میشه و حسابت در اپ حذف میشه.\n\n" +
-  "توجه:\n" +
-  "پیام‌های بخش پشتیبانی پاک نمیشن و ممکنه بعد از ورود دوباره هم قابل مشاهده باشند.\n" +
-  "این پیام‌ها فقط برای پیگیری پشتیبانی و به شکل کاملاً ناشناس و محرمانه نگه‌داری میشن.\n\n" +
-  "ادامه میدی؟",
+        "این کار غیرقابل بازگشته و با حذف حساب، همهٔ اطلاعات و پیشرفت‌ها از روی این گوشی پاک میشه و حسابت در اپ حذف میشه.\n\n" +
+        "توجه:\n" +
+        "پیام‌های بخش پشتیبانی پاک نمیشن و ممکنه بعد از ورود دوباره هم قابل مشاهده باشند.\n" +
+        "این پیام‌ها فقط برای پیگیری پشتیبانی و به شکل کاملاً ناشناس و محرمانه نگه‌داری میشن.\n\n" +
+        "ادامه میدی؟",
       buttons: [
         { text: "انصراف", kind: "secondary", onPress: closeDialog },
         {
@@ -873,7 +870,7 @@ setTimeout(() => {
                       <Text style={textStyle as any}>{b.text}</Text>
                     </TouchableOpacity>
                   );
-                }
+                },
               )}
             </View>
           </View>
@@ -891,20 +888,20 @@ setTimeout(() => {
       t === "ok"
         ? "rgba(34,197,94,.14)"
         : t === "danger"
-        ? "rgba(248,113,113,.14)"
-        : "rgba(212,175,55,.14)";
+          ? "rgba(248,113,113,.14)"
+          : "rgba(212,175,55,.14)";
     const border =
       t === "ok"
         ? "rgba(34,197,94,.45)"
         : t === "danger"
-        ? "rgba(248,113,113,.45)"
-        : "rgba(212,175,55,.35)";
+          ? "rgba(248,113,113,.45)"
+          : "rgba(212,175,55,.35)";
     const icon =
       t === "ok"
         ? "checkmark-circle-outline"
         : t === "danger"
-        ? "warning-outline"
-        : "information-circle-outline";
+          ? "warning-outline"
+          : "information-circle-outline";
     const iconC = t === "ok" ? P.ok : t === "danger" ? P.danger : P.gold;
 
     return (
@@ -1029,16 +1026,15 @@ setTimeout(() => {
                 </View>
 
                 <TextInput
-  value={name}
-  onChangeText={(t) => mountedRef.current && setName(t)}
-  onFocus={onFocusScroll("name")}
-  placeholder="نام شما"
-  placeholderTextColor="rgba(231,238,247,.45)"
-  style={[styles.input, { color: P.text }]}
-  textAlign="right"
-  returnKeyType="done"
-/>
-
+                  value={name}
+                  onChangeText={(t) => mountedRef.current && setName(t)}
+                  onFocus={onFocusScroll("name")}
+                  placeholder="نام شما"
+                  placeholderTextColor="rgba(231,238,247,.45)"
+                  style={[styles.input, { color: P.text }]}
+                  textAlign="right"
+                  returnKeyType="done"
+                />
               </View>
 
               {/* Photo buttons */}
@@ -1168,7 +1164,13 @@ setTimeout(() => {
                   />
                 </View>
 
-                <View style={{ flexDirection: "row-reverse", gap: 10, marginTop: 10 }}>
+                <View
+                  style={{
+                    flexDirection: "row-reverse",
+                    gap: 10,
+                    marginTop: 10,
+                  }}
+                >
                   {[
                     { key: "male", label: "مرد", icon: "male" },
                     { key: "female", label: "زن", icon: "female" },
@@ -1208,14 +1210,13 @@ setTimeout(() => {
               </View>
 
               {/* Birthdate */}
-              <View style={{ marginTop: 18 }} onLayout={onLayoutCapture("birth")}>
+              <View
+                style={{ marginTop: 18 }}
+                onLayout={onLayoutCapture("birth")}
+              >
                 <View style={styles.labelRow}>
                   <Text style={styles.labelText}>تاریخ تولد</Text>
-                  <Ionicons
-                    name="calendar-outline"
-                    size={16}
-                    color={P.muted}
-                  />
+                  <Ionicons name="calendar-outline" size={16} color={P.muted} />
                 </View>
 
                 <View style={{ marginTop: 10 }}>
@@ -1290,7 +1291,8 @@ setTimeout(() => {
                     marginTop: 6,
                   }}
                 >
-                  با این کار تمرین‌های پلکان و امتیازها صفر میشه و به صفحه شروع منتقل میشی.
+                  با این کار تمرین‌های پلکان و امتیازها صفر میشه و به صفحه شروع
+                  منتقل میشی.
                 </Text>
               </View>
 
@@ -1325,7 +1327,8 @@ setTimeout(() => {
                     marginTop: 6,
                   }}
                 >
-                  فقط از حساب خارج میشی. هیچ اطلاعاتی پاک نمیشه و دوباره با شماره وارد میشی.
+                  فقط از حساب خارج میشی. هیچ اطلاعاتی پاک نمیشه و دوباره با
+                  شماره وارد میشی.
                 </Text>
               </View>
 
@@ -1364,7 +1367,8 @@ setTimeout(() => {
                     marginTop: 6,
                   }}
                 >
-                  هشدار: حذف حساب غیرقابل بازگشته و اگر کاربر پرو باشی، اشتراکت هم حذف میشه.
+                  هشدار: حذف حساب غیرقابل بازگشته و اگر کاربر پرو باشی، اشتراکت
+                  هم حذف میشه.
                 </Text>
               </View>
 
@@ -1395,7 +1399,9 @@ setTimeout(() => {
                   disabled={saving}
                   activeOpacity={0.9}
                 >
-                  <Text style={{ color: P.text, fontWeight: "800" }}>انصراف</Text>
+                  <Text style={{ color: P.text, fontWeight: "800" }}>
+                    انصراف
+                  </Text>
                 </TouchableOpacity>
               </View>
 

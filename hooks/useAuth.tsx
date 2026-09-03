@@ -270,14 +270,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             error?.message || error,
           );
         });
-        console.log("[AUTH] register from boot");
-        
-        registerDeviceToken().catch((error) => {
-          console.warn(
-            "[auth] device token register on boot failed:",
-            error?.message || error,
-          );
-        });
       }
 
       if (!mountedRef.current) return;
@@ -306,15 +298,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await AsyncStorage.removeItem("session_v1");
       } catch {
         // intentionally ignored
-      }
-      if (token) {
-        console.log("[AUTH] register from refresh");
-        registerDeviceToken().catch((error) => {
-          console.warn(
-            "[auth] device token register after refresh failed:",
-            error?.message || error,
-          );
-        });
       }
     }
 
@@ -364,8 +347,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           error?.message || error,
         );
       });
-      console.log("[AUTH] register from refresh");
-
       registerDeviceToken().catch((error) => {
         console.warn(
           "[auth] device token register failed:",
@@ -425,6 +406,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           error instanceof Error ? error.message : error,
         );
       }
+
       await Promise.all([
         safeDel(SECURE_KEYS.SESSION),
 
@@ -518,11 +500,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return { ok: true };
     } catch (e: any) {
-      console.log("VERIFY_OTP_ERROR_RAW:", e);
-      console.log("VERIFY_OTP_ERROR_MESSAGE:", e?.message);
-
       const raw = String(e?.message || e?.error || "VERIFY_FAILED");
-
       if (
         raw === "INVALID_CODE" ||
         /invalid code/i.test(raw) ||
