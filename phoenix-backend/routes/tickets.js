@@ -695,6 +695,19 @@ publicTicketsRouter.get("/open", async (req, res) => {
       });
     }
 
+    const lastAdminMessage = [...t.messages]
+      .reverse()
+      .find((m) => m.sender === "admin");
+
+    if (lastAdminMessage?.id) {
+      await prisma.ticket.update({
+        where: { id: t.id },
+        data: {
+          userLastSeenAdminMessageId: lastAdminMessage.id,
+        },
+      });
+    }
+
     const ticketWithSignedUrls = await attachSignedUrlsToTicket(t);
     return res.json({
       ok: true,
