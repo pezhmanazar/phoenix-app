@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, {
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -266,7 +267,7 @@ function toPersianNumber(value: number | string) {
 }
 
 /* ----------------------------- Component (ONE ITEM) ----------------------------- */
-export default function TreatmentView({
+const TreatmentView = memo(function TreatmentView({
   item,
   state,
   onTapActiveDay,
@@ -807,8 +808,8 @@ export default function TreatmentView({
       )}
     </View>
   );
-}
-
+});
+export default TreatmentView;
 /* ----------------------------- Styles ----------------------------- */
 const styles = StyleSheet.create({
   node: {
