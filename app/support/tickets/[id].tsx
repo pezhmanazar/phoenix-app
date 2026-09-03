@@ -100,12 +100,11 @@ type Ticket = {
   type: "tech" | "therapy";
   createdAt: string;
   updatedAt: string;
+  userLastSeenAdminMessageId?: string | null;
   messages: Message[];
 };
 
 type PlanView = "free" | "pro" | "expiring" | "expired";
-const SUPPORT_SEEN_KEY = (type: "tech" | "therapy") =>
-  `support:lastSeenAdmin:${type}`;
 
 /* ===== پاک کردن تاریخچه فقط سمت کلاینت (برای هر تیکت جدا) ===== */
 const clearKey = (ticketId: string) => `chat_cleared_at:${ticketId}`;
@@ -1437,11 +1436,6 @@ export default function TicketDetail() {
         /*
          * 1) unread پناه
          */
-        await AsyncStorage.setItem(
-          SUPPORT_SEEN_KEY(currentType),
-          lastAdminMessage.id,
-        );
-
         DeviceEventEmitter.emit("supportUnreadChanged");
 
         /*
