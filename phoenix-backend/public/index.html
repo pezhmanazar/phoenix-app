@@ -819,6 +819,55 @@
         border-color: rgba(212, 175, 55, 0.3);
       }
 
+      .screenshot-lightbox-nav {
+        position: fixed;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 10002;
+
+        width: 52px;
+        height: 52px;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        border-radius: 50%;
+        border: 1px solid rgba(212, 175, 55, 0.3);
+        background: rgba(11, 15, 20, 0.72);
+        color: #e8ecf1;
+
+        font-family: Arial, sans-serif;
+        font-size: 38px;
+        line-height: 1;
+
+        cursor: pointer;
+        -webkit-user-select: none;
+        user-select: none;
+
+        transition:
+          background 0.2s ease,
+          border-color 0.2s ease,
+          transform 0.2s ease;
+      }
+
+      .screenshot-lightbox-prev {
+        left: 24px;
+      }
+
+      .screenshot-lightbox-next {
+        right: 24px;
+      }
+
+      .screenshot-lightbox-nav:hover {
+        background: rgba(212, 175, 55, 0.16);
+        border-color: rgba(212, 175, 55, 0.55);
+      }
+
+      .screenshot-lightbox-nav:active {
+        transform: translateY(-50%) scale(0.94);
+      }
+
       body.lightbox-open {
         overflow: hidden;
       }
@@ -837,6 +886,20 @@
 
         .screenshot-lightbox-back {
           right: 14px;
+        }
+        .screenshot-lightbox-nav {
+          width: 44px;
+          height: 44px;
+          font-size: 32px;
+          background: rgba(11, 15, 20, 0.68);
+        }
+
+        .screenshot-lightbox-prev {
+          left: 8px;
+        }
+
+        .screenshot-lightbox-next {
+          right: 8px;
         }
       }
 
@@ -1746,12 +1809,30 @@
         type="button"
         aria-label="بازگشت"
       >
-        <span>←</span>
+        <span class="back-arrow">→</span>
         <span>بازگشت</span>
       </button>
 
-      <div class="screenshot-lightbox-inner">
+      <div class="screenshot-lightbox-inner" id="screenshotLightboxInner">
+        <button
+          class="screenshot-lightbox-nav screenshot-lightbox-prev"
+          id="screenshotLightboxPrev"
+          type="button"
+          aria-label="تصویر قبلی"
+        >
+          ‹
+        </button>
+
         <img id="screenshotLightboxImage" alt="" />
+
+        <button
+          class="screenshot-lightbox-nav screenshot-lightbox-next"
+          id="screenshotLightboxNext"
+          type="button"
+          aria-label="تصویر بعدی"
+        >
+          ›
+        </button>
       </div>
     </div>
 
@@ -1794,24 +1875,63 @@
           });
         });
       })();
-      // Screenshot lightbox
+      // Screenshot lightbox gallery
       (function () {
         const lightbox = document.getElementById("screenshotLightbox");
         const lightboxImage = document.getElementById(
           "screenshotLightboxImage",
         );
+        const lightboxInner = document.getElementById(
+          "screenshotLightboxInner",
+        );
         const backButton = document.getElementById("screenshotLightboxBack");
+        const prevButton = document.getElementById("screenshotLightboxPrev");
+        const nextButton = document.getElementById("screenshotLightboxNext");
 
-        if (!lightbox || !lightboxImage || !backButton) return;
+        if (
+          !lightbox ||
+          !lightboxImage ||
+          !lightboxInner ||
+          !backButton ||
+          !prevButton ||
+          !nextButton
+        ) {
+          return;
+        }
 
-        const screenshots = document.querySelectorAll(".phone-shot img");
+        const screenshots = Array.from(
+          document.querySelectorAll(".phone-shot img"),
+        );
 
-        function openLightbox(img) {
+        let currentIndex = 0;
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        function showImage(index) {
+          if (!screenshots.length) return;
+
+          if (index < 0) {
+            index = screenshots.length - 1;
+          }
+
+          if (index >= screenshots.length) {
+            index = 0;
+          }
+
+          currentIndex = index;
+
+          const img = screenshots[currentIndex];
+
           lightboxImage.style.display = "block";
           lightboxImage.parentElement?.classList.remove("img-fallback");
 
           lightboxImage.src = img.currentSrc || img.src;
           lightboxImage.alt = img.alt || "تصویر اپلیکیشن ققنوس";
+        }
+
+        function openLightbox(index) {
+          currentIndex = index;
+          showImage(currentIndex);
 
           lightbox.classList.add("open");
           lightbox.setAttribute("aria-hidden", "false");
@@ -1829,28 +1949,79 @@
           lightboxImage.alt = "";
         }
 
-        screenshots.forEach(function (img) {
+        function showNext() {
+          showImage(currentIndex + 1);
+        }
+
+        function showPrevious() {
+          showImage(currentIndex - 1);
+        }
+
+        screenshots.forEach(function (img, index) {
           img.addEventListener("click", function () {
-            openLightbox(img);
+            openLightbox(index);
           });
         });
 
         backButton.addEventListener("click", closeLightbox);
 
+        nextButton.addEventListener("click", function (event) {
+          event.stopPropagation();
+          showNext();
+        });
+
+        prevButton.addEventListener("click", function (event) {
+          event.stopPropagation();
+          showPrevious();
+        });
+
         lightbox.addEventListener("click", function (event) {
-          if (
-            event.target === lightbox ||
-            event.target.classList.contains("screenshot-lightbox-inner")
-          ) {
+          if (event.target === lightbox || event.target === lightboxInner) {
             closeLightbox();
           }
         });
 
         document.addEventListener("keydown", function (event) {
-          if (event.key === "Escape" && lightbox.classList.contains("open")) {
+          if (!lightbox.classList.contains("open")) return;
+
+          if (event.key === "Escape") {
             closeLightbox();
           }
+
+          if (event.key === "ArrowLeft") {
+            showPrevious();
+          }
+
+          if (event.key === "ArrowRight") {
+            showNext();
+          }
         });
+
+        lightboxInner.addEventListener(
+          "touchstart",
+          function (event) {
+            touchStartX = event.changedTouches[0].screenX;
+          },
+          { passive: true },
+        );
+
+        lightboxInner.addEventListener(
+          "touchend",
+          function (event) {
+            touchEndX = event.changedTouches[0].screenX;
+
+            const distance = touchEndX - touchStartX;
+
+            if (Math.abs(distance) < 50) return;
+
+            if (distance < 0) {
+              showNext();
+            } else {
+              showPrevious();
+            }
+          },
+          { passive: true },
+        );
       })();
     </script>
   </body>
