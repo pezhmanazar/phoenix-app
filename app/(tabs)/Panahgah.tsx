@@ -39,6 +39,7 @@ import { useUser } from "../../hooks/useUser";
 import { getPlanStatus, PRO_FLAG_KEY } from "../../lib/plan";
 
 import { AUDIO_KEYS, mediaUrl } from "../../constants/media";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 
 /* ----------------------------- UI ----------------------------- */
 
@@ -383,6 +384,7 @@ function SeekBar({
 
 export default function Panahgah() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
   const { me } = useUser();
 
@@ -838,7 +840,7 @@ export default function Panahgah() {
               <TextInput
                 value={q}
                 onChangeText={setQ}
-                placeholder="جست‌وجوی موقعیت…"
+                placeholder="جست‌وجوی موقعیت..."
                 placeholderTextColor="rgba(231,238,247,.55)"
                 style={{
                   flex: 1,
@@ -858,17 +860,30 @@ export default function Panahgah() {
               <View style={styles.row}>
                 <Ionicons
                   name="information-circle-outline"
-                  size={18}
+                  size={16}
                   color={palette.gold}
                 />
-                <Text style={[styles.title, { color: palette.text }]}>
+
+                <Text
+                  style={[
+                    styles.title,
+                    {
+                      color: palette.text,
+                      fontSize: 12,
+                    },
+                  ]}
+                >
                   راهنما
                 </Text>
+
                 <Ionicons
                   name="chevron-forward"
-                  size={18}
+                  size={16}
                   color="#E5E7EB"
-                  style={{ transform: [{ scaleX: -1 }], opacity: 0.7 }}
+                  style={{
+                    transform: [{ scaleX: -1 }],
+                    opacity: 0.65,
+                  }}
                 />
               </View>
             </TouchableOpacity>
@@ -881,7 +896,7 @@ export default function Panahgah() {
             ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
             contentContainerStyle={{
               paddingHorizontal: 16,
-              paddingBottom: 16 + insets.bottom,
+              paddingBottom: tabBarHeight + insets.bottom + 28,
               paddingTop: 6,
             }}
           />
@@ -966,18 +981,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: 2,
     borderColor: "rgba(255,255,255,.08)",
     backgroundColor: "rgba(255,255,255,.04)",
   },
 
   guideCard: {
-    marginTop: 10,
+    marginTop: 8,
+    marginLeft: 0,
+
     borderWidth: 1,
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 12,
+
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+
     borderColor: "rgba(255,255,255,.08)",
-    backgroundColor: "rgba(255,255,255,.04)",
+    backgroundColor: "rgba(255,255,255,.035)",
   },
 
   card: {

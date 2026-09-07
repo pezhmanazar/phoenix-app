@@ -1123,8 +1123,8 @@ const styles = StyleSheet.create({
   },
   xpJourneyBadge: {
     position: "absolute",
-    top: -4,
-    right: -4,
+    top: 0,
+    right: 0,
     width: 10,
     height: 10,
     borderRadius: 5,

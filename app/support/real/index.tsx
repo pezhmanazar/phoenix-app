@@ -328,7 +328,7 @@ export default function RealSupport() {
             >
               <Ionicons
                 name={iconName}
-                size={32}
+                size={28}
                 color={type === "therapy" ? "#D8B4FE" : "#93C5FD"}
               />
             </View>
@@ -541,7 +541,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 24,
     paddingHorizontal: 14,
-    paddingVertical: 16,
+    paddingVertical: 10,
     overflow: "hidden",
   },
   cardGlow: {
@@ -557,7 +557,7 @@ const styles = StyleSheet.create({
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 10,
+    marginBottom: 6,
   },
   rankChip: {
     paddingHorizontal: 10,
@@ -698,9 +698,9 @@ const styles = StyleSheet.create({
   },
 
   bigIconBubble: {
-    width: 63,
-    height: 63,
-    borderRadius: 20,
+    width: 54,
+    height: 54,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
@@ -725,8 +725,8 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   headerBox: {
-    marginTop: 10,
-    padding: 11,
+    marginTop: 6,
+    padding: 9,
     borderRadius: 16,
     backgroundColor: "rgba(255,255,255,.035)",
     borderWidth: 1,

@@ -405,13 +405,12 @@ export default function Phoenix() {
       <View pointerEvents="none" style={styles.bgGlow2} />
 
       <Screen
-        backgroundColor="#0b0f14"
-        contentContainerStyle={{
-          rowGap: 12,
-          direction: "ltr",
-          paddingBottom: 18,
-        }}
-      >
+  backgroundColor="#0b0f14"
+  contentContainerStyle={{
+    rowGap: 12,
+    direction: "ltr",
+  }}
+>
         {hasAppUpdate && (
           <TouchableOpacity
             activeOpacity={0.9}

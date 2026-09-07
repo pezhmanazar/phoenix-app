@@ -1270,22 +1270,6 @@ export default function Review({ me, state, onRefresh }: Props) {
           <View style={{ height: 14 }} />
 
           <Pressable
-            style={[styles.btnPrimary, { borderColor: palette.border }]}
-            onPress={goToTest2}
-            disabled={loading}
-          >
-            {loading ? (
-              <InlineLoading label="در حال انتقال به آزمون دوم…" />
-            ) : (
-              <Text style={[styles.btnText, { color: palette.text }]}>
-                ادامه: رفتن به آزمون دوم
-              </Text>
-            )}
-          </Pressable>
-
-          <View style={{ height: 10 }} />
-
-          <Pressable
             disabled={loading}
             onPress={goPrev}
             style={[
@@ -1300,6 +1284,35 @@ export default function Review({ me, state, onRefresh }: Props) {
             <Text style={[styles.btnText, { color: palette.sub }]}>
               مرحله قبلی
             </Text>
+          </Pressable>
+          <View style={{ height: 20 }} />
+
+          <Pressable
+            disabled={loading}
+            onPress={goToTest2}
+            style={[
+              styles.btnPrimary,
+              {
+                borderColor: "rgba(34,197,94,.45)",
+                backgroundColor: "rgba(34,197,94,.16)",
+                opacity: loading ? 0.85 : 1,
+              },
+            ]}
+          >
+            {loading ? (
+              <InlineLoading label="در حال آماده‌سازی…" />
+            ) : (
+              <Text
+                style={[
+                  styles.btnText,
+                  {
+                    color: "#86EFAC",
+                  },
+                ]}
+              >
+                ادامه: رفتن به آزمون دوم
+              </Text>
+            )}
           </Pressable>
 
           <View style={{ height: 10 }} />
@@ -1325,7 +1338,9 @@ export default function Review({ me, state, onRefresh }: Props) {
           </Pressable>
 
           <View style={{ height: 10 }} />
+        </View>
 
+        <View style={styles.utilityActionsRow}>
           <Pressable
             disabled={loading}
             onPress={() =>
@@ -1336,13 +1351,13 @@ export default function Review({ me, state, onRefresh }: Props) {
               )
             }
             style={[
-              styles.resetInlineBtn,
-              {
-                opacity: loading ? 0.5 : 1,
-              },
+              styles.utilityBtn,
+              styles.restartUtilityBtn,
+              { opacity: loading ? 0.5 : 1 },
             ]}
           >
-            <Text style={styles.resetInlineText}>شروع از اول</Text>
+            <Ionicons name="refresh-outline" size={17} color="#FCA5A5" />
+            <Text style={styles.restartUtilityText}>شروع از اول</Text>
           </Pressable>
 
           <Pressable
@@ -1350,18 +1365,18 @@ export default function Review({ me, state, onRefresh }: Props) {
             onPress={() =>
               openConfirm(
                 "انصراف از آزمون",
-                "با انصراف، پاسخ‌ها و وضعیت این دو آزمون پاک می‌شن و به پلکان برمی‌گردی. اگه بعداً دوباره این مسیر رو انتخاب کنی، آزمون از ابتدا شروع می‌شه. مطمئنی؟",
+                "با انصراف، پاسخ‌ها و وضعیت این دو آزمون پاک می‌شن و مستقیم وارد مسیر درمان می‌شی. مطمئنی؟",
                 cancelReview,
               )
             }
             style={[
-              styles.cancelInlineBtn,
-              {
-                opacity: loading ? 0.5 : 1,
-              },
+              styles.utilityBtn,
+              styles.cancelUtilityBtn,
+              { opacity: loading ? 0.5 : 1 },
             ]}
           >
-            <Text style={styles.cancelInlineText}>انصراف از آزمون</Text>
+            <Ionicons name="exit-outline" size={17} color="#F87171" />
+            <Text style={styles.cancelUtilityText}>انصراف از آزمون</Text>
           </Pressable>
         </View>
 
@@ -1415,28 +1430,6 @@ export default function Review({ me, state, onRefresh }: Props) {
           <View style={{ height: 14 }} />
 
           <Pressable
-            style={[styles.btnPrimary, { borderColor: palette.border }]}
-            onPress={() => {
-              if (session?.status !== "in_progress") {
-                goToResultPage();
-                return;
-              }
-              finishAfterTest2();
-            }}
-            disabled={loading}
-          >
-            {loading ? (
-              <InlineLoading label="در حال ثبت نهایی…" />
-            ) : (
-              <Text style={[styles.btnText, { color: palette.text }]}>
-                ثبت نهایی و رفتن به نتیجه
-              </Text>
-            )}
-          </Pressable>
-
-          <View style={{ height: 10 }} />
-
-          <Pressable
             disabled={loading}
             onPress={goPrev}
             style={[
@@ -1456,6 +1449,45 @@ export default function Review({ me, state, onRefresh }: Props) {
           <View style={{ height: 10 }} />
 
           <Pressable
+            style={[
+              styles.btnPrimary,
+              {
+                borderColor: "rgba(34,197,94,.45)",
+                backgroundColor: "rgba(34,197,94,.16)",
+                opacity: loading ? 0.85 : 1,
+              },
+            ]}
+            onPress={() => {
+              if (session?.status !== "in_progress") {
+                goToResultPage();
+                return;
+              }
+
+              finishAfterTest2();
+            }}
+            disabled={loading}
+          >
+            {loading ? (
+              <InlineLoading label="در حال ثبت نهایی…" />
+            ) : (
+              <Text
+                style={[
+                  styles.btnText,
+                  {
+                    color: "#86EFAC",
+                  },
+                ]}
+              >
+                ثبت نهایی و رفتن به نتیجه
+              </Text>
+            )}
+          </Pressable>
+
+          <View style={{ height: 10 }} />
+        </View>
+
+        <View style={styles.utilityActionsRow}>
+          <Pressable
             disabled={loading}
             onPress={() =>
               openConfirm(
@@ -1465,13 +1497,13 @@ export default function Review({ me, state, onRefresh }: Props) {
               )
             }
             style={[
-              styles.resetInlineBtn,
-              {
-                opacity: loading ? 0.5 : 1,
-              },
+              styles.utilityBtn,
+              styles.restartUtilityBtn,
+              { opacity: loading ? 0.5 : 1 },
             ]}
           >
-            <Text style={styles.resetInlineText}>شروع از اول</Text>
+            <Ionicons name="refresh-outline" size={17} color="#FCA5A5" />
+            <Text style={styles.restartUtilityText}>شروع از اول</Text>
           </Pressable>
 
           <Pressable
@@ -1479,21 +1511,19 @@ export default function Review({ me, state, onRefresh }: Props) {
             onPress={() =>
               openConfirm(
                 "انصراف از آزمون",
-                "با انصراف، پاسخ‌ها و وضعیت این دو آزمون پاک می‌شن و به پلکان برمی‌گردی. اگر بعداً دوباره این مسیر رو انتخاب کنی، آزمون از ابتدا شروع می‌شه. مطمئنی؟",
+                "با انصراف، پاسخ‌ها و وضعیت این دو آزمون پاک می‌شن و مستقیم وارد مسیر درمان می‌شی. مطمئنی؟",
                 cancelReview,
               )
             }
             style={[
-              styles.cancelInlineBtn,
-              {
-                opacity: loading ? 0.5 : 1,
-              },
+              styles.utilityBtn,
+              styles.cancelUtilityBtn,
+              { opacity: loading ? 0.5 : 1 },
             ]}
           >
-            <Text style={styles.cancelInlineText}>انصراف از آزمون</Text>
+            <Ionicons name="exit-outline" size={17} color="#F87171" />
+            <Text style={styles.cancelUtilityText}>انصراف از آزمون</Text>
           </Pressable>
-
-          <View style={{ height: 10 }} />
         </View>
 
         {ConfirmGlass}
@@ -1583,8 +1613,18 @@ export default function Review({ me, state, onRefresh }: Props) {
           <View style={{ height: 16 }} />
 
           {OptionsBlock}
-
-          <View style={{ height: 6 }} />
+          <View
+            style={[
+              styles.answerNavDivider,
+              {
+                backgroundColor:
+                  currentTest === 1
+                    ? "rgba(212,175,55,.22)"
+                    : "rgba(233,138,21,.22)",
+              },
+            ]}
+          />
+          <View style={styles.answerNavDivider} />
 
           <View style={styles.navButtonsRow}>
             <Pressable
@@ -1923,5 +1963,10 @@ const styles = StyleSheet.create({
     color: "#F87171",
     fontSize: 11,
     fontWeight: "900",
+  },
+  answerNavDivider: {
+    height: 1,
+    marginTop: 8,
+    marginBottom: 8,
   },
 });
