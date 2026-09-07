@@ -54,6 +54,7 @@ type ReviewStateResponse = {
     hasSession: boolean;
     canEnterPelekan?: boolean;
     paywallRequired?: boolean;
+    selectedValue?: number | null;
     session: {
       id: string;
       status: SessStatus;
@@ -205,6 +206,13 @@ const { token, loading: authLoading } = useAuth();
   if (!json?.ok) throw new Error(json?.error || "STATE_FAILED");
 
   if (mountedRef.current) setReviewState(json.data || null);
+  if (mountedRef.current) {
+  setSelectedValue(
+    typeof json.data?.selectedValue === "number"
+      ? json.data.selectedValue
+      : null
+  );
+}
   return json.data || null;
 }, [authLoading, token, fetchJsonAuthed]);
 
@@ -363,25 +371,24 @@ if (bootRef.current.done) return;
   }, [session, sessStatus, goToResultPage]);
 
   useEffect(() => {
-    setSelectedValue(null);
-    fade.setValue(0);
-    slideY.setValue(10);
+  fade.setValue(0);
+  slideY.setValue(10);
 
-    Animated.parallel([
-      Animated.timing(fade, {
-        toValue: 1,
-        duration: 180,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideY, {
-        toValue: 0,
-        duration: 180,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [currentTest, currentIndex, fade, slideY]);
+  Animated.parallel([
+    Animated.timing(fade, {
+      toValue: 1,
+      duration: 180,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }),
+    Animated.timing(slideY, {
+      toValue: 0,
+      duration: 180,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }),
+  ]).start();
+}, [currentTest, currentIndex, fade, slideY]);
 
   const title = useMemo(() => {
     if (currentTest === 1) return "آزمون بازسنجی";
@@ -483,6 +490,46 @@ const json = await postJsonAuthed<any>(`${API_BASE}/answer`, {
   syncAndMaybeGoResult,
 ]
   );
+
+  const goPrev = useCallback(async () => {
+  if (authLoading) return;
+  if (!token || !session) return;
+
+  if (session.status !== "in_progress") {
+    await openResultScreen();
+    return;
+  }
+
+  if (loading || submitLockRef.current) return;
+
+  try {
+    setLoading(true);
+
+    const json = await postJsonAuthed<any>(
+      `${API_BASE}/previous`,
+      {},
+    );
+
+    if (!json?.ok) {
+      setError(json?.error || "SERVER_ERROR");
+      return;
+    }
+
+    await fetchReviewState();
+  } catch (e: any) {
+    setError(e?.message || "SERVER_ERROR");
+  } finally {
+    setLoading(false);
+  }
+}, [
+  authLoading,
+  token,
+  session,
+  loading,
+  openResultScreen,
+  postJsonAuthed,
+  fetchReviewState,
+]);
 
   const goToTest2 = useCallback(async () => {
   if (authLoading) return;
@@ -1052,30 +1099,68 @@ if (!token) return;
 
           <View style={{ height: 6 }} />
 
-          <Pressable
-            disabled={loading || selectedValue === null}
-            onPress={() => {
-              if (selectedValue === null) return;
-              submitAnswer(selectedValue);
-            }}
-            style={[
-              styles.btnPrimary,
-              {
-                borderColor: selectedValue === null ? palette.border : "rgba(212,175,55,.35)",
-                backgroundColor:
-                  selectedValue === null ? "rgba(255,255,255,.04)" : "rgba(212,175,55,.10)",
-                opacity: loading ? 0.85 : 1,
-              },
-            ]}
-          >
-            {loading ? (
-              <InlineLoading label="در حال ثبت پاسخ…" />
-            ) : (
-              <Text style={[styles.btnText, { color: selectedValue === null ? palette.sub : palette.text }]}>
-                ادامه
-              </Text>
-            )}
-          </Pressable>
+          <View style={styles.navButtonsRow}>
+  <Pressable
+    disabled={loading || selectedValue === null}
+    onPress={() => {
+      if (selectedValue === null) return;
+      submitAnswer(selectedValue);
+    }}
+    style={[
+      styles.btnPrimary,
+      {
+        flex: 1,
+        borderColor:
+          selectedValue === null
+            ? palette.border
+            : "rgba(212,175,55,.35)",
+        backgroundColor:
+          selectedValue === null
+            ? "rgba(255,255,255,.04)"
+            : "rgba(212,175,55,.10)",
+        opacity: loading ? 0.85 : 1,
+      },
+    ]}
+  >
+    {loading ? (
+      <InlineLoading label="در حال ثبت پاسخ…" />
+    ) : (
+      <Text
+        style={[
+          styles.btnText,
+          {
+            color:
+              selectedValue === null ? palette.sub : palette.text,
+          },
+        ]}
+      >
+        ادامه
+      </Text>
+    )}
+  </Pressable>
+
+  {currentIndex > 0 || currentTest === 2 ? (
+    <Pressable
+      disabled={loading}
+      onPress={goPrev}
+      style={[
+        styles.btnGhost,
+        {
+          flex: 1,
+          borderColor: palette.border,
+          backgroundColor: "rgba(255,255,255,.04)",
+          opacity: loading ? 0.65 : 1,
+        },
+      ]}
+    >
+      <Text style={[styles.btnText, { color: palette.sub }]}>
+        مرحله قبلی
+      </Text>
+    </Pressable>
+  ) : (
+    <View style={{ flex: 1 }} />
+  )}
+</View>
         </Animated.View>
       </ScrollView>
 
@@ -1235,4 +1320,9 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     writingDirection: "rtl" as any,
   },
+  navButtonsRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 10,
+},
 });

@@ -698,6 +698,19 @@ router.get("/state", authUser, async (req, res) => {
       where: { userId: user.id },
     });
 
+    let selectedValue = null;
+
+if (session) {
+  const answers = ensureAnswersShape(session.answersJson);
+  const key = Number(session.currentTest) === 2 ? "test2" : "test1";
+  const value = answers[key]?.answers?.[session.currentIndex];
+
+  selectedValue =
+    typeof value === "number" && Number.isFinite(value)
+      ? value
+      : null;
+}
+
     const canEnterPelekan = computeCanEnterPelekan(session);
     const paywallRequired = false;
 
@@ -707,6 +720,7 @@ router.get("/state", authUser, async (req, res) => {
         hasSession: !!session,
         canEnterPelekan,
         paywallRequired,
+        selectedValue,
         session: session
           ? {
               id: session.id,
@@ -924,6 +938,88 @@ router.post("/skip-test2", authUser, async (req, res) => {
     });
   } catch (e) {
     console.error("[pelekanReview.skipTest2] error:", e?.message || "unknown_error");
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
+// POST /previous
+router.post("/previous", authUser, async (req, res) => {
+  try {
+    const user = await getAuthUser(req);
+    if (!user) {
+      return res.json({ ok: false, error: "USER_NOT_FOUND" });
+    }
+
+    const session = await prisma.pelekanReviewSession.findUnique({
+      where: { userId: user.id },
+    });
+
+    if (!session) {
+      return res.json({ ok: false, error: "NO_SESSION" });
+    }
+
+    if (session.status !== "in_progress") {
+      return res.json({ ok: false, error: "NOT_IN_PROGRESS" });
+    }
+
+    let currentTest = Number(session.currentTest || 1);
+    let currentIndex = Number(session.currentIndex || 0);
+
+    if (currentTest === 2 && currentIndex === 0) {
+  const setId =
+    session.questionSetId || (await ensureQuestionSetSeeded()).id;
+
+  const full = await loadQuestionsForSet(setId);
+
+  if (!full) {
+    return res.json({
+      ok: false,
+      error: "QUESTION_SET_NOT_FOUND",
+    });
+  }
+
+  const test1Count = full.questions.filter(
+    (q) => q.testNo === "TEST1",
+  ).length;
+
+  // برگشت به صفحه پایان آزمون اول / شروع آزمون دوم
+  currentTest = 1;
+  currentIndex = test1Count;
+} else if (currentIndex > 0) {
+      currentIndex -= 1;
+    } else {
+      currentIndex = 0;
+    }
+
+    const updated = await prisma.pelekanReviewSession.update({
+      where: { userId: user.id },
+      data: {
+        currentTest,
+        currentIndex,
+        updatedAt: now(),
+      },
+    });
+
+    const answers = ensureAnswersShape(updated.answersJson);
+    const key = currentTest === 2 ? "test2" : "test1";
+    const value = answers[key]?.answers?.[currentIndex];
+
+    return res.json({
+      ok: true,
+      data: {
+        currentTest: updated.currentTest,
+        currentIndex: updated.currentIndex,
+        selectedValue:
+          typeof value === "number" && Number.isFinite(value)
+            ? value
+            : null,
+      },
+    });
+  } catch (e) {
+    console.error(
+      "[pelekanReview.previous] error:",
+      e?.message || "unknown_error",
+    );
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
