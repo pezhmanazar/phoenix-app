@@ -14,6 +14,7 @@ import { router } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  DeviceEventEmitter,
   Linking,
   Pressable,
   RefreshControl,
@@ -23,6 +24,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { BACKEND_URL } from "../constants/backend";
+import { useAuth } from "../hooks/useAuth";
 
 function formatNotificationDate(value: string) {
   const date = new Date(value);
@@ -68,6 +71,8 @@ function getExternalUrl(notification: AppNotification): string | null {
 }
 
 export default function NotificationsScreen() {
+  const { token } = useAuth();
+
   const [items, setItems] = useState<AppNotification[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -129,24 +134,114 @@ export default function NotificationsScreen() {
     void load();
   };
 
-  const markAsRead = useCallback(async (notificationId: string) => {
-    setItems((prev) =>
-      prev.map((notification) =>
-        notification.id === notificationId
-          ? {
-              ...notification,
-              readAt: notification.readAt || new Date().toISOString(),
-            }
-          : notification,
-      ),
-    );
+  const markAsRead = useCallback(
+    async (notification: AppNotification) => {
+      const isSupportNotification = notification.type === "ticket_reply";
 
-    try {
-      await markNotificationRead(notificationId);
-    } catch (error) {
-      console.warn("[notifications] mark read failed:", error);
-    }
-  }, []);
+      const rawTicketId = notification.data?.ticketId;
+      const ticketId =
+        typeof rawTicketId === "string" && rawTicketId.trim()
+          ? rawTicketId.trim()
+          : null;
+
+      /*
+       * 1) اگر نوتیف مربوط به پناه است،
+       * اول اعلان سیستم‌عامل را همان لحظه حذف کن.
+       */
+      if (isSupportNotification && ticketId) {
+        const dismissPresented = async () => {
+          try {
+            const presented =
+              await Notifications.getPresentedNotificationsAsync();
+
+            const relatedPresented = presented.filter(
+              (presentedNotification) => {
+                const data = presentedNotification.request.content.data as {
+                  type?: string;
+                  ticketId?: string;
+                  notificationId?: string;
+                };
+
+                return (
+                  data?.type === "ticket_reply" &&
+                  (String(data?.notificationId || "") ===
+                    String(notification.id) ||
+                    String(data?.ticketId || "") === ticketId)
+                );
+              },
+            );
+
+            await Promise.all(
+              relatedPresented.map((presentedNotification) =>
+                Notifications.dismissNotificationAsync(
+                  presentedNotification.request.identifier,
+                ),
+              ),
+            );
+          } catch {
+            // پاک نشدن tray نباید read state را خراب کند
+          }
+        };
+
+        /*
+         * بار اول فوری
+         */
+        await dismissPresented();
+
+        /*
+         * retry کوتاه برای بعضی دستگاه‌های Android/Samsung
+         */
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        await dismissPresented();
+      }
+
+      /*
+       * 2) UI خود Notification Center فوراً read شود
+       */
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === notification.id
+            ? {
+                ...item,
+                readAt: item.readAt || new Date().toISOString(),
+              }
+            : item,
+        ),
+      );
+
+      try {
+        /*
+         * 3) خود Notification در Backend
+         */
+        await markNotificationRead(notification.id);
+
+        /*
+         * 4) فقط برای نوتیف‌های پناه،
+         * پیام تیکت هم در Backend seen شود.
+         */
+        if (isSupportNotification && ticketId && token) {
+          const res = await fetch(
+            `${BACKEND_URL}/api/public/tickets/${encodeURIComponent(
+              ticketId,
+            )}?ts=${Date.now()}`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Cache-Control": "no-store",
+              },
+            },
+          );
+
+          if (res.ok) {
+            DeviceEventEmitter.emit("supportUnreadChanged");
+          }
+        }
+      } catch (error) {
+        console.warn("[notifications] mark read failed:", error);
+      }
+    },
+    [token],
+  );
 
   const hideOne = useCallback(async (notificationId: string) => {
     setDeletingId(notificationId);
@@ -209,13 +304,33 @@ export default function NotificationsScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
+        {items.some((item) => Boolean(item.readAt)) ? (
+          <Pressable
+            disabled={clearingRead}
+            onPress={() => setClearConfirmOpen(true)}
+            style={({ pressed }) => [
+              styles.clearReadHeaderButton,
+              pressed && { opacity: 0.7 },
+              clearingRead && { opacity: 0.45 },
+            ]}
+          >
+            {clearingRead ? (
+              <ActivityIndicator size="small" color="#EF4444" />
+            ) : (
+              <Ionicons name="trash-outline" size={21} color="#EF4444" />
+            )}
+          </Pressable>
+        ) : (
+          <View style={styles.headerSpacer} />
+        )}
+
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerTitle}>اعلان‌های ققنوس</Text>
+        </View>
+
         <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>بازگشت</Text>
+          <Ionicons name="chevron-forward" size={23} color="#F4F4F5" />
         </Pressable>
-
-        <Text style={styles.headerTitle}>اعلان‌های ققنوس</Text>
-
-        <View style={styles.headerSpacer} />
       </View>
 
       {loading ? (
@@ -231,23 +346,6 @@ export default function NotificationsScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={refresh} />
           }
         >
-          {items.some((item) => Boolean(item.readAt)) ? (
-            <View style={styles.cleanupRow}>
-              <Pressable
-                disabled={clearingRead}
-                onPress={() => setClearConfirmOpen(true)}
-                style={({ pressed }) => [
-                  styles.clearReadButton,
-                  pressed && { opacity: 0.75 },
-                  clearingRead && { opacity: 0.5 },
-                ]}
-              >
-                <Ionicons name="trash-outline" size={14} color="#9CA3AF" />
-
-                <Text style={styles.clearReadText}>پاک کردن خوانده‌شده‌ها</Text>
-              </Pressable>
-            </View>
-          ) : null}
           {error ? (
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>
@@ -289,7 +387,7 @@ export default function NotificationsScreen() {
                   pressed && { opacity: 0.8 },
                 ]}
                 onPress={async () => {
-                  await markAsRead(item.id);
+                  await markAsRead(item);
 
                   if (externalUrl) {
                     try {
@@ -316,9 +414,9 @@ export default function NotificationsScreen() {
                     <View style={styles.readStatusWrap}>
                       {!item.readAt ? (
                         <Pressable
-                          onPress={(event) => {
+                          onPress={async (event) => {
                             event.stopPropagation();
-                            void markAsRead(item.id);
+                            await markAsRead(item);
                           }}
                           style={styles.readButtonTop}
                         >
@@ -464,33 +562,49 @@ const styles = StyleSheet.create({
   },
 
   header: {
-    minHeight: 58,
+    height: 62,
     paddingHorizontal: 16,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     borderBottomWidth: 1,
-    borderBottomColor: "#1f2937",
+    borderBottomColor: "rgba(255,255,255,.07)",
   },
 
   backButton: {
-    minWidth: 64,
-    paddingVertical: 8,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,.045)",
   },
 
-  backText: {
-    color: "#d8a95c",
-    fontSize: 13,
+  headerTitleWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   headerTitle: {
-    color: "#ffffff",
-    fontSize: 18,
-    fontWeight: "700",
+    color: "#F8FAFC",
+    fontSize: 16,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  headerSpacer: {
+    width: 42,
+    height: 42,
   },
 
-  headerSpacer: {
-    width: 64,
+  clearReadHeaderButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(239,68,68,.08)",
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,.20)",
   },
 
   content: {
@@ -659,29 +773,6 @@ const styles = StyleSheet.create({
     color: "#D4AF37",
     fontSize: 10,
     fontWeight: "800",
-  },
-  cleanupRow: {
-    width: "100%",
-    alignItems: "flex-start",
-    marginBottom: 12,
-  },
-
-  clearReadButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#374151",
-    backgroundColor: "#111820",
-  },
-
-  clearReadText: {
-    color: "#9CA3AF",
-    fontSize: 11,
-    fontWeight: "700",
   },
 
   readStatusWrap: {

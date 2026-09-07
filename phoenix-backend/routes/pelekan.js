@@ -2083,6 +2083,86 @@ router.post("/baseline/answer", authUser, async (req, res) => {
   }
 });
 
+// POST /api/pelekan/baseline/previous
+router.post("/baseline/previous", authUser, async (req, res) => {
+  try {
+    const phone = req.user?.phone;
+
+    if (!phone) {
+      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      select: { id: true },
+    });
+
+    if (!user) {
+      return baselineError(res, "USER_NOT_FOUND");
+    }
+
+    const session = await prisma.assessmentSession.findUnique({
+      where: {
+        userId_kind: {
+          userId: user.id,
+          kind: HB_BASELINE.kind,
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+        currentIndex: true,
+      },
+    });
+
+    if (!session) {
+      return baselineError(res, "SESSION_NOT_FOUND");
+    }
+
+    if (session.status !== "in_progress") {
+      return baselineError(res, "SESSION_NOT_IN_PROGRESS");
+    }
+
+    const steps = buildBaselineStepsLinear();
+    const total = steps.length;
+
+    const currentIndex = Math.max(
+      0,
+      Math.min(total, session.currentIndex || 0),
+    );
+
+    const previousIndex = Math.max(0, currentIndex - 1);
+
+    const updated = await prisma.assessmentSession.update({
+      where: { id: session.id },
+      data: {
+        currentIndex: previousIndex,
+        totalItems: total,
+      },
+      select: {
+        id: true,
+        currentIndex: true,
+        totalItems: true,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      data: updated,
+    });
+  } catch (e) {
+    console.error(
+      "[pelekan.baseline.previous] error:",
+      e?.message || "unknown_error",
+    );
+
+    return res.status(500).json({
+      ok: false,
+      error: "SERVER_ERROR",
+    });
+  }
+});
+
 // POST /api/pelekan/baseline/submit
 router.post("/baseline/submit", authUser, async (req, res) => {
   try {
@@ -2307,7 +2387,13 @@ router.get("/baseline/state", authUser, async (req, res) => {
     const isLast = index >= total - 1;
     const canSubmit = missingAll.length === 0 && isLast && canNext;
 
-    const nav = { index, total, canPrev: false, canNext, canSubmit };
+    const nav = {
+      index,
+      total,
+      canPrev: index > 0,
+      canNext,
+      canSubmit,
+    };
 
     let uiStep = null;
     if (step) {

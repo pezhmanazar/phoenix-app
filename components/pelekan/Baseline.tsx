@@ -1,7 +1,14 @@
 import { useAuth } from "@/hooks/useAuth";
 import { getFriendlyErrorMessage } from "@/lib/errors/getFriendlyErrorMessage";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import AppBannerModal from "../ui/AppBannerModal";
 
@@ -79,7 +86,7 @@ export default function Baseline({ state, onRefresh }: Props) {
       lime: "#86efac",
       track: "rgba(231,238,247,.14)",
     }),
-    []
+    [],
   );
 
   const baselineMeta = state?.baseline?.content?.meta || {};
@@ -129,7 +136,7 @@ export default function Baseline({ state, onRefresh }: Props) {
   const showAppModal = (
     kind: "success" | "error" | "warning" | "info",
     title: string,
-    message?: string
+    message?: string,
   ) => {
     setAppModal({
       visible: true,
@@ -157,7 +164,7 @@ export default function Baseline({ state, onRefresh }: Props) {
 
   const fetchBaselineState = useCallback(async () => {
     if (authLoading) {
-            return;
+      return;
     }
 
     if (!token) {
@@ -182,7 +189,9 @@ export default function Baseline({ state, onRefresh }: Props) {
         setCompletedResult(null);
         setNav({ index: 0, total: 0, canNext: false, canSubmit: false });
         setStatus("error");
-        setErrorMsg(String(json?.error || json?.message || `HTTP_${res.status}`));
+        setErrorMsg(
+          String(json?.error || json?.message || `HTTP_${res.status}`),
+        );
         return;
       }
 
@@ -205,13 +214,17 @@ export default function Baseline({ state, onRefresh }: Props) {
 
       setCompletedResult(null);
 
-      setNav(data.nav || { index: 0, total: 0, canNext: false, canSubmit: false });
+      setNav(
+        data.nav || { index: 0, total: 0, canNext: false, canSubmit: false },
+      );
 
       const s: UiStep = data.step || null;
       setStep(s);
 
       if (s?.type === "question") {
-        setLocalSelected(typeof s.selectedIndex === "number" ? s.selectedIndex : null);
+        setLocalSelected(
+          typeof s.selectedIndex === "number" ? s.selectedIndex : null,
+        );
       } else {
         setLocalSelected(null);
       }
@@ -249,13 +262,17 @@ export default function Baseline({ state, onRefresh }: Props) {
       try {
         setBusy(true);
 
-        const { res, json } = await postJson(`${API_BASE}/answer`, token, payload);
+        const { res, json } = await postJson(
+          `${API_BASE}/answer`,
+          token,
+          payload,
+        );
 
         if (!res.ok || !json?.ok) {
           showAppModal(
             "error",
             "ثبت پاسخ انجام نشد",
-            json?.message || json?.error || `status=${res.status}`
+            json?.message || json?.error || `status=${res.status}`,
           );
           return false;
         }
@@ -265,14 +282,14 @@ export default function Baseline({ state, onRefresh }: Props) {
         showAppModal(
           "error",
           "ارتباط برقرار نشد",
-          e?.message || "اتصال به سرور برقرار نشد. لطفاً دوباره تلاش کن."
+          e?.message || "اتصال به سرور برقرار نشد. لطفاً دوباره تلاش کن.",
         );
         return false;
       } finally {
         setBusy(false);
       }
     },
-    [token, authLoading]
+    [token, authLoading],
   );
 
   const submit = useCallback(async () => {
@@ -293,7 +310,7 @@ export default function Baseline({ state, onRefresh }: Props) {
         showAppModal(
           "error",
           "ثبت نهایی انجام نشد",
-          json?.message || json?.error || `status=${res.status}`
+          json?.message || json?.error || `status=${res.status}`,
         );
         return;
       }
@@ -301,11 +318,10 @@ export default function Baseline({ state, onRefresh }: Props) {
       await onRefresh?.();
       await fetchBaselineState();
     } catch (e: any) {
-
       showAppModal(
         "error",
         "ارتباط برقرار نشد",
-        e?.message || "اتصال به سرور برقرار نشد. لطفاً دوباره تلاش کن."
+        e?.message || "اتصال به سرور برقرار نشد. لطفاً دوباره تلاش کن.",
       );
     } finally {
       setBusy(false);
@@ -348,7 +364,7 @@ export default function Baseline({ state, onRefresh }: Props) {
         showAppModal(
           "warning",
           "یک گزینه را انتخاب کن",
-          "برای ادامه، لازمه یکی از گزینه‌ها رو انتخاب کنی."
+          "برای ادامه، لازمه یکی از گزینه‌ها رو انتخاب کنی.",
         );
         return;
       }
@@ -374,10 +390,54 @@ export default function Baseline({ state, onRefresh }: Props) {
         "warning",
         "از اول باید شروع کنی",
         step.message ||
-          "چند پاسخ ثبت نشده. برای شروع دوباره، به تب پروفایل برو، وارد ویرایش پروفایل شو و گزینه «شروع از صفر» رو انتخاب کن."
+          "چند پاسخ ثبت نشده. برای شروع دوباره، به تب پروفایل برو، وارد ویرایش پروفایل شو و گزینه «شروع از صفر» رو انتخاب کن.",
       );
     }
-  }, [step, localSelected, postAnswer, fetchBaselineState, isLastQuestion, submit]);
+  }, [
+    step,
+    localSelected,
+    postAnswer,
+    fetchBaselineState,
+    isLastQuestion,
+    submit,
+  ]);
+
+  const goPrev = useCallback(async () => {
+    if (authLoading) {
+      showAppModal("warning", "کمی صبر کن", "احراز هویت هنوز کامل نشده.");
+      return;
+    }
+
+    if (!token) {
+      showAppModal("error", "نیاز به ورود", "توکن احراز هویت پیدا نشد.");
+      return;
+    }
+
+    try {
+      setBusy(true);
+
+      const { res, json } = await postJson(`${API_BASE}/previous`, token, {});
+
+      if (!res.ok || !json?.ok) {
+        showAppModal(
+          "error",
+          "برگشت انجام نشد",
+          json?.message || json?.error || `status=${res.status}`,
+        );
+        return;
+      }
+
+      await fetchBaselineState();
+    } catch (e: any) {
+      showAppModal(
+        "error",
+        "ارتباط برقرار نشد",
+        e?.message || "اتصال به سرور برقرار نشد. لطفاً دوباره تلاش کن.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [token, authLoading, fetchBaselineState]);
 
   const markSeen = useCallback(async () => {
     if (authLoading) {
@@ -391,12 +451,12 @@ export default function Baseline({ state, onRefresh }: Props) {
     }
 
     try {
-  setBusy(true);
-  await postJson(`${API_BASE}/seen`, token, {});
-} catch {
-} finally {
-  setBusy(false);
-}
+      setBusy(true);
+      await postJson(`${API_BASE}/seen`, token, {});
+    } catch {
+    } finally {
+      setBusy(false);
+    }
 
     await onRefresh?.();
   }, [token, authLoading, onRefresh]);
@@ -409,9 +469,18 @@ export default function Baseline({ state, onRefresh }: Props) {
     const dash = (valuePercent / 100) * c;
 
     return (
-      <View style={{ alignItems: "center", justifyContent: "center", marginTop: 6 }}>
+      <View
+        style={{ alignItems: "center", justifyContent: "center", marginTop: 6 }}
+      >
         <Svg width={size} height={size}>
-          <Circle cx={size / 2} cy={size / 2} r={r} stroke={palette.track} strokeWidth={stroke} fill="none" />
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            stroke={palette.track}
+            strokeWidth={stroke}
+            fill="none"
+          />
           <Circle
             cx={size / 2}
             cy={size / 2}
@@ -428,10 +497,19 @@ export default function Baseline({ state, onRefresh }: Props) {
         </Svg>
 
         <View style={{ position: "absolute", alignItems: "center" }}>
-          <Text style={{ color: palette.text, fontWeight: "900", fontSize: 26 }}>
+          <Text
+            style={{ color: palette.text, fontWeight: "900", fontSize: 26 }}
+          >
             {String(completedResult?.totalScore ?? 0)}
           </Text>
-          <Text style={{ color: palette.sub2, fontWeight: "900", marginTop: 2, fontSize: 12 }}>
+          <Text
+            style={{
+              color: palette.sub2,
+              fontWeight: "900",
+              marginTop: 2,
+              fontSize: 12,
+            }}
+          >
             از {baselineMaxScore}
           </Text>
         </View>
@@ -450,7 +528,8 @@ export default function Baseline({ state, onRefresh }: Props) {
     );
   }
 
-  const accent = status === "completed" && completedResult ? levelColor : palette.gold;
+  const accent =
+    status === "completed" && completedResult ? levelColor : palette.gold;
   const header = baselineTitle;
 
   const interpretationText =
@@ -465,19 +544,37 @@ export default function Baseline({ state, onRefresh }: Props) {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={[styles.card, styles.cardFancy, { backgroundColor: palette.glass, borderColor: palette.border }]}>
+        <View
+          style={[
+            styles.card,
+            styles.cardFancy,
+            { backgroundColor: palette.glass, borderColor: palette.border },
+          ]}
+        >
           <View style={[styles.accentBarTop, { backgroundColor: accent }]} />
 
-          <Text style={[styles.title, { color: accent, textAlign: "center" }]}>{header}</Text>
+          <Text style={[styles.title, { color: accent, textAlign: "center" }]}>
+            {header}
+          </Text>
 
           {status === "error" ? (
             <>
-              <Text style={[styles.centerText, { color: palette.red, marginTop: 12, lineHeight: 20 }]}>
+              <Text
+                style={[
+                  styles.centerText,
+                  { color: palette.red, marginTop: 12, lineHeight: 20 },
+                ]}
+              >
                 خطا در دریافت سنجش.
               </Text>
 
               {!!errorMsg && (
-                <Text style={[styles.centerText, { color: palette.sub2, marginTop: 8, fontSize: 12 }]}>
+                <Text
+                  style={[
+                    styles.centerText,
+                    { color: palette.sub2, marginTop: 8, fontSize: 12 },
+                  ]}
+                >
                   {getFriendlyErrorMessage(errorMsg)}
                 </Text>
               )}
@@ -495,23 +592,50 @@ export default function Baseline({ state, onRefresh }: Props) {
                   },
                 ]}
               >
-                <Text style={[styles.btnText, { color: palette.text }]}>تلاش دوباره</Text>
+                <Text style={[styles.btnText, { color: palette.text }]}>
+                  تلاش دوباره
+                </Text>
               </Pressable>
             </>
           ) : status === "completed" && completedResult ? (
             <>
               <View style={{ height: 6 }} />
               <Donut valuePercent={percent} />
-              <Text style={[styles.centerText, { color: palette.sub2, marginTop: 8, fontSize: 12 }]}>
+              <Text
+                style={[
+                  styles.centerText,
+                  { color: palette.sub2, marginTop: 8, fontSize: 12 },
+                ]}
+              >
                 {percent}% از بیشترین میزان
               </Text>
 
               {interpretationText ? (
-                <Text style={[styles.rtlText, { color: palette.sub, marginTop: 12, lineHeight: 20, textAlign: "right" }]}>
+                <Text
+                  style={[
+                    styles.rtlText,
+                    {
+                      color: palette.sub,
+                      marginTop: 12,
+                      lineHeight: 20,
+                      textAlign: "right",
+                    },
+                  ]}
+                >
                   {interpretationText}
                 </Text>
               ) : (
-                <Text style={[styles.rtlText, { color: palette.sub2, marginTop: 12, fontSize: 12, textAlign: "right" }]}>
+                <Text
+                  style={[
+                    styles.rtlText,
+                    {
+                      color: palette.sub2,
+                      marginTop: 12,
+                      fontSize: 12,
+                      textAlign: "right",
+                    },
+                  ]}
+                >
                   تفسیر در حال آماده‌سازی است…
                 </Text>
               )}
@@ -530,12 +654,24 @@ export default function Baseline({ state, onRefresh }: Props) {
                   },
                 ]}
               >
-                <Text style={[styles.btnText, { color: palette.text }]}>رفتن به ادامه مسیر</Text>
+                <Text style={[styles.btnText, { color: palette.text }]}>
+                  رفتن به ادامه مسیر
+                </Text>
               </Pressable>
             </>
           ) : step?.type === "consent" ? (
             <>
-              <Text style={[styles.rtlText, { color: palette.text, marginTop: 10, lineHeight: 22, textAlign: "right" }]}>
+              <Text
+                style={[
+                  styles.rtlText,
+                  {
+                    color: palette.text,
+                    marginTop: 10,
+                    lineHeight: 22,
+                    textAlign: "right",
+                  },
+                ]}
+              >
                 {step.text}
               </Text>
 
@@ -554,9 +690,17 @@ export default function Baseline({ state, onRefresh }: Props) {
                 ]}
               >
                 {busy ? (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
                     <ActivityIndicator color={palette.gold} />
-                    <Text style={[styles.btnText, { color: palette.text }]}>در حال ثبت…</Text>
+                    <Text style={[styles.btnText, { color: palette.text }]}>
+                      در حال ثبت…
+                    </Text>
                   </View>
                 ) : (
                   <Text style={[styles.btnText, { color: palette.text }]}>
@@ -567,12 +711,23 @@ export default function Baseline({ state, onRefresh }: Props) {
             </>
           ) : step?.type === "question" ? (
             <>
-              <Text style={[styles.centerText, { color: palette.sub, marginTop: 6, fontSize: 12 }]}>
+              <Text
+                style={[
+                  styles.centerText,
+                  { color: palette.sub, marginTop: 6, fontSize: 12 },
+                ]}
+              >
                 سوال {(questionIndex ?? 0) + 1} از {questionTotal ?? 0}
+              </Text>
+
+              <Text style={styles.scrollHint}>
+                برای دیدن همه گزینه‌ها صفحه رو به بالا بکش
               </Text>
               <View style={styles.hr} />
 
-              <Text style={[styles.qText, styles.rtlText, { color: palette.text }]}>
+              <Text
+                style={[styles.qText, styles.rtlText, { color: palette.text }]}
+              >
                 {step.text}
               </Text>
 
@@ -589,13 +744,21 @@ export default function Baseline({ state, onRefresh }: Props) {
                       styles.option,
                       {
                         borderColor: selected ? palette.gold : palette.border,
-                        backgroundColor: selected ? "rgba(255,255,255,.06)" : "transparent",
+                        backgroundColor: selected
+                          ? "rgba(255,255,255,.06)"
+                          : "transparent",
                         opacity: pressed ? 0.92 : 1,
                         transform: [{ scale: pressed ? 0.995 : 1 }],
                       },
                     ]}
                   >
-                    <Text style={[styles.centerText, styles.rtlText, { color: palette.text, fontSize: 14 }]}>
+                    <Text
+                      style={[
+                        styles.centerText,
+                        styles.rtlText,
+                        { color: palette.text, fontSize: 14 },
+                      ]}
+                    >
                       {opt.label}
                     </Text>
                   </Pressable>
@@ -604,58 +767,110 @@ export default function Baseline({ state, onRefresh }: Props) {
 
               <View style={{ height: 6 }} />
 
-              <Pressable
-                disabled={busy || typeof localSelected !== "number"}
-                onPress={goNext}
-                style={[
-                  styles.btnPrimary,
-                  {
-                    borderColor:
-                      typeof localSelected !== "number"
-                        ? palette.border
-                        : "rgba(212,175,55,.35)",
-                    backgroundColor:
-                      typeof localSelected !== "number"
-                        ? "rgba(255,255,255,.04)"
-                        : "rgba(212,175,55,.10)",
-                    opacity: busy ? 0.85 : 1,
-                  },
-                ]}
-              >
-                {busy ? (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <ActivityIndicator color={palette.gold} />
-                    <Text style={[styles.btnText, { color: palette.text }]}>در حال ثبت…</Text>
-                  </View>
-                ) : (
-                  <Text
+              <View style={styles.navButtonsRow}>
+                <Pressable
+                  disabled={busy || typeof localSelected !== "number"}
+                  onPress={goNext}
+                  style={[
+                    styles.btnPrimary,
+                    {
+                      flex: 1,
+                      borderColor:
+                        typeof localSelected !== "number"
+                          ? palette.border
+                          : "rgba(212,175,55,.35)",
+                      backgroundColor:
+                        typeof localSelected !== "number"
+                          ? "rgba(255,255,255,.04)"
+                          : "rgba(212,175,55,.10)",
+                      opacity: busy ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  {busy ? (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <ActivityIndicator color={palette.gold} />
+                      <Text style={[styles.btnText, { color: palette.text }]}>
+                        در حال ثبت…
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text
+                      style={[
+                        styles.btnText,
+                        {
+                          color:
+                            typeof localSelected !== "number"
+                              ? palette.sub
+                              : palette.text,
+                        },
+                      ]}
+                    >
+                      {isLastQuestion ? "ثبت نهایی" : "ادامه"}
+                    </Text>
+                  )}
+                </Pressable>
+
+                {nav.canPrev ? (
+                  <Pressable
+                    disabled={busy}
+                    onPress={goPrev}
                     style={[
-                      styles.btnText,
+                      styles.btnSecondary,
                       {
-                        color:
-                          typeof localSelected !== "number"
-                            ? palette.sub
-                            : palette.text,
+                        borderColor: palette.border,
+                        backgroundColor: "rgba(255,255,255,.04)",
+                        opacity: busy ? 0.7 : 1,
                       },
                     ]}
                   >
-                    {isLastQuestion ? "ثبت نهایی" : "ادامه"}
-                  </Text>
+                    <Text style={[styles.btnText, { color: palette.sub }]}>
+                      مرحله قبلی
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <View style={{ flex: 1 }} />
                 )}
-              </Pressable>
+              </View>
             </>
           ) : step?.type === "review_missing" ? (
-            <Text style={[styles.rtlText, { color: palette.red, marginTop: 10, lineHeight: 22, textAlign: "right" }]}>
+            <Text
+              style={[
+                styles.rtlText,
+                {
+                  color: palette.red,
+                  marginTop: 10,
+                  lineHeight: 22,
+                  textAlign: "right",
+                },
+              ]}
+            >
               {step.message || "چند پاسخ ثبت نشده. لطفاً سنجش رو ریست کن."}
             </Text>
           ) : (
             <>
-              <Text style={[styles.centerText, { color: palette.sub2, marginTop: 12, lineHeight: 20 }]}>
+              <Text
+                style={[
+                  styles.centerText,
+                  { color: palette.sub2, marginTop: 12, lineHeight: 20 },
+                ]}
+              >
                 سنجش در حال همگام‌سازی است…
               </Text>
 
               {!!errorMsg && (
-                <Text style={[styles.centerText, { color: palette.sub2, marginTop: 8, fontSize: 12 }]}>
+                <Text
+                  style={[
+                    styles.centerText,
+                    { color: palette.sub2, marginTop: 8, fontSize: 12 },
+                  ]}
+                >
                   {getFriendlyErrorMessage(errorMsg)}
                 </Text>
               )}
@@ -673,7 +888,9 @@ export default function Baseline({ state, onRefresh }: Props) {
                   },
                 ]}
               >
-                <Text style={[styles.btnText, { color: palette.text }]}>تازه‌سازی</Text>
+                <Text style={[styles.btnText, { color: palette.text }]}>
+                  تازه‌سازی
+                </Text>
               </Pressable>
             </>
           )}
@@ -700,15 +917,17 @@ const styles = StyleSheet.create({
 
   scrollContent: {
     flexGrow: 1,
-    padding: 16,
-    paddingBottom: 28,
+    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingBottom: 18,
     justifyContent: "center",
   },
 
   card: {
     borderWidth: 1,
     borderRadius: 20,
-    padding: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     overflow: "hidden",
   },
 
@@ -747,12 +966,35 @@ const styles = StyleSheet.create({
   option: {
     borderWidth: 1,
     borderRadius: 14,
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 10,
-    marginBottom: 10,
+    marginBottom: 8,
   },
 
   btnPrimary: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+
+  scrollHint: {
+    marginTop: 5,
+    color: "#EF4444",
+    fontSize: 11,
+    fontWeight: "900",
+    textAlign: "center",
+    writingDirection: "rtl",
+  },
+
+  navButtonsRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  btnSecondary: {
+    flex: 1,
     borderWidth: 1,
     borderRadius: 14,
     paddingVertical: 12,
