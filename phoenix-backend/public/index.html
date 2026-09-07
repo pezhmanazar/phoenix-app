@@ -777,15 +777,6 @@
         justify-content: center;
       }
 
-      .screenshot-lightbox-inner {
-        position: relative;
-        width: 100%;
-        height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
       .screenshot-lightbox-track {
         width: 100%;
         height: 100%;
@@ -798,12 +789,23 @@
 
         scroll-snap-type: x mandatory;
 
-        -ms-overflow-style: none;
-
         overscroll-behavior-x: contain;
         touch-action: pan-x;
 
         direction: ltr;
+
+        cursor: grab;
+      }
+
+      .screenshot-lightbox-track.is-dragging {
+        cursor: grabbing;
+        scroll-snap-type: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+
+      .screenshot-lightbox-track.is-programmatic {
+        scroll-snap-type: none;
       }
 
       .screenshot-lightbox-track::-webkit-scrollbar {
@@ -822,7 +824,7 @@
         scroll-snap-align: center;
         scroll-snap-stop: always;
 
-        padding: 60px 90px 20px;
+        padding: 64px 110px 32px;
         box-sizing: border-box;
       }
 
@@ -832,8 +834,8 @@
         width: auto;
         height: auto;
 
-        max-width: 100%;
-        max-height: 100%;
+        max-width: min(520px, 100%);
+        max-height: calc(100vh - 120px);
 
         object-fit: contain;
 
@@ -843,6 +845,8 @@
 
         -webkit-user-select: none;
         user-select: none;
+
+        pointer-events: none;
       }
 
       .screenshot-lightbox-back {
@@ -893,9 +897,6 @@
         border: 1px solid rgba(212, 175, 55, 0.3);
         background: rgba(11, 15, 20, 0.72);
         color: #e8ecf1;
-
-        font-family: Arial, sans-serif;
-        font-size: 38px;
         line-height: 1;
 
         cursor: pointer;
@@ -906,6 +907,12 @@
           background 0.2s ease,
           border-color 0.2s ease,
           transform 0.2s ease;
+      }
+
+      .screenshot-lightbox-nav svg {
+        width: 24px;
+        height: 24px;
+        display: block;
       }
 
       .screenshot-lightbox-prev {
@@ -951,8 +958,12 @@
         .screenshot-lightbox-nav {
           width: 44px;
           height: 44px;
-          font-size: 32px;
           background: rgba(11, 15, 20, 0.68);
+        }
+
+        .screenshot-lightbox-nav svg {
+          width: 22px;
+          height: 22px;
         }
 
         .screenshot-lightbox-prev {
@@ -1881,7 +1892,16 @@
           type="button"
           aria-label="تصویر قبلی"
         >
-          &lt;
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M15 18l-6-6 6-6"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
         </button>
 
         <div class="screenshot-lightbox-track" id="screenshotLightboxTrack">
@@ -1941,7 +1961,16 @@
           type="button"
           aria-label="تصویر بعدی"
         >
-          &gt;
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M9 18l6-6-6-6"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
         </button>
       </div>
     </div>
@@ -2022,6 +2051,9 @@
         let currentIndex = 0;
         let scrollTimer = null;
         let animationFrame = null;
+        let isDragging = false;
+        let dragStartX = 0;
+        let dragStartScrollLeft = 0;
 
         function slideWidth() {
           return track.clientWidth;
@@ -2059,7 +2091,9 @@
 
           if (Math.abs(distance) < 1) return;
 
-          const duration = 360;
+          track.classList.add("is-programmatic");
+
+          const duration = 420;
           const startTime = performance.now();
 
           function easeInOutCubic(t) {
@@ -2077,7 +2111,12 @@
               animationFrame = requestAnimationFrame(animate);
             } else {
               animationFrame = null;
-              settlePosition();
+
+              track.classList.remove("is-programmatic");
+
+              requestAnimationFrame(function () {
+                settlePosition();
+              });
             }
           }
 
@@ -2166,6 +2205,61 @@
           event.stopPropagation();
           goPrevious();
         });
+
+        track.addEventListener("pointerdown", function (event) {
+          if (event.pointerType !== "mouse") return;
+
+          isDragging = true;
+          dragStartX = event.clientX;
+          dragStartScrollLeft = track.scrollLeft;
+
+          track.classList.add("is-dragging");
+          track.setPointerCapture(event.pointerId);
+        });
+
+        track.addEventListener("pointermove", function (event) {
+          if (!isDragging) return;
+
+          const delta = event.clientX - dragStartX;
+
+          track.scrollLeft = dragStartScrollLeft - delta;
+        });
+
+        track.addEventListener("pointerup", function (event) {
+          if (!isDragging) return;
+
+          isDragging = false;
+          track.classList.remove("is-dragging");
+
+          try {
+            track.releasePointerCapture(event.pointerId);
+          } catch {}
+
+          const width = slideWidth();
+          if (!width) return;
+
+          const nearest = Math.round(track.scrollLeft / width);
+
+          smoothScrollToPhysical(nearest);
+        });
+
+        track.addEventListener("pointercancel", function () {
+          isDragging = false;
+          track.classList.remove("is-dragging");
+        });
+        track.addEventListener(
+          "wheel",
+          function (event) {
+            if (window.innerWidth <= 900) return;
+
+            if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+
+            event.preventDefault();
+
+            track.scrollLeft += event.deltaY;
+          },
+          { passive: false },
+        );
 
         // بعد از swipe موبایل، موقعیت را تشخیص بده
         track.addEventListener(
