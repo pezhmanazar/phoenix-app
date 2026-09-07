@@ -1751,7 +1751,7 @@
       </button>
 
       <div class="screenshot-lightbox-inner">
-        <img id="screenshotLightboxImage" src="" alt="" />
+        <img id="screenshotLightboxImage" alt="" />
       </div>
     </div>
 
@@ -1784,6 +1784,9 @@
         const images = document.querySelectorAll("img");
 
         images.forEach(function (img) {
+          // تصویر داخل لایت‌باکس fallback عمومی نمی‌خواهد
+          if (img.id === "screenshotLightboxImage") return;
+
           img.addEventListener("error", function () {
             img.style.display = "none";
             img.parentElement?.classList.add("img-fallback");
@@ -1804,6 +1807,9 @@
         const screenshots = document.querySelectorAll(".phone-shot img");
 
         function openLightbox(img) {
+          lightboxImage.style.display = "block";
+          lightboxImage.parentElement?.classList.remove("img-fallback");
+
           lightboxImage.src = img.currentSrc || img.src;
           lightboxImage.alt = img.alt || "تصویر اپلیکیشن ققنوس";
 
