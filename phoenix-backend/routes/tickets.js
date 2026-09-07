@@ -828,11 +828,29 @@ publicTicketsRouter.get("/:id", async (req, res) => {
       });
     }
 
-    if (!ticketMatchesIdentity(t, identity)) {
+        if (!ticketMatchesIdentity(t, identity)) {
       return res.status(403).json({
         ok: false,
         error: "TICKET_FORBIDDEN",
       });
+    }
+
+    const lastAdminMessage = [...t.messages]
+      .reverse()
+      .find((m) => m.sender === "admin");
+
+    if (
+      lastAdminMessage?.id &&
+      t.userLastSeenAdminMessageId !== lastAdminMessage.id
+    ) {
+      await prisma.ticket.update({
+        where: { id: t.id },
+        data: {
+          userLastSeenAdminMessageId: lastAdminMessage.id,
+        },
+      });
+
+      t.userLastSeenAdminMessageId = lastAdminMessage.id;
     }
 
     const ticketWithSignedUrls = await attachSignedUrlsToTicket(t);
