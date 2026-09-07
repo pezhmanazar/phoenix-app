@@ -702,8 +702,8 @@
       .screenshots-row {
         position: relative;
         display: grid;
-        grid-template-columns: repeat(5, 1fr);
-        gap: 14px;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 12px;
         align-items: end;
       }
       .phone-shot {
@@ -729,6 +729,7 @@
         display: block;
         border-radius: 18px;
         background: #111;
+        cursor: zoom-in;
       }
 
       @media (max-width: 900px) {
@@ -746,6 +747,96 @@
         .phone-shot {
           min-width: 42%;
           scroll-snap-align: center;
+        }
+      }
+
+      /* Screenshot Lightbox */
+      .screenshot-lightbox {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: rgba(5, 8, 12, 0.94);
+        -webkit-backdrop-filter: blur(14px);
+        backdrop-filter: blur(14px);
+      }
+
+      .screenshot-lightbox.open {
+        display: flex;
+      }
+
+      .screenshot-lightbox-inner {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .screenshot-lightbox img {
+        display: block;
+        max-width: min(92vw, 520px);
+        max-height: calc(100vh - 100px);
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        border-radius: 22px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow: 0 28px 90px rgba(0, 0, 0, 0.65);
+      }
+
+      .screenshot-lightbox-back {
+        position: fixed;
+        top: max(18px, env(safe-area-inset-top));
+        right: 18px;
+        z-index: 10001;
+
+        min-height: 44px;
+        padding: 0 15px;
+
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.08);
+        color: #e8ecf1;
+
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      .screenshot-lightbox-back:hover {
+        background: rgba(255, 255, 255, 0.13);
+        border-color: rgba(212, 175, 55, 0.3);
+      }
+
+      body.lightbox-open {
+        overflow: hidden;
+      }
+
+      @media (max-width: 900px) {
+        .screenshot-lightbox {
+          padding: max(70px, calc(env(safe-area-inset-top) + 60px)) 14px
+            max(18px, env(safe-area-inset-bottom));
+        }
+
+        .screenshot-lightbox img {
+          max-width: 94vw;
+          max-height: calc(100dvh - 105px);
+          border-radius: 18px;
+        }
+
+        .screenshot-lightbox-back {
+          right: 14px;
         }
       }
 
@@ -1420,53 +1511,68 @@
 
       <!-- SCREENSHOTS -->
       <section class="section" id="screenshots">
-        <div class="section-title">
-          <h2>نگاهی به فضای داخل اپ ققنوس</h2>
-          <p>مسیر درمان، پناهگاه فوری، مشعل و پشتیبانی در یک فضای منظم</p>
-        </div>
+        <div class="screenshots-row">
+          <div class="phone-shot">
+            <img
+              src="/static/img/screenshots/01.webp"
+              alt="نمای اپلیکیشن ققنوس - تصویر ۱"
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
 
-        <div class="card screenshots-card">
-          <div class="screenshots-row">
-            <div class="phone-shot">
-              <img
-                src="/static/img/screenshots/01-pelekan.webp"
-                alt="نمای پلکان اپ ققنوس"
-                loading="lazy"
-                decoding="async"
-              />
-            </div>
-            <div class="phone-shot">
-              <img
-                src="/static/img/screenshots/02-panahgah.webp"
-                alt="نمای پناهگاه اپ ققنوس"
-                loading="lazy"
-                decoding="async"
-              />
-            </div>
-            <div class="phone-shot">
-              <img
-                src="/static/img/screenshots/03-mashaal.webp"
-                alt="نمای مشعل اپ ققنوس"
-                loading="lazy"
-                decoding="async"
-              />
-            </div>
-            <div class="phone-shot">
-              <img
-                src="/static/img/screenshots/04-panah.webp"
-                alt="نمای پناه اپ ققنوس"
-                loading="lazy"
-                decoding="async"
-              />
-            </div>
-            <div class="phone-shot">
-              <img
-                src="/static/img/screenshots/05-profile.webp"
-                alt="نمای پروفایل اپ ققنوس"
-                loading="lazy"
-                decoding="async"
-              />
-            </div>
+          <div class="phone-shot">
+            <img
+              src="/static/img/screenshots/02.webp"
+              alt="نمای اپلیکیشن ققنوس - تصویر ۲"
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+
+          <div class="phone-shot">
+            <img
+              src="/static/img/screenshots/03.webp"
+              alt="نمای اپلیکیشن ققنوس - تصویر ۳"
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+
+          <div class="phone-shot">
+            <img
+              src="/static/img/screenshots/04.webp"
+              alt="نمای اپلیکیشن ققنوس - تصویر ۴"
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+
+          <div class="phone-shot">
+            <img
+              src="/static/img/screenshots/05.webp"
+              alt="نمای اپلیکیشن ققنوس - تصویر ۵"
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+
+          <div class="phone-shot">
+            <img
+              src="/static/img/screenshots/06.webp"
+              alt="نمای اپلیکیشن ققنوس - تصویر ۶"
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+
+          <div class="phone-shot">
+            <img
+              src="/static/img/screenshots/07.webp"
+              alt="نمای اپلیکیشن ققنوس - تصویر ۷"
+              loading="lazy"
+              decoding="async"
+            />
           </div>
         </div>
       </section>
@@ -1626,6 +1732,29 @@
       </div>
     </footer>
 
+    <div
+      class="screenshot-lightbox"
+      id="screenshotLightbox"
+      role="dialog"
+      aria-modal="true"
+      aria-label="نمایش بزرگ تصویر اپلیکیشن"
+      aria-hidden="true"
+    >
+      <button
+        class="screenshot-lightbox-back"
+        id="screenshotLightboxBack"
+        type="button"
+        aria-label="بازگشت"
+      >
+        <span>←</span>
+        <span>بازگشت</span>
+      </button>
+
+      <div class="screenshot-lightbox-inner">
+        <img id="screenshotLightboxImage" src="" alt="" />
+      </div>
+    </div>
+
     <script>
       // Loader fade out
       window.addEventListener("DOMContentLoaded", function () {
@@ -1660,6 +1789,61 @@
             img.parentElement?.classList.add("img-fallback");
             img.removeAttribute("src");
           });
+        });
+      })();
+      // Screenshot lightbox
+      (function () {
+        const lightbox = document.getElementById("screenshotLightbox");
+        const lightboxImage = document.getElementById(
+          "screenshotLightboxImage",
+        );
+        const backButton = document.getElementById("screenshotLightboxBack");
+
+        if (!lightbox || !lightboxImage || !backButton) return;
+
+        const screenshots = document.querySelectorAll(".phone-shot img");
+
+        function openLightbox(img) {
+          lightboxImage.src = img.currentSrc || img.src;
+          lightboxImage.alt = img.alt || "تصویر اپلیکیشن ققنوس";
+
+          lightbox.classList.add("open");
+          lightbox.setAttribute("aria-hidden", "false");
+          document.body.classList.add("lightbox-open");
+
+          backButton.focus();
+        }
+
+        function closeLightbox() {
+          lightbox.classList.remove("open");
+          lightbox.setAttribute("aria-hidden", "true");
+          document.body.classList.remove("lightbox-open");
+
+          lightboxImage.removeAttribute("src");
+          lightboxImage.alt = "";
+        }
+
+        screenshots.forEach(function (img) {
+          img.addEventListener("click", function () {
+            openLightbox(img);
+          });
+        });
+
+        backButton.addEventListener("click", closeLightbox);
+
+        lightbox.addEventListener("click", function (event) {
+          if (
+            event.target === lightbox ||
+            event.target.classList.contains("screenshot-lightbox-inner")
+          ) {
+            closeLightbox();
+          }
+        });
+
+        document.addEventListener("keydown", function (event) {
+          if (event.key === "Escape" && lightbox.classList.contains("open")) {
+            closeLightbox();
+          }
         });
       })();
     </script>
