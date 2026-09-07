@@ -1293,14 +1293,69 @@ router.post("/cancel", authUser, async (req, res) => {
       });
     }
 
-    await prisma.pelekanReviewSession.deleteMany({
-      where: { userId: user.id },
-    });
+    const activeSet = await ensureQuestionSetSeeded();
+
+    const existing =
+      await prisma.pelekanReviewSession.findUnique({
+        where: { userId: user.id },
+      });
+
+    const session =
+      await prisma.pelekanReviewSession.upsert({
+        where: { userId: user.id },
+
+        create: {
+          userId: user.id,
+          chosenPath: "skip_review",
+          status: "completed_locked",
+
+          currentTest: 1,
+          currentIndex: 0,
+
+          questionSetId: activeSet.id,
+
+          answersJson: ensureAnswersShape(null),
+          resultJson: null,
+
+          completedAt: null,
+          paywallShownAt: null,
+          unlockedAt: null,
+
+          test1CompletedAt: null,
+          test2CompletedAt: null,
+          test2SkippedAt: null,
+        },
+
+        update: {
+          chosenPath: "skip_review",
+          status: "completed_locked",
+
+          currentTest: 1,
+          currentIndex: 0,
+
+          answersJson: ensureAnswersShape(null),
+          resultJson: null,
+
+          completedAt: null,
+          paywallShownAt: null,
+          unlockedAt: null,
+
+          test1CompletedAt: null,
+          test2CompletedAt: null,
+          test2SkippedAt: null,
+
+          questionSetId:
+            existing?.questionSetId ?? activeSet.id,
+
+          updatedAt: now(),
+        },
+      });
 
     return res.json({
       ok: true,
       data: {
         cancelled: true,
+        chosenPath: session.chosenPath,
       },
     });
   } catch (e) {
@@ -1315,7 +1370,6 @@ router.post("/cancel", authUser, async (req, res) => {
     });
   }
 });
-
 // POST answer (برای هر سوال)
 router.post("/answer", authUser, async (req, res) => {
   try {

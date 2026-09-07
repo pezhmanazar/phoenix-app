@@ -18,6 +18,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 type Props = {
   me: any;
@@ -595,22 +596,20 @@ export default function Review({ me, state, onRefresh }: Props) {
       }
 
       setSelectedValue(null);
-      setReviewState(null);
 
-      bootRef.current.done = false;
-      startLockRef.current = false;
-      submitLockRef.current = false;
-      redirectedRef.current = false;
+      // نگذار Review دوباره برای خودش session بسازد
+      bootRef.current.done = true;
+      startLockRef.current = true;
+      redirectedRef.current = true;
 
+      // والد state جدید را می‌گیرد و Review را با Treatment جایگزین می‌کند
       await onRefresh?.();
-
-      router.replace("/(tabs)/Pelekan" as any);
     } catch (e: any) {
       setError(e?.message || "SERVER_ERROR");
     } finally {
       setLoading(false);
     }
-  }, [authLoading, token, loading, postJsonAuthed, onRefresh, router]);
+  }, [authLoading, token, loading, postJsonAuthed, onRefresh]);
 
   const goToTest2 = useCallback(async () => {
     if (authLoading) return;
@@ -1559,45 +1558,6 @@ export default function Review({ me, state, onRefresh }: Props) {
           >
             سوال {currentIndex + 1} از {questions.length}
           </Text>
-
-          <Pressable
-            disabled={loading}
-            onPress={() =>
-              openConfirm(
-                "شروع آزمون‌ها از صفر",
-                "با این کار همه پاسخ‌های ثبت‌شده در هر دو آزمون بازسنجی و آیا برمی‌گرده؟ پاک می‌شن و آزمون بازسنجی از سؤال اول شروع می‌شه. مطمئنی؟",
-                resetReview,
-              )
-            }
-            style={[
-              styles.resetInlineBtn,
-              {
-                opacity: loading ? 0.5 : 1,
-              },
-            ]}
-          >
-            <Text style={styles.resetInlineText}>شروع از اول</Text>
-          </Pressable>
-
-          <Pressable
-            disabled={loading}
-            onPress={() =>
-              openConfirm(
-                "انصراف از آزمون",
-                "با انصراف، پاسخ‌ها و وضعیت این دو آزمون پاک می‌شن و به پلکان برمی‌گردی. اگه بعداً دوباره این مسیر رو انتخاب کنی، آزمون از ابتدا شروع می‌شه. مطمئنی؟",
-                cancelReview,
-              )
-            }
-            style={[
-              styles.cancelInlineBtn,
-              {
-                opacity: loading ? 0.5 : 1,
-              },
-            ]}
-          >
-            <Text style={styles.cancelInlineText}>انصراف از آزمون</Text>
-          </Pressable>
-
           <View style={styles.hr} />
 
           <Text style={[styles.qText, styles.rtlText, { color: palette.text }]}>
@@ -1684,11 +1644,48 @@ export default function Review({ me, state, onRefresh }: Props) {
                   مرحله قبلی
                 </Text>
               </Pressable>
-            ) : (
-              <View style={{ flex: 1 }} />
-            )}
+            ) : null}
           </View>
         </Animated.View>
+        <View style={styles.utilityActionsRow}>
+          <Pressable
+            disabled={loading}
+            onPress={() =>
+              openConfirm(
+                "شروع آزمون‌ها از صفر",
+                "با این کار همه پاسخ‌های ثبت‌شده در هر دو آزمون بازسنجی و آیا برمی‌گرده؟ پاک می‌شن و آزمون بازسنجی از سؤال اول شروع می‌شه. مطمئنی؟",
+                resetReview,
+              )
+            }
+            style={[
+              styles.utilityBtn,
+              styles.restartUtilityBtn,
+              { opacity: loading ? 0.5 : 1 },
+            ]}
+          >
+            <Ionicons name="refresh-outline" size={17} color="#FCA5A5" />
+            <Text style={styles.restartUtilityText}>شروع از اول</Text>
+          </Pressable>
+
+          <Pressable
+            disabled={loading}
+            onPress={() =>
+              openConfirm(
+                "انصراف از آزمون",
+                "با انصراف، پاسخ‌ها و وضعیت این دو آزمون پاک می‌شن و مستقیم وارد مسیر درمان می‌شی. مطمئنی؟",
+                cancelReview,
+              )
+            }
+            style={[
+              styles.utilityBtn,
+              styles.cancelUtilityBtn,
+              { opacity: loading ? 0.5 : 1 },
+            ]}
+          >
+            <Ionicons name="exit-outline" size={17} color="#F87171" />
+            <Text style={styles.cancelUtilityText}>انصراف از آزمون</Text>
+          </Pressable>
+        </View>
       </ScrollView>
 
       {ConfirmGlass}
@@ -1885,5 +1882,46 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "900",
     textAlign: "center",
+  },
+  utilityActionsRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 10,
+    paddingHorizontal: 2,
+  },
+
+  utilityBtn: {
+    flex: 1,
+    minHeight: 42,
+    borderWidth: 1,
+    borderRadius: 14,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingHorizontal: 10,
+  },
+
+  restartUtilityBtn: {
+    borderColor: "rgba(239,68,68,.28)",
+    backgroundColor: "rgba(239,68,68,.08)",
+  },
+
+  cancelUtilityBtn: {
+    borderColor: "rgba(239,68,68,.50)",
+    backgroundColor: "rgba(239,68,68,.14)",
+  },
+
+  restartUtilityText: {
+    color: "#FCA5A5",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+
+  cancelUtilityText: {
+    color: "#F87171",
+    fontSize: 11,
+    fontWeight: "900",
   },
 });
