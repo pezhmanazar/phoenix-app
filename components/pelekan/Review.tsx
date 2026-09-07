@@ -1,7 +1,13 @@
 // phoenix-app/components/pelekan/Review.tsx
 import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -40,7 +46,12 @@ type QuestionSetResponse = {
   ok: boolean;
   error?: string;
   data?: {
-    questionSet: { id: string; code: string; version: number; titleFa?: string | null };
+    questionSet: {
+      id: string;
+      code: string;
+      version: number;
+      titleFa?: string | null;
+    };
     tests: { test1: ReviewQuestion[]; test2: ReviewQuestion[] };
   };
 };
@@ -75,22 +86,24 @@ type ReviewStateResponse = {
 const API_BASE = "https://api.qoqnoos.app/api/pelekan/review";
 
 export default function Review({ me, state, onRefresh }: Props) {
-const router = useRouter();
-const { token, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const { token, loading: authLoading } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [qsLoading, setQsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [reviewState, setReviewState] = useState<ReviewStateResponse["data"] | null>(null);
+  const [reviewState, setReviewState] = useState<
+    ReviewStateResponse["data"] | null
+  >(null);
   const [, setQuestionSetId] = useState<string | null>(null);
   const [test1, setTest1] = useState<ReviewQuestion[]>([]);
   const [test2, setTest2] = useState<ReviewQuestion[]>([]);
 
   const bootRef = useRef<{ token: string | null; done: boolean }>({
-  token: null,
-  done: false,
-});
+    token: null,
+    done: false,
+  });
   const startLockRef = useRef(false);
   const mountedRef = useRef(true);
   const submitLockRef = useRef(false);
@@ -113,12 +126,15 @@ const { token, loading: authLoading } = useAuth();
   const fade = useRef(new Animated.Value(0)).current;
   const slideY = useRef(new Animated.Value(10)).current;
 
-  const openConfirm = useCallback((t: string, m: string, action: () => Promise<void> | void) => {
-    confirmActionRef.current = action;
-    setConfirmTitle(t);
-    setConfirmMsg(m);
-    setConfirmOpen(true);
-  }, []);
+  const openConfirm = useCallback(
+    (t: string, m: string, action: () => Promise<void> | void) => {
+      confirmActionRef.current = action;
+      setConfirmTitle(t);
+      setConfirmMsg(m);
+      setConfirmOpen(true);
+    },
+    [],
+  );
 
   const closeConfirm = useCallback(() => {
     setConfirmOpen(false);
@@ -138,7 +154,7 @@ const { token, loading: authLoading } = useAuth();
       red: "#ef4444",
       lime: "#86efac",
     }),
-    []
+    [],
   );
 
   useEffect(() => {
@@ -167,7 +183,7 @@ const { token, loading: authLoading } = useAuth();
 
       return json as T;
     },
-    [token]
+    [token],
   );
 
   const postJsonAuthed = useCallback(
@@ -192,53 +208,50 @@ const { token, loading: authLoading } = useAuth();
 
       return json as T;
     },
-    [token]
+    [token],
   );
 
   const fetchReviewState = useCallback(async () => {
-  if (authLoading) return null;
-  if (!token) return null;
+    if (authLoading) return null;
+    if (!token) return null;
 
-  const json = await fetchJsonAuthed<ReviewStateResponse>(
-    `${API_BASE}/state`
-  );
+    const json = await fetchJsonAuthed<ReviewStateResponse>(
+      `${API_BASE}/state`,
+    );
 
-  if (!json?.ok) throw new Error(json?.error || "STATE_FAILED");
+    if (!json?.ok) throw new Error(json?.error || "STATE_FAILED");
 
-  if (mountedRef.current) setReviewState(json.data || null);
-  if (mountedRef.current) {
-  setSelectedValue(
-    typeof json.data?.selectedValue === "number"
-      ? json.data.selectedValue
-      : null
-  );
-}
-  return json.data || null;
-}, [authLoading, token, fetchJsonAuthed]);
-
-
+    if (mountedRef.current) setReviewState(json.data || null);
+    if (mountedRef.current) {
+      setSelectedValue(
+        typeof json.data?.selectedValue === "number"
+          ? json.data.selectedValue
+          : null,
+      );
+    }
+    return json.data || null;
+  }, [authLoading, token, fetchJsonAuthed]);
 
   const fetchQuestionSet = useCallback(async () => {
-  if (authLoading) return null;
-  if (!token) return null;
+    if (authLoading) return null;
+    if (!token) return null;
 
-  const json = await fetchJsonAuthed<QuestionSetResponse>(
-    `${API_BASE}/question-set`
-  );
+    const json = await fetchJsonAuthed<QuestionSetResponse>(
+      `${API_BASE}/question-set`,
+    );
 
-  if (!json?.ok || !json?.data?.tests || !json?.data?.questionSet?.id) {
-    throw new Error(json?.error || "QS_FAILED");
-  }
+    if (!json?.ok || !json?.data?.tests || !json?.data?.questionSet?.id) {
+      throw new Error(json?.error || "QS_FAILED");
+    }
 
-  if (!mountedRef.current) return null;
+    if (!mountedRef.current) return null;
 
-  setQuestionSetId(json.data.questionSet.id);
-  setTest1(Array.isArray(json.data.tests.test1) ? json.data.tests.test1 : []);
-  setTest2(Array.isArray(json.data.tests.test2) ? json.data.tests.test2 : []);
+    setQuestionSetId(json.data.questionSet.id);
+    setTest1(Array.isArray(json.data.tests.test1) ? json.data.tests.test1 : []);
+    setTest2(Array.isArray(json.data.tests.test2) ? json.data.tests.test2 : []);
 
-  return json.data.questionSet.id;
-}, [authLoading, token, fetchJsonAuthed]);
-
+    return json.data.questionSet.id;
+  }, [authLoading, token, fetchJsonAuthed]);
 
   const goToResultPage = useCallback(() => {
     router.push({
@@ -268,87 +281,85 @@ const { token, loading: authLoading } = useAuth();
   }, [fetchReviewState, goToResultPage]);
 
   const ensureStarted = useCallback(
-  async (stData: ReviewStateResponse["data"] | null) => {
-    if (authLoading) return;
-    if (!token) return;
+    async (stData: ReviewStateResponse["data"] | null) => {
+      if (authLoading) return;
+      if (!token) return;
 
-    const st = stData?.session;
-    if (st?.id && st?.questionSetId) return;
+      const st = stData?.session;
+      if (st?.id && st?.questionSetId) return;
 
-    if (startLockRef.current) return;
-    startLockRef.current = true;
+      if (startLockRef.current) return;
+      startLockRef.current = true;
 
-    try {
-      await postJsonAuthed(`${API_BASE}/start`, {});
-      await fetchReviewState();
-      onRefresh?.();
-    } finally {
-      startLockRef.current = false;
-    }
-  },
-  [authLoading, token, postJsonAuthed, fetchReviewState, onRefresh]
-);
-
-
+      try {
+        await postJsonAuthed(`${API_BASE}/start`, {});
+        await fetchReviewState();
+        onRefresh?.();
+      } finally {
+        startLockRef.current = false;
+      }
+    },
+    [authLoading, token, postJsonAuthed, fetchReviewState, onRefresh],
+  );
 
   const bootstrap = useCallback(async () => {
-  if (authLoading) return;
-  if (!token) return;
-  if (bootingRef.current) return;
-  bootingRef.current = true;
+    if (authLoading) return;
+    if (!token) return;
+    if (bootingRef.current) return;
+    bootingRef.current = true;
 
-  const seq = ++bootSeqRef.current;
+    const seq = ++bootSeqRef.current;
 
-  setError(null);
-  setQsLoading(true);
+    setError(null);
+    setQsLoading(true);
 
-  try {
-    let st = await fetchReviewState();
-if (!st) throw new Error("STATE_EMPTY");
+    try {
+      let st = await fetchReviewState();
+      if (!st) throw new Error("STATE_EMPTY");
 
-await ensureStarted(st);
+      await ensureStarted(st);
 
-st = await fetchReviewState();
-if (!st) throw new Error("STATE_EMPTY_AFTER_START");
+      st = await fetchReviewState();
+      if (!st) throw new Error("STATE_EMPTY_AFTER_START");
 
-await fetchQuestionSet();
-  } catch (e: any) {
-    if (mountedRef.current && bootSeqRef.current === seq) {
-      setError(String(e?.message || "UNKNOWN_ERROR"));
+      await fetchQuestionSet();
+    } catch (e: any) {
+      if (mountedRef.current && bootSeqRef.current === seq) {
+        setError(String(e?.message || "UNKNOWN_ERROR"));
+      }
+    } finally {
+      if (mountedRef.current && bootSeqRef.current === seq) {
+        setQsLoading(false);
+      }
+      bootingRef.current = false;
     }
-  } finally {
-    if (mountedRef.current && bootSeqRef.current === seq) {
-      setQsLoading(false);
-    }
-    bootingRef.current = false;
-  }
-}, [authLoading, token, fetchReviewState, ensureStarted, fetchQuestionSet]);
+  }, [authLoading, token, fetchReviewState, ensureStarted, fetchQuestionSet]);
 
   useEffect(() => {
     if (bootRef.current.token !== (token || null)) {
-  bootRef.current.token = token || null;
-  bootRef.current.done = false;
-  startLockRef.current = false;
-  submitLockRef.current = false;
-  redirectedRef.current = false;
+      bootRef.current.token = token || null;
+      bootRef.current.done = false;
+      startLockRef.current = false;
+      submitLockRef.current = false;
+      redirectedRef.current = false;
 
-  setResultOpen(false);
-  setResultData(null);
-  setResultError(null);
-  setResultLoading(false);
-  setSelectedValue(null);
-}
+      setResultOpen(false);
+      setResultData(null);
+      setResultError(null);
+      setResultLoading(false);
+      setSelectedValue(null);
+    }
 
-if (authLoading) return;
-if (!token) return;
-if (bootRef.current.done) return;
+    if (authLoading) return;
+    if (!token) return;
+    if (bootRef.current.done) return;
 
-(async () => {
-  await bootstrap();
-  if (!mountedRef.current) return;
-  bootRef.current.done = true;
-})();
-}, [token, authLoading, bootstrap]);
+    (async () => {
+      await bootstrap();
+      if (!mountedRef.current) return;
+      bootRef.current.done = true;
+    })();
+  }, [token, authLoading, bootstrap]);
 
   const session = reviewState?.session || null;
   const currentTest = session?.currentTest ?? 1;
@@ -358,7 +369,8 @@ if (bootRef.current.done) return;
   const currentQuestion = questions[currentIndex] || null;
 
   const sessStatus = String(session?.status || "");
-  const showUnlocked = sessStatus === "unlocked" || sessStatus === "completed_locked";
+  const showUnlocked =
+    sessStatus === "unlocked" || sessStatus === "completed_locked";
 
   useEffect(() => {
     if (!session) return;
@@ -371,24 +383,24 @@ if (bootRef.current.done) return;
   }, [session, sessStatus, goToResultPage]);
 
   useEffect(() => {
-  fade.setValue(0);
-  slideY.setValue(10);
+    fade.setValue(0);
+    slideY.setValue(10);
 
-  Animated.parallel([
-    Animated.timing(fade, {
-      toValue: 1,
-      duration: 180,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
-    }),
-    Animated.timing(slideY, {
-      toValue: 0,
-      duration: 180,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
-    }),
-  ]).start();
-}, [currentTest, currentIndex, fade, slideY]);
+    Animated.parallel([
+      Animated.timing(fade, {
+        toValue: 1,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideY, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [currentTest, currentIndex, fade, slideY]);
 
   const title = useMemo(() => {
     if (currentTest === 1) return "آزمون بازسنجی";
@@ -427,16 +439,18 @@ if (bootRef.current.done) return;
     ({ label }: { label: string }) => (
       <View style={styles.inlineLoading}>
         <ActivityIndicator color={palette.gold} size="small" />
-        <Text style={[styles.inlineLoadingText, { color: palette.sub }]}>{label}</Text>
+        <Text style={[styles.inlineLoadingText, { color: palette.sub }]}>
+          {label}
+        </Text>
       </View>
     ),
-    [palette.gold, palette.sub]
+    [palette.gold, palette.sub],
   );
 
   const submitAnswer = useCallback(
     async (value: number) => {
       if (authLoading) return;
-if (!token || !session) return;
+      if (!token || !session) return;
       if (session?.status !== "in_progress") {
         await openResultScreen();
         return;
@@ -449,11 +463,11 @@ if (!token || !session) return;
 
       setLoading(true);
       try {
-const json = await postJsonAuthed<any>(`${API_BASE}/answer`, {
-  testNo: currentTest,
-  index: idx,
-  value,
-});
+        const json = await postJsonAuthed<any>(`${API_BASE}/answer`, {
+          testNo: currentTest,
+          index: idx,
+          value,
+        });
 
         if (!json?.ok) {
           setError(json?.error || "SERVER_ERROR");
@@ -461,6 +475,7 @@ const json = await postJsonAuthed<any>(`${API_BASE}/answer`, {
         }
 
         optimisticAdvance(idx);
+        setSelectedValue(null);
 
         const nextIdx = idx + 1;
         const len = questions?.length || 0;
@@ -479,61 +494,127 @@ const json = await postJsonAuthed<any>(`${API_BASE}/answer`, {
       }
     },
     [
-  authLoading,
-  token,
-  session,
-  currentTest,
-  openResultScreen,
-  postJsonAuthed,
-  optimisticAdvance,
-  questions?.length,
-  syncAndMaybeGoResult,
-]
+      authLoading,
+      token,
+      session,
+      currentTest,
+      openResultScreen,
+      postJsonAuthed,
+      optimisticAdvance,
+      questions?.length,
+      syncAndMaybeGoResult,
+    ],
   );
 
   const goPrev = useCallback(async () => {
-  if (authLoading) return;
-  if (!token || !session) return;
+    if (authLoading) return;
+    if (!token || !session) return;
 
-  if (session.status !== "in_progress") {
-    await openResultScreen();
-    return;
-  }
-
-  if (loading || submitLockRef.current) return;
-
-  try {
-    setLoading(true);
-
-    const json = await postJsonAuthed<any>(
-      `${API_BASE}/previous`,
-      {},
-    );
-
-    if (!json?.ok) {
-      setError(json?.error || "SERVER_ERROR");
+    if (session.status !== "in_progress") {
+      await openResultScreen();
       return;
     }
 
-    await fetchReviewState();
-  } catch (e: any) {
-    setError(e?.message || "SERVER_ERROR");
-  } finally {
-    setLoading(false);
-  }
-}, [
-  authLoading,
-  token,
-  session,
-  loading,
-  openResultScreen,
-  postJsonAuthed,
-  fetchReviewState,
-]);
+    if (loading || submitLockRef.current) return;
+
+    try {
+      setLoading(true);
+
+      const json = await postJsonAuthed<any>(`${API_BASE}/previous`, {});
+
+      if (!json?.ok) {
+        setError(json?.error || "SERVER_ERROR");
+        return;
+      }
+
+      await fetchReviewState();
+    } catch (e: any) {
+      setError(e?.message || "SERVER_ERROR");
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    authLoading,
+    token,
+    session,
+    loading,
+    openResultScreen,
+    postJsonAuthed,
+    fetchReviewState,
+  ]);
+
+  const resetReview = useCallback(async () => {
+    if (authLoading) return;
+    if (!token) return;
+
+    if (loading || submitLockRef.current) return;
+
+    try {
+      setLoading(true);
+
+      const json = await postJsonAuthed<any>(`${API_BASE}/reset`, {});
+
+      if (!json?.ok) {
+        setError(json?.error || "SERVER_ERROR");
+        return;
+      }
+
+      setSelectedValue(null);
+      redirectedRef.current = false;
+
+      await fetchReviewState();
+      onRefresh?.();
+    } catch (e: any) {
+      setError(e?.message || "SERVER_ERROR");
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    authLoading,
+    token,
+    loading,
+    postJsonAuthed,
+    fetchReviewState,
+    onRefresh,
+  ]);
+
+  const cancelReview = useCallback(async () => {
+    if (authLoading) return;
+    if (!token) return;
+
+    if (loading || submitLockRef.current) return;
+
+    try {
+      setLoading(true);
+
+      const json = await postJsonAuthed<any>(`${API_BASE}/cancel`, {});
+
+      if (!json?.ok) {
+        setError(json?.error || "SERVER_ERROR");
+        return;
+      }
+
+      setSelectedValue(null);
+      setReviewState(null);
+
+      bootRef.current.done = false;
+      startLockRef.current = false;
+      submitLockRef.current = false;
+      redirectedRef.current = false;
+
+      await onRefresh?.();
+
+      router.replace("/(tabs)/Pelekan" as any);
+    } catch (e: any) {
+      setError(e?.message || "SERVER_ERROR");
+    } finally {
+      setLoading(false);
+    }
+  }, [authLoading, token, loading, postJsonAuthed, onRefresh, router]);
 
   const goToTest2 = useCallback(async () => {
-  if (authLoading) return;
-  if (!token) return;
+    if (authLoading) return;
+    if (!token) return;
     if (session?.status !== "in_progress") {
       await openResultScreen();
       return;
@@ -544,9 +625,9 @@ const json = await postJsonAuthed<any>(`${API_BASE}/answer`, {
 
     setLoading(true);
     try {
-    const json = await postJsonAuthed<any>(`${API_BASE}/complete-test`, {
-  testNo: 1,
-});
+      const json = await postJsonAuthed<any>(`${API_BASE}/complete-test`, {
+        testNo: 1,
+      });
 
       if (!json?.ok) {
         setError(json?.error || "SERVER_ERROR");
@@ -559,13 +640,19 @@ const json = await postJsonAuthed<any>(`${API_BASE}/answer`, {
       setLoading(false);
       submitLockRef.current = false;
     }
- }, [authLoading, token, session?.status, openResultScreen, postJsonAuthed, fetchReviewState, onRefresh]
-);
-
+  }, [
+    authLoading,
+    token,
+    session?.status,
+    openResultScreen,
+    postJsonAuthed,
+    fetchReviewState,
+    onRefresh,
+  ]);
 
   const passTest2FromEndOfTest1 = useCallback(async () => {
     if (authLoading) return;
-if (!token) return;
+    if (!token) return;
     if (session?.status !== "in_progress") {
       await openResultScreen();
       return;
@@ -576,9 +663,9 @@ if (!token) return;
 
     setLoading(true);
     try {
-    const c1 = await postJsonAuthed<any>(`${API_BASE}/complete-test`, {
-  testNo: 1,
-});
+      const c1 = await postJsonAuthed<any>(`${API_BASE}/complete-test`, {
+        testNo: 1,
+      });
 
       if (!c1?.ok) {
         setError(c1?.error || "SERVER_ERROR");
@@ -597,11 +684,18 @@ if (!token) return;
       setLoading(false);
       submitLockRef.current = false;
     }
-  }, [authLoading, token, session?.status, openResultScreen, postJsonAuthed, syncAndMaybeGoResult]);
+  }, [
+    authLoading,
+    token,
+    session?.status,
+    openResultScreen,
+    postJsonAuthed,
+    syncAndMaybeGoResult,
+  ]);
 
   const finishAfterTest2 = useCallback(async () => {
     if (authLoading) return;
-if (!token) return;
+    if (!token) return;
     if (session?.status !== "in_progress") {
       await openResultScreen();
       return;
@@ -612,10 +706,9 @@ if (!token) return;
 
     setLoading(true);
     try {
-     const c = await postJsonAuthed<any>(`${API_BASE}/complete-test`, {
-  testNo: 2,
-});
-
+      const c = await postJsonAuthed<any>(`${API_BASE}/complete-test`, {
+        testNo: 2,
+      });
 
       if (!c?.ok) {
         setError(c?.error || "SERVER_ERROR");
@@ -633,27 +726,44 @@ if (!token) return;
       setLoading(false);
       submitLockRef.current = false;
     }
-  }, [authLoading, token, session?.status, openResultScreen, postJsonAuthed, syncAndMaybeGoResult]);
+  }, [
+    authLoading,
+    token,
+    session?.status,
+    openResultScreen,
+    postJsonAuthed,
+    syncAndMaybeGoResult,
+  ]);
 
   const manualReload = useCallback(() => {
-  bootRef.current.done = false;
-  startLockRef.current = false;
-  submitLockRef.current = false;
-  redirectedRef.current = false;
-  setError(null);
-  bootstrap();
-}, [bootstrap]);
+    bootRef.current.done = false;
+    startLockRef.current = false;
+    submitLockRef.current = false;
+    redirectedRef.current = false;
+    setError(null);
+    bootstrap();
+  }, [bootstrap]);
 
   const ConfirmGlass = useMemo(() => {
     if (!confirmOpen) return null;
 
     return (
       <View style={styles.confirmOverlay}>
-        <View style={[styles.confirmCard, { backgroundColor: palette.glass, borderColor: palette.border }]}>
+        <View
+          style={[
+            styles.confirmCard,
+            { backgroundColor: palette.glass, borderColor: palette.border },
+          ]}
+        >
           <Text
             style={[
               styles.rtlText,
-              { color: palette.text, fontWeight: "900", fontSize: 16, textAlign: "center" },
+              {
+                color: palette.text,
+                fontWeight: "900",
+                fontSize: 16,
+                textAlign: "center",
+              },
             ]}
           >
             {confirmTitle}
@@ -661,7 +771,13 @@ if (!token) return;
           <Text
             style={[
               styles.rtlText,
-              { color: palette.sub, marginTop: 10, lineHeight: 22, fontSize: 12, textAlign: "right" },
+              {
+                color: palette.sub,
+                marginTop: 10,
+                lineHeight: 22,
+                fontSize: 12,
+                textAlign: "right",
+              },
             ]}
           >
             {confirmMsg}
@@ -673,7 +789,10 @@ if (!token) return;
             disabled={loading}
             style={[
               styles.btnPrimary,
-              { borderColor: "rgba(212,175,55,.35)", backgroundColor: "rgba(212,175,55,.10)" },
+              {
+                borderColor: "rgba(212,175,55,.35)",
+                backgroundColor: "rgba(212,175,55,.10)",
+              },
             ]}
             onPress={async () => {
               const fn = confirmActionRef.current;
@@ -684,7 +803,9 @@ if (!token) return;
             {loading ? (
               <InlineLoading label="در حال ثبت…" />
             ) : (
-              <Text style={[styles.btnText, { color: palette.text }]}>بله، ادامه</Text>
+              <Text style={[styles.btnText, { color: palette.text }]}>
+                بله، ادامه
+              </Text>
             )}
           </Pressable>
 
@@ -694,7 +815,10 @@ if (!token) return;
             disabled={loading}
             style={[
               styles.btnGhost,
-              { borderColor: palette.border, backgroundColor: "rgba(255,255,255,.04)" },
+              {
+                borderColor: palette.border,
+                backgroundColor: "rgba(255,255,255,.04)",
+              },
             ]}
             onPress={closeConfirm}
           >
@@ -707,7 +831,15 @@ if (!token) return;
         </View>
       </View>
     );
-  }, [confirmOpen, confirmTitle, confirmMsg, palette, loading, closeConfirm, InlineLoading]);
+  }, [
+    confirmOpen,
+    confirmTitle,
+    confirmMsg,
+    palette,
+    loading,
+    closeConfirm,
+    InlineLoading,
+  ]);
 
   const ResultScreen = useMemo(() => {
     if (!resultOpen) return null;
@@ -718,15 +850,49 @@ if (!token) return;
     const msg = String(resultData?.message || "نتیجه آماده است.");
 
     return (
-      <View style={[styles.container, { backgroundColor: palette.bg, justifyContent: "center" }]}>
-        <View style={[styles.card, styles.cardFancy, { backgroundColor: palette.glass, borderColor: palette.border }]}>
-          <View style={[styles.accentBarTop, { backgroundColor: locked ? palette.red : palette.lime }]} />
+      <View
+        style={[
+          styles.container,
+          { backgroundColor: palette.bg, justifyContent: "center" },
+        ]}
+      >
+        <View
+          style={[
+            styles.card,
+            styles.cardFancy,
+            { backgroundColor: palette.glass, borderColor: palette.border },
+          ]}
+        >
+          <View
+            style={[
+              styles.accentBarTop,
+              { backgroundColor: locked ? palette.red : palette.lime },
+            ]}
+          />
 
-          <Text style={[styles.title, { color: locked ? palette.red : palette.lime, textAlign: "center" }]}>
+          <Text
+            style={[
+              styles.title,
+              {
+                color: locked ? palette.red : palette.lime,
+                textAlign: "center",
+              },
+            ]}
+          >
             {resultTitle}
           </Text>
 
-          <Text style={[styles.rtlText, { color: palette.sub, marginTop: 10, lineHeight: 22, textAlign: "right" }]}>
+          <Text
+            style={[
+              styles.rtlText,
+              {
+                color: palette.sub,
+                marginTop: 10,
+                lineHeight: 22,
+                textAlign: "right",
+              },
+            ]}
+          >
             {msg}
           </Text>
 
@@ -734,7 +900,12 @@ if (!token) return;
             <Text
               style={[
                 styles.rtlText,
-                { color: palette.red, marginTop: 10, fontSize: 12, textAlign: "right" },
+                {
+                  color: palette.red,
+                  marginTop: 10,
+                  fontSize: 12,
+                  textAlign: "right",
+                },
               ]}
             >
               {resultError}
@@ -744,9 +915,17 @@ if (!token) return;
           <View style={{ height: 16 }} />
 
           {resultLoading ? (
-            <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 10 }}>
+            <View
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+                paddingVertical: 10,
+              }}
+            >
               <ActivityIndicator color={palette.gold} />
-              <Text style={{ color: palette.sub, marginTop: 10, fontSize: 12 }}>در حال دریافت نتیجه…</Text>
+              <Text style={{ color: palette.sub, marginTop: 10, fontSize: 12 }}>
+                در حال دریافت نتیجه…
+              </Text>
             </View>
           ) : (
             <>
@@ -754,32 +933,48 @@ if (!token) return;
                 style={[styles.btn, { borderColor: palette.border }]}
                 onPress={async () => {
                   setResultOpen(false);
-                  router.replace(
-                    {
-                      pathname: "/(tabs)/Pelekan",
-                      params: { focus: "" },
-                    } as any
-                  );
+                  router.replace({
+                    pathname: "/(tabs)/Pelekan",
+                    params: { focus: "" },
+                  } as any);
                   setTimeout(() => onRefresh?.(), 50);
                 }}
               >
-                <Text style={[styles.btnText, { color: palette.text }]}>رفتن به پلکان درمان</Text>
+                <Text style={[styles.btnText, { color: palette.text }]}>
+                  رفتن به پلکان درمان
+                </Text>
               </Pressable>
 
               <View style={{ height: 10 }} />
 
               <Pressable
-                style={[styles.btnGhost, { borderColor: palette.border, backgroundColor: "rgba(255,255,255,.04)" }]}
+                style={[
+                  styles.btnGhost,
+                  {
+                    borderColor: palette.border,
+                    backgroundColor: "rgba(255,255,255,.04)",
+                  },
+                ]}
                 onPress={() => setResultOpen(false)}
               >
-                <Text style={[styles.btnText, { color: palette.sub }]}>بازگشت</Text>
+                <Text style={[styles.btnText, { color: palette.sub }]}>
+                  بازگشت
+                </Text>
               </Pressable>
             </>
           )}
         </View>
       </View>
     );
-  }, [resultOpen, resultData, resultLoading, resultError, palette, router, onRefresh]);
+  }, [
+    resultOpen,
+    resultData,
+    resultLoading,
+    resultError,
+    palette,
+    router,
+    onRefresh,
+  ]);
 
   const OptionsBlock = useMemo(() => {
     if (!currentQuestion) return null;
@@ -787,7 +982,12 @@ if (!token) return;
     const opts = currentQuestion.options || [];
     const rawLayout = String(currentQuestion.ui?.layout || "").trim();
     const layout =
-      rawLayout || (opts.length === 4 ? "grid2x2" : opts.length === 5 ? "grid3x2_last2" : "stack");
+      rawLayout ||
+      (opts.length === 4
+        ? "grid2x2"
+        : opts.length === 5
+          ? "grid3x2_last2"
+          : "stack");
 
     const renderBtn = (op: ReviewOption) => {
       const isSelected = selectedValue === op.value;
@@ -800,13 +1000,21 @@ if (!token) return;
             styles.option,
             {
               borderColor: isSelected ? accentColor : palette.border,
-              backgroundColor: isSelected ? "rgba(255,255,255,.06)" : "transparent",
+              backgroundColor: isSelected
+                ? "rgba(255,255,255,.06)"
+                : "transparent",
               opacity: pressed ? 0.9 : 1,
               transform: [{ scale: pressed ? 0.995 : 1 }],
             },
           ]}
         >
-          <Text style={[styles.centerText, styles.rtlText, { color: palette.text, fontSize: 14 }]}>
+          <Text
+            style={[
+              styles.centerText,
+              styles.rtlText,
+              { color: palette.text, fontSize: 14 },
+            ]}
+          >
             {op.labelFa}
           </Text>
         </Pressable>
@@ -871,13 +1079,22 @@ if (!token) return;
     }
 
     return <View>{opts.map(renderBtn)}</View>;
-  }, [currentQuestion, selectedValue, loading, accentColor, palette.border, palette.text]);
+  }, [
+    currentQuestion,
+    selectedValue,
+    loading,
+    accentColor,
+    palette.border,
+    palette.text,
+  ]);
 
   if (authLoading) {
     return (
       <View style={[styles.root, { backgroundColor: palette.bg }]}>
         <ActivityIndicator color={palette.gold} />
-        <Text style={{ color: palette.sub, marginTop: 10, fontSize: 12 }}>در حال بررسی ورود…</Text>
+        <Text style={{ color: palette.sub, marginTop: 10, fontSize: 12 }}>
+          در حال بررسی ورود…
+        </Text>
       </View>
     );
   }
@@ -894,50 +1111,115 @@ if (!token) return;
     return (
       <View style={[styles.root, { backgroundColor: palette.bg }]}>
         <ActivityIndicator color={palette.gold} />
-        <Text style={{ color: palette.sub, marginTop: 10, fontSize: 12 }}>در حال دریافت سوال‌ها…</Text>
+        <Text style={{ color: palette.sub, marginTop: 10, fontSize: 12 }}>
+          در حال دریافت سوال‌ها…
+        </Text>
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={[styles.root, { backgroundColor: palette.bg, paddingHorizontal: 18 }]}>
-        <Text style={{ color: palette.red, fontWeight: "900", marginBottom: 8, textAlign: "center" }}>
+      <View
+        style={[
+          styles.root,
+          { backgroundColor: palette.bg, paddingHorizontal: 18 },
+        ]}
+      >
+        <Text
+          style={{
+            color: palette.red,
+            fontWeight: "900",
+            marginBottom: 8,
+            textAlign: "center",
+          }}
+        >
           خطا
         </Text>
-        <Text style={[styles.rtlText, { color: palette.sub, fontSize: 12, lineHeight: 18, textAlign: "right" }]}>
+        <Text
+          style={[
+            styles.rtlText,
+            {
+              color: palette.sub,
+              fontSize: 12,
+              lineHeight: 18,
+              textAlign: "right",
+            },
+          ]}
+        >
           {error}
         </Text>
 
         <View style={{ height: 14 }} />
 
-        <Pressable style={[styles.btn, { borderColor: palette.border }]} onPress={manualReload}>
-          <Text style={[styles.btnText, { color: palette.text }]}>تلاش مجدد</Text>
+        <Pressable
+          style={[styles.btn, { borderColor: palette.border }]}
+          onPress={manualReload}
+        >
+          <Text style={[styles.btnText, { color: palette.text }]}>
+            تلاش مجدد
+          </Text>
         </Pressable>
       </View>
     );
   }
 
   if (resultOpen) {
-    return <View style={{ flex: 1, backgroundColor: palette.bg }}>{ResultScreen}</View>;
+    return (
+      <View style={{ flex: 1, backgroundColor: palette.bg }}>
+        {ResultScreen}
+      </View>
+    );
   }
 
   if (session && showUnlocked) {
     return (
-      <View style={[styles.container, { backgroundColor: palette.bg, justifyContent: "center" }]}>
-        <View style={[styles.card, styles.cardFancy, { backgroundColor: palette.glass, borderColor: palette.border }]}>
-          <View style={[styles.accentBarTop, { backgroundColor: palette.lime }]} />
+      <View
+        style={[
+          styles.container,
+          { backgroundColor: palette.bg, justifyContent: "center" },
+        ]}
+      >
+        <View
+          style={[
+            styles.card,
+            styles.cardFancy,
+            { backgroundColor: palette.glass, borderColor: palette.border },
+          ]}
+        >
+          <View
+            style={[styles.accentBarTop, { backgroundColor: palette.lime }]}
+          />
 
-          <Text style={[styles.title, { color: palette.lime, textAlign: "center" }]}>نتیجه آماده است</Text>
+          <Text
+            style={[styles.title, { color: palette.lime, textAlign: "center" }]}
+          >
+            نتیجه آماده است
+          </Text>
 
-          <Text style={[styles.rtlText, { color: palette.sub, marginTop: 10, lineHeight: 22, textAlign: "right" }]}>
+          <Text
+            style={[
+              styles.rtlText,
+              {
+                color: palette.sub,
+                marginTop: 10,
+                lineHeight: 22,
+                textAlign: "right",
+              },
+            ]}
+          >
             آزمون‌ها کامل شده‌اند و نتیجه قابل مشاهده است.
           </Text>
 
           <View style={{ height: 14 }} />
 
-          <Pressable style={[styles.btnPrimary, { borderColor: palette.border }]} onPress={goToResultPage}>
-            <Text style={[styles.btnText, { color: palette.text }]}>رفتن به نتیجه</Text>
+          <Pressable
+            style={[styles.btnPrimary, { borderColor: palette.border }]}
+            onPress={goToResultPage}
+          >
+            <Text style={[styles.btnText, { color: palette.text }]}>
+              رفتن به نتیجه
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -946,26 +1228,79 @@ if (!token) return;
 
   if (session && currentTest === 1 && isEndOfTest) {
     return (
-      <View style={[styles.container, { backgroundColor: palette.bg, justifyContent: "center" }]}>
-        <View style={[styles.card, styles.cardFancy, { backgroundColor: palette.glass, borderColor: palette.border }]}>
-          <View style={[styles.accentBarTop, { backgroundColor: palette.gold }]} />
+      <View
+        style={[
+          styles.container,
+          { backgroundColor: palette.bg, justifyContent: "center" },
+        ]}
+      >
+        <View
+          style={[
+            styles.card,
+            styles.cardFancy,
+            { backgroundColor: palette.glass, borderColor: palette.border },
+          ]}
+        >
+          <View
+            style={[styles.accentBarTop, { backgroundColor: palette.gold }]}
+          />
 
-          <Text style={[styles.title, { color: palette.gold, textAlign: "center" }]}>پایان آزمون بازسنجی</Text>
+          <Text
+            style={[styles.title, { color: palette.gold, textAlign: "center" }]}
+          >
+            پایان آزمون بازسنجی
+          </Text>
 
-          <Text style={[styles.rtlText, { color: palette.sub, marginTop: 10, lineHeight: 22, textAlign: "right" }]}>
+          <Text
+            style={[
+              styles.rtlText,
+              {
+                color: palette.sub,
+                marginTop: 10,
+                lineHeight: 22,
+                textAlign: "right",
+              },
+            ]}
+          >
             آزمون بازسنجی به پایان رسید و پاسخ‌های تو ثبت شد.
             {"\n"}
-            اگر «ادامه» رو بزنی، وارد آزمون دوم یعنی آزمون «آیا برمی‌گرده؟» میشی و در پایان، نتیجه‌ی کامل هر دو نمایش داده میشه.
+            اگر «ادامه» رو بزنی، وارد آزمون دوم یعنی آزمون «آیا برمی‌گرده؟» میشی
+            و در پایان، نتیجه‌ی کامل هر دو نمایش داده میشه.
           </Text>
 
           <View style={{ height: 14 }} />
 
-          <Pressable style={[styles.btnPrimary, { borderColor: palette.border }]} onPress={goToTest2} disabled={loading}>
+          <Pressable
+            style={[styles.btnPrimary, { borderColor: palette.border }]}
+            onPress={goToTest2}
+            disabled={loading}
+          >
             {loading ? (
               <InlineLoading label="در حال انتقال به آزمون دوم…" />
             ) : (
-              <Text style={[styles.btnText, { color: palette.text }]}>ادامه: رفتن به آزمون دوم</Text>
+              <Text style={[styles.btnText, { color: palette.text }]}>
+                ادامه: رفتن به آزمون دوم
+              </Text>
             )}
+          </Pressable>
+
+          <View style={{ height: 10 }} />
+
+          <Pressable
+            disabled={loading}
+            onPress={goPrev}
+            style={[
+              styles.btnGhost,
+              {
+                borderColor: palette.border,
+                backgroundColor: "rgba(255,255,255,.04)",
+                opacity: loading ? 0.65 : 1,
+              },
+            ]}
+          >
+            <Text style={[styles.btnText, { color: palette.sub }]}>
+              مرحله قبلی
+            </Text>
           </Pressable>
 
           <View style={{ height: 10 }} />
@@ -977,15 +1312,57 @@ if (!token) return;
               openConfirm(
                 "عبور از آزمون دوم",
                 "اگر عبور کنی، آزمون دوم انجام نمی‌شود.\nنتیجه بر اساس آزمون اول نمایش داده می‌شود.",
-                passTest2FromEndOfTest1
+                passTest2FromEndOfTest1,
               )
             }
           >
             {loading ? (
               <InlineLoading label="در حال پردازش…" />
             ) : (
-              <Text style={[styles.btnText, { color: palette.red }]}>عبور از آزمون دوم</Text>
+              <Text style={[styles.btnText, { color: palette.red }]}>
+                عبور از آزمون دوم
+              </Text>
             )}
+          </Pressable>
+
+          <View style={{ height: 10 }} />
+
+          <Pressable
+            disabled={loading}
+            onPress={() =>
+              openConfirm(
+                "شروع آزمون‌ها از صفر",
+                "با این کار همه پاسخ‌های ثبت‌شده در هر دو آزمون پاک می‌شن و آزمون بازسنجی از سؤال اول شروع می‌شه. مطمئنی؟",
+                resetReview,
+              )
+            }
+            style={[
+              styles.resetInlineBtn,
+              {
+                opacity: loading ? 0.5 : 1,
+              },
+            ]}
+          >
+            <Text style={styles.resetInlineText}>شروع از اول</Text>
+          </Pressable>
+
+          <Pressable
+            disabled={loading}
+            onPress={() =>
+              openConfirm(
+                "انصراف از آزمون",
+                "با انصراف، پاسخ‌ها و وضعیت این دو آزمون پاک می‌شن و به پلکان برمی‌گردی. اگه بعداً دوباره این مسیر رو انتخاب کنی، آزمون از ابتدا شروع می‌شه. مطمئنی؟",
+                cancelReview,
+              )
+            }
+            style={[
+              styles.cancelInlineBtn,
+              {
+                opacity: loading ? 0.5 : 1,
+              },
+            ]}
+          >
+            <Text style={styles.cancelInlineText}>انصراف از آزمون</Text>
           </Pressable>
         </View>
 
@@ -996,15 +1373,43 @@ if (!token) return;
 
   if (session && currentTest === 2 && isEndOfTest) {
     return (
-      <View style={[styles.container, { backgroundColor: palette.bg, justifyContent: "center" }]}>
-        <View style={[styles.card, styles.cardFancy, { backgroundColor: palette.glass, borderColor: palette.border }]}>
-          <View style={[styles.accentBarTop, { backgroundColor: palette.orange }]} />
+      <View
+        style={[
+          styles.container,
+          { backgroundColor: palette.bg, justifyContent: "center" },
+        ]}
+      >
+        <View
+          style={[
+            styles.card,
+            styles.cardFancy,
+            { backgroundColor: palette.glass, borderColor: palette.border },
+          ]}
+        >
+          <View
+            style={[styles.accentBarTop, { backgroundColor: palette.orange }]}
+          />
 
-          <Text style={[styles.title, { color: palette.orange, textAlign: "center" }]}>
+          <Text
+            style={[
+              styles.title,
+              { color: palette.orange, textAlign: "center" },
+            ]}
+          >
             پایان آزمون «آیا برمی‌گرده؟»
           </Text>
 
-          <Text style={[styles.rtlText, { color: palette.sub, marginTop: 10, lineHeight: 22, textAlign: "center" }]}>
+          <Text
+            style={[
+              styles.rtlText,
+              {
+                color: palette.sub,
+                marginTop: 10,
+                lineHeight: 22,
+                textAlign: "center",
+              },
+            ]}
+          >
             با «ثبت نهایی»، نتیجه‌ی درمان‌محور دو آزمون نمایش داده می‌شود.
           </Text>
 
@@ -1024,8 +1429,69 @@ if (!token) return;
             {loading ? (
               <InlineLoading label="در حال ثبت نهایی…" />
             ) : (
-              <Text style={[styles.btnText, { color: palette.text }]}>ثبت نهایی و رفتن به نتیجه</Text>
+              <Text style={[styles.btnText, { color: palette.text }]}>
+                ثبت نهایی و رفتن به نتیجه
+              </Text>
             )}
+          </Pressable>
+
+          <View style={{ height: 10 }} />
+
+          <Pressable
+            disabled={loading}
+            onPress={goPrev}
+            style={[
+              styles.btnGhost,
+              {
+                borderColor: palette.border,
+                backgroundColor: "rgba(255,255,255,.04)",
+                opacity: loading ? 0.65 : 1,
+              },
+            ]}
+          >
+            <Text style={[styles.btnText, { color: palette.sub }]}>
+              مرحله قبلی
+            </Text>
+          </Pressable>
+
+          <View style={{ height: 10 }} />
+
+          <Pressable
+            disabled={loading}
+            onPress={() =>
+              openConfirm(
+                "شروع آزمون‌ها از صفر",
+                "با این کار همه پاسخ‌های ثبت‌شده در هر دو آزمون پاک می‌شن و آزمون بازسنجی از سؤال اول شروع می‌شه. مطمئنی؟",
+                resetReview,
+              )
+            }
+            style={[
+              styles.resetInlineBtn,
+              {
+                opacity: loading ? 0.5 : 1,
+              },
+            ]}
+          >
+            <Text style={styles.resetInlineText}>شروع از اول</Text>
+          </Pressable>
+
+          <Pressable
+            disabled={loading}
+            onPress={() =>
+              openConfirm(
+                "انصراف از آزمون",
+                "با انصراف، پاسخ‌ها و وضعیت این دو آزمون پاک می‌شن و به پلکان برمی‌گردی. اگر بعداً دوباره این مسیر رو انتخاب کنی، آزمون از ابتدا شروع می‌شه. مطمئنی؟",
+                cancelReview,
+              )
+            }
+            style={[
+              styles.cancelInlineBtn,
+              {
+                opacity: loading ? 0.5 : 1,
+              },
+            ]}
+          >
+            <Text style={styles.cancelInlineText}>انصراف از آزمون</Text>
           </Pressable>
 
           <View style={{ height: 10 }} />
@@ -1040,11 +1506,16 @@ if (!token) return;
     return (
       <View style={[styles.root, { backgroundColor: palette.bg }]}>
         <ActivityIndicator color={palette.gold} />
-        <Text style={{ color: palette.sub, marginTop: 10, fontSize: 12 }}>در حال همگام‌سازی…</Text>
+        <Text style={{ color: palette.sub, marginTop: 10, fontSize: 12 }}>
+          در حال همگام‌سازی…
+        </Text>
 
         <View style={{ height: 12 }} />
 
-        <Pressable style={[styles.btn, { borderColor: palette.border }]} onPress={manualReload}>
+        <Pressable
+          style={[styles.btn, { borderColor: palette.border }]}
+          onPress={manualReload}
+        >
           <Text style={[styles.btnText, { color: palette.text }]}>رفرش</Text>
         </Pressable>
       </View>
@@ -1070,23 +1541,79 @@ if (!token) return;
             },
           ]}
         >
-          <View style={[styles.accentBarTop, { backgroundColor: accentColor }]} />
+          <View
+            style={[styles.accentBarTop, { backgroundColor: accentColor }]}
+          />
 
-          <Text style={[styles.title, { color: titleColor, textAlign: "center" }]}>{title}</Text>
+          <Text
+            style={[styles.title, { color: titleColor, textAlign: "center" }]}
+          >
+            {title}
+          </Text>
 
-          <Text style={[styles.centerText, { color: palette.sub, marginTop: 6, fontSize: 12 }]}>
+          <Text
+            style={[
+              styles.centerText,
+              { color: palette.sub, marginTop: 6, fontSize: 12 },
+            ]}
+          >
             سوال {currentIndex + 1} از {questions.length}
           </Text>
 
+          <Pressable
+            disabled={loading}
+            onPress={() =>
+              openConfirm(
+                "شروع آزمون‌ها از صفر",
+                "با این کار همه پاسخ‌های ثبت‌شده در هر دو آزمون بازسنجی و آیا برمی‌گرده؟ پاک می‌شن و آزمون بازسنجی از سؤال اول شروع می‌شه. مطمئنی؟",
+                resetReview,
+              )
+            }
+            style={[
+              styles.resetInlineBtn,
+              {
+                opacity: loading ? 0.5 : 1,
+              },
+            ]}
+          >
+            <Text style={styles.resetInlineText}>شروع از اول</Text>
+          </Pressable>
+
+          <Pressable
+            disabled={loading}
+            onPress={() =>
+              openConfirm(
+                "انصراف از آزمون",
+                "با انصراف، پاسخ‌ها و وضعیت این دو آزمون پاک می‌شن و به پلکان برمی‌گردی. اگه بعداً دوباره این مسیر رو انتخاب کنی، آزمون از ابتدا شروع می‌شه. مطمئنی؟",
+                cancelReview,
+              )
+            }
+            style={[
+              styles.cancelInlineBtn,
+              {
+                opacity: loading ? 0.5 : 1,
+              },
+            ]}
+          >
+            <Text style={styles.cancelInlineText}>انصراف از آزمون</Text>
+          </Pressable>
+
           <View style={styles.hr} />
 
-          <Text style={[styles.qText, styles.rtlText, { color: palette.text }]}>{currentQuestion.textFa}</Text>
+          <Text style={[styles.qText, styles.rtlText, { color: palette.text }]}>
+            {currentQuestion.textFa}
+          </Text>
 
           {!!currentQuestion.helpFa && (
             <Text
               style={[
                 styles.rtlText,
-                { color: palette.sub2, marginTop: 10, lineHeight: 20, textAlign: "right" },
+                {
+                  color: palette.sub2,
+                  marginTop: 10,
+                  lineHeight: 20,
+                  textAlign: "right",
+                },
               ]}
             >
               {currentQuestion.helpFa}
@@ -1100,67 +1627,67 @@ if (!token) return;
           <View style={{ height: 6 }} />
 
           <View style={styles.navButtonsRow}>
-  <Pressable
-    disabled={loading || selectedValue === null}
-    onPress={() => {
-      if (selectedValue === null) return;
-      submitAnswer(selectedValue);
-    }}
-    style={[
-      styles.btnPrimary,
-      {
-        flex: 1,
-        borderColor:
-          selectedValue === null
-            ? palette.border
-            : "rgba(212,175,55,.35)",
-        backgroundColor:
-          selectedValue === null
-            ? "rgba(255,255,255,.04)"
-            : "rgba(212,175,55,.10)",
-        opacity: loading ? 0.85 : 1,
-      },
-    ]}
-  >
-    {loading ? (
-      <InlineLoading label="در حال ثبت پاسخ…" />
-    ) : (
-      <Text
-        style={[
-          styles.btnText,
-          {
-            color:
-              selectedValue === null ? palette.sub : palette.text,
-          },
-        ]}
-      >
-        ادامه
-      </Text>
-    )}
-  </Pressable>
+            <Pressable
+              disabled={loading || selectedValue === null}
+              onPress={() => {
+                if (selectedValue === null) return;
+                submitAnswer(selectedValue);
+              }}
+              style={[
+                styles.btnPrimary,
+                {
+                  flex: 1,
+                  borderColor:
+                    selectedValue === null
+                      ? palette.border
+                      : "rgba(212,175,55,.35)",
+                  backgroundColor:
+                    selectedValue === null
+                      ? "rgba(255,255,255,.04)"
+                      : "rgba(212,175,55,.10)",
+                  opacity: loading ? 0.85 : 1,
+                },
+              ]}
+            >
+              {loading ? (
+                <InlineLoading label="در حال ثبت پاسخ…" />
+              ) : (
+                <Text
+                  style={[
+                    styles.btnText,
+                    {
+                      color:
+                        selectedValue === null ? palette.sub : palette.text,
+                    },
+                  ]}
+                >
+                  ادامه
+                </Text>
+              )}
+            </Pressable>
 
-  {currentIndex > 0 || currentTest === 2 ? (
-    <Pressable
-      disabled={loading}
-      onPress={goPrev}
-      style={[
-        styles.btnGhost,
-        {
-          flex: 1,
-          borderColor: palette.border,
-          backgroundColor: "rgba(255,255,255,.04)",
-          opacity: loading ? 0.65 : 1,
-        },
-      ]}
-    >
-      <Text style={[styles.btnText, { color: palette.sub }]}>
-        مرحله قبلی
-      </Text>
-    </Pressable>
-  ) : (
-    <View style={{ flex: 1 }} />
-  )}
-</View>
+            {currentIndex > 0 || currentTest === 2 ? (
+              <Pressable
+                disabled={loading}
+                onPress={goPrev}
+                style={[
+                  styles.btnGhost,
+                  {
+                    flex: 1,
+                    borderColor: palette.border,
+                    backgroundColor: "rgba(255,255,255,.04)",
+                    opacity: loading ? 0.65 : 1,
+                  },
+                ]}
+              >
+                <Text style={[styles.btnText, { color: palette.sub }]}>
+                  مرحله قبلی
+                </Text>
+              </Pressable>
+            ) : (
+              <View style={{ flex: 1 }} />
+            )}
+          </View>
         </Animated.View>
       </ScrollView>
 
@@ -1321,8 +1848,42 @@ const styles = StyleSheet.create({
     writingDirection: "rtl" as any,
   },
   navButtonsRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 10,
-},
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  resetInlineBtn: {
+    alignSelf: "center",
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,.28)",
+    backgroundColor: "rgba(239,68,68,.08)",
+  },
+
+  resetInlineText: {
+    color: "#FCA5A5",
+    fontSize: 11,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  cancelInlineBtn: {
+    alignSelf: "center",
+    marginTop: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,.50)",
+    backgroundColor: "rgba(239,68,68,.14)",
+  },
+
+  cancelInlineText: {
+    color: "#F87171",
+    fontSize: 11,
+    fontWeight: "900",
+    textAlign: "center",
+  },
 });

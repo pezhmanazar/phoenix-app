@@ -34,7 +34,6 @@ async function getAuthUser(req) {
   return null;
 }
 
-
 function safeJson(obj) {
   try {
     return obj ?? null;
@@ -155,7 +154,8 @@ function buildDiagramsAndSummary(answersJson, didSkipTest2) {
   const conflictPercent = toPercentFromLikert(avg(conflict), 3);
 
   const attachMix = avg([anxPercent, avdPercent].filter((x) => x != null));
-  const attachPercent = attachMix == null ? null : clamp(Math.round(attachMix), 0, 100);
+  const attachPercent =
+    attachMix == null ? null : clamp(Math.round(attachMix), 0, 100);
 
   const t1Diagrams = [
     {
@@ -235,8 +235,10 @@ function buildDiagramsAndSummary(answersJson, didSkipTest2) {
 
   // رابطه ممکنه "خطرناک" نباشه ولی "روان‌فرسا" باشه
   const personalDanger =
-    (satisfPercent != null && satisfPercent <= 30) &&
-    (attachPercent != null && attachPercent >= 70);
+    satisfPercent != null &&
+    satisfPercent <= 30 &&
+    attachPercent != null &&
+    attachPercent >= 70;
 
   // کیفیت کلی رابطه (برای اینکه متن‌ها فقط روی تست2 نچرخند)
   const relationshipPoor =
@@ -245,9 +247,12 @@ function buildDiagramsAndSummary(answersJson, didSkipTest2) {
     (attachPercent != null && attachPercent >= 65);
 
   const relationshipGood =
-    (satisfPercent != null && satisfPercent >= 65) &&
-    (conflictPercent != null && conflictPercent <= 45) &&
-    (attachPercent != null && attachPercent <= 55);
+    satisfPercent != null &&
+    satisfPercent >= 65 &&
+    conflictPercent != null &&
+    conflictPercent <= 45 &&
+    attachPercent != null &&
+    attachPercent <= 55;
 
   const riskHard = relationshipDanger || personalDanger;
 
@@ -290,7 +295,10 @@ function buildDiagramsAndSummary(answersJson, didSkipTest2) {
   let retStep = "";
 
   const hasTest2 =
-    !didSkipTest2 && evidenceP != null && maturityP != null && ambiguousP != null;
+    !didSkipTest2 &&
+    evidenceP != null &&
+    maturityP != null &&
+    ambiguousP != null;
 
   if (hasTest2) {
     const goodReturn = evidenceP >= 60 && maturityP >= 60 && ambiguousP <= 40;
@@ -331,7 +339,9 @@ function buildDiagramsAndSummary(answersJson, didSkipTest2) {
           hasTest2,
         },
         test1: { redPercent, satisfPercent, attachPercent, conflictPercent },
-        test2: didSkipTest2 ? null : { evidenceP, ambiguousP, costP, maturityP },
+        test2: didSkipTest2
+          ? null
+          : { evidenceP, ambiguousP, costP, maturityP },
       },
     },
   };
@@ -342,7 +352,7 @@ function buildResultSkeleton({ user, session }) {
 
   const { diagrams, summary } = buildDiagramsAndSummary(
     session.answersJson,
-    didSkipTest2
+    didSkipTest2,
   );
 
   // ✅ PAYWALL REMOVED: always unlocked in review
@@ -406,15 +416,27 @@ function buildDefaultQuestions() {
   };
 
   // ✅ ساده‌سازی سوال‌ها + چند مثال محدود
-  pushT1("آیا تو رابطه خشونت بود؟", "مثلا تهدید کردن، فحاشی شدید یا کتک زدن.", OPT_YES_NO);
-  pushT1("آیا تو رابطه خیانت اتفاق افتاد؟", "یعنی خیانت عاطفی یا جنسی یا هر دو.", OPT_YES_NO);
+  pushT1(
+    "آیا تو رابطه خشونت بود؟",
+    "مثلا تهدید کردن، فحاشی شدید یا کتک زدن.",
+    OPT_YES_NO,
+  );
+  pushT1(
+    "آیا تو رابطه خیانت اتفاق افتاد؟",
+    "یعنی خیانت عاطفی یا جنسی یا هر دو.",
+    OPT_YES_NO,
+  );
   pushT1("آیا تو رابطه تحقیر یا کوچیک‌کردن مداوم بود؟", null, OPT_YES_NO);
   pushT1(
     "آیا تو رابطه اعتیاد فعالی که درمان نشده باشه، بود؟",
     "مثل کشیدن مواد، قمار کردن، مصرف الکل زیاد، دیدن پورن بدون رضایت پارتنر به شکل زیاد و غیره.",
-    OPT_YES_NO
+    OPT_YES_NO,
   );
-  pushT1("آیا تو رابطه پارتنر یا همسرت برای تغییر کردن جدی نبود؟", "مثلا قول می‌داد ولی عمل نمی‌کرد.", OPT_YES_NO);
+  pushT1(
+    "آیا تو رابطه پارتنر یا همسرت برای تغییر کردن جدی نبود؟",
+    "مثلا قول می‌داد ولی عمل نمی‌کرد.",
+    OPT_YES_NO,
+  );
 
   // بخش 2: رضایت و فرسودگی (8)
   pushT1("از رابطم در کل راضی بودم.", null, OPT_0_4_AGREE);
@@ -422,30 +444,78 @@ function buildDefaultQuestions() {
   pushT1("کنار اون آرامش داشتم.", null, OPT_0_4_AGREE);
   pushT1("این رابطه به نظرم سالم بود.", null, OPT_0_4_AGREE);
   pushT1("صمیمیت عاطفی واقعی داشتیم.", null, OPT_0_4_AGREE);
-  pushT1("این رابطه بیشتر بهم انرژی می‌داد تا اینکه منو خسته کنه.", null, OPT_0_4_AGREE);
+  pushT1(
+    "این رابطه بیشتر بهم انرژی می‌داد تا اینکه منو خسته کنه.",
+    null,
+    OPT_0_4_AGREE,
+  );
   pushT1("باهاش یک آینده روشن رو تصور می‌کردم.", null, OPT_0_4_AGREE);
-  pushT1("با عقل الانم اگه برگردم به عقب، باز هم این رابطه رو انتخاب می‌کنم.", null, OPT_0_4_AGREE);
+  pushT1(
+    "با عقل الانم اگه برگردم به عقب، باز هم این رابطه رو انتخاب می‌کنم.",
+    null,
+    OPT_0_4_AGREE,
+  );
 
   // بخش 3: دلبستگی (10) -> اضطراب 5 + اجتناب 5
   // اضطراب
   pushT1("داخل رابطه ترس از رها شدن تو من زیاد بود.", null, OPT_0_4_AGREE);
-  pushT1("داخل رابطه برای آروم شدن خودم، ازش زیاد سوال می‌پرسیدم تا مطمئن بشم.", null, OPT_0_4_AGREE);
+  pushT1(
+    "داخل رابطه برای آروم شدن خودم، ازش زیاد سوال می‌پرسیدم تا مطمئن بشم.",
+    null,
+    OPT_0_4_AGREE,
+  );
   pushT1("داخل رابطه فاصله یا جدایی برام خیلی سخت بود.", null, OPT_0_4_AGREE);
-  pushT1("وقتی پارتنر یا همسرم باهام سرد می‌شد، اضطراب و نگرانیم بالا می‌رفت.", null, OPT_0_4_AGREE);
-  pushT1("ارزش خودم رو به این رابطه گره می‌زدم یعنی فکر می‌کردم بدون این رابطه بی‌ارزشم.", null, OPT_0_4_AGREE);
+  pushT1(
+    "وقتی پارتنر یا همسرم باهام سرد می‌شد، اضطراب و نگرانیم بالا می‌رفت.",
+    null,
+    OPT_0_4_AGREE,
+  );
+  pushT1(
+    "ارزش خودم رو به این رابطه گره می‌زدم یعنی فکر می‌کردم بدون این رابطه بی‌ارزشم.",
+    null,
+    OPT_0_4_AGREE,
+  );
   // اجتناب
-  pushT1("داخل رابطه صمیمیت خیلی زیاد، من رو معذب می‌کرد.", null, OPT_0_4_AGREE);
+  pushT1(
+    "داخل رابطه صمیمیت خیلی زیاد، من رو معذب می‌کرد.",
+    null,
+    OPT_0_4_AGREE,
+  );
   pushT1("بعضی وقتا نیاز داشتم از پارتنرم فاصله بگیرم.", null, OPT_0_4_AGREE);
   pushT1("احساساتم رو داخل رابطه پنهون می‌کردم.", null, OPT_0_4_AGREE);
   pushT1("وقتی خیلی بهم نزدیک بود، احساس خفگی می‌کردم.", null, OPT_0_4_AGREE);
-  pushT1("تو دعواها از گفت‌وگو کردن فرار می‌کردم.", "مثلا زود قهر می‌کردم یا جوابش رو نمی‌دادم.", OPT_0_4_AGREE);
+  pushT1(
+    "تو دعواها از گفت‌وگو کردن فرار می‌کردم.",
+    "مثلا زود قهر می‌کردم یا جوابش رو نمی‌دادم.",
+    OPT_0_4_AGREE,
+  );
 
   // بخش 4: الگوی تعارض (6) - 0..3
-  pushT1("وقتی دعوا می‌کردیم همدیگه رو تحقیر یا مسخره می‌کردیم.", null, OPT_0_3_CONFLICT);
-  pushT1("به جای تمرکز کردن روی مشکل، به شخصیت همدیگه گیر می‌دادیم.", null, OPT_0_3_CONFLICT);
-  pushT1("داخل رابطه قهر کردن یا قطع ارتباط زیاد، اتفاق می‌افتاد.", null, OPT_0_3_CONFLICT);
-  pushT1(" موقع اختلاف بیشتر از خودمون دفاع می‌کردیم تا مشکل رو حل کنیم.", null, OPT_0_3_CONFLICT);
-  pushT1("داخل رابطه اختلافات و تعارض‌ها معمولاً حل نمی‌شد و نهایتا بی‌خیالش می‌شدیم.", null, OPT_0_3_CONFLICT);
+  pushT1(
+    "وقتی دعوا می‌کردیم همدیگه رو تحقیر یا مسخره می‌کردیم.",
+    null,
+    OPT_0_3_CONFLICT,
+  );
+  pushT1(
+    "به جای تمرکز کردن روی مشکل، به شخصیت همدیگه گیر می‌دادیم.",
+    null,
+    OPT_0_3_CONFLICT,
+  );
+  pushT1(
+    "داخل رابطه قهر کردن یا قطع ارتباط زیاد، اتفاق می‌افتاد.",
+    null,
+    OPT_0_3_CONFLICT,
+  );
+  pushT1(
+    " موقع اختلاف بیشتر از خودمون دفاع می‌کردیم تا مشکل رو حل کنیم.",
+    null,
+    OPT_0_3_CONFLICT,
+  );
+  pushT1(
+    "داخل رابطه اختلافات و تعارض‌ها معمولاً حل نمی‌شد و نهایتا بی‌خیالش می‌شدیم.",
+    null,
+    OPT_0_3_CONFLICT,
+  );
   pushT1("بعد از دعوا کردن، یه مدت رابطمون سرد می‌شد.", null, OPT_0_3_CONFLICT);
 
   // TEST2: منطقی بودن انتظار برگشت (20)
@@ -455,31 +525,91 @@ function buildDefaultQuestions() {
   };
 
   // 1) شواهد واقعی برگشت (5)
-  pushT2("بعد از جدایی، برای برگشتن به رابطه اقدام جدی انجام داده.", "نه اینکه فقط حرف بزنه بلکه اقدام واقعی و قابل گفتن.", OPT_0_4_AGREE);
-  pushT2("مسئولیت اشتباهات خودش رو داخل رابطه قبول کرده.", "بدون اینکه توجیه کنه و یکی دیگه رو مقصر کنه.", OPT_0_4_AGREE);
-  pushT2("رفتارهای بدش واقعاً بهتر شده.", "یعنی یک تغییر پایدار، نه تغییر یکی دو روزه.", OPT_0_4_AGREE);
+  pushT2(
+    "بعد از جدایی، برای برگشتن به رابطه اقدام جدی انجام داده.",
+    "نه اینکه فقط حرف بزنه بلکه اقدام واقعی و قابل گفتن.",
+    OPT_0_4_AGREE,
+  );
+  pushT2(
+    "مسئولیت اشتباهات خودش رو داخل رابطه قبول کرده.",
+    "بدون اینکه توجیه کنه و یکی دیگه رو مقصر کنه.",
+    OPT_0_4_AGREE,
+  );
+  pushT2(
+    "رفتارهای بدش واقعاً بهتر شده.",
+    "یعنی یک تغییر پایدار، نه تغییر یکی دو روزه.",
+    OPT_0_4_AGREE,
+  );
   pushT2("برای برگشت، برنامه یا تعهد مشخص داده.", null, OPT_0_4_AGREE);
-  pushT2("برای ترمیم رابطه هزینه واقعی داده.", "مثلا زمان گذاشته خودش رو تغییر بده یا خودش رو درمان کرده یا به طور مداوم تلاش کرده برگرده.", OPT_0_4_AGREE);
+  pushT2(
+    "برای ترمیم رابطه هزینه واقعی داده.",
+    "مثلا زمان گذاشته خودش رو تغییر بده یا خودش رو درمان کرده یا به طور مداوم تلاش کرده برگرده.",
+    OPT_0_4_AGREE,
+  );
 
   // 2) سیگنال‌های مبهم و تعلیق‌آور (5)
-  pushT2("مدام از دلتنگ بودن حرف می‌زنه ولی تصمیم روشن یا اقدام واقعی برای برگشت نداره.", null, OPT_0_4_AGREE);
+  pushT2(
+    "مدام از دلتنگ بودن حرف می‌زنه ولی تصمیم روشن یا اقدام واقعی برای برگشت نداره.",
+    null,
+    OPT_0_4_AGREE,
+  );
   pushT2("ارتباط ما بعد از جدایی، مدام قطع و وصل میشه.", null, OPT_0_4_AGREE);
-  pushT2("کاری می‌کنه من در دسترسش باشم ولی تکلیف رو روشن نمی‌کنه.", "مثلا داخل اینستا برام چیزی می‌فرسته یا هر چند وقت یکبار حالم رو می‌پرسه یا تلاش می‌کنه مشکلاتم رو حل کنه.", OPT_0_4_AGREE);
-  pushT2("برگشتن رو  می‌اندازه به یک آینده نامشخص.", "مثلا میگه: الان نه، شاید بعداً که وضع بهتر شد.", OPT_0_4_AGREE);
-  pushT2("بعد از جدایی سعی میکنه باهام گرم برخورد کنه ولی از اقدام مشخص فرار می‌کنه.", null, OPT_0_4_AGREE);
+  pushT2(
+    "کاری می‌کنه من در دسترسش باشم ولی تکلیف رو روشن نمی‌کنه.",
+    "مثلا داخل اینستا برام چیزی می‌فرسته یا هر چند وقت یکبار حالم رو می‌پرسه یا تلاش می‌کنه مشکلاتم رو حل کنه.",
+    OPT_0_4_AGREE,
+  );
+  pushT2(
+    "برگشتن رو  می‌اندازه به یک آینده نامشخص.",
+    "مثلا میگه: الان نه، شاید بعداً که وضع بهتر شد.",
+    OPT_0_4_AGREE,
+  );
+  pushT2(
+    "بعد از جدایی سعی میکنه باهام گرم برخورد کنه ولی از اقدام مشخص فرار می‌کنه.",
+    null,
+    OPT_0_4_AGREE,
+  );
 
   // 3) هزینه‌ی روانی انتظار (5)
-  pushT2("بیشترِ ذهنم درگیر اینه که بالاخره برمی‌گرده یا نه.", null, OPT_0_4_AGREE);
-  pushT2("تصمیم‌های مهم زندگیم رو به اون و برگشتنش گره زدم.", null, OPT_0_4_AGREE);
-  pushT2("از شروع جدید می‌ترسم چون احتمال میدم یه روز برگرده.", null, OPT_0_4_AGREE);
+  pushT2(
+    "بیشترِ ذهنم درگیر اینه که بالاخره برمی‌گرده یا نه.",
+    null,
+    OPT_0_4_AGREE,
+  );
+  pushT2(
+    "تصمیم‌های مهم زندگیم رو به اون و برگشتنش گره زدم.",
+    null,
+    OPT_0_4_AGREE,
+  );
+  pushT2(
+    "از شروع جدید می‌ترسم چون احتمال میدم یه روز برگرده.",
+    null,
+    OPT_0_4_AGREE,
+  );
   pushT2("این جدایی رو هنوز «موقتی» می‌دونم.", null, OPT_0_4_AGREE);
-  pushT2("فکر کردن به برگشتنش بهم آرامش کوتاه مدت می‌ده ولی این آرامش پایدار نیست.", null, OPT_0_4_AGREE);
+  pushT2(
+    "فکر کردن به برگشتنش بهم آرامش کوتاه مدت می‌ده ولی این آرامش پایدار نیست.",
+    null,
+    OPT_0_4_AGREE,
+  );
 
   // 4) بلوغ رابطه‌ای طرف مقابل (5)
-  pushT2("می‌تونه درباره رابطه درست به شکل شفاف حرف بزنه.", null, OPT_0_4_AGREE);
-  pushT2("بعد از جدایی کمتر مشکلات رو انکار یا مقصرسازی می‌کنه.", null, OPT_0_4_AGREE);
+  pushT2(
+    "می‌تونه درباره رابطه درست به شکل شفاف حرف بزنه.",
+    null,
+    OPT_0_4_AGREE,
+  );
+  pushT2(
+    "بعد از جدایی کمتر مشکلات رو انکار یا مقصرسازی می‌کنه.",
+    null,
+    OPT_0_4_AGREE,
+  );
   pushT2("رفتارهای هیجانی و کودکانش کمتر شده.", null, OPT_0_4_AGREE);
-  pushT2("بعد از جدایی هم به مرزهای من احترام می‌ذاره و کاری نمی‌کنه که ناراحت بشم.", null, OPT_0_4_AGREE);
+  pushT2(
+    "بعد از جدایی هم به مرزهای من احترام می‌ذاره و کاری نمی‌کنه که ناراحت بشم.",
+    null,
+    OPT_0_4_AGREE,
+  );
   pushT2("نسبت به قبل، ثبات بیشتری نشون می‌ده.", null, OPT_0_4_AGREE);
 
   return { test1_q, test2_q };
@@ -530,7 +660,13 @@ async function ensureQuestionSetSeeded() {
               key: `t1_${idx}`,
               textFa: q.textFa,
               helpFa: q.helpFa,
-              options: { create: q.options.map((op, j) => ({ order: j, labelFa: op.labelFa, value: op.value })) },
+              options: {
+                create: q.options.map((op, j) => ({
+                  order: j,
+                  labelFa: op.labelFa,
+                  value: op.value,
+                })),
+              },
             })),
             ...test2_q.map((q, idx) => ({
               testNo: "TEST2",
@@ -538,7 +674,13 @@ async function ensureQuestionSetSeeded() {
               key: `t2_${idx}`,
               textFa: q.textFa,
               helpFa: q.helpFa,
-              options: { create: q.options.map((op, j) => ({ order: j, labelFa: op.labelFa, value: op.value })) },
+              options: {
+                create: q.options.map((op, j) => ({
+                  order: j,
+                  labelFa: op.labelFa,
+                  value: op.value,
+                })),
+              },
             })),
           ],
         },
@@ -601,33 +743,36 @@ function isQsCacheValid() {
 router.get("/question-set", authUser, async (req, res) => {
   try {
     const user = await getAuthUser(req);
-if (!user) return res.json({ ok: false, error: "USER_NOT_FOUND" });
+    if (!user) return res.json({ ok: false, error: "USER_NOT_FOUND" });
 
-// ✅ چون endpoint حالا authed است، public cache نذار
-res.setHeader("Cache-Control", "private, max-age=600");
+    // ✅ چون endpoint حالا authed است، public cache نذار
+    res.setHeader("Cache-Control", "private, max-age=600");
 
-const activeSet = await ensureQuestionSetSeeded();
+    const activeSet = await ensureQuestionSetSeeded();
 
-// اگر session موجود بود و questionSetId نداشت، همینجا ست می‌کنیم
-const session = await prisma.pelekanReviewSession.findUnique({
-  where: { userId: user.id },
-});
+    // اگر session موجود بود و questionSetId نداشت، همینجا ست می‌کنیم
+    const session = await prisma.pelekanReviewSession.findUnique({
+      where: { userId: user.id },
+    });
 
-if (session && !session.questionSetId) {
-  await prisma.pelekanReviewSession.update({
-    where: { userId: user.id },
-    data: { questionSetId: activeSet.id, updatedAt: now() },
-  });
-}
+    if (session && !session.questionSetId) {
+      await prisma.pelekanReviewSession.update({
+        where: { userId: user.id },
+        data: { questionSetId: activeSet.id, updatedAt: now() },
+      });
+    }
 
-// ✅ fast path: cached payload
-// بعد از sync کردن session اجازه داریم از cache جواب بدیم
-if (isQsCacheValid()) {
-  return res.json(QS_CACHE.payload);
-}
+    // ✅ fast path: cached payload
+    // بعد از sync کردن session اجازه داریم از cache جواب بدیم
+    if (isQsCacheValid()) {
+      return res.json(QS_CACHE.payload);
+    }
 
     const full = await loadQuestionsForSet(activeSet.id);
-    if (!full) return res.status(500).json({ ok: false, error: "QUESTION_SET_NOT_FOUND" });
+    if (!full)
+      return res
+        .status(500)
+        .json({ ok: false, error: "QUESTION_SET_NOT_FOUND" });
 
     const payload = {
       ok: true,
@@ -643,7 +788,10 @@ if (isQsCacheValid()) {
           test1: full.questions
             .filter((q) => q.testNo === "TEST1")
             .map((q) => {
-              const options = q.options.map((o) => ({ value: o.value, labelFa: o.labelFa }));
+              const options = q.options.map((o) => ({
+                value: o.value,
+                labelFa: o.labelFa,
+              }));
               return {
                 index: q.order,
                 key: q.key,
@@ -657,7 +805,10 @@ if (isQsCacheValid()) {
           test2: full.questions
             .filter((q) => q.testNo === "TEST2")
             .map((q) => {
-              const options = q.options.map((o) => ({ value: o.value, labelFa: o.labelFa }));
+              const options = q.options.map((o) => ({
+                value: o.value,
+                labelFa: o.labelFa,
+              }));
               return {
                 index: q.order,
                 key: q.key,
@@ -683,7 +834,10 @@ if (isQsCacheValid()) {
 
     return res.json(payload);
   } catch (e) {
-    console.error("[pelekanReview.questionSet] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekanReview.questionSet] error:",
+      e?.message || "unknown_error",
+    );
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -700,16 +854,14 @@ router.get("/state", authUser, async (req, res) => {
 
     let selectedValue = null;
 
-if (session) {
-  const answers = ensureAnswersShape(session.answersJson);
-  const key = Number(session.currentTest) === 2 ? "test2" : "test1";
-  const value = answers[key]?.answers?.[session.currentIndex];
+    if (session) {
+      const answers = ensureAnswersShape(session.answersJson);
+      const key = Number(session.currentTest) === 2 ? "test2" : "test1";
+      const value = answers[key]?.answers?.[session.currentIndex];
 
-  selectedValue =
-    typeof value === "number" && Number.isFinite(value)
-      ? value
-      : null;
-}
+      selectedValue =
+        typeof value === "number" && Number.isFinite(value) ? value : null;
+    }
 
     const canEnterPelekan = computeCanEnterPelekan(session);
     const paywallRequired = false;
@@ -743,7 +895,10 @@ if (session) {
       },
     });
   } catch (e) {
-    console.error("[pelekanReview.state] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekanReview.state] error:",
+      e?.message || "unknown_error",
+    );
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -767,7 +922,9 @@ router.post("/choose", authUser, async (req, res) => {
     const activeSet = await ensureQuestionSetSeeded();
 
     // ✅ FIX: حذف query اضافه داخل upsert (دو بار findUnique می‌زد)
-    const existing = await prisma.pelekanReviewSession.findUnique({ where: { userId: user.id } });
+    const existing = await prisma.pelekanReviewSession.findUnique({
+      where: { userId: user.id },
+    });
 
     const session = await prisma.pelekanReviewSession.upsert({
       where: { userId: user.id },
@@ -789,11 +946,15 @@ router.post("/choose", authUser, async (req, res) => {
     });
 
     // ✅ اگر کاربر بعد از آزمون ۱، skip_review زد: همان‌جا test2 را skip کن و نتیجه را آماده کن
-    if (normalized === "skip_review" && (existing?.test1CompletedAt || session.test1CompletedAt)) {
+    if (
+      normalized === "skip_review" &&
+      (existing?.test1CompletedAt || session.test1CompletedAt)
+    ) {
       const updated1 = await prisma.pelekanReviewSession.update({
         where: { userId: user.id },
         data: {
-          test2SkippedAt: (existing?.test2SkippedAt || session.test2SkippedAt) ?? now(),
+          test2SkippedAt:
+            (existing?.test2SkippedAt || session.test2SkippedAt) ?? now(),
           currentTest: 2,
           currentIndex: 0,
           updatedAt: now(),
@@ -816,13 +977,23 @@ router.post("/choose", authUser, async (req, res) => {
 
       return res.json({
         ok: true,
-        data: { sessionId: updated2.id, chosenPath: updated2.chosenPath, status: updated2.status },
+        data: {
+          sessionId: updated2.id,
+          chosenPath: updated2.chosenPath,
+          status: updated2.status,
+        },
       });
     }
 
-    return res.json({ ok: true, data: { sessionId: session.id, chosenPath: session.chosenPath } });
+    return res.json({
+      ok: true,
+      data: { sessionId: session.id, chosenPath: session.chosenPath },
+    });
   } catch (e) {
-    console.error("[pelekanReview.choose] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekanReview.choose] error:",
+      e?.message || "unknown_error",
+    );
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -836,7 +1007,9 @@ router.post("/start", authUser, async (req, res) => {
 
     const activeSet = await ensureQuestionSetSeeded();
 
-    const existing = await prisma.pelekanReviewSession.findUnique({ where: { userId: user.id } });
+    const existing = await prisma.pelekanReviewSession.findUnique({
+      where: { userId: user.id },
+    });
 
     // اگر قبلاً تمام شده و force نیست، اجازه نده دوباره شروع کنه
     if (existing && existing.status !== "in_progress" && !force) {
@@ -882,7 +1055,10 @@ router.post("/start", authUser, async (req, res) => {
       },
     });
   } catch (e) {
-    console.error("[pelekanReview.start] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekanReview.start] error:",
+      e?.message || "unknown_error",
+    );
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -898,11 +1074,15 @@ router.post("/skip-test2", authUser, async (req, res) => {
     const user = await getAuthUser(req);
     if (!user) return res.json({ ok: false, error: "USER_NOT_FOUND" });
 
-    const session = await prisma.pelekanReviewSession.findUnique({ where: { userId: user.id } });
+    const session = await prisma.pelekanReviewSession.findUnique({
+      where: { userId: user.id },
+    });
     if (!session) return res.json({ ok: false, error: "NO_SESSION" });
 
-    if (!session.test1CompletedAt) return res.json({ ok: false, error: "TEST1_NOT_COMPLETED" });
-    if (session.test2CompletedAt) return res.json({ ok: false, error: "TEST2_ALREADY_COMPLETED" });
+    if (!session.test1CompletedAt)
+      return res.json({ ok: false, error: "TEST1_NOT_COMPLETED" });
+    if (session.test2CompletedAt)
+      return res.json({ ok: false, error: "TEST2_ALREADY_COMPLETED" });
 
     const updated1 = await prisma.pelekanReviewSession.update({
       where: { userId: user.id },
@@ -937,7 +1117,10 @@ router.post("/skip-test2", authUser, async (req, res) => {
       },
     });
   } catch (e) {
-    console.error("[pelekanReview.skipTest2] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekanReview.skipTest2] error:",
+      e?.message || "unknown_error",
+    );
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -966,26 +1149,26 @@ router.post("/previous", authUser, async (req, res) => {
     let currentIndex = Number(session.currentIndex || 0);
 
     if (currentTest === 2 && currentIndex === 0) {
-  const setId =
-    session.questionSetId || (await ensureQuestionSetSeeded()).id;
+      const setId =
+        session.questionSetId || (await ensureQuestionSetSeeded()).id;
 
-  const full = await loadQuestionsForSet(setId);
+      const full = await loadQuestionsForSet(setId);
 
-  if (!full) {
-    return res.json({
-      ok: false,
-      error: "QUESTION_SET_NOT_FOUND",
-    });
-  }
+      if (!full) {
+        return res.json({
+          ok: false,
+          error: "QUESTION_SET_NOT_FOUND",
+        });
+      }
 
-  const test1Count = full.questions.filter(
-    (q) => q.testNo === "TEST1",
-  ).length;
+      const test1Count = full.questions.filter(
+        (q) => q.testNo === "TEST1",
+      ).length;
 
-  // برگشت به صفحه پایان آزمون اول / شروع آزمون دوم
-  currentTest = 1;
-  currentIndex = test1Count;
-} else if (currentIndex > 0) {
+      // برگشت به صفحه پایان آزمون اول / شروع آزمون دوم
+      currentTest = 1;
+      currentIndex = test1Count;
+    } else if (currentIndex > 0) {
       currentIndex -= 1;
     } else {
       currentIndex = 0;
@@ -1010,9 +1193,7 @@ router.post("/previous", authUser, async (req, res) => {
         currentTest: updated.currentTest,
         currentIndex: updated.currentIndex,
         selectedValue:
-          typeof value === "number" && Number.isFinite(value)
-            ? value
-            : null,
+          typeof value === "number" && Number.isFinite(value) ? value : null,
       },
     });
   } catch (e) {
@@ -1021,6 +1202,117 @@ router.post("/previous", authUser, async (req, res) => {
       e?.message || "unknown_error",
     );
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+  }
+});
+
+// POST /reset
+router.post("/reset", authUser, async (req, res) => {
+  try {
+    const user = await getAuthUser(req);
+
+    if (!user) {
+      return res.json({
+        ok: false,
+        error: "USER_NOT_FOUND",
+      });
+    }
+
+    const session = await prisma.pelekanReviewSession.findUnique({
+      where: { userId: user.id },
+    });
+
+    if (!session) {
+      return res.json({
+        ok: false,
+        error: "NO_SESSION",
+      });
+    }
+
+    const activeSet = await ensureQuestionSetSeeded();
+
+    const updated = await prisma.pelekanReviewSession.update({
+      where: { userId: user.id },
+      data: {
+        chosenPath: "review",
+        status: "in_progress",
+
+        currentTest: 1,
+        currentIndex: 0,
+
+        startedAt: now(),
+        completedAt: null,
+
+        paywallShownAt: null,
+        unlockedAt: null,
+
+        test1CompletedAt: null,
+        test2CompletedAt: null,
+        test2SkippedAt: null,
+
+        answersJson: ensureAnswersShape(null),
+        resultJson: null,
+
+        questionSetId: session.questionSetId ?? activeSet.id,
+
+        updatedAt: now(),
+      },
+    });
+
+    return res.json({
+      ok: true,
+      data: {
+        sessionId: updated.id,
+        status: updated.status,
+        chosenPath: updated.chosenPath,
+        currentTest: updated.currentTest,
+        currentIndex: updated.currentIndex,
+      },
+    });
+  } catch (e) {
+    console.error(
+      "[pelekanReview.reset] error:",
+      e?.message || "unknown_error",
+    );
+
+    return res.status(500).json({
+      ok: false,
+      error: "SERVER_ERROR",
+    });
+  }
+});
+
+// POST /cancel
+router.post("/cancel", authUser, async (req, res) => {
+  try {
+    const user = await getAuthUser(req);
+
+    if (!user) {
+      return res.json({
+        ok: false,
+        error: "USER_NOT_FOUND",
+      });
+    }
+
+    await prisma.pelekanReviewSession.deleteMany({
+      where: { userId: user.id },
+    });
+
+    return res.json({
+      ok: true,
+      data: {
+        cancelled: true,
+      },
+    });
+  } catch (e) {
+    console.error(
+      "[pelekanReview.cancel] error:",
+      e?.message || "unknown_error",
+    );
+
+    return res.status(500).json({
+      ok: false,
+      error: "SERVER_ERROR",
+    });
   }
 });
 
@@ -1035,17 +1327,23 @@ router.post("/answer", authUser, async (req, res) => {
     const i = Number(index);
     const v = Number(value);
 
-    if (![1, 2].includes(t)) return res.json({ ok: false, error: "INVALID_TEST" });
-    if (!Number.isFinite(i) || i < 0) return res.json({ ok: false, error: "INVALID_INDEX" });
-    if (!Number.isFinite(v) || v < 0) return res.json({ ok: false, error: "INVALID_VALUE" });
+    if (![1, 2].includes(t))
+      return res.json({ ok: false, error: "INVALID_TEST" });
+    if (!Number.isFinite(i) || i < 0)
+      return res.json({ ok: false, error: "INVALID_INDEX" });
+    if (!Number.isFinite(v) || v < 0)
+      return res.json({ ok: false, error: "INVALID_VALUE" });
 
-    let session = await prisma.pelekanReviewSession.findUnique({ where: { userId: user.id } });
+    let session = await prisma.pelekanReviewSession.findUnique({
+      where: { userId: user.id },
+    });
     if (!session) return res.json({ ok: false, error: "NO_SESSION" });
 
     // ✅ self-heal: اگر کاربر وارد پاسخ‌دهی شد ولی سشن in_progress نبود، سشن را شروع کن
     if (session.status !== "in_progress") {
       // فقط این حالت‌ها را اجازه بده خودکار وارد in_progress شوند
-      const canAutoResume = session.status === "unlocked" || session.status === "completed_locked";
+      const canAutoResume =
+        session.status === "unlocked" || session.status === "completed_locked";
 
       if (!canAutoResume) {
         return res.json({ ok: false, error: "NOT_IN_PROGRESS" });
@@ -1062,23 +1360,32 @@ router.post("/answer", authUser, async (req, res) => {
           startedAt: session.startedAt ?? now(),
           completedAt: null,
           // اگر قبلاً مسیر skip بوده ولی الان کاربر عملاً تست می‌دهد
-          chosenPath: session.chosenPath === "skip_review" ? "review" : session.chosenPath,
-          currentTest: Number.isFinite(Number(session.currentTest)) ? session.currentTest : 1,
-          currentIndex: Number.isFinite(Number(session.currentIndex)) ? session.currentIndex : 0,
+          chosenPath:
+            session.chosenPath === "skip_review"
+              ? "review"
+              : session.chosenPath,
+          currentTest: Number.isFinite(Number(session.currentTest))
+            ? session.currentTest
+            : 1,
+          currentIndex: Number.isFinite(Number(session.currentIndex))
+            ? session.currentIndex
+            : 0,
           questionSetId: session.questionSetId ?? qSetId,
           updatedAt: now(),
         },
       });
     }
 
-    const qSetId = session.questionSetId || (await ensureQuestionSetSeeded()).id;
+    const qSetId =
+      session.questionSetId || (await ensureQuestionSetSeeded()).id;
 
     // validate question + options (قفل روی set)
     const q = await findQuestionInSet(qSetId, t, i);
     if (!q) return res.json({ ok: false, error: "QUESTION_NOT_FOUND" });
 
     const allowed = new Set((q.options || []).map((o) => o.value));
-    if (!allowed.has(v)) return res.json({ ok: false, error: "VALUE_NOT_ALLOWED" });
+    if (!allowed.has(v))
+      return res.json({ ok: false, error: "VALUE_NOT_ALLOWED" });
 
     const answers = ensureAnswersShape(session.answersJson);
     const key = t === 1 ? "test1" : "test2";
@@ -1108,7 +1415,10 @@ router.post("/answer", authUser, async (req, res) => {
       },
     });
   } catch (e) {
-    console.error("[pelekanReview.answer] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekanReview.answer] error:",
+      e?.message || "unknown_error",
+    );
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -1121,9 +1431,12 @@ router.post("/complete-test", authUser, async (req, res) => {
     if (!user) return res.json({ ok: false, error: "USER_NOT_FOUND" });
 
     const t = Number(testNo);
-    if (![1, 2].includes(t)) return res.json({ ok: false, error: "INVALID_TEST" });
+    if (![1, 2].includes(t))
+      return res.json({ ok: false, error: "INVALID_TEST" });
 
-    const session = await prisma.pelekanReviewSession.findUnique({ where: { userId: user.id } });
+    const session = await prisma.pelekanReviewSession.findUnique({
+      where: { userId: user.id },
+    });
     if (!session) return res.json({ ok: false, error: "NO_SESSION" });
 
     // ✅ self-heal: اگر اپ اشتباهی complete-test را بعد از finish صدا زد، بن‌بست نکن
@@ -1182,7 +1495,10 @@ router.post("/complete-test", authUser, async (req, res) => {
       },
     });
   } catch (e) {
-    console.error("[pelekanReview.completeTest] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekanReview.completeTest] error:",
+      e?.message || "unknown_error",
+    );
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -1198,7 +1514,9 @@ router.post("/finish", authUser, async (req, res) => {
     const user = await getAuthUser(req);
     if (!user) return res.json({ ok: false, error: "USER_NOT_FOUND" });
 
-    const session = await prisma.pelekanReviewSession.findUnique({ where: { userId: user.id } });
+    const session = await prisma.pelekanReviewSession.findUnique({
+      where: { userId: user.id },
+    });
     if (!session) return res.json({ ok: false, error: "NO_SESSION" });
 
     // شرط جدید
@@ -1232,7 +1550,10 @@ router.post("/finish", authUser, async (req, res) => {
       },
     });
   } catch (e) {
-    console.error("[pelekanReview.finish] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekanReview.finish] error:",
+      e?.message || "unknown_error",
+    );
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
@@ -1243,7 +1564,9 @@ router.get("/result", authUser, async (req, res) => {
     const user = await getAuthUser(req);
     if (!user) return res.json({ ok: false, error: "USER_NOT_FOUND" });
 
-    const session = await prisma.pelekanReviewSession.findUnique({ where: { userId: user.id } });
+    const session = await prisma.pelekanReviewSession.findUnique({
+      where: { userId: user.id },
+    });
     if (!session) return res.json({ ok: false, error: "NO_SESSION" });
 
     const rj = session.resultJson || null;
@@ -1255,7 +1578,8 @@ router.get("/result", authUser, async (req, res) => {
       const updated = await prisma.pelekanReviewSession.update({
         where: { userId: user.id },
         data: {
-          status: session.status === "in_progress" ? session.status : "unlocked",
+          status:
+            session.status === "in_progress" ? session.status : "unlocked",
           resultJson: { ...fresh, locked: false, message: "نتیجه آماده است." },
           updatedAt: now(),
         },
@@ -1276,11 +1600,18 @@ router.get("/result", authUser, async (req, res) => {
       data: {
         status: session.status,
         canEnterPelekan: computeCanEnterPelekan(session),
-        result: { ...session.resultJson, locked: false, message: "نتیجه آماده است." },
+        result: {
+          ...session.resultJson,
+          locked: false,
+          message: "نتیجه آماده است.",
+        },
       },
     });
   } catch (e) {
-    console.error("[pelekanReview.result] error:", e?.message || "unknown_error");
+    console.error(
+      "[pelekanReview.result] error:",
+      e?.message || "unknown_error",
+    );
     return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
