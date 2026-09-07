@@ -18,12 +18,18 @@ type Props = {
   me: any;
   state: any; // PelekanState
   onRefresh?: () => Promise<void> | void;
+  onBaselineStart?: () => Promise<void> | void;
 };
 
 const KEY_START_GATE = "pelekan:idle:start_gate:v1";
 const API_BASE = "https://api.qoqnoos.app";
 
-export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
+export default function IdlePlaceholder({
+  me,
+  state,
+  onRefresh,
+  onBaselineStart,
+}: Props) {
   const { token, loading: authLoading } = useAuth();
 
   const [busy, setBusy] = useState(false);
@@ -43,7 +49,7 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
   const showAppModal = (
     kind: "error" | "warning" | "success" | "info",
     title: string,
-    message: string
+    message: string,
   ) => {
     setAppModal({
       visible: true,
@@ -82,14 +88,8 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
       startGreenBg: "rgba(134,239,172,.14)",
       startGreenBorder: "rgba(134,239,172,.42)",
     }),
-    []
+    [],
   );
-
-  const consentSteps =
-    state?.baseline?.content?.consentSteps &&
-    Array.isArray(state.baseline.content.consentSteps)
-      ? state.baseline.content.consentSteps
-      : [];
 
   const introText =
     "برای اینکه یک برنامه‌ی دقیق، اثرگذار و کاملاً متناسب با وضعیت تو ارائه بشه، اول یک آزمون کوتاه بده تا وضعیتت مشخص بشه.";
@@ -141,8 +141,8 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
     try {
       await AsyncStorage.setItem(KEY_START_GATE, "1");
       setGateReady(true);
-    } catch {
-    } setMode("intro");
+    } catch {}
+    setMode("intro");
     requestAnimationFrame(() => animateTo(1));
   };
 
@@ -154,12 +154,20 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
     if (busy) return;
 
     if (authLoading) {
-      showAppModal("info", "کمی صبر کن", "در حال آماده‌سازی اطلاعات ورود هستیم.");
+      showAppModal(
+        "info",
+        "کمی صبر کن",
+        "در حال آماده‌سازی اطلاعات ورود هستیم.",
+      );
       return;
     }
 
     if (!token) {
-      showAppModal("error", "نیاز به ورود", "نشست کاربری شما پیدا نشد. لطفاً دوباره وارد شوید.");
+      showAppModal(
+        "error",
+        "نیاز به ورود",
+        "نشست کاربری شما پیدا نشد. لطفاً دوباره وارد شوید.",
+      );
       return;
     }
 
@@ -191,7 +199,7 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
           showAppModal(
             "error",
             "نشست نامعتبر است",
-            "نشست کاربری شما منقضی شده یا معتبر نیست. لطفاً دوباره وارد شوید."
+            "نشست کاربری شما منقضی شده یا معتبر نیست. لطفاً دوباره وارد شوید.",
           );
           return;
         }
@@ -200,7 +208,7 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
           showAppModal(
             "error",
             "دسترسی مجاز نیست",
-            "اجازه شروع این بخش برای این کاربر صادر نشده است."
+            "اجازه شروع این بخش برای این کاربر صادر نشده است.",
           );
           return;
         }
@@ -208,7 +216,7 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
         showAppModal(
           "error",
           "شروع آزمون انجام نشد",
-          json?.message || json?.error || "سرور درخواست شروع آزمون را نپذیرفت."
+          json?.message || json?.error || "سرور درخواست شروع آزمون را نپذیرفت.",
         );
         return;
       }
@@ -217,17 +225,18 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
         showAppModal(
           "error",
           "شروع آزمون انجام نشد",
-          json?.message || json?.error || "شروع آزمون ناموفق بود."
+          json?.message || json?.error || "شروع آزمون ناموفق بود.",
         );
         return;
       }
 
+      await onBaselineStart?.();
       await onRefresh?.();
     } catch (e: any) {
       showAppModal(
         "error",
         "ارتباط برقرار نشد",
-        e?.message || "ارتباط با سرور برقرار نشد."
+        e?.message || "ارتباط با سرور برقرار نشد.",
       );
     } finally {
       setBusy(false);
@@ -306,7 +315,10 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
                 ]}
               >
                 <Text
-                  style={[styles.startCircleText, { color: palette.startGreen }]}
+                  style={[
+                    styles.startCircleText,
+                    { color: palette.startGreen },
+                  ]}
                 >
                   شروع
                 </Text>
@@ -359,7 +371,9 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
               { backgroundColor: palette.glass, borderColor: palette.border },
             ]}
           >
-            <View style={[styles.accentBarTop, { backgroundColor: palette.gold }]} />
+            <View
+              style={[styles.accentBarTop, { backgroundColor: palette.gold }]}
+            />
 
             <Text
               style={[
@@ -369,41 +383,6 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
             >
               {introText}
             </Text>
-
-            <View style={{ marginTop: 14, gap: 10 }}>
-              {consentSteps.map((s: any, idx: number) => (
-                <View
-                  key={String(s?.id || idx)}
-                  style={[
-                    styles.stepCard,
-                    {
-                      borderColor: palette.border2,
-                      backgroundColor: palette.glass2,
-                    },
-                  ]}
-                >
-                  <View style={styles.stepHeaderRow}>
-                    <View
-                      style={[
-                        styles.bulletDot,
-                        {
-                          backgroundColor: "rgba(212,175,55,.20)",
-                          borderColor: "rgba(212,175,55,.35)",
-                        },
-                      ]}
-                    />
-                    <Text
-                      style={[
-                        styles.bulletText,
-                        { color: palette.sub, textAlign: "center" },
-                      ]}
-                    >
-                      {s?.text}
-                    </Text>
-                  </View>
-                </View>
-              ))}
-            </View>
 
             <TouchableOpacity
               activeOpacity={0.9}
@@ -419,9 +398,13 @@ export default function IdlePlaceholder({ me, state, onRefresh }: Props) {
               ]}
             >
               {busy ? (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
                   <ActivityIndicator />
-                  <Text style={[styles.primaryBtnText, { color: palette.text }]}>
+                  <Text
+                    style={[styles.primaryBtnText, { color: palette.text }]}
+                  >
                     در حال شروع…
                   </Text>
                 </View>

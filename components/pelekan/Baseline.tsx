@@ -14,8 +14,10 @@ import AppBannerModal from "../ui/AppBannerModal";
 
 type Props = {
   me: any;
-  state: any; // PelekanState
+  state: any;
   onRefresh?: () => Promise<void> | void;
+  onResetToStart?: () => Promise<void> | void;
+  onBackToBaselineStart?: () => Promise<void> | void;
 };
 
 type UiStep =
@@ -67,7 +69,12 @@ async function postJson(url: string, token: string, body: any) {
   return { res, json };
 }
 
-export default function Baseline({ state, onRefresh }: Props) {
+export default function Baseline({
+  state,
+  onRefresh,
+  onResetToStart,
+  onBackToBaselineStart,
+}: Props) {
   const { token, loading: authLoading } = useAuth();
 
   const palette = useMemo(
@@ -127,6 +134,8 @@ export default function Baseline({ state, onRefresh }: Props) {
     title: "",
     message: "",
   });
+
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
 
   const consentCount: number = useMemo(() => {
     const arr = state?.baseline?.content?.consentSteps;
@@ -439,6 +448,47 @@ export default function Baseline({ state, onRefresh }: Props) {
     }
   }, [token, authLoading, fetchBaselineState]);
 
+  const resetBaseline = useCallback(async () => {
+    if (authLoading) {
+      showAppModal("warning", "کمی صبر کن", "احراز هویت هنوز کامل نشده.");
+      return;
+    }
+
+    if (!token) {
+      showAppModal("error", "نیاز به ورود", "توکن احراز هویت پیدا نشد.");
+      return;
+    }
+
+    try {
+      setBusy(true);
+
+      const { res, json } = await postJson(`${API_BASE}/reset`, token, {});
+
+      if (!res.ok || !json?.ok) {
+        showAppModal(
+          "error",
+          "شروع دوباره انجام نشد",
+          json?.message || json?.error || `status=${res.status}`,
+        );
+        return;
+      }
+
+      setLocalSelected(null);
+      setCompletedResult(null);
+      setStep(null);
+
+      await onResetToStart?.();
+    } catch (e: any) {
+      showAppModal(
+        "error",
+        "ارتباط برقرار نشد",
+        e?.message || "اتصال به سرور برقرار نشد. لطفاً دوباره تلاش کن.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [token, authLoading, onResetToStart]);
+
   const markSeen = useCallback(async () => {
     if (authLoading) {
       showAppModal("warning", "کمی صبر کن", "احراز هویت هنوز کامل نشده.");
@@ -677,37 +727,63 @@ export default function Baseline({ state, onRefresh }: Props) {
 
               <View style={{ height: 14 }} />
 
-              <Pressable
-                disabled={busy}
-                onPress={goNext}
-                style={[
-                  styles.btnPrimary,
-                  {
-                    borderColor: "rgba(212,175,55,.35)",
-                    backgroundColor: "rgba(212,175,55,.10)",
-                    opacity: busy ? 0.7 : 1,
-                  },
-                ]}
-              >
-                {busy ? (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <ActivityIndicator color={palette.gold} />
+              <View style={styles.navButtonsRow}>
+                <Pressable
+                  disabled={busy}
+                  onPress={goNext}
+                  style={[
+                    styles.btnPrimary,
+                    {
+                      flex: 1,
+                      borderColor: "rgba(212,175,55,.35)",
+                      backgroundColor: "rgba(212,175,55,.10)",
+                      opacity: busy ? 0.7 : 1,
+                    },
+                  ]}
+                >
+                  {busy ? (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <ActivityIndicator color={palette.gold} />
+                      <Text style={[styles.btnText, { color: palette.text }]}>
+                        در حال ثبت…
+                      </Text>
+                    </View>
+                  ) : (
                     <Text style={[styles.btnText, { color: palette.text }]}>
-                      در حال ثبت…
+                      {step.optionText || "متوجه شدم"}
                     </Text>
-                  </View>
-                ) : (
-                  <Text style={[styles.btnText, { color: palette.text }]}>
-                    {step.optionText || "متوجه شدم"}
+                  )}
+                </Pressable>
+
+                <Pressable
+                  disabled={busy}
+                  onPress={() => {
+                    if (nav.canPrev) {
+                      void goPrev();
+                    } else {
+                      void onBackToBaselineStart?.();
+                    }
+                  }}
+                  style={[
+                    styles.btnSecondary,
+                    {
+                      borderColor: palette.border,
+                      backgroundColor: "rgba(255,255,255,.04)",
+                      opacity: busy ? 0.7 : 1,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.btnText, { color: palette.sub }]}>
+                    مرحله قبلی
                   </Text>
-                )}
-              </Pressable>
+                </Pressable>
+              </View>
             </>
           ) : step?.type === "question" ? (
             <>
@@ -723,6 +799,19 @@ export default function Baseline({ state, onRefresh }: Props) {
               <Text style={styles.scrollHint}>
                 برای دیدن همه گزینه‌ها صفحه رو به بالا بکش
               </Text>
+
+              <Pressable
+                disabled={busy}
+                onPress={() => setResetConfirmOpen(true)}
+                style={({ pressed }) => [
+                  styles.resetInlineBtn,
+                  {
+                    opacity: busy ? 0.5 : pressed ? 0.75 : 1,
+                  },
+                ]}
+              >
+                <Text style={styles.resetInlineText}>شروع آزمون از اول</Text>
+              </Pressable>
               <View style={styles.hr} />
 
               <Text
@@ -904,6 +993,21 @@ export default function Baseline({ state, onRefresh }: Props) {
         message={appModal.message}
         onClose={() => setAppModal((prev) => ({ ...prev, visible: false }))}
       />
+      <AppBannerModal
+        visible={resetConfirmOpen}
+        kind="warning"
+        title="شروع آزمون از اول"
+        message="با این کار همه پاسخ‌هایی که تا الان در این سنجش ثبت کردی پاک می‌شن و آزمون از ابتدا شروع می‌شه. مطمئنی؟"
+        closeText="انصراف"
+        onClose={() => setResetConfirmOpen(false)}
+        confirmText="شروع از اول"
+        confirmKind="danger"
+        confirmLoading={busy}
+        onConfirm={async () => {
+          await resetBaseline();
+          setResetConfirmOpen(false);
+        }}
+      />
     </View>
   );
 }
@@ -988,7 +1092,7 @@ const styles = StyleSheet.create({
   },
 
   navButtonsRow: {
-    flexDirection: "row-reverse",
+    flexDirection: "row",
     alignItems: "center",
     gap: 10,
   },
@@ -999,6 +1103,23 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 12,
     alignItems: "center",
+  },
+  resetInlineBtn: {
+    alignSelf: "center",
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,.28)",
+    backgroundColor: "rgba(239,68,68,.08)",
+  },
+
+  resetInlineText: {
+    color: "#FCA5A5",
+    fontSize: 11,
+    fontWeight: "900",
+    textAlign: "center",
   },
 
   btnText: { fontSize: 14, fontWeight: "900" },

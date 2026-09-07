@@ -146,6 +146,8 @@ export default function PelekanTab() {
 
   const [gateBoot, setGateBoot] = useState(true);
   const [startGateReady, setStartGateReady] = useState(false);
+  const [forceBaselineStartScreen, setForceBaselineStartScreen] =
+    useState(false);
   const { token, loading: authLoading } = useAuth();
 
   const palette = useMemo(
@@ -499,10 +501,11 @@ export default function PelekanTab() {
 
   const baselineHasSession = !!state?.baseline?.session;
   const gateAllowsBaseline =
-    startGateReady ||
-    baselineHasSession ||
-    autoStart === "baseline" ||
-    forceTab === "baseline_assessment";
+    !forceBaselineStartScreen &&
+    (startGateReady ||
+      baselineHasSession ||
+      autoStart === "baseline" ||
+      forceTab === "baseline_assessment");
 
   if (!baselineCompleted) {
     if (!gateAllowsBaseline) {
@@ -698,6 +701,27 @@ export default function PelekanTab() {
   }, [view, activeDayId, activeIndex, pathItems.length]);
 
   /* ----------------------------- Handlers ----------------------------- */
+  const resetBaselineToStart = useCallback(async () => {
+    try {
+      await AsyncStorage.removeItem(KEY_START_GATE);
+    } catch {}
+    setForceBaselineStartScreen(false);
+    setStartGateReady(false);
+    setForceView(null);
+    setForceTab(null);
+
+    await fetchState({
+      initial: false,
+      reason: "baseline_reset_to_start",
+    });
+  }, [fetchState]);
+
+  const backToBaselineStart = useCallback(() => {
+    setForceBaselineStartScreen(true);
+    setForceView(null);
+    setForceTab(null);
+  }, []);
+
   const onTapStart = useCallback(() => {
     router.push("/pelekan/bastan" as any);
   }, [router]);
@@ -900,6 +924,8 @@ export default function PelekanTab() {
               onRefresh={() =>
                 fetchState({ initial: false, reason: "baseline_refresh" })
               }
+              onResetToStart={resetBaselineToStart}
+              onBackToBaselineStart={backToBaselineStart}
             />
           </View>
         ) : view === "choose_path" ? (
@@ -1000,6 +1026,10 @@ export default function PelekanTab() {
               onRefresh={() =>
                 fetchState({ initial: false, reason: "idle_refresh" })
               }
+              onBaselineStart={() => {
+                setForceBaselineStartScreen(false);
+                setStartGateReady(true);
+              }}
             />
           </View>
         )}
