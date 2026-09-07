@@ -777,16 +777,73 @@
         justify-content: center;
       }
 
-      .screenshot-lightbox img {
+      .screenshot-lightbox-inner {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .screenshot-lightbox-track {
+        width: 100%;
+        height: 100%;
+
+        display: flex;
+        flex-direction: row;
+
+        overflow-x: auto;
+        overflow-y: hidden;
+
+        scroll-snap-type: x mandatory;
+        scroll-behavior: smooth;
+
+        -ms-overflow-style: none;
+
+        overscroll-behavior-x: contain;
+        touch-action: pan-x;
+
+        direction: ltr;
+      }
+
+      .screenshot-lightbox-track::-webkit-scrollbar {
+        display: none;
+      }
+
+      .screenshot-lightbox-slide {
+        flex: 0 0 100%;
+        width: 100%;
+        height: 100%;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        scroll-snap-align: center;
+        scroll-snap-stop: always;
+
+        padding: 60px 90px 20px;
+        box-sizing: border-box;
+      }
+
+      .screenshot-lightbox-slide img {
         display: block;
-        max-width: min(92vw, 520px);
-        max-height: calc(100vh - 100px);
+
         width: auto;
         height: auto;
+
+        max-width: 100%;
+        max-height: 100%;
+
         object-fit: contain;
+
         border-radius: 22px;
         border: 1px solid rgba(255, 255, 255, 0.12);
         box-shadow: 0 28px 90px rgba(0, 0, 0, 0.65);
+
+        -webkit-user-select: none;
+        user-select: none;
       }
 
       .screenshot-lightbox-back {
@@ -878,9 +935,14 @@
             max(18px, env(safe-area-inset-bottom));
         }
 
-        .screenshot-lightbox img {
-          max-width: 94vw;
-          max-height: calc(100dvh - 105px);
+        .screenshot-lightbox-slide {
+          padding: max(66px, calc(env(safe-area-inset-top) + 56px)) 18px
+            max(18px, env(safe-area-inset-bottom));
+        }
+
+        .screenshot-lightbox-slide img {
+          max-width: 100%;
+          max-height: 100%;
           border-radius: 18px;
         }
 
@@ -1823,7 +1885,56 @@
           ‹
         </button>
 
-        <img id="screenshotLightboxImage" alt="" />
+        <div class="screenshot-lightbox-track" id="screenshotLightboxTrack">
+          <div class="screenshot-lightbox-slide">
+            <img
+              src="/static/img/screenshots/01.webp"
+              alt="نمای اپلیکیشن ققنوس - تصویر ۱"
+            />
+          </div>
+
+          <div class="screenshot-lightbox-slide">
+            <img
+              src="/static/img/screenshots/02.webp"
+              alt="نمای اپلیکیشن ققنوس - تصویر ۲"
+            />
+          </div>
+
+          <div class="screenshot-lightbox-slide">
+            <img
+              src="/static/img/screenshots/03.webp"
+              alt="نمای اپلیکیشن ققنوس - تصویر ۳"
+            />
+          </div>
+
+          <div class="screenshot-lightbox-slide">
+            <img
+              src="/static/img/screenshots/04.webp"
+              alt="نمای اپلیکیشن ققنوس - تصویر ۴"
+            />
+          </div>
+
+          <div class="screenshot-lightbox-slide">
+            <img
+              src="/static/img/screenshots/05.webp"
+              alt="نمای اپلیکیشن ققنوس - تصویر ۵"
+            />
+          </div>
+
+          <div class="screenshot-lightbox-slide">
+            <img
+              src="/static/img/screenshots/06.webp"
+              alt="نمای اپلیکیشن ققنوس - تصویر ۶"
+            />
+          </div>
+
+          <div class="screenshot-lightbox-slide">
+            <img
+              src="/static/img/screenshots/07.webp"
+              alt="نمای اپلیکیشن ققنوس - تصویر ۷"
+            />
+          </div>
+        </div>
 
         <button
           class="screenshot-lightbox-nav screenshot-lightbox-next"
@@ -1875,89 +1986,66 @@
           });
         });
       })();
-      // Screenshot lightbox gallery
+      // Screenshot lightbox — real horizontal gallery
       (function () {
         const lightbox = document.getElementById("screenshotLightbox");
-        const lightboxImage = document.getElementById(
-          "screenshotLightboxImage",
-        );
-        const lightboxInner = document.getElementById(
-          "screenshotLightboxInner",
-        );
+        const track = document.getElementById("screenshotLightboxTrack");
         const backButton = document.getElementById("screenshotLightboxBack");
         const prevButton = document.getElementById("screenshotLightboxPrev");
         const nextButton = document.getElementById("screenshotLightboxNext");
 
-        if (
-          !lightbox ||
-          !lightboxImage ||
-          !lightboxInner ||
-          !backButton ||
-          !prevButton ||
-          !nextButton
-        ) {
+        if (!lightbox || !track || !backButton || !prevButton || !nextButton) {
           return;
         }
 
-        const screenshots = Array.from(
+        const thumbnails = Array.from(
           document.querySelectorAll(".phone-shot img"),
         );
 
-        let currentIndex = 0;
-        let touchStartX = 0;
-        let touchEndX = 0;
+        const slides = Array.from(
+          track.querySelectorAll(".screenshot-lightbox-slide"),
+        );
 
-        function showImage(index) {
-          if (!screenshots.length) return;
+        let currentIndex = 0;
+
+        function goToSlide(index, behavior = "smooth") {
+          if (!slides.length) return;
 
           if (index < 0) {
-            index = screenshots.length - 1;
+            index = slides.length - 1;
           }
 
-          if (index >= screenshots.length) {
+          if (index >= slides.length) {
             index = 0;
           }
 
           currentIndex = index;
 
-          const img = screenshots[currentIndex];
-
-          lightboxImage.style.display = "block";
-          lightboxImage.parentElement?.classList.remove("img-fallback");
-
-          lightboxImage.src = img.currentSrc || img.src;
-          lightboxImage.alt = img.alt || "تصویر اپلیکیشن ققنوس";
+          track.scrollTo({
+            left: currentIndex * track.clientWidth,
+            behavior,
+          });
         }
 
         function openLightbox(index) {
           currentIndex = index;
-          showImage(currentIndex);
 
           lightbox.classList.add("open");
           lightbox.setAttribute("aria-hidden", "false");
           document.body.classList.add("lightbox-open");
 
-          backButton.focus();
+          requestAnimationFrame(function () {
+            goToSlide(currentIndex, "auto");
+          });
         }
 
         function closeLightbox() {
           lightbox.classList.remove("open");
           lightbox.setAttribute("aria-hidden", "true");
           document.body.classList.remove("lightbox-open");
-
-          lightboxImage.removeAttribute("src");
-          lightboxImage.alt = "";
         }
 
-        function showNext() {
-          showImage(currentIndex + 1);
-        }
-
-        function showPrevious() {
-          showImage(currentIndex - 1);
-        }
-
-        screenshots.forEach(function (img, index) {
+        thumbnails.forEach(function (img, index) {
           img.addEventListener("click", function () {
             openLightbox(index);
           });
@@ -1965,20 +2053,22 @@
 
         backButton.addEventListener("click", closeLightbox);
 
+        // فلش سمت راست = تصویر بعدی
         nextButton.addEventListener("click", function (event) {
           event.stopPropagation();
-          showNext();
+          goToSlide(currentIndex + 1);
         });
 
+        // فلش سمت چپ = تصویر قبلی
         prevButton.addEventListener("click", function (event) {
           event.stopPropagation();
-          showPrevious();
+          goToSlide(currentIndex - 1);
         });
 
-        lightbox.addEventListener("click", function (event) {
-          if (event.target === lightbox || event.target === lightboxInner) {
-            closeLightbox();
-          }
+        track.addEventListener("scroll", function () {
+          if (!track.clientWidth) return;
+
+          currentIndex = Math.round(track.scrollLeft / track.clientWidth);
         });
 
         document.addEventListener("keydown", function (event) {
@@ -1988,40 +2078,20 @@
             closeLightbox();
           }
 
-          if (event.key === "ArrowLeft") {
-            showPrevious();
+          if (event.key === "ArrowRight") {
+            goToSlide(currentIndex + 1);
           }
 
-          if (event.key === "ArrowRight") {
-            showNext();
+          if (event.key === "ArrowLeft") {
+            goToSlide(currentIndex - 1);
           }
         });
 
-        lightboxInner.addEventListener(
-          "touchstart",
-          function (event) {
-            touchStartX = event.changedTouches[0].screenX;
-          },
-          { passive: true },
-        );
+        window.addEventListener("resize", function () {
+          if (!lightbox.classList.contains("open")) return;
 
-        lightboxInner.addEventListener(
-          "touchend",
-          function (event) {
-            touchEndX = event.changedTouches[0].screenX;
-
-            const distance = touchEndX - touchStartX;
-
-            if (Math.abs(distance) < 50) return;
-
-            if (distance < 0) {
-              showNext();
-            } else {
-              showPrevious();
-            }
-          },
-          { passive: true },
-        );
+          goToSlide(currentIndex, "auto");
+        });
       })();
     </script>
   </body>
