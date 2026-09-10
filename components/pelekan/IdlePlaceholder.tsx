@@ -64,6 +64,8 @@ export default function IdlePlaceholder({
   const [gateReady, setGateReady] = useState(false);
 
   const anim = useRef(new Animated.Value(0)).current;
+  const pulse = useRef(new Animated.Value(0)).current;
+  const pressScale = useRef(new Animated.Value(1)).current;
 
   const palette = useMemo(
     () => ({
@@ -136,6 +138,34 @@ export default function IdlePlaceholder({
       alive = false;
     };
   }, [anim]);
+
+  useEffect(() => {
+    if (mode !== "start") return;
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 1500,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 1500,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    loop.start();
+
+    return () => {
+      loop.stop();
+      pulse.setValue(0);
+    };
+  }, [mode, pulse]);
 
   const goIntro = async () => {
     try {
@@ -282,6 +312,21 @@ export default function IdlePlaceholder({
       outputRange: [0, -12],
     });
 
+    const haloScale = pulse.interpolate({
+      inputRange: [0, 1],
+      outputRange: [1, 1.16],
+    });
+
+    const haloOpacity = pulse.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.5, 0.1],
+    });
+
+    const innerGlowOpacity = pulse.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.22, 0.46],
+    });
+
     return (
       <>
         <View style={[styles.full, { backgroundColor: palette.bg }]}>
@@ -294,36 +339,66 @@ export default function IdlePlaceholder({
               },
             ]}
           >
-            <TouchableOpacity
-              activeOpacity={0.92}
-              onPress={goIntro}
-              style={[
-                styles.startCircle,
-                {
-                  backgroundColor: palette.startGreenBg,
-                  borderColor: palette.startGreenBorder,
-                },
-              ]}
-            >
-              <View
+            <View style={styles.startStage}>
+              {/* هاله بیرونی متحرک */}
+              <Animated.View
+                pointerEvents="none"
                 style={[
-                  styles.startCircleInner,
+                  styles.startHalo,
                   {
-                    backgroundColor: "rgba(3,7,18,.60)",
-                    borderColor: "rgba(134,239,172,.25)",
+                    opacity: haloOpacity,
+                    transform: [{ scale: haloScale }],
                   },
                 ]}
+              />
+
+              {/* هاله داخلی */}
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.startGlow,
+                  {
+                    opacity: innerGlowOpacity,
+                  },
+                ]}
+              />
+
+              <Animated.View
+                style={{
+                  transform: [{ scale: pressScale }],
+                }}
               >
-                <Text
-                  style={[
-                    styles.startCircleText,
-                    { color: palette.startGreen },
-                  ]}
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onPressIn={() => {
+                    Animated.spring(pressScale, {
+                      toValue: 0.96,
+                      friction: 6,
+                      tension: 160,
+                      useNativeDriver: true,
+                    }).start();
+                  }}
+                  onPressOut={() => {
+                    Animated.spring(pressScale, {
+                      toValue: 1,
+                      friction: 6,
+                      tension: 140,
+                      useNativeDriver: true,
+                    }).start();
+                  }}
+                  onPress={goIntro}
+                  style={styles.startCirclePremium}
                 >
-                  شروع
-                </Text>
-              </View>
-            </TouchableOpacity>
+                  <View style={styles.startCircleInnerPremium}>
+                    <Text style={styles.startCircleTextPremium}>شــروع</Text>
+
+                    <Text style={styles.startCircleSubText}>
+                      آغاز مسیر درمان
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </Animated.View>
+            </View>
           </Animated.View>
         </View>
 
@@ -462,34 +537,122 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
 
-  startCircle: {
-    width: 220,
-    height: 220,
-    borderRadius: 999,
-    borderWidth: 1,
+  startStage: {
+    width: 320,
+    height: 320,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 12 },
+  },
+
+  startHalo: {
+    position: "absolute",
+
+    width: 294,
+    height: 294,
+    borderRadius: 999,
+
+    borderWidth: 1.5,
+    borderColor: "rgba(234,175,72,.58)",
+
+    backgroundColor: "rgba(233,138,21,.08)",
+
+    shadowColor: "#E98A15",
+    shadowOpacity: 0.58,
+    shadowRadius: 28,
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+
     elevation: 12,
   },
-  startCircleInner: {
-    width: 192,
-    height: 192,
+
+  startGlow: {
+    position: "absolute",
+
+    width: 262,
+    height: 262,
     borderRadius: 999,
-    borderWidth: 1,
+
+    backgroundColor: "rgba(233,138,21,.28)",
+
+    shadowColor: "#E98A15",
+    shadowOpacity: 0.5,
+    shadowRadius: 22,
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+
+    elevation: 8,
+  },
+
+  startCirclePremium: {
+    width: 242,
+    height: 242,
+    borderRadius: 999,
+
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 14,
+
+    backgroundColor: "rgba(11,15,20,.94)",
+
+    borderWidth: 1.8,
+    borderColor: "rgba(234,175,72,.88)",
+
+    shadowColor: "#E98A15",
+    shadowOpacity: 0.6,
+    shadowRadius: 30,
+    shadowOffset: {
+      width: 0,
+      height: 7,
+    },
+
+    elevation: 16,
   },
-  startCircleText: {
-    fontSize: 22,
+
+  startCircleInnerPremium: {
+  width: 208,
+  height: 208,
+  borderRadius: 999,
+
+  alignItems: "center",
+  justifyContent: "center",
+
+  backgroundColor: "rgba(134,239,172,.055)",
+
+  borderWidth: 1,
+  borderColor: "rgba(134,239,172,.28)",
+},
+
+  startCircleTextPremium: {
+    color: "#F3CA69",
+
+    fontSize: 30,
+    lineHeight: 42,
     fontWeight: "900",
+
+    textAlign: "center",
+
+    textShadowColor: "rgba(233,138,21,.35)",
+    textShadowRadius: 10,
+
     writingDirection: "rtl" as any,
   },
 
+  startCircleSubText: {
+    marginTop: 10,
+
+    color: "#86EFAC",
+
+    fontSize: 12.5,
+    lineHeight: 20,
+    fontWeight: "700",
+
+    textAlign: "center",
+
+    writingDirection: "rtl" as any,
+  },
   introCenterWrap: {
     flex: 1,
     alignItems: "center",
