@@ -12,6 +12,7 @@ import React, { useEffect, useMemo } from "react";
 import {
   I18nManager,
   Linking,
+  View,
 } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { PhoenixProvider, usePhoenix } from "../hooks/PhoenixContext";
@@ -27,6 +28,12 @@ import {
 } from "../api/notifications";
 import NotificationPermissionGate from "../components/notifications/NotificationPermissionGate";
 import XpJourneyWatcher from "../components/xp/XpJourneyWatcher";
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
+SplashScreen.setOptions({
+  duration: 500,
+  fade: true,
+});
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -79,14 +86,28 @@ function RootStack() {
 }
 function ThemeBridge() {
   const { navTheme, isDark } = usePhoenix();
+
   const theme: Theme = useMemo(
     () => navTheme ?? (isDark ? DarkTheme : DefaultTheme),
     [navTheme, isDark],
   );
+
+  const handleLayout = React.useCallback(() => {
+    SplashScreen.hideAsync().catch(() => {});
+  }, []);
+
   return (
     <ThemeProvider value={theme}>
-      <StatusBar style="auto" />
-      <RootStack />
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "#0b0f14",
+        }}
+        onLayout={handleLayout}
+      >
+        <StatusBar style="light" />
+        <RootStack />
+      </View>
     </ThemeProvider>
   );
 }
@@ -100,14 +121,6 @@ export default function RootLayout() {
       I18nManager.forceRTL(false);
     }
   }, []);
-
-  useEffect(() => {
-    SplashScreen.preventAutoHideAsync().catch(() => {});
-  }, []);
-
-  useEffect(() => {
-  SplashScreen.hideAsync().catch(() => {});
-}, []);
 
   useEffect(() => {
     (async () => {
