@@ -7,6 +7,7 @@ import { StatusBar } from "expo-status-bar";
 import React, { useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -43,13 +44,26 @@ function normalizeIranPhone(value: string) {
   return only;
 }
 
+function formatIranPhone(value: string) {
+  const digits = toEnDigits(value).replace(/\D/g, "").slice(0, 11);
+
+  if (digits.length <= 4) {
+    return digits;
+  }
+
+  if (digits.length <= 7) {
+    return `${digits.slice(0, 4)} ${digits.slice(4)}`;
+  }
+
+  return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
+}
+
 /* بخش‌های بیانیه استفاده و حریم خصوصی با آیکون */
 const TERMS_SECTIONS = [
   {
     icon: "heart-dislike-outline",
     title: "این اپلیکیشن تشویق به جدایی نمی‌کند",
-    body:
-      "ققنوس هیچ کاربری را به جدایی از همسر یا شریک عاطفی ترغیب نمی‌کند. تصمیم برای ادامه یا پایان رابطه کاملاً شخصی و بر عهده کاربر است. ققنوس صرفاً ابزارها و آموزش‌هایی برای مدیریت پیامدهای عاطفی و روانی رابطه یا جدایی ارائه می‌دهد.",
+    body: "ققنوس هیچ کاربری را به جدایی از همسر یا شریک عاطفی ترغیب نمی‌کند. تصمیم برای ادامه یا پایان رابطه کاملاً شخصی و بر عهده کاربر است. ققنوس صرفاً ابزارها و آموزش‌هایی برای مدیریت پیامدهای عاطفی و روانی رابطه یا جدایی ارائه می‌دهد.",
   },
 
   {
@@ -63,15 +77,13 @@ const TERMS_SECTIONS = [
   {
     icon: "medkit-outline",
     title: "ماهیت خدمات ققنوس",
-    body:
-      "ققنوس یک ابزار آموزشی و کمک‌درمانی در حوزه روان‌شناسی و به‌ویژه ترمیم شکست عاطفی است. این خدمات جایگزین مشاوره تخصصی، روان‌درمانی یا درمان پزشکی نیستند و برای مدیریت شرایط بالینی شدید یا بحران‌های حاد طراحی نشده‌اند.",
+    body: "ققنوس یک ابزار آموزشی و کمک‌درمانی در حوزه روان‌شناسی و به‌ویژه ترمیم شکست عاطفی است. این خدمات جایگزین مشاوره تخصصی، روان‌درمانی یا درمان پزشکی نیستند و برای مدیریت شرایط بالینی شدید یا بحران‌های حاد طراحی نشده‌اند.",
   },
 
   {
     icon: "people-circle-outline",
     title: "محتوا عمومی است و نسخه اختصاصی محسوب نمی‌شود",
-    body:
-      "تمام آموزش‌ها، تکنیک‌ها و ارزیابی‌ها بر اساس پژوهش‌های علمی و الگوهای رایج رفتاری ارائه شده‌اند و برای هر فرد، نسخه درمانی اختصاصی محسوب نمی‌شوند. در صورت نیاز به ارزیابی دقیق یا مداخله تخصصی، مراجعه به متخصص سلامت روان ضروری است.",
+    body: "تمام آموزش‌ها، تکنیک‌ها و ارزیابی‌ها بر اساس پژوهش‌های علمی و الگوهای رایج رفتاری ارائه شده‌اند و برای هر فرد، نسخه درمانی اختصاصی محسوب نمی‌شوند. در صورت نیاز به ارزیابی دقیق یا مداخله تخصصی، مراجعه به متخصص سلامت روان ضروری است.",
   },
 
   {
@@ -85,15 +97,13 @@ const TERMS_SECTIONS = [
   {
     icon: "bandage-outline",
     title: "خدمات فوریت‌های روانی ارائه نمی‌شود",
-    body:
-      "در صورت وجود افکار خودآسیبی یا دیگرآسیبی، علائم شدید افسردگی یا اضطراب، تجربه خشونت یا بی‌ثباتی شدید روانی، کاربر باید فوراً با اورژانس یا متخصص سلامت روان تماس بگیرد. ققنوس خدمات بحران یا مداخله فوری ارائه نمی‌دهد.",
+    body: "در صورت وجود افکار خودآسیبی یا دیگرآسیبی، علائم شدید افسردگی یا اضطراب، تجربه خشونت یا بی‌ثباتی شدید روانی، کاربر باید فوراً با اورژانس یا متخصص سلامت روان تماس بگیرد. ققنوس خدمات بحران یا مداخله فوری ارائه نمی‌دهد.",
   },
 
   {
     icon: "trending-up-outline",
     title: "نتیجه قطعی وعده داده نمی‌شود",
-    body:
-      "بهبود روانی، فرآیندی فردی، تدریجی و وابسته به شرایط هر شخص است. ققنوس هیچ نتیجه قطعی یا یکسانی برای همه کاربران تضمین نمی‌کند.",
+    body: "بهبود روانی، فرآیندی فردی، تدریجی و وابسته به شرایط هر شخص است. ققنوس هیچ نتیجه قطعی یا یکسانی برای همه کاربران تضمین نمی‌کند.",
   },
 
   {
@@ -127,15 +137,13 @@ const TERMS_SECTIONS = [
   {
     icon: "document-text-outline",
     title: "مالکیت معنوی",
-    body:
-      "تمام محتوا، ساختار، آزمون‌ها، آموزش‌ها و طراحی‌های اپلیکیشن متعلق به برند ققنوس است و مالیکت مادی و معنوی آن در اختیار آقای مسعود احمدی آذر به عنوان موسس و صاحب اثر است و هرگونه تکثیر، انتشار یا استفاده تجاری بدون مجوز کتبی ممنوع است.",
+    body: "تمام محتوا، ساختار، آزمون‌ها، آموزش‌ها و طراحی‌های اپلیکیشن متعلق به برند ققنوس است و مالیکت مادی و معنوی آن در اختیار آقای مسعود احمدی آذر به عنوان موسس و صاحب اثر است و هرگونه تکثیر، انتشار یا استفاده تجاری بدون مجوز کتبی ممنوع است.",
   },
 
   {
     icon: "shield-checkmark-outline",
     title: "حد و مرزهای اخلاقی و قانونی",
-    body:
-      "کاربر متعهد می‌شود از اپلیکیشن به‌صورت اخلاقی و قانونی استفاده کند، از تکنیک‌ها برای آسیب به خود یا دیگران بهره نگیرد و قوانین کشور محل اقامت خود را رعایت کند. هرگونه استفاده غیرقانونی از محتوا یا تلاش برای سوءاستفاده از سیستم ممنوع است.",
+    body: "کاربر متعهد می‌شود از اپلیکیشن به‌صورت اخلاقی و قانونی استفاده کند، از تکنیک‌ها برای آسیب به خود یا دیگران بهره نگیرد و قوانین کشور محل اقامت خود را رعایت کند. هرگونه استفاده غیرقانونی از محتوا یا تلاش برای سوءاستفاده از سیستم ممنوع است.",
   },
 
   {
@@ -163,6 +171,7 @@ export default function LoginScreen() {
 
   // ✅ NEW: تایید خاموش بودن VPN
   const [vpnOff, setVpnOff] = useState(false);
+  const [accountControlAware, setAccountControlAware] = useState(false);
 
   const [showTerms, setShowTerms] = useState(false);
 
@@ -191,13 +200,13 @@ export default function LoginScreen() {
     });
   }
 
-    async function safePing() {
+  async function safePing() {
     try {
       const url = `${APP_API_URL}/api/ping`;
       await withTimeout(fetch(url, { method: "GET" }), 3000).catch(() => {});
     } catch {}
   }
-  
+
   const { requestCode } = useAuth();
   async function onSend() {
     if (loading || runningRef.current) return;
@@ -209,7 +218,7 @@ export default function LoginScreen() {
       showNotice({
         type: "warn",
         title: "شماره نامعتبر است",
-        message: "شماره باید ۱۱ رقم و با 09 شروع شود.",
+        //message: "شماره باید ۱۱ رقم و با 09 شروع شود.",
       });
       return;
     }
@@ -219,6 +228,16 @@ export default function LoginScreen() {
         type: "error",
         title: "تأیید قوانین لازمه",
         message: "برای ادامه، باید شرایط استفاده و حریم خصوصی رو بپذیری.",
+      });
+      return;
+    }
+
+    if (!accountControlAware) {
+      showNotice({
+        type: "warn",
+        title: "تأیید حذف حساب لازمه",
+        message:
+          "برای ادامه، تأیید کن که از امکان خروج از حساب یا حذف حساب و اطلاعاتت اطلاع داری.",
       });
       return;
     }
@@ -241,15 +260,13 @@ export default function LoginScreen() {
 
       await withTimeout(requestCode(phone), 15000);
 
-router.push({
-  pathname: "/(auth)/verify",
-  params: {
-    phone,
-    exp: "180",
-  },
-});
-
-
+      router.push({
+        pathname: "/(auth)/verify",
+        params: {
+          phone,
+          exp: "180",
+        },
+      });
     } catch (e: any) {
       const msg = String(e?.message || "");
       if (msg.includes("429") || msg === "TOO_MANY_REQUESTS") {
@@ -284,7 +301,8 @@ router.push({
   }
 
   // ✅ NEW: دکمه فقط با قوانین + VPN خاموش فعال می‌شود
-  const disableButton = loading || !isValid || !agree || !vpnOff;
+  const disableButton =
+    loading || !isValid || !agree || !accountControlAware || !vpnOff;
 
   // پالت ثابت مثل onboarding
   const BG = "#0b0f14";
@@ -293,7 +311,6 @@ router.push({
   const LINE = "rgba(255,255,255,.10)";
   const GOLD = "#D4AF37";
   const OK = "#22c55e";
-  const INPUT_BG = "rgba(255,255,255,.04)";
 
   const BAD = "rgba(248,113,113,1)";
   const WARN = "rgba(251,191,36,1)";
@@ -330,8 +347,10 @@ router.push({
   }
 
   // ✅ این متن همیشه قابل دیدن باشد؛ فقط وقتی خطاست قرمز شود
-  const helperColor =
-    rawPhone.length === 0 || isValid ? "rgba(231,238,247,.65)" : "rgba(248,113,113,.95)";
+  // const helperColor =
+  // rawPhone.length === 0 || isValid
+  // ? "rgba(231,238,247,.65)"
+  //: "rgba(248,113,113,.95)";
 
   // ✅ لینک رسمی قوانین
   const TERMS_URL = "https://qoqnoos.app/terms.html";
@@ -341,275 +360,599 @@ router.push({
       <StatusBar style={dark ? "light" : "light"} />
 
       <KeyboardAvoidingView
-  style={{ flex: 1 }}
-  behavior={Platform.OS === "ios" ? "padding" : "height"}
->
-  <ScrollView
-    keyboardShouldPersistTaps="handled"
-    showsVerticalScrollIndicator={false}
-    contentContainerStyle={{
-      flexGrow: 1,
-      paddingBottom: 24,
-    }}
-  >
-    <View style={{ flex: 1 }}>
-          {/* گلوها */}
-          <View
-            style={{
-              position: "absolute",
-              top: -220,
-              left: -220,
-              width: 420,
-              height: 420,
-              borderRadius: 999,
-              backgroundColor: "rgba(212,175,55,.16)",
-            }}
-          />
-          <View
-            style={{
-              position: "absolute",
-              bottom: -240,
-              right: -240,
-              width: 480,
-              height: 480,
-              borderRadius: 999,
-              backgroundColor: "rgba(233,138,21,.12)",
-            }}
-          />
-
-          <View style={{ flex: 1, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 18, gap: 14 }}>
-            {/* هدر */}
-            <View style={{ alignItems: "center", gap: 6, marginTop: 6 }}>
-              <View
-                style={{
-                  width: 58,
-                  height: 58,
-                  borderRadius: 22,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: "rgba(212,175,55,.10)",
-                  borderWidth: 1,
-                  borderColor: "rgba(212,175,55,.28)",
-                }}
-              >
-                <Ionicons name="flame-outline" size={26} color={GOLD} />
-              </View>
-
-              <Text style={{ color: TEXT, fontSize: 20, fontWeight: "900", textAlign: "center" }}>
-                ورود | ثبت‌نام
-              </Text>
-
-              <Text
-                style={{
-                  color: MUTED,
-                  fontSize: 12.5,
-                  lineHeight: 20,
-                  textAlign: "center",
-                  paddingHorizontal: 12,
-                }}
-              >
-                شماره موبایل خودت رو وارد کن تا کد تأیید برات پیامک بشه.
-              </Text>
-            </View>
-
-            {/* نوتیف تم‌دار */}
-            {notice && (
-              <View
-                style={{
-                  borderRadius: 18,
-                  borderWidth: 1,
-                  borderColor: noticeStyle(notice.type).border,
-                  backgroundColor: noticeStyle(notice.type).bg,
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  flexDirection: "row-reverse",
-                  alignItems: "flex-start",
-                  gap: 10,
-                }}
-              >
-                <Ionicons
-                  name={noticeStyle(notice.type).icon}
-                  size={20}
-                  color={noticeStyle(notice.type).iconColor}
-                  style={{ marginTop: 2 }}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      color: TEXT,
-                      fontSize: 13,
-                      fontWeight: "900",
-                      textAlign: "right",
-                      marginBottom: notice.message ? 4 : 0,
-                    }}
-                  >
-                    {notice.title}
-                  </Text>
-                  {!!notice.message && (
-                    <Text style={{ color: "rgba(231,238,247,.78)", fontSize: 12.5, lineHeight: 20, textAlign: "right" }}>
-                      {notice.message}
-                    </Text>
-                  )}
-                </View>
-
-                <Pressable onPress={() => setNotice(null)} hitSlop={10} style={{ padding: 2 }}>
-                  <Ionicons name="close" size={18} color="rgba(231,238,247,.75)" />
-                </Pressable>
-              </View>
-            )}
-
-            {/* کارت اصلی */}
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingBottom: 24,
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            {/* گلوها */}
             <View
               style={{
-                marginTop: 4,
-                borderRadius: 22,
-                borderWidth: 1,
-                borderColor: LINE,
-                backgroundColor: "rgba(255,255,255,.03)",
-                padding: 16,
-                gap: 12,
+                position: "absolute",
+                top: -220,
+                left: -220,
+                width: 420,
+                height: 420,
+                borderRadius: 999,
+                backgroundColor: "rgba(212,175,55,.16)",
+              }}
+            />
+            <View
+              style={{
+                position: "absolute",
+                bottom: -240,
+                right: -240,
+                width: 480,
+                height: 480,
+                borderRadius: 999,
+                backgroundColor: "rgba(233,138,21,.12)",
+              }}
+            />
+
+            <View
+              style={{
+                flex: 1,
+                paddingHorizontal: 18,
+                paddingTop: 18,
+                paddingBottom: 18,
+                gap: 14,
               }}
             >
-              {/* فیلد شماره */}
-              <View style={{ gap: 8 }}>
-                <Text style={{ color: MUTED, fontSize: 12, fontWeight: "800", textAlign: "right" }}>شماره موبایل</Text>
-
+              {/* هدر */}
+              <View style={{ alignItems: "center", gap: 6, marginTop: 6 }}>
                 <View
                   style={{
-                    flexDirection: "row-reverse",
+                    width: 58,
+                    height: 58,
+                    borderRadius: 22,
                     alignItems: "center",
-                    gap: 10,
+                    justifyContent: "center",
+                    backgroundColor: "rgba(212,175,55,.10)",
                     borderWidth: 1,
-                    borderColor: rawPhone.length === 0 || isValid ? LINE : "rgba(248,113,113,.35)",
-                    borderRadius: 16,
-                    backgroundColor: INPUT_BG,
-                    paddingHorizontal: 12,
-                    height: 52,
+                    borderColor: "rgba(212,175,55,.28)",
                   }}
                 >
-                  <Ionicons name="call-outline" size={20} color="rgba(231,238,247,.75)" />
-                  <TextInput
-                    value={rawPhone}
-                    onChangeText={(t) => {
-                      setRawPhone(toEnDigits(t));
-                      if (notice) setNotice(null);
-                    }}
-                    keyboardType="phone-pad"
-                    placeholder="مثلاً 09123456789"
-                    placeholderTextColor="rgba(231,238,247,.45)"
-                    maxLength={14}
-                    onSubmitEditing={onSend}
-                    returnKeyType="done"
-                    style={{ flex: 1, color: TEXT, fontSize: 14, textAlign: "right", paddingVertical: 0 }}
-                  />
+                  <Ionicons name="flame-outline" size={26} color={GOLD} />
                 </View>
 
-                <Text style={{ color: helperColor, fontSize: 11.5, textAlign: "right" }}>
-                  شماره باید ۱۱ رقم و با 09 شروع بشه.
+                <Text
+                  style={{
+                    color: TEXT,
+                    fontSize: 20,
+                    fontWeight: "900",
+                    textAlign: "center",
+                  }}
+                >
+                  ورود | ثبت‌نام
+                </Text>
+
+                <Text
+                  style={{
+                    color: MUTED,
+                    fontSize: 12.5,
+                    lineHeight: 20,
+                    textAlign: "center",
+                    paddingHorizontal: 12,
+                  }}
+                >
+                  شماره موبایل خودت رو وارد کن تا کد تأیید برات پیامک بشه.
                 </Text>
               </View>
 
-              {/* قوانین + VPN */}
-              <View
-                style={{
-                  borderRadius: 18,
-                  borderWidth: 1,
-                  borderColor: LINE,
-                  backgroundColor: "rgba(255,255,255,.02)",
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  gap: 10,
-                }}
-              >
-                {/* ✅ قوانین */}
-                <Pressable
-                  onPress={() => {
-                    setAgree((p) => !p);
-                    if (notice) setNotice(null);
+              {/* نوتیف تم‌دار */}
+              {notice && (
+                <View
+                  style={{
+                    borderRadius: 18,
+                    borderWidth: 1,
+                    borderColor: noticeStyle(notice.type).border,
+                    backgroundColor: noticeStyle(notice.type).bg,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    flexDirection: "row-reverse",
+                    alignItems: "flex-start",
+                    gap: 10,
                   }}
-                  style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}
                 >
                   <Ionicons
-                    name={agree ? "checkbox-outline" : "square-outline"}
+                    name={noticeStyle(notice.type).icon}
                     size={20}
-                    color={agree ? OK : "rgba(231,238,247,.70)"}
-                  />
-                  <Text style={{ flex: 1, color: TEXT, fontSize: 11.5, lineHeight: 18, textAlign: "right" }}>
-                    تأیید می‌کنم که شرایط استفاده، محدودیت‌ها و حریم خصوصی اپ ققنوس رو خوندم و می‌پذیرم.
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={() => setShowTerms(true)}
-                  style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}
-                >
-                  <Ionicons name="document-text-outline" size={18} color={GOLD} />
-                  <Text style={{ color: GOLD, fontSize: 12.5, fontWeight: "900", textAlign: "right" }}>
-                    مشاهده متن کامل
-                  </Text>
-                </Pressable>
-
-                {/* ✅ NEW: تیک VPN خاموش */}
-                <View style={{ height: 1, backgroundColor: "rgba(255,255,255,.06)" }} />
-
-                <Pressable
-                  onPress={() => {
-                    setVpnOff((p) => !p);
-                    if (notice) setNotice(null);
-                  }}
-                  style={{ flexDirection: "row-reverse", alignItems: "flex-start", gap: 10 }}
-                >
-                  <Ionicons
-                    name={vpnOff ? "checkbox-outline" : "square-outline"}
-                    size={20}
-                    color={vpnOff ? OK : "rgba(231,238,247,.70)"}
-                    style={{ marginTop: 1 }}
+                    color={noticeStyle(notice.type).iconColor}
+                    style={{ marginTop: 2 }}
                   />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: TEXT, fontSize: 11.5, lineHeight: 18, textAlign: "right" }}>
-                      قبل از ورود به اپ، فیلترشکن رو خاموش می‌کنم تا همهٔ بخش‌ها درست کار کنه.
+                    <Text
+                      style={{
+                        color: TEXT,
+                        fontSize: 13,
+                        fontWeight: "900",
+                        textAlign: "right",
+                        marginBottom: notice.message ? 4 : 0,
+                      }}
+                    >
+                      {notice.title}
                     </Text>
-                    
+                    {!!notice.message && (
+                      <Text
+                        style={{
+                          color: "rgba(231,238,247,.78)",
+                          fontSize: 12.5,
+                          lineHeight: 20,
+                          textAlign: "right",
+                        }}
+                      >
+                        {notice.message}
+                      </Text>
+                    )}
                   </View>
-                </Pressable>
-              </View>
 
-              {/* دکمه ادامه */}
-              <Pressable
-                onPress={onSend}
-                disabled={disableButton}
+                  <Pressable
+                    onPress={() => setNotice(null)}
+                    hitSlop={10}
+                    style={{ padding: 2 }}
+                  >
+                    <Ionicons
+                      name="close"
+                      size={18}
+                      color="rgba(231,238,247,.75)"
+                    />
+                  </Pressable>
+                </View>
+              )}
+
+              {/* کارت اصلی */}
+              <View
                 style={{
-                  height: 54,
-                  borderRadius: 18,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: disableButton ? "rgba(255,255,255,.06)" : "rgba(212,175,55,.16)",
+                  marginTop: 4,
+                  borderRadius: 22,
                   borderWidth: 1,
-                  borderColor: disableButton ? LINE : "rgba(212,175,55,.35)",
+                  borderColor: LINE,
+                  backgroundColor: "rgba(255,255,255,.03)",
+                  padding: 16,
+                  gap: 12,
                 }}
               >
-                {loading ? (
-                  <ActivityIndicator color={TEXT} />
-                ) : (
-                  <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
-                    <Ionicons name="arrow-forward-outline" size={18} color={TEXT} />
-                    <Text style={{ color: TEXT, fontSize: 14, fontWeight: "900" }}>ادامه</Text>
-                  </View>
-                )}
-              </Pressable>
+                {/* شماره موبایل */}
+                <View style={{ gap: 9 }}>
+                  <View
+                    style={{
+                      flexDirection: "row-reverse",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      paddingHorizontal: 2,
+                    }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row-reverse",
+                        alignItems: "center",
+                        gap: 7,
+                      }}
+                    >
+                      <Ionicons
+                        name="phone-portrait-outline"
+                        size={17}
+                        color={GOLD}
+                      />
 
-              <Text style={{ color: "rgba(231,238,247,.55)", fontSize: 11, lineHeight: 18, textAlign: "center" }}>
-                با ادامه دادن، وارد مرحله دریافت کد تأیید می‌شی.
-              </Text>
+                      <Text
+                        style={{
+                          color: TEXT,
+                          fontSize: 12.5,
+                          fontWeight: "900",
+                          textAlign: "right",
+                        }}
+                      >
+                        شماره موبایل
+                      </Text>
+                    </View>
+
+                    {isValid && (
+                      <View
+                        style={{
+                          flexDirection: "row-reverse",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                      >
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={16}
+                          color={OK}
+                        />
+
+                        <Text
+                          style={{
+                            color: OK,
+                            fontSize: 10.5,
+                            fontWeight: "800",
+                          }}
+                        >
+                          شماره معتبر
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View
+                    style={{
+                      flexDirection: "row-reverse",
+                      alignItems: "center",
+                      borderWidth: 1,
+                      borderColor: isValid
+                        ? "rgba(34,197,94,.45)"
+                        : rawPhone.length > 0
+                          ? "rgba(212,175,55,.32)"
+                          : LINE,
+                      borderRadius: 18,
+                      backgroundColor: isValid
+                        ? "rgba(34,197,94,.055)"
+                        : "rgba(255,255,255,.035)",
+                      paddingHorizontal: 14,
+                      height: 64,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 12,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: isValid
+                          ? "rgba(34,197,94,.10)"
+                          : "rgba(212,175,55,.08)",
+                      }}
+                    >
+                      <Ionicons
+                        name={isValid ? "checkmark" : "call-outline"}
+                        size={20}
+                        color={isValid ? OK : GOLD}
+                      />
+                    </View>
+
+                    <TextInput
+                      value={formatIranPhone(rawPhone)}
+                      onChangeText={(t) => {
+                        const next = toEnDigits(t)
+                          .replace(/\D/g, "")
+                          .slice(0, 11);
+
+                        setRawPhone(next);
+
+                        if (notice) setNotice(null);
+
+                        const normalized = normalizeIranPhone(next);
+
+                        if (/^09\d{9}$/.test(normalized)) {
+                          Keyboard.dismiss();
+                        }
+                      }}
+                      keyboardType="phone-pad"
+                      placeholder="0912 345 6789"
+                      placeholderTextColor="rgba(231,238,247,.32)"
+                      maxLength={13}
+                      onSubmitEditing={onSend}
+                      returnKeyType="done"
+                      selectionColor={GOLD}
+                      style={{
+                        flex: 1,
+                        color: TEXT,
+                        fontSize: 20,
+                        fontWeight: "800",
+                        textAlign: "left",
+                        letterSpacing: 0.7,
+                        paddingHorizontal: 14,
+                        paddingVertical: 0,
+                      }}
+                    />
+                  </View>
+
+                  <View
+                    style={{
+                      flexDirection: "row-reverse",
+                      alignItems: "center",
+                      gap: 5,
+                      paddingHorizontal: 3,
+                    }}
+                  ></View>
+                </View>
+                {/* تأییدها */}
+                <View style={{ gap: 10 }}>
+                  <View
+                    style={{
+                      flexDirection: "row-reverse",
+                      alignItems: "center",
+                      gap: 7,
+                      paddingHorizontal: 2,
+                    }}
+                  >
+                    <Ionicons
+                      name="shield-checkmark-outline"
+                      size={17}
+                      color={GOLD}
+                    />
+                    <Text
+                      style={{
+                        color: TEXT,
+                        fontSize: 12.5,
+                        fontWeight: "900",
+                        textAlign: "right",
+                      }}
+                    >
+                      تأییدها
+                    </Text>
+                  </View>
+
+                  <View
+                    style={{
+                      borderRadius: 18,
+                      borderWidth: 1,
+                      borderColor: LINE,
+                      backgroundColor: "rgba(255,255,255,.025)",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {/* پذیرش قوانین */}
+                    <Pressable
+                      onPress={() => {
+                        setAgree((p) => !p);
+                        if (notice) setNotice(null);
+                      }}
+                      style={({ pressed }) => ({
+                        flexDirection: "row-reverse",
+                        alignItems: "flex-start",
+                        gap: 10,
+                        paddingHorizontal: 12,
+                        paddingTop: 12,
+                        paddingBottom: 8,
+                        backgroundColor: pressed
+                          ? "rgba(255,255,255,.025)"
+                          : "transparent",
+                      })}
+                    >
+                      <Ionicons
+                        name={agree ? "checkbox" : "square-outline"}
+                        size={21}
+                        color={agree ? OK : "rgba(231,238,247,.55)"}
+                        style={{ marginTop: 1 }}
+                      />
+
+                      <Text
+                        style={{
+                          flex: 1,
+                          color: TEXT,
+                          fontSize: 11.5,
+                          lineHeight: 19,
+                          textAlign: "right",
+                        }}
+                      >
+                        تأیید می‌کنم که شرایط استفاده، قوانین، تعاریف و حریم
+                        خصوصی اپ ققنوس رو خوندم و می‌پذیرم.
+                      </Text>
+                    </Pressable>
+
+                    {/* لینک قوانین */}
+                    <Pressable
+                      onPress={() => setShowTerms(true)}
+                      hitSlop={6}
+                      style={({ pressed }) => ({
+                        alignSelf: "flex-end",
+                        flexDirection: "row-reverse",
+                        alignItems: "center",
+                        gap: 5,
+                        marginRight: 43,
+                        marginBottom: 11,
+                        paddingVertical: 3,
+                        opacity: pressed ? 0.65 : 1,
+                      })}
+                    >
+                      <Ionicons
+                        name="document-text-outline"
+                        size={15}
+                        color={GOLD}
+                      />
+                      <Text
+                        style={{
+                          color: GOLD,
+                          fontSize: 11.5,
+                          fontWeight: "800",
+                        }}
+                      >
+                        مشاهده متن کامل
+                      </Text>
+                    </Pressable>
+
+                    <View
+                      style={{
+                        height: 1,
+                        marginHorizontal: 12,
+                        backgroundColor: "rgba(255,255,255,.06)",
+                      }}
+                    />
+
+                    {/* آگاهی از حذف حساب */}
+                    <Pressable
+                      onPress={() => {
+                        setAccountControlAware((p) => !p);
+                        if (notice) setNotice(null);
+                      }}
+                      style={({ pressed }) => ({
+                        flexDirection: "row-reverse",
+                        alignItems: "flex-start",
+                        gap: 10,
+                        padding: 12,
+                        backgroundColor: pressed
+                          ? "rgba(255,255,255,.025)"
+                          : "transparent",
+                      })}
+                    >
+                      <Ionicons
+                        name={
+                          accountControlAware ? "checkbox" : "square-outline"
+                        }
+                        size={21}
+                        color={
+                          accountControlAware ? OK : "rgba(231,238,247,.55)"
+                        }
+                        style={{ marginTop: 1 }}
+                      />
+
+                      <Text
+                        style={{
+                          flex: 1,
+                          color: TEXT,
+                          fontSize: 11.5,
+                          lineHeight: 19,
+                          textAlign: "right",
+                        }}
+                      >
+                        اطلاع دارم که هر زمان بخوام، می‌تونم از حساب کاربری خودم
+                        خارج بشم یا از بخش «ویرایش پروفایل» در تب پروفایل .حساب
+                        کاربری و اطلاعات مرتبط با اون رو حذف کنم.
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  {/* پیش‌نیاز فنی */}
+                  <View
+                    style={{
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      borderColor: vpnOff
+                        ? "rgba(34,197,94,.25)"
+                        : "rgba(212,175,55,.24)",
+                      backgroundColor: vpnOff
+                        ? "rgba(34,197,94,.055)"
+                        : "rgba(212,175,55,.055)",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <Pressable
+                      onPress={() => {
+                        setVpnOff((p) => !p);
+                        if (notice) setNotice(null);
+                      }}
+                      style={({ pressed }) => ({
+                        flexDirection: "row-reverse",
+                        alignItems: "center",
+                        gap: 10,
+                        paddingHorizontal: 12,
+                        paddingVertical: 11,
+                        opacity: pressed ? 0.75 : 1,
+                      })}
+                    >
+                      <Ionicons
+                        name={vpnOff ? "checkbox" : "square-outline"}
+                        size={21}
+                        color={vpnOff ? OK : GOLD}
+                      />
+
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            color: TEXT,
+                            fontSize: 11.5,
+                            lineHeight: 18,
+                            textAlign: "right",
+                            fontWeight: "700",
+                          }}
+                        >
+                          فیلترشکن یا پروکسی من خاموشه
+                        </Text>
+
+                        <Text
+                          style={{
+                            color: MUTED,
+                            fontSize: 10.5,
+                            lineHeight: 17,
+                            textAlign: "right",
+                            marginTop: 2,
+                          }}
+                        >
+                          برای عملکرد صحیح بخش‌های ورود، پرداخت، محتوا و
+                          پشتیبانی
+                        </Text>
+                      </View>
+
+                      <Ionicons
+                        name="wifi-outline"
+                        size={18}
+                        color={vpnOff ? OK : GOLD}
+                      />
+                    </Pressable>
+                  </View>
+                </View>
+
+                {/* دکمه ادامه */}
+                <Pressable
+                  onPress={onSend}
+                  disabled={disableButton}
+                  style={{
+                    height: 54,
+                    borderRadius: 18,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: disableButton
+                      ? "rgba(255,255,255,.06)"
+                      : "rgba(212,175,55,.16)",
+                    borderWidth: 1,
+                    borderColor: disableButton ? LINE : "rgba(212,175,55,.35)",
+                  }}
+                >
+                  {loading ? (
+                    <ActivityIndicator color={TEXT} />
+                  ) : (
+                    <View
+                      style={{
+                        flexDirection: "row-reverse",
+                        alignItems: "center",
+                        gap: 10,
+                      }}
+                    >
+                      <Ionicons
+                        name="arrow-forward-outline"
+                        size={18}
+                        color={TEXT}
+                      />
+                      <Text
+                        style={{ color: TEXT, fontSize: 14, fontWeight: "900" }}
+                      >
+                        ادامه
+                      </Text>
+                    </View>
+                  )}
+                </Pressable>
+
+                <Text
+                  style={{
+                    color: "rgba(231,238,247,.55)",
+                    fontSize: 11,
+                    lineHeight: 18,
+                    textAlign: "center",
+                  }}
+                >
+                  با ادامه دادن، وارد مرحله دریافت کد تأیید می‌شی.
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
-
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* مودال قوانین */}
-      <Modal visible={showTerms} animationType="slide" onRequestClose={() => setShowTerms(false)}>
+      <Modal
+        visible={showTerms}
+        animationType="slide"
+        onRequestClose={() => setShowTerms(false)}
+      >
         <SafeAreaView style={{ flex: 1, backgroundColor: BG }}>
           <View
             style={{
@@ -623,21 +966,38 @@ router.push({
               backgroundColor: "rgba(255,255,255,.03)",
             }}
           >
-            <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
+            <View
+              style={{
+                flexDirection: "row-reverse",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
               <Ionicons name="shield-checkmark" size={20} color={GOLD} />
-              <Text style={{ fontSize: 16, fontWeight: "900", color: TEXT }}>شرایط استفاده و حریم خصوصی</Text>
+              <Text style={{ fontSize: 16, fontWeight: "900", color: TEXT }}>
+                شرایط استفاده و حریم خصوصی
+              </Text>
             </View>
 
-            <Pressable onPress={() => setShowTerms(false)} style={{ padding: 6 }}>
+            <Pressable
+              onPress={() => setShowTerms(false)}
+              style={{ padding: 6 }}
+            >
               <Ionicons name="close" size={22} color={TEXT} />
             </Pressable>
           </View>
 
-          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
+          <ScrollView
+            contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+          >
             {TERMS_SECTIONS.map((item, idx) => {
-              const isTermsLinkSection = item.title === "تغییر قوانین و دسترسی به نسخه رسمی";
+              const isTermsLinkSection =
+                item.title === "تغییر قوانین و دسترسی به نسخه رسمی";
               const bodyWithoutUrl = isTermsLinkSection
-                ? String(item.body || "").replace(TERMS_URL, "").replace(/\n{3,}/g, "\n\n").trim()
+                ? String(item.body || "")
+                    .replace(TERMS_URL, "")
+                    .replace(/\n{3,}/g, "\n\n")
+                    .trim()
                 : item.body;
 
               return (
@@ -667,7 +1027,14 @@ router.push({
                       {`${idx + 1}) ${item.title}`}
                     </Text>
 
-                    <Text style={{ color: MUTED, fontSize: 12.5, lineHeight: 21, textAlign: "right" }}>
+                    <Text
+                      style={{
+                        color: MUTED,
+                        fontSize: 12.5,
+                        lineHeight: 21,
+                        textAlign: "right",
+                      }}
+                    >
                       {bodyWithoutUrl}
                     </Text>
 
@@ -680,7 +1047,9 @@ router.push({
                           borderRadius: 14,
                           borderWidth: 1,
                           borderColor: "rgba(212,175,55,.35)",
-                          backgroundColor: pressed ? "rgba(212,175,55,.14)" : "rgba(212,175,55,.10)",
+                          backgroundColor: pressed
+                            ? "rgba(212,175,55,.14)"
+                            : "rgba(212,175,55,.10)",
                           paddingVertical: 10,
                           paddingHorizontal: 12,
                           flexDirection: "row-reverse",
@@ -692,7 +1061,14 @@ router.push({
                         })}
                       >
                         <Ionicons name="link-outline" size={18} color={GOLD} />
-                        <Text style={{ color: GOLD, fontSize: 12.5, fontWeight: "900", textAlign: "center" }}>
+                        <Text
+                          style={{
+                            color: GOLD,
+                            fontSize: 12.5,
+                            fontWeight: "900",
+                            textAlign: "center",
+                          }}
+                        >
                           مشاهده نسخه رسمی قوانین
                         </Text>
                       </Pressable>
@@ -716,7 +1092,9 @@ router.push({
                 borderColor: "rgba(212,175,55,.35)",
               }}
             >
-              <Text style={{ color: TEXT, fontSize: 14, fontWeight: "900" }}>بستن</Text>
+              <Text style={{ color: TEXT, fontSize: 14, fontWeight: "900" }}>
+                بستن
+              </Text>
             </Pressable>
           </View>
         </SafeAreaView>

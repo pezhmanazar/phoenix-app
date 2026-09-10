@@ -5,6 +5,8 @@ import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -72,6 +74,13 @@ export default function VerifyScreen() {
   const [secondsLeft, setSecondsLeft] = useState(RESEND_COOLDOWN_SEC);
 
   const runRef = useRef(false);
+  const codeInputRef = useRef<TextInput>(null);
+
+  const otpScale = useRef(new Animated.Value(1)).current;
+  const successOpacity = useRef(new Animated.Value(0)).current;
+
+  const [codeError, setCodeError] = useState(false);
+  const [codeSuccess, setCodeSuccess] = useState(false);
 
   // نوتیف تم‌دار (جای Alert)
   const [notice, setNotice] = useState<NoticeState>(null);
@@ -140,11 +149,40 @@ export default function VerifyScreen() {
     if (!isCodeReady(enCode) || loading || runRef.current) return;
 
     setNotice(null);
+    setCodeError(false);
+    setCodeSuccess(false);
+
     runRef.current = true;
     setLoading(true);
 
     try {
       await withTimeout(verifyOtp(enCode), 15000);
+
+      // کد واقعاً توسط سرور تأیید شده
+      setCodeError(false);
+      setCodeSuccess(true);
+
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(otpScale, {
+            toValue: 1.035,
+            duration: 120,
+            useNativeDriver: true,
+          }),
+          Animated.spring(otpScale, {
+            toValue: 1,
+            friction: 5,
+            tension: 90,
+            useNativeDriver: true,
+          }),
+        ]),
+
+        Animated.timing(successOpacity, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start();
 
       try {
         await refresh();
@@ -152,7 +190,8 @@ export default function VerifyScreen() {
         // اگر refresh شکست بخورد، ورود را متوقف نمی‌کنیم.
       }
 
-      await new Promise((r) => setTimeout(r, 300));
+      // کمی فرصت بده تا کاربر موفقیت را ببیند
+      await new Promise((r) => setTimeout(r, 650));
 
       router.replace({
         pathname: "/(auth)/profile-wizard",
@@ -160,6 +199,11 @@ export default function VerifyScreen() {
       });
     } catch (e: any) {
       const msg = String(e?.message || "");
+
+      // هر شکست در تأیید کد = نمایش قرمز کادرهای OTP
+      setCodeSuccess(false);
+      setCodeError(true);
+      successOpacity.setValue(0);
 
       if (msg === "TOKEN_INVALID_OR_EXPIRED") {
         setNotice({
@@ -174,14 +218,33 @@ export default function VerifyScreen() {
       ) {
         setNotice({
           type: "error",
-          title: "کد نادرست است",
+          title: "کد نادرسته",
           message: "کد تأیید اشتباهه. دوباره تلاش کن.",
         });
+
+        Animated.sequence([
+          Animated.timing(otpScale, {
+            toValue: 0.97,
+            duration: 70,
+            useNativeDriver: true,
+          }),
+          Animated.timing(otpScale, {
+            toValue: 1.02,
+            duration: 70,
+            useNativeDriver: true,
+          }),
+          Animated.spring(otpScale, {
+            toValue: 1,
+            friction: 5,
+            tension: 100,
+            useNativeDriver: true,
+          }),
+        ]).start();
       } else if (msg === "OTP_FLOW_NOT_STARTED") {
         setNotice({
           type: "error",
-          title: "فرآیند تأیید ناقص است",
-          message: "لطفاً دوباره شماره موبایل را وارد کن.",
+          title: "فرآیند تأیید ناقصه",
+          message: "لطفاً دوباره شماره موبایل رو وارد کن.",
         });
       } else if (msg === "NO_SESSION_FROM_BACKEND") {
         setNotice({
@@ -193,7 +256,7 @@ export default function VerifyScreen() {
         setNotice({
           type: "warn",
           title: "کندی شبکه",
-          message: "پاسخی دریافت نشد. اینترنت را چک کن و دوباره امتحان کن.",
+          message: "پاسخی دریافت نشد. اینترنت رو چک کن و دوباره امتحان کن.",
         });
       } else {
         setNotice({
@@ -223,8 +286,11 @@ export default function VerifyScreen() {
           exp: String(res.expiresInSec ?? 45),
         });
 
-        setSecondsLeft(res.expiresInSec ?? 45);
+        setSecondsLeft(RESEND_COOLDOWN_SEC);
         setCode("");
+        setCodeError(false);
+        setCodeSuccess(false);
+        successOpacity.setValue(0);
 
         setNotice({
           type: "success",
@@ -267,12 +333,33 @@ export default function VerifyScreen() {
 
   function handleChangeCode(t: string) {
     const next = toEnDigits(t).replace(/\D/g, "").slice(0, 6);
+
     setCode(next);
+    setCodeError(false);
+    setCodeSuccess(false);
+    successOpacity.setValue(0);
+
     if (notice) setNotice(null);
 
-    // اتو-ورود
-    if (isCodeReady(next) && !loading && !runRef.current) {
-      doVerify(next);
+    if (isCodeReady(next)) {
+      Keyboard.dismiss();
+
+      Animated.sequence([
+        Animated.timing(otpScale, {
+          toValue: 1.025,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.spring(otpScale, {
+          toValue: 1,
+          friction: 5,
+          tension: 90,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      if (!loading && !runRef.current) {
+        doVerify(next);
+      }
     }
   }
 
@@ -438,69 +525,186 @@ export default function VerifyScreen() {
                 gap: 12,
               }}
             >
-              {/* فیلد کد */}
-              <View style={{ gap: 8 }}>
-                <Text
-                  style={{
-                    color: MUTED,
-                    fontSize: 12,
-                    fontWeight: "800",
-                    textAlign: "right",
-                  }}
-                >
-                  کد تأیید
-                </Text>
-
+              {/* کد تأیید */}
+              <View style={{ gap: 10 }}>
                 <View
                   style={{
                     flexDirection: "row-reverse",
                     alignItems: "center",
-                    gap: 10,
-                    borderWidth: 1,
-                    borderColor:
-                      code.length === 0 || isCodeReady(code)
-                        ? LINE
-                        : "rgba(248,113,113,.35)",
-                    borderRadius: 16,
-                    backgroundColor: INPUT_BG,
-                    paddingHorizontal: 12,
-                    height: 56,
+                    justifyContent: "space-between",
+                    paddingHorizontal: 2,
                   }}
                 >
-                  <Ionicons
-                    name="shield-checkmark-outline"
-                    size={20}
-                    color="rgba(231,238,247,.75)"
-                  />
+                  <View
+                    style={{
+                      flexDirection: "row-reverse",
+                      alignItems: "center",
+                      gap: 7,
+                    }}
+                  >
+                    <Ionicons
+                      name="shield-checkmark-outline"
+                      size={17}
+                      color={GOLD}
+                    />
+
+                    <Text
+                      style={{
+                        color: TEXT,
+                        fontSize: 12.5,
+                        fontWeight: "900",
+                        textAlign: "right",
+                      }}
+                    >
+                      کد تأیید
+                    </Text>
+                  </View>
+
+                  <Text
+                    style={{
+                      color: MUTED,
+                      fontSize: 10.5,
+                      textAlign: "right",
+                    }}
+                  >
+                    ۶ رقم
+                  </Text>
+                </View>
+
+                <Pressable
+                  onPress={() => codeInputRef.current?.focus()}
+                  style={{
+                    position: "relative",
+                  }}
+                >
+                  <Animated.View
+                    style={{
+                      transform: [{ scale: otpScale }],
+                    }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        gap: 7,
+                        justifyContent: "center",
+                        direction: "ltr",
+                      }}
+                    >
+                      {Array.from({ length: 6 }).map((_, index) => {
+                        const digit = code[index] || "";
+                        const isFilled = !!digit;
+                        const isCurrent =
+                          index === code.length && code.length < 6;
+
+                        return (
+                          <View
+                            key={index}
+                            style={{
+                              flex: 1,
+                              maxWidth: 52,
+                              height: 60,
+                              borderRadius: 15,
+                              alignItems: "center",
+                              justifyContent: "center",
+                              borderWidth: isCurrent ? 1.5 : 1,
+                              borderColor: codeError
+                                ? "rgba(248,113,113,.65)"
+                                : codeSuccess
+                                  ? "rgba(34,197,94,.60)"
+                                  : isCurrent
+                                    ? "rgba(212,175,55,.65)"
+                                    : isFilled
+                                      ? "rgba(212,175,55,.30)"
+                                      : LINE,
+                              backgroundColor: codeError
+                                ? "rgba(248,113,113,.09)"
+                                : codeSuccess
+                                  ? "rgba(34,197,94,.09)"
+                                  : isCurrent
+                                    ? "rgba(212,175,55,.075)"
+                                    : isFilled
+                                      ? "rgba(255,255,255,.045)"
+                                      : INPUT_BG,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                color: codeError
+                                  ? BAD
+                                  : codeSuccess
+                                    ? OK
+                                    : TEXT,
+                                fontSize: 22,
+                                fontWeight: "900",
+                                textAlign: "center",
+                              }}
+                            >
+                              {digit}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </Animated.View>
+
+                  {/* TextInput واقعی ولی نامرئی */}
                   <TextInput
+                    ref={codeInputRef}
                     value={code}
                     onChangeText={handleChangeCode}
                     keyboardType="number-pad"
-                    placeholder="------"
-                    placeholderTextColor="rgba(231,238,247,.45)"
                     maxLength={6}
-                    returnKeyType="done"
+                    autoFocus
+                    caretHidden
                     style={{
-                      flex: 1,
-                      color: TEXT,
-                      fontSize: 22,
-                      fontWeight: "900",
-                      textAlign: "center",
-                      letterSpacing: 8,
-                      paddingVertical: 0,
+                      position: "absolute",
+                      width: 1,
+                      height: 1,
+                      opacity: 0,
                     }}
                   />
-                </View>
+
+                  {codeSuccess && (
+                    <Animated.View
+                      pointerEvents="none"
+                      style={{
+                        position: "absolute",
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        opacity: successOpacity,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 42,
+                          height: 42,
+                          borderRadius: 21,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: "rgba(34,197,94,.16)",
+                          borderWidth: 1,
+                          borderColor: "rgba(34,197,94,.35)",
+                        }}
+                      >
+                        <Ionicons name="checkmark" size={24} color={OK} />
+                      </View>
+                    </Animated.View>
+                  )}
+                </Pressable>
 
                 <Text
                   style={{
                     color: helperColor,
-                    fontSize: 11.5,
-                    textAlign: "right",
+                    fontSize: 10.5,
+                    lineHeight: 17,
+                    textAlign: "center",
                   }}
                 >
-                  کد باید ۶ رقم باشه. بعد از وارد کردن کامل، به‌صورت خودکار
-                  بررسی میشه.
+                  کد پیامک‌شده رو وارد کن؛ پس از رقم ششم خودکار بررسی میشه.
                 </Text>
               </View>
 
@@ -539,22 +743,90 @@ export default function VerifyScreen() {
                   </View>
                 )}
               </Pressable>
-
-              {/* تایمر resend */}
-              <Text
+              {/* زمان ارسال مجدد */}
+              <View
                 style={{
-                  color: "rgba(231,238,247,.60)",
-                  fontSize: 12,
-                  textAlign: "center",
-                  marginTop: 2,
+                  marginTop: 4,
+                  gap: 8,
                 }}
               >
-                امکان ارسال مجدد تا{" "}
-                <Text style={{ color: TEXT, fontWeight: "900" }}>
-                  {secondsLeft} ثانیه
-                </Text>{" "}
-                دیگر
-              </Text>
+                <View
+                  style={{
+                    flexDirection: "row-reverse",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row-reverse",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <Ionicons
+                      name={
+                        secondsLeft > 0
+                          ? "time-outline"
+                          : "checkmark-circle-outline"
+                      }
+                      size={15}
+                      color={secondsLeft > 0 ? MUTED : OK}
+                    />
+
+                    <Text
+                      style={{
+                        color: secondsLeft > 0 ? MUTED : OK,
+                        fontSize: 11,
+                        fontWeight: "800",
+                      }}
+                    >
+                      {secondsLeft > 0
+                        ? "زمان تا ارسال مجدد"
+                        : "امکان ارسال مجدد فعال شد"}
+                    </Text>
+                  </View>
+
+                  {secondsLeft > 0 && (
+                    <Text
+                      style={{
+                        color: TEXT,
+                        fontSize: 11.5,
+                        fontWeight: "900",
+                      }}
+                    >
+                      {secondsLeft} ثانیه
+                    </Text>
+                  )}
+                </View>
+
+                <View
+                  style={{
+                    height: 6,
+                    borderRadius: 999,
+                    overflow: "hidden",
+                    backgroundColor: "rgba(255,255,255,.07)",
+                  }}
+                >
+                  <View
+                    style={{
+                      height: "100%",
+                      width: `${Math.max(
+                        0,
+                        Math.min(
+                          100,
+                          ((RESEND_COOLDOWN_SEC - secondsLeft) /
+                            RESEND_COOLDOWN_SEC) *
+                            100,
+                        ),
+                      )}%`,
+                      borderRadius: 999,
+                      backgroundColor:
+                        secondsLeft > 0 ? "rgba(212,175,55,.85)" : OK,
+                    }}
+                  />
+                </View>
+              </View>
 
               {/* ارسال مجدد */}
               <Pressable
@@ -608,18 +880,6 @@ export default function VerifyScreen() {
                   </View>
                 )}
               </Pressable>
-
-              {/* راهنمای ریز */}
-              <Text
-                style={{
-                  color: "rgba(231,238,247,.55)",
-                  fontSize: 11,
-                  lineHeight: 18,
-                  textAlign: "center",
-                }}
-              >
-                اگر پیامک نیومد، پوشه اسپم یا پیامک‌های تبلیغاتی رو هم چک کن.
-              </Text>
             </View>
 
             <View style={{ flex: 1 }} />
