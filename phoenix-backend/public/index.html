@@ -1417,6 +1417,48 @@
         animation: emberRise linear infinite;
         opacity: 0;
       }
+
+      .ember-1 {
+        right: 8%;
+        --drift: 14px;
+        animation-duration: 4.2s;
+        animation-delay: 0.2s;
+      }
+
+      .ember-2 {
+        right: 22%;
+        --drift: -10px;
+        animation-duration: 5.1s;
+        animation-delay: 1.4s;
+      }
+
+      .ember-3 {
+        right: 38%;
+        --drift: 18px;
+        animation-duration: 3.8s;
+        animation-delay: 0.8s;
+      }
+
+      .ember-4 {
+        right: 55%;
+        --drift: -16px;
+        animation-duration: 4.7s;
+        animation-delay: 2.1s;
+      }
+
+      .ember-5 {
+        right: 70%;
+        --drift: 10px;
+        animation-duration: 4s;
+        animation-delay: 1.7s;
+      }
+
+      .ember-6 {
+        right: 84%;
+        --drift: -12px;
+        animation-duration: 5.4s;
+        animation-delay: 0.5s;
+      }
       @keyframes emberRise {
         0% {
           transform: translateY(0) translateX(0) scale(0.6);
@@ -1426,8 +1468,7 @@
           opacity: 0.9;
         }
         100% {
-          transform: translateY(-220px) translateX(var(--drift, 12px))
-            scale(1);
+          transform: translateY(-220px) translateX(var(--drift, 12px)) scale(1);
           opacity: 0;
         }
       }
@@ -1473,6 +1514,54 @@
           opacity 0.6s ease,
           transform 0.6s ease;
         transition-delay: var(--reveal-delay, 0s);
+      }
+
+      .reveal-delay-00 {
+        --reveal-delay: 0s;
+      }
+
+      .reveal-delay-05 {
+        --reveal-delay: 0.05s;
+      }
+
+      .reveal-delay-06 {
+        --reveal-delay: 0.06s;
+      }
+
+      .reveal-delay-08 {
+        --reveal-delay: 0.08s;
+      }
+
+      .reveal-delay-12 {
+        --reveal-delay: 0.12s;
+      }
+
+      .reveal-delay-15 {
+        --reveal-delay: 0.15s;
+      }
+
+      .reveal-delay-16 {
+        --reveal-delay: 0.16s;
+      }
+
+      .reveal-delay-18 {
+        --reveal-delay: 0.18s;
+      }
+
+      .reveal-delay-24 {
+        --reveal-delay: 0.24s;
+      }
+
+      .reveal-delay-25 {
+        --reveal-delay: 0.25s;
+      }
+
+      .reveal-delay-30 {
+        --reveal-delay: 0.3s;
+      }
+
+      .reveal-delay-36 {
+        --reveal-delay: 0.36s;
       }
       .reveal.is-visible {
         opacity: 1;
@@ -1598,12 +1687,12 @@
             alt="روایت بازسازی عاطفی با اپ ققنوس"
           />
           <div class="ember-field" aria-hidden="true">
-            <span class="ember" style="right: 8%; --drift: 14px; animation-duration: 4.2s; animation-delay: 0.2s;"></span>
-            <span class="ember" style="right: 22%; --drift: -10px; animation-duration: 5.1s; animation-delay: 1.4s;"></span>
-            <span class="ember" style="right: 38%; --drift: 18px; animation-duration: 3.8s; animation-delay: 0.8s;"></span>
-            <span class="ember" style="right: 55%; --drift: -16px; animation-duration: 4.7s; animation-delay: 2.1s;"></span>
-            <span class="ember" style="right: 70%; --drift: 10px; animation-duration: 4.0s; animation-delay: 1.7s;"></span>
-            <span class="ember" style="right: 84%; --drift: -12px; animation-duration: 5.4s; animation-delay: 0.5s;"></span>
+            <span class="ember ember-1"></span>
+            <span class="ember ember-2"></span>
+            <span class="ember ember-3"></span>
+            <span class="ember ember-4"></span>
+            <span class="ember ember-5"></span>
+            <span class="ember ember-6"></span>
           </div>
         </div>
 
@@ -1631,7 +1720,7 @@
             </div>
           </div>
 
-          <div class="side-card reveal" style="--reveal-delay: 0.12s;">
+          <div class="side-card reveal reveal-delay-12">
             <div class="metric">
               <div class="title">سه ستون اصلی ققنوس</div>
               <div class="desc">
@@ -1640,7 +1729,7 @@
               </div>
 
               <div class="feature-stack">
-                <div class="feature-mini reveal" style="--reveal-delay: 0.05s;">
+                <div class="feature-mini reveal reveal-delay-05">
                   <div class="feature-icon">۱</div>
                   <div class="feature-copy">
                     <strong>پلکان</strong>
@@ -1651,7 +1740,7 @@
                   </div>
                 </div>
 
-                <div class="feature-mini reveal" style="--reveal-delay: 0.15s;">
+                <div class="feature-mini reveal reveal-delay-15">
                   <div class="feature-icon">۲</div>
                   <div class="feature-copy">
                     <strong>پناهگاه</strong>
@@ -1662,7 +1751,7 @@
                   </div>
                 </div>
 
-                <div class="feature-mini reveal" style="--reveal-delay: 0.25s;">
+                <div class="feature-mini reveal reveal-delay-25">
                   <div class="feature-icon">۳</div>
                   <div class="feature-copy">
                     <strong>مشعل</strong>
@@ -1754,7 +1843,7 @@
             </div>
           </div>
 
-          <div class="card reveal" style="--reveal-delay: 0.08s;">
+          <div class="card reveal reveal-delay-08">
             <div class="item">
               <span class="dot"></span>تکنیک‌های «پناهگاه» برای مدیریت فوری
               موج‌های وسوسه، خشم، اضطراب و دلتنگی
@@ -1765,7 +1854,7 @@
             </div>
           </div>
 
-          <div class="card reveal" style="--reveal-delay: 0.16s;">
+          <div class="card reveal reveal-delay-16">
             <div class="item">
               <span class="dot"></span>امکان پیام مستقیم و نامحدود به درمانگر
               واقعی برای دریافت راهنمایی شخصی‌سازی‌شده
@@ -1776,7 +1865,7 @@
             </div>
           </div>
 
-          <div class="card reveal" style="--reveal-delay: 0.24s;">
+          <div class="card reveal reveal-delay-24">
             <div class="item">
               <span class="dot"></span>یک مسیر واضح: امروز دقیقاً چیکار کنم؟
               فردا چی میشه؟
@@ -1792,7 +1881,7 @@
       <!-- SCREENSHOTS -->
       <section class="section" id="screenshots">
         <div class="screenshots-row">
-          <div class="phone-shot reveal" style="--reveal-delay: 0.0s;">
+          <div class="phone-shot reveal reveal-delay-00">
             <img
               src="/static/img/screenshots/01.webp"
               alt="نمای اپلیکیشن ققنوس - تصویر ۱"
@@ -1801,7 +1890,7 @@
             />
           </div>
 
-          <div class="phone-shot reveal" style="--reveal-delay: 0.06s;">
+          <div class="phone-shot reveal reveal-delay-06">
             <img
               src="/static/img/screenshots/02.webp"
               alt="نمای اپلیکیشن ققنوس - تصویر ۲"
@@ -1810,7 +1899,7 @@
             />
           </div>
 
-          <div class="phone-shot reveal" style="--reveal-delay: 0.12s;">
+          <div class="phone-shot reveal reveal-delay-12">
             <img
               src="/static/img/screenshots/03.webp"
               alt="نمای اپلیکیشن ققنوس - تصویر ۳"
@@ -1819,7 +1908,7 @@
             />
           </div>
 
-          <div class="phone-shot reveal" style="--reveal-delay: 0.18s;">
+          <div class="phone-shot reveal reveal-delay-18">
             <img
               src="/static/img/screenshots/04.webp"
               alt="نمای اپلیکیشن ققنوس - تصویر ۴"
@@ -1828,7 +1917,7 @@
             />
           </div>
 
-          <div class="phone-shot reveal" style="--reveal-delay: 0.24s;">
+          <div class="phone-shot reveal reveal-delay-24">
             <img
               src="/static/img/screenshots/05.webp"
               alt="نمای اپلیکیشن ققنوس - تصویر ۵"
@@ -1837,7 +1926,7 @@
             />
           </div>
 
-          <div class="phone-shot reveal" style="--reveal-delay: 0.3s;">
+          <div class="phone-shot reveal reveal-delay-30">
             <img
               src="/static/img/screenshots/06.webp"
               alt="نمای اپلیکیشن ققنوس - تصویر ۶"
@@ -1846,7 +1935,7 @@
             />
           </div>
 
-          <div class="phone-shot reveal" style="--reveal-delay: 0.36s;">
+          <div class="phone-shot reveal reveal-delay-36">
             <img
               src="/static/img/screenshots/07.webp"
               alt="نمای اپلیکیشن ققنوس - تصویر ۷"
@@ -1877,7 +1966,7 @@
             </div>
           </div>
 
-          <div class="card reveal" style="--reveal-delay: 0.08s;">
+          <div class="card reveal reveal-delay-08">
             <div class="item">
               <span class="dot"></span><strong>دوره آموزشی</strong> معمولاً
               محتوامحور و یک‌طرفه‌ست: یعنی می‌بینی یا می‌شنوی و تموم میشه.
@@ -1889,7 +1978,7 @@
             </div>
           </div>
 
-          <div class="card reveal" style="--reveal-delay: 0.16s;">
+          <div class="card reveal reveal-delay-16">
             <div class="item">
               <span class="dot"></span>در ققنوس «امروز دقیقاً چیکار کنم؟» واضحه؛
               نه اینکه فقط بدونی «چیکار باید بکنی».
@@ -1904,7 +1993,7 @@
             </div>
           </div>
 
-          <div class="card reveal" style="--reveal-delay: 0.24s;">
+          <div class="card reveal reveal-delay-24">
             <div class="item">
               <span class="dot"></span>هدف ققنوس: تبدیل فهم به عمل، و عمل به
               ثباته.
