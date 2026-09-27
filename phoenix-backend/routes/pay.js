@@ -204,10 +204,13 @@ router.post("/start", async (req, res) => {
     };
 
     const zpRes = await fetch(requestUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Referer": "https://qoqnoos.app/",
+  },
+  body: JSON.stringify(payload),
+});
 
     const json = await zpRes.json().catch(() => null);
 
