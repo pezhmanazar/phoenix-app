@@ -24,19 +24,7 @@ type PayStatusResp =
 export default function PayResultScreen() {
   const params = useLocalSearchParams();
   const authority = String(params.authority || "").trim();
-  const okParam = String(params.ok || "").trim();
-  const statusParam = String(params.status || "").trim();
-
   const { refresh } = useUser();
-
-  const initialOk = useMemo(() => {
-    if (okParam === "1") return true;
-    if (okParam === "0") return false;
-    if (statusParam.toLowerCase() === "success") return true;
-    if (statusParam.toLowerCase() === "failed") return false;
-    return null;
-  }, [okParam, statusParam]);
-
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<PayStatusResp | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -47,73 +35,94 @@ export default function PayResultScreen() {
   const payOk = data?.ok === true;
   const payStatus = payOk ? data.status : null;
 
+  const fetchStatus = useCallback(
+    async (silent = false) => {
+      if (!authority) {
+        setErr("AUTHORITY_MISSING");
+        setLoading(false);
+        return;
+      }
 
-  const fetchStatus = useCallback(async () => {
-  if (!authority) {
-    setErr("AUTHORITY_MISSING");
-    setLoading(false);
-    return;
-  }
+      try {
+        if (!silent) {
+          setLoading(true);
+        }
 
-  try {
-    setLoading(true);
-    setErr(null);
+        setErr(null);
 
-    const url = toApi(`/api/pay/status?authority=${encodeURIComponent(authority)}`);
-    const r = await fetch(url, { method: "GET" });
+        const url = toApi(
+          `/api/pay/status?authority=${encodeURIComponent(authority)}`,
+        );
+        const r = await fetch(url, { method: "GET" });
 
         const ct = r.headers.get("content-type") || "";
-    if (!ct.includes("application/json")) {
-      await r.text();
-      setErr("NON_JSON_RESPONSE");
-      setLoading(false);
-      return;
-    }
+        if (!ct.includes("application/json")) {
+          await r.text();
+          setErr("NON_JSON_RESPONSE");
+          setLoading(false);
+          return;
+        }
 
-    const j = (await r.json()) as PayStatusResp;
-    setData(j);
+        const j = (await r.json()) as PayStatusResp;
+        setData(j);
 
-    if (!r.ok || !j || (j as any).ok !== true) {
-      setErr((j as any)?.error || `HTTP_${r.status}`);
-    }
-  } catch (e: any) {
-    setErr(e?.message || "NETWORK_ERROR");
-  } finally {
-    setLoading(false);
-  }
-}, [authority]);
-
+        if (!r.ok || !j || (j as any).ok !== true) {
+          setErr((j as any)?.error || `HTTP_${r.status}`);
+        }
+      } catch (e: any) {
+        setErr(e?.message || "NETWORK_ERROR");
+      } finally {
+        if (!silent) {
+          setLoading(false);
+        }
+      }
+    },
+    [authority],
+  );
 
   useEffect(() => {
-  fetchStatus();
-}, [fetchStatus]);
-
-  useEffect(() => {
-  if (!payOk) return;
-  if (payStatus !== "pending") return;
-  if (pollRef.current >= 20) return;
-
-  pollRef.current += 1;
-
-  const t = setTimeout(() => {
     fetchStatus();
-  }, 3000);
-
-  return () => clearTimeout(t);
-}, [payOk, payStatus, fetchStatus]);
+  }, [fetchStatus]);
 
   useEffect(() => {
-  if (!payOk) return;
-  if (payStatus !== "active") return;
-  if (handledSuccessRef.current) return;
+    if (!authority || payStatus !== "pending") return;
 
-  handledSuccessRef.current = true;
-  (async () => {
-    try {
-      await refresh({ force: true });
-    } catch {}
-  })();
-}, [payOk, payStatus, refresh]);
+    let cancelled = false;
+    let running = false;
+
+    const timer = setInterval(async () => {
+      if (cancelled || running || pollRef.current >= 20) {
+        return;
+      }
+
+      running = true;
+      pollRef.current += 1;
+
+      try {
+        await fetchStatus(true);
+      } finally {
+        running = false;
+      }
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [authority, payStatus, fetchStatus]);
+
+  useEffect(() => {
+    if (!payOk) return;
+    if (payStatus !== "active") return;
+    if (handledSuccessRef.current) return;
+
+    handledSuccessRef.current = true;
+    (async () => {
+      try {
+        await refresh({ force: true });
+      } catch {}
+    })();
+  }, [payOk, payStatus, refresh]);
 
   const status = (() => {
     if (loading) return "loading";
@@ -141,7 +150,8 @@ export default function PayResultScreen() {
 
     if (status === "error") {
       title = "خطا در بررسی پرداخت";
-      subtitle = "دوباره تلاش کن. اگر ادامه داشت، از داخل اپ پرداخت را تکرار کن.";
+      subtitle =
+        "دوباره تلاش کن. اگر ادامه داشت، از داخل اپ پرداخت را تکرار کن.";
       icon = "warning-outline";
       bar = "rgba(251,191,36,0.95)";
       cardBorder = "rgba(251,191,36,0.25)";
@@ -157,7 +167,8 @@ export default function PayResultScreen() {
       btnBorder = "rgba(167,139,250,0.25)";
     } else if (status === "pending") {
       title = "در انتظار تایید";
-      subtitle = "اگر همین الان از درگاه برگشتی، چند ثانیه دیگه خودکار دوباره چک می‌کنیم.";
+      subtitle =
+        "اگر همین الان از درگاه برگشتی، چند ثانیه دیگه خودکار دوباره چک می‌کنیم.";
       icon = "time-outline";
       bar = "rgba(251,191,36,0.95)";
       cardBorder = "rgba(251,191,36,0.25)";
@@ -175,7 +186,7 @@ export default function PayResultScreen() {
       btnBg = "rgba(34,197,94,0.16)";
       btnBorder = "rgba(34,197,94,0.35)";
       btnText = "#E8EEF7";
-    } else if (status === "canceled" || initialOk === false) {
+    } else if (status === "canceled") {
       // ✅ قرمز برای ناموفق
       title = "پرداخت ناموفق";
       subtitle = "پرداخت تایید نشد. اگر مبلغی کم شده، معمولاً برگشت ميخوره.";
@@ -206,7 +217,7 @@ export default function PayResultScreen() {
       btnBorder,
       btnText,
     };
-  }, [status, initialOk]);
+  }, [status]);
 
   const bg = "#0b0f14";
   const text = "#e8eef7";
@@ -217,7 +228,14 @@ export default function PayResultScreen() {
   const showRetry = !isSuccess; // موفق → فقط یک دکمه
 
   return (
-    <View style={{ flex: 1, backgroundColor: bg, padding: 20, justifyContent: "center" }}>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: bg,
+        padding: 20,
+        justifyContent: "center",
+      }}
+    >
       <View
         style={{
           backgroundColor: ui.cardBg,
@@ -248,7 +266,9 @@ export default function PayResultScreen() {
             width: 260,
             height: 260,
             borderRadius: 260,
-            backgroundColor: isSuccess ? "rgba(34,197,94,0.10)" : "rgba(248,113,113,0.08)",
+            backgroundColor: isSuccess
+              ? "rgba(34,197,94,0.10)"
+              : "rgba(248,113,113,0.08)",
           }}
         />
 
@@ -264,7 +284,13 @@ export default function PayResultScreen() {
         />
 
         {/* Header */}
-        <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 10 }}>
+        <View
+          style={{
+            flexDirection: "row-reverse",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
           <View
             style={{
               width: 48,
@@ -281,10 +307,25 @@ export default function PayResultScreen() {
           </View>
 
           <View style={{ flex: 1 }}>
-            <Text style={{ color: text, fontSize: 21, fontWeight: "900", textAlign: "right" }}>
+            <Text
+              style={{
+                color: text,
+                fontSize: 21,
+                fontWeight: "900",
+                textAlign: "right",
+              }}
+            >
               {ui.title}
             </Text>
-            <Text style={{ color: muted, fontSize: 13, lineHeight: 20, textAlign: "right", marginTop: 4 }}>
+            <Text
+              style={{
+                color: muted,
+                fontSize: 13,
+                lineHeight: 20,
+                textAlign: "right",
+                marginTop: 4,
+              }}
+            >
               {ui.subtitle}
             </Text>
           </View>
@@ -325,7 +366,9 @@ export default function PayResultScreen() {
               // ✅ ناموفق → برگرد به ققنوس (منطقی‌ترین: همین تب اشتراک)
               router.replace({
                 pathname: "/(tabs)/Subscription",
-                params: isSuccess ? { _forceReloadUser: Date.now().toString() } : {},
+                params: isSuccess
+                  ? { _forceReloadUser: Date.now().toString() }
+                  : {},
               } as any);
             }}
             style={{
@@ -346,7 +389,14 @@ export default function PayResultScreen() {
 
         {/* tiny note only on error-ish */}
         {status === "error" ? (
-          <Text style={{ color: "rgba(231,238,247,0.55)", fontSize: 11, marginTop: 12, textAlign: "right" }}>
+          <Text
+            style={{
+              color: "rgba(231,238,247,0.55)",
+              fontSize: 11,
+              marginTop: 12,
+              textAlign: "right",
+            }}
+          >
             اگر این خطا تکرار شد، یکبار اپ را ببند و دوباره باز کن.
           </Text>
         ) : null}

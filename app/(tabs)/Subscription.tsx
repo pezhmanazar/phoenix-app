@@ -2,7 +2,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -34,12 +40,11 @@ type PlanOption = {
   key: PlanKey;
   title: string;
   subtitle: string;
-  price: string; 
+  price: string;
   oldPrice?: string;
   badge?: string;
   badgeType?: "best" | "value" | "premium";
 };
-
 
 type PayResultKind = "success" | "failed" | "cancelled";
 
@@ -52,7 +57,6 @@ type PayResultState = {
 
 // نمای نمایش پلن برای UI (هم‌راستا با تب پلکان / ققنوس)
 type PlanView = "free" | "pro" | "expiring" | "expired";
-
 
 function formatJalaliDate(iso?: string | null): string | null {
   if (!iso) return null;
@@ -86,34 +90,35 @@ export default function SubscriptionScreen() {
   const params = useLocalSearchParams();
   const { phone, isAuthenticated } = useAuth();
   const { me, refresh, refreshing } = useUser() as any;
-  const [providerKey, setProviderKey] = useState<"bazaar" | "zarinpal">("zarinpal");
+  const [providerKey, setProviderKey] = useState<"bazaar" | "zarinpal">(
+    "zarinpal",
+  );
   const [pricing, setPricing] = useState<SubscriptionPricingShape>(
-  SUBSCRIPTION_PRICING_FALLBACK
-);
+    SUBSCRIPTION_PRICING_FALLBACK,
+  );
 
-const providerPrices = pricing[providerKey];
+  const providerPrices = pricing[providerKey];
 
-useEffect(() => {
-  let mounted = true;
+  useEffect(() => {
+    let mounted = true;
 
-  getSubscriptionPricing()
-    .then((res) => {
-      if (!mounted) return;
-      if (res.ok && res.data) {
-        setPricing(res.data);
-      }
-    })
-    .catch(() => {
-      // fallback already applied
-    });
+    getSubscriptionPricing()
+      .then((res) => {
+        if (!mounted) return;
+        if (res.ok && res.data) {
+          setPricing(res.data);
+        }
+      })
+      .catch(() => {
+        // fallback already applied
+      });
 
-  return () => {
-    mounted = false;
-  };
-}, []);
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
-
-      useEffect(() => {
+  useEffect(() => {
     let mounted = true;
 
     getPaymentProvider()
@@ -132,36 +137,34 @@ useEffect(() => {
   }, []);
 
   const plans: PlanOption[] = [
-  {
-    key: "p30",
-    title: "اشتراک ۳۰ روزه",
-    subtitle: "برای عبور اولیه از رابطه قبلی",
-    price: providerPrices.p30.price,
-    oldPrice: providerPrices.p30.oldPrice,
-    badge: "پیشنهادی",
-    badgeType: "best",
-  },
-  {
-    key: "p90",
-    title: "اشتراک ۹۰ روزه",
-    subtitle: "برای عبور عمیق‌تر و تثبیت تغییر رفتاری",
-    oldPrice: providerPrices.p90.oldPrice,
-    price: providerPrices.p90.price,
-    badge: "پرفروش‌ترین",
-    badgeType: "value",
-  },
-  {
-    key: "p180",
-    title: "اشتراک ۱۸۰ روزه",
-    subtitle: "برای بازسازی کامل و مسیر بی‌وقفه تا انتها",
-    oldPrice: providerPrices.p180.oldPrice,
-    price: providerPrices.p180.price,
-    badge: "بیشترین صرفه اقتصادی",
-    badgeType: "premium",
-  },
-];
-
-
+    {
+      key: "p30",
+      title: "اشتراک ۳۰ روزه",
+      subtitle: "برای عبور اولیه از رابطه قبلی",
+      price: providerPrices.p30.price,
+      oldPrice: providerPrices.p30.oldPrice,
+      badge: "پیشنهادی",
+      badgeType: "best",
+    },
+    {
+      key: "p90",
+      title: "اشتراک ۹۰ روزه",
+      subtitle: "برای عبور عمیق‌تر و تثبیت تغییر رفتاری",
+      oldPrice: providerPrices.p90.oldPrice,
+      price: providerPrices.p90.price,
+      badge: "پرفروش‌ترین",
+      badgeType: "value",
+    },
+    {
+      key: "p180",
+      title: "اشتراک ۱۸۰ روزه",
+      subtitle: "برای بازسازی کامل و مسیر بی‌وقفه تا انتها",
+      oldPrice: providerPrices.p180.oldPrice,
+      price: providerPrices.p180.price,
+      badge: "بیشترین صرفه اقتصادی",
+      badgeType: "premium",
+    },
+  ];
 
   const toFaNum = (n: number) =>
     String(n).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[Number(d)]);
@@ -205,27 +208,27 @@ useEffect(() => {
 
   // هر بار ورود به تب → فقط از سرور می‌خوانیم
   useFocusEffect(
-  useCallback(() => {
-    // 👈 اگر از پرداخت برگشتیم (فورس رفرش واقعی)
-    if (params?._forceReloadUser && !handledFromPayRef.current) {
-      handledFromPayRef.current = true;
-      setWaitingForPayRefresh(true);
+    useCallback(() => {
+      // 👈 اگر از پرداخت برگشتیم (فورس رفرش واقعی)
+      if (params?._forceReloadUser && !handledFromPayRef.current) {
+        handledFromPayRef.current = true;
+        setWaitingForPayRefresh(true);
 
-      refresh({ force: true })
-        .catch(() => {})
-        .finally(() => {
-          setWaitingForPayRefresh(false);
-          // 2️⃣ بعدش خود تب رو بدون پارامتر replace کن = جلوگیری از حلقه
-          router.replace("/(tabs)/Subscription");
-        });
+        refresh({ force: true })
+          .catch(() => {})
+          .finally(() => {
+            setWaitingForPayRefresh(false);
+            // 2️⃣ بعدش خود تب رو بدون پارامتر replace کن = جلوگیری از حلقه
+            router.replace("/(tabs)/Subscription");
+          });
 
-      return;
-    }
+        return;
+      }
 
-    // ورود عادی به تب
-    refresh().catch(() => {});
-  }, [refresh, params?._forceReloadUser, router])
-);
+      // ورود عادی به تب
+      refresh().catch(() => {});
+    }, [refresh, params?._forceReloadUser, router]),
+  );
 
   // 🔍 منبع واحد وضعیت پلن: فقط دیتابیس (getPlanStatus)
   const status = getPlanStatus(me);
@@ -267,12 +270,12 @@ useEffect(() => {
 
   async function handleBuy(option: PlanOption) {
     if (!option.price) {
-    openPayModal({
-      kind: "failed",
-      message: "این پلن هنوز فعال نشده.",
-    });
-    return;
-  }
+      openPayModal({
+        kind: "failed",
+        message: "این پلن هنوز فعال نشده.",
+      });
+      return;
+    }
     if (!isAuthenticated || !phone) {
       openPayModal({
         kind: "failed",
@@ -307,8 +310,8 @@ useEffect(() => {
             option.key === "p30"
               ? "sub_30"
               : option.key === "p90"
-              ? "sub_90"
-              : "sub_180";
+                ? "sub_90"
+                : "sub_180";
 
           // 3) شروع خرید اشتراک بازار (داخلش verify سرور انجام میشه)
           await provider.purchaseSubscription(sku as any, phone!);
@@ -335,21 +338,21 @@ useEffect(() => {
           }
 
           openPayModal({
-  kind: "failed",
-  message: getFriendlyErrorMessage(msg),
-});
+            kind: "failed",
+            message: getFriendlyErrorMessage(msg),
+          });
           return;
         }
       }
 
       // --- ۱) شروع پرداخت ---
       const start = await startPay({
-      phone: phone!,
-      planKey:
-         option.key === "p30" || option.key === "p90" || option.key === "p180"
-         ? option.key
-         : "p30",
-        });
+        phone: phone!,
+        planKey:
+          option.key === "p30" || option.key === "p90" || option.key === "p180"
+            ? option.key
+            : "p30",
+      });
       if (!start.ok) {
         openPayModal({
           kind: "failed",
@@ -374,25 +377,29 @@ useEffect(() => {
         return;
       }
 
-      // --- ۲) باز کردن درگاه ---
-      const redirectUrl = "phoenix://pay/result"; // ✅ باید با APP_DEEPLINK_BASE هم‌راستا باشد
-      await WebBrowser.openAuthSessionAsync(gatewayUrl, redirectUrl);
+      // --- ۲) باز کردن درگاه از دامنه اصلی ققنوس ---
+      const redirectUrl = "phoenixapp://pay/result";
 
-      router.replace(
-        {
-          pathname: "/pay/result",
-          params: {
-            authority, // 👈 کلید اصلی
-          },
-        } as any
-      );
+      const paymentPageUrl =
+        "https://qoqnoos.app/pay-redirect.html?authority=" +
+        encodeURIComponent(authority);
+
+      // باز کردن صفحه واسط ققنوس
+      await WebBrowser.openAuthSessionAsync(paymentPageUrl, redirectUrl);
+
+      // نتیجه مرورگر، نتیجه تراکنش نیست.
+      // حتی اگر مرورگر بسته شود، وضعیت واقعی را از سرور می‌گیریم.
+      router.replace({
+        pathname: "/pay/result",
+        params: { authority },
+      } as any);
 
       return;
     } catch (e: any) {
       openPayModal({
-  kind: "failed",
-  message: getFriendlyErrorMessage(String(e?.message || "")),
-});
+        kind: "failed",
+        message: getFriendlyErrorMessage(String(e?.message || "")),
+      });
     } finally {
       payingRef.current = false;
       setPayingKey(null);
@@ -407,26 +414,26 @@ useEffect(() => {
     planView === "expired"
       ? "#7f1d1d55"
       : planView === "expiring"
-      ? "#fbbf2455"
-      : planView === "pro"
-      ? "#16a34a33"
-      : "#4B556333";
+        ? "#fbbf2455"
+        : planView === "pro"
+          ? "#16a34a33"
+          : "#4B556333";
 
   const badgeTextColor =
     planView === "expired"
       ? "#F87171"
       : planView === "expiring"
-      ? "#FBBF24"
-      : planView === "pro"
-      ? "#4ADE80"
-      : "#E5E7EB";
+        ? "#FBBF24"
+        : planView === "pro"
+          ? "#4ADE80"
+          : "#E5E7EB";
 
   const badgeLabel =
     planView === "expired"
       ? "EXPIRED"
       : planView === "pro" || planView === "expiring"
-      ? "PRO"
-      : "FREE";
+        ? "PRO"
+        : "FREE";
 
   return (
     <SafeAreaView
@@ -541,7 +548,11 @@ useEffect(() => {
                 }}
               >
                 <Text
-                  style={{ color: badgeTextColor, fontSize: 13, fontWeight: "900" }}
+                  style={{
+                    color: badgeTextColor,
+                    fontSize: 13,
+                    fontWeight: "900",
+                  }}
                 >
                   {badgeLabel}
                 </Text>
@@ -551,7 +562,10 @@ useEffect(() => {
 
           {/* باکس ارزش اشتراک */}
           <View
-            style={[styles.glassCard, { marginTop: 16, borderRadius: 22, padding: 16 }]}
+            style={[
+              styles.glassCard,
+              { marginTop: 16, borderRadius: 22, padding: 16 },
+            ]}
           >
             {/* بخش اول: تغییر واقعی */}
             <View style={styles.sectionTitleRow}>
@@ -601,7 +615,9 @@ useEffect(() => {
                         style={{ marginLeft: 6 }}
                       />
                       <Text style={styles.moreText}>
-                        {showMoreChanges ? "بستن موارد بیشتر" : "دیدن موارد بیشتر"}
+                        {showMoreChanges
+                          ? "بستن موارد بیشتر"
+                          : "دیدن موارد بیشتر"}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -657,7 +673,9 @@ useEffect(() => {
                         style={{ marginLeft: 6 }}
                       />
                       <Text style={styles.moreText}>
-                        {showMoreAccess ? "بستن موارد بیشتر" : "دیدن موارد بیشتر"}
+                        {showMoreAccess
+                          ? "بستن موارد بیشتر"
+                          : "دیدن موارد بیشتر"}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -667,7 +685,8 @@ useEffect(() => {
 
             <View style={{ marginTop: 16 }}>
               <Text style={styles.subscriptionStrong}>
-                ققنوس برای ماندن در گذشته طراحی نشده؛ برای عبور ساختارمند از اون ساخته شده.
+                ققنوس برای ماندن در گذشته طراحی نشده؛ برای عبور ساختارمند از اون
+                ساخته شده.
               </Text>
             </View>
           </View>
@@ -687,32 +706,32 @@ useEffect(() => {
                 p.badgeType === "best"
                   ? "#F97316"
                   : p.badgeType === "value"
-                  ? "#22C55E"
-                  : p.badgeType === "premium"
-                  ? "#C8A951"
-                  : border;
+                    ? "#22C55E"
+                    : p.badgeType === "premium"
+                      ? "#C8A951"
+                      : border;
 
               const bgHighlight =
                 p.badgeType === "best"
                   ? "rgba(17,24,39,.70)"
                   : p.badgeType === "value"
-                  ? "rgba(2,44,34,.70)"
-                  : p.badgeType === "premium"
-                  ? "rgba(26,26,16,.70)"
-                  : "rgba(255,255,255,.03)";
+                    ? "rgba(2,44,34,.70)"
+                    : p.badgeType === "premium"
+                      ? "rgba(26,26,16,.70)"
+                      : "rgba(255,255,255,.03)";
 
               let ctaLabel = "شروع اشتراک";
-                if (p.price) {
+              if (p.price) {
                 if (planView === "pro" || planView === "expiring") {
-                ctaLabel = "تغییر  یا  تمدید اشتراک";
+                  ctaLabel = "تغییر  یا  تمدید اشتراک";
                 } else if (planView === "expired") {
-                ctaLabel = "تمدید اشتراک";
+                  ctaLabel = "تمدید اشتراک";
                 } else {
-                ctaLabel = "شروع اشتراک";
+                  ctaLabel = "شروع اشتراک";
                 }
-                } else {
+              } else {
                 ctaLabel = "به‌زودی";
-                }
+              }
 
               const showOld = !!p.oldPrice && p.oldPrice !== p.price;
 
@@ -758,10 +777,10 @@ useEffect(() => {
                             p.badgeType === "best"
                               ? "#F9731633"
                               : p.badgeType === "value"
-                              ? "#22C55E33"
-                              : p.badgeType === "premium"
-                              ? "#C8A95133"
-                              : "#37415133",
+                                ? "#22C55E33"
+                                : p.badgeType === "premium"
+                                  ? "#C8A95133"
+                                  : "#37415133",
                         }}
                       >
                         <Text
@@ -770,10 +789,10 @@ useEffect(() => {
                               p.badgeType === "best"
                                 ? "#FDBA74"
                                 : p.badgeType === "value"
-                                ? "#6EE7B7"
-                                : p.badgeType === "premium"
-                                ? "#EAD49F"
-                                : "#FFFFFF",
+                                  ? "#6EE7B7"
+                                  : p.badgeType === "premium"
+                                    ? "#EAD49F"
+                                    : "#FFFFFF",
                             fontSize: 11,
                             fontWeight: "900",
                           }}
@@ -803,17 +822,25 @@ useEffect(() => {
                       justifyContent: "space-between",
                     }}
                   >
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                      {showOld && <Text style={styles.oldPriceText}>{p.oldPrice}</Text>}
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      {showOld && (
+                        <Text style={styles.oldPriceText}>{p.oldPrice}</Text>
+                      )}
 
                       <Text
-                       style={[
-                       styles.priceText,
-                       { color: disabled ? "#9CA3AF" : "#FBBF24" },
-                      ]}
+                        style={[
+                          styles.priceText,
+                          { color: disabled ? "#9CA3AF" : "#FBBF24" },
+                        ]}
                       >
-                      {p.price}
-                    </Text>
+                        {p.price}
+                      </Text>
                     </View>
 
                     <TouchableOpacity
@@ -835,7 +862,13 @@ useEffect(() => {
                       ) : (
                         <>
                           <Ionicons name="card" size={16} color="#fff" />
-                          <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "800" }}>
+                          <Text
+                            style={{
+                              color: "#FFFFFF",
+                              fontSize: 12,
+                              fontWeight: "800",
+                            }}
+                          >
                             {ctaLabel}
                           </Text>
                         </>
@@ -848,24 +881,37 @@ useEffect(() => {
           </View>
 
           {/* اعتمادسازی پایین صفحه */}
-          <View style={[styles.glassCard, { marginTop: 18, borderRadius: 22, padding: 14, gap: 8 }]}>
-            <View style={{ flexDirection: "row-reverse", alignItems: "center" }}>
+          <View
+            style={[
+              styles.glassCard,
+              { marginTop: 18, borderRadius: 22, padding: 14, gap: 8 },
+            ]}
+          >
+            <View
+              style={{ flexDirection: "row-reverse", alignItems: "center" }}
+            >
               <Ionicons name="shield-checkmark" size={18} color="#22C55E" />
               <Text style={styles.trustText}>
                 حریم خصوصی و اطلاعاتت داخل ققنوس کاملاً محرمانه‌ست.
               </Text>
             </View>
 
-            <View style={{ flexDirection: "row-reverse", alignItems: "center" }}>
+            <View
+              style={{ flexDirection: "row-reverse", alignItems: "center" }}
+            >
               <Ionicons name="lock-closed" size={18} color="#60A5FA" />
               <Text style={styles.trustText}>
                 پرداخت از طریق درگاه امن و معتبر انجام میشه.
               </Text>
             </View>
 
-            <View style={{ flexDirection: "row-reverse", alignItems: "center" }}>
+            <View
+              style={{ flexDirection: "row-reverse", alignItems: "center" }}
+            >
               <Ionicons name="help-circle" size={18} color="#F97316" />
-              <Text style={[styles.trustText, { color: "#9CA3AF", fontSize: 11 }]}>
+              <Text
+                style={[styles.trustText, { color: "#9CA3AF", fontSize: 11 }]}
+              >
                 این محصول یک ابزار کمک‌درمانی برای رهایی از زخم جداییه.
               </Text>
             </View>
@@ -875,27 +921,26 @@ useEffect(() => {
         </ScrollView>
 
         {/* بنر نتیجه پرداخت (برای بازار و خطاهای شبکه) */}
-                <AppBannerModal
+        <AppBannerModal
           visible={payResult.visible}
           kind={
             payResult.kind === "success"
               ? "success"
               : payResult.kind === "cancelled"
-              ? "warning"
-              : "error"
+                ? "warning"
+                : "error"
           }
           title={
             payResult.kind === "success"
               ? "پرداخت موفق"
               : payResult.kind === "cancelled"
-              ? "پرداخت لغو شد"
-              : "پرداخت ناموفق"
+                ? "پرداخت لغو شد"
+                : "پرداخت ناموفق"
           }
           message={payResult.message}
           refId={payResult.refId}
           onClose={() => setPayResult((prev) => ({ ...prev, visible: false }))}
         />
-
       </View>
     </SafeAreaView>
   );
