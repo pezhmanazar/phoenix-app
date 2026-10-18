@@ -829,6 +829,55 @@
         width: 100%;
         margin-inline: auto;
       }
+      /* iOS Alternative Course */
+      .ios-course {
+        margin: 18px 0;
+        padding: 22px 20px;
+        border-radius: 18px;
+        border: 1px solid rgba(212, 175, 55, 0.24);
+        background: linear-gradient(
+          135deg,
+          rgba(212, 175, 55, 0.09),
+          rgba(233, 138, 21, 0.035)
+        );
+        text-align: center;
+      }
+
+      .ios-course-title {
+        color: #fde68a;
+        font-size: 18px;
+        font-weight: 900;
+        line-height: 1.7;
+        margin-bottom: 14px;
+      }
+
+      .ios-course-description {
+        color: rgba(232, 236, 241, 0.88);
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 2.1;
+        margin: 0 auto 12px;
+        max-width: 540px;
+      }
+
+      .ios-course-description:last-child {
+        margin-bottom: 0;
+      }
+
+      @media (max-width: 600px) {
+        .ios-course {
+          padding: 18px 14px;
+          margin: 14px 0;
+        }
+
+        .ios-course-title {
+          font-size: 16px;
+        }
+
+        .ios-course-description {
+          font-size: 12px;
+        }
+      }
     </style>
   </head>
 
@@ -935,10 +984,12 @@
               </div>
 
               <div class="benefit-box direct">
-                <div class="benefit-title">مزیت دانلود مستقیم</div>
+                <div class="benefit-title">مزایای دانلود مستقیم</div>
 
                 <div class="benefit-text">
-                  اشتراک‌های ارزان‌تر و تخفیف‌های بیشتر
+                  خرید اشتراک تا ۲۰٪ ارزان‌تر
+                  <br />
+                  شروع سریع، بدون نیاز به حساب کافه‌بازار
                 </div>
               </div>
 
@@ -977,9 +1028,13 @@
               </a>
 
               <div class="benefit-box bazaar">
-                <div class="benefit-title">مزیت دانلود از کافه‌بازار</div>
+                <div class="benefit-title">مزایای دانلود از کافه‌بازار</div>
 
-                <div class="benefit-text">امکان خرید اشتراک به‌صورت اقساطی</div>
+                <div class="benefit-text">
+                  نصب مطمئن از فروشگاه معتبر
+                  <br />
+                  امکان خرید اشتراک به‌صورت اقساطی
+                </div>
               </div>
             </div>
           </div>
@@ -1008,8 +1063,8 @@
 
           <div class="note direct-note desktop-direct-note">
             <strong>نکته نصب دانلود مستقیم:</strong>
-            اگه بعد از دانلود مستقیم گوشی برای نصب، هشدار داد یا اجازه خواست،
-            کافیه به مرورگر اجازه نصب اپ بدی.
+            بعد از دانلود مستقیم، اگه گوشی برای نصب، هشدار داد یا اجازه خواست،
+            کافیه به مرورگر اجازه نصب بدی.
             <br />
             <a class="gold-link" href="/install-help.html">
               مشاهده راهنمای قدم‌به‌قدم نصب
@@ -1018,26 +1073,45 @@
 
           <!-- iOS -->
           <div class="card download-card ios-card">
-            <div class="download-head ios">نسخه آیفون</div>
+            <div class="download-head ios">
+              نسخه آیفون | مسیر جایگزین برای شروع
+            </div>
 
             <div class="download-card-body">
               <p class="option-description">
-                نسخه مخصوص آیفون در حال آماده‌سازیه و تا چند ماه آینده در دسترس
-                قرار می‌گیره.
+                نسخه آیفون ققنوس در حال آماده‌سازیه. اما برای شروع مسیر بازسازی،
+                لازم نیست منتظر بمونی.
               </p>
 
+              <div class="ios-course">
+                <div class="ios-course-title">دوره ۱۱روزه پاکسازی ققنوس</div>
+
+                <p class="ios-course-description">
+                  تا زمان انتشار نسخه آیفون، می‌تونی با دوره ۱۱روزه پاکسازی
+                  ققنوس، قدم‌به‌قدم مسیر بازسازی خودت رو شروع کنی.
+                </p>
+
+                <p class="ios-course-description">
+                  محتوای هر ۱۱ روز از قبل ضبط شده و در تلگرام به‌صورت ویدیویی و
+                  صوتی در اختیارت قرار می‌گیره؛ تا بتونی هر روز رو با سرعت و
+                  زمان‌بندی خودت دنبال کنی.
+                </p>
+              </div>
+
               <a
-                class="btn btn-soon cta-btn"
-                href="javascript:void(0)"
-                aria-disabled="true"
+                id="iosCourseTelegramBtn"
+                class="btn btn-primary cta-btn"
+                href="https://t.me/qoqnoos_admin1"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="ارتباط با پشتیبانی ققنوس در تلگرام برای ثبت‌نام دوره پاکسازی"
               >
-                به‌زودی…
+                دریافت اطلاعات و ثبت‌نام از طریق تلگرام
               </a>
 
               <div class="note">
-                اگه دوست داری از زمان انتشار نسخه آیفون باخبر بشی، از صفحه
-                <a class="gold-link" href="/contact.html">تماس با ما</a>
-                به ما پیام بده تا راه ارتباطیت ثبت بشه.
+                برای اطلاع از شرایط شرکت و هزینه دوره، با پشتیبان ققنوس در
+                ارتباط باش.
               </div>
             </div>
           </div>
@@ -1137,6 +1211,14 @@
 
         bazaarDownloadBtn?.addEventListener("click", function () {
           trackDownload("EVENT_BAZAAR_DOWNLOAD");
+        });
+
+        const iosCourseTelegramBtn = document.getElementById(
+          "iosCourseTelegramBtn",
+        );
+
+        iosCourseTelegramBtn?.addEventListener("click", function () {
+          trackDownload("EVENT_IOS_COURSE_TELEGRAM");
         });
       });
     </script>
