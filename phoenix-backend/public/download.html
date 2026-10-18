@@ -829,53 +829,201 @@
         width: 100%;
         margin-inline: auto;
       }
-      /* iOS Alternative Course */
-      .ios-course {
-        margin: 18px 0;
-        padding: 22px 20px;
-        border-radius: 18px;
+
+      /* =========================================
+   Phoenix Cleansing Course
+========================================= */
+
+      .cleansing-card {
+        grid-column: 1 / -1;
+        padding: 28px 24px;
         border: 1px solid rgba(212, 175, 55, 0.24);
         background: linear-gradient(
-          135deg,
-          rgba(212, 175, 55, 0.09),
+          145deg,
+          rgba(212, 175, 55, 0.075),
+          rgba(255, 255, 255, 0.025) 45%,
           rgba(233, 138, 21, 0.035)
         );
+        overflow: hidden;
+      }
+
+      /* Course introduction */
+
+      .cleansing-intro {
+        text-align: center;
+        max-width: 720px;
+        margin: 0 auto 24px;
+      }
+
+      .cleansing-eyebrow {
+        display: inline-block;
+        padding: 5px 14px;
+        border-radius: 999px;
+        color: #fde68a;
+        background: rgba(212, 175, 55, 0.1);
+        border: 1px solid rgba(212, 175, 55, 0.22);
+        font-size: 12px;
+        font-weight: 800;
+        margin-bottom: 12px;
+      }
+
+      .cleansing-intro h2 {
+        margin: 0 0 12px;
+        color: #fde68a;
+        font-size: 23px;
+        font-weight: 900;
+        line-height: 1.6;
+      }
+
+      .cleansing-lead {
+        margin: 0 auto;
+        max-width: 640px;
+        color: rgba(232, 236, 241, 0.82);
+        font-size: 14px;
+        line-height: 2.1;
+      }
+
+      /* Feature cards */
+
+      .cleansing-features {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 24px;
+      }
+
+      .cleansing-feature {
+        min-width: 0;
+        padding: 22px 16px;
+        border-radius: 18px;
+        border: 1px solid rgba(212, 175, 55, 0.18);
+        background: rgba(255, 255, 255, 0.035);
+        text-align: center;
+        transition:
+          transform 0.2s ease,
+          border-color 0.2s ease,
+          background 0.2s ease;
+      }
+
+      .cleansing-feature:hover {
+        transform: translateY(-3px);
+        border-color: rgba(212, 175, 55, 0.4);
+        background: rgba(212, 175, 55, 0.065);
+      }
+
+      .cleansing-feature-icon {
+        width: 56px;
+        height: 56px;
+        margin: 0 auto 14px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fde68a;
+        background: rgba(212, 175, 55, 0.11);
+        border: 1px solid rgba(212, 175, 55, 0.18);
+      }
+
+      .cleansing-feature-icon svg {
+        width: 27px;
+        height: 27px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .cleansing-feature h3 {
+        margin: 0 0 8px;
+        color: #f5e6be;
+        font-size: 15px;
+        font-weight: 900;
+        line-height: 1.8;
+      }
+
+      .cleansing-feature p {
+        margin: 0;
+        color: rgba(232, 236, 241, 0.7);
+        font-size: 12px;
+        line-height: 2;
+      }
+
+      /* Telegram registration */
+
+      .cleansing-action {
+        max-width: 560px;
+        margin: 0 auto;
         text-align: center;
       }
 
-      .ios-course-title {
-        color: #fde68a;
-        font-size: 18px;
-        font-weight: 900;
-        line-height: 1.7;
-        margin-bottom: 14px;
+      .cleansing-action .cta-btn {
+        min-height: 58px;
       }
 
-      .ios-course-description {
-        color: rgba(232, 236, 241, 0.88);
-        font-size: 13px;
-        font-weight: 500;
-        line-height: 2.1;
-        margin: 0 auto 12px;
-        max-width: 540px;
+      .cleansing-action-note {
+        margin: 12px 0 0;
+        color: rgba(232, 236, 241, 0.62);
+        font-size: 12px;
+        line-height: 1.9;
       }
 
-      .ios-course-description:last-child {
-        margin-bottom: 0;
-      }
+      /* Responsive */
 
-      @media (max-width: 600px) {
-        .ios-course {
-          padding: 18px 14px;
-          margin: 14px 0;
+      @media (max-width: 760px) {
+        .cleansing-card {
+          padding: 22px 14px;
         }
 
-        .ios-course-title {
-          font-size: 16px;
+        .cleansing-intro h2 {
+          font-size: 19px;
         }
 
-        .ios-course-description {
+        .cleansing-lead {
           font-size: 12px;
+        }
+
+        .cleansing-features {
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+
+        .cleansing-feature {
+          padding: 18px 14px;
+        }
+
+        .cleansing-feature-icon {
+          width: 48px;
+          height: 48px;
+          margin-bottom: 10px;
+        }
+
+        .cleansing-feature-icon svg {
+          width: 24px;
+          height: 24px;
+        }
+
+        .cleansing-feature h3 {
+          font-size: 14px;
+        }
+
+        .cleansing-feature p {
+          font-size: 12px;
+        }
+
+        .cleansing-action .cta-btn {
+          white-space: normal;
+          line-height: 1.8;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .cleansing-feature {
+          transition: none;
+        }
+
+        .cleansing-feature:hover {
+          transform: none;
         }
       }
     </style>
@@ -1071,50 +1219,95 @@
             </a>
           </div>
 
-          <!-- iOS -->
+          <!-- iOS Availability -->
           <div class="card download-card ios-card">
-            <div class="download-head ios">
-              نسخه آیفون | مسیر جایگزین برای شروع
-            </div>
+            <div class="download-head ios">نسخه آیفون ققنوس</div>
 
             <div class="download-card-body">
-              <p class="option-description">
-                نسخه آیفون ققنوس در حال آماده‌سازیه. اما برای شروع مسیر بازسازی،
-                لازم نیست منتظر بمونی.
+              <p class="option-description" style="margin-bottom: 0">
+                نسخه آیفون اپلیکیشن ققنوس در حال آماده‌سازیه و پس از تکمیل مراحل
+                توسعه و انتشار، در دسترس قرار می‌گیره.
               </p>
+            </div>
+          </div>
+          <!-- Phoenix 11-Day Cleansing Course -->
+          <section class="card cleansing-card" aria-labelledby="cleansingTitle">
+            <div class="cleansing-intro">
+              <div class="cleansing-eyebrow">بدون نیاز به نصب اپلیکیشن</div>
 
-              <div class="ios-course">
-                <div class="ios-course-title">دوره ۱۱روزه پاکسازی ققنوس</div>
+              <h2 id="cleansingTitle">دوره ۱۱روزه پاکسازی ققنوس</h2>
 
-                <p class="ios-course-description">
-                  تا زمان انتشار نسخه آیفون، می‌تونی با دوره ۱۱روزه پاکسازی
-                  ققنوس، قدم‌به‌قدم مسیر بازسازی خودت رو شروع کنی.
-                </p>
+              <p class="cleansing-lead">
+                می‌خوای مسیر بازسازی بعد از جدایی رو شروع کنی، اما ترجیح می‌دی
+                اپلیکیشن نصب نکنی؟ دوره پاکسازی ققنوس یک مسیر ۱۱روزه‌ست که
+                می‌تونی از طریق تلگرام دنبال کنی.
+              </p>
+            </div>
 
-                <p class="ios-course-description">
-                  محتوای هر ۱۱ روز از قبل ضبط شده و در تلگرام به‌صورت ویدیویی و
-                  صوتی در اختیارت قرار می‌گیره؛ تا بتونی هر روز رو با سرعت و
-                  زمان‌بندی خودت دنبال کنی.
+            <div class="cleansing-features">
+              <div class="cleansing-feature">
+                <div class="cleansing-feature-icon">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3" y="5" width="18" height="16" rx="2"></rect>
+                    <path d="M7 3v4M17 3v4M3 10h18"></path>
+                    <path d="m9 16 2 2 4-4"></path>
+                  </svg>
+                </div>
+                <h3>۱۱ روز محتوای مرحله‌به‌مرحله</h3>
+                <p>
+                  یک برنامه منظم برای تمرکز روی خودت و آغاز مسیر بازسازی بعد از
+                  جدایی.
                 </p>
               </div>
 
+              <div class="cleansing-feature">
+                <div class="cleansing-feature-icon">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3" y="4" width="18" height="16" rx="3"></rect>
+                    <path d="m10 8 6 4-6 4z"></path>
+                    <path d="M7 20v2M17 20v2"></path>
+                  </svg>
+                </div>
+                <h3>محتوای صوتی و ویدیویی</h3>
+                <p>
+                  محتوای هر ۱۱ روز از قبل ضبط شده و در تلگرام در اختیارت قرار
+                  می‌گیره.
+                </p>
+              </div>
+
+              <div class="cleansing-feature">
+                <div class="cleansing-feature-icon">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9"></circle>
+                    <path d="M12 7v5l3 2"></path>
+                  </svg>
+                </div>
+                <h3>با زمان‌بندی خودت</h3>
+                <p>
+                  بدون وابستگی به ساعت مشخص؛ هر روز رو با سرعت و زمان دلخواه
+                  خودت دنبال کن.
+                </p>
+              </div>
+            </div>
+
+            <div class="cleansing-action">
               <a
-                id="iosCourseTelegramBtn"
+                id="cleansingCourseTelegramBtn"
                 class="btn btn-primary cta-btn"
                 href="https://t.me/qoqnoos_admin1"
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="ارتباط با پشتیبانی ققنوس در تلگرام برای ثبت‌نام دوره پاکسازی"
+                aria-label="دریافت اطلاعات و ثبت‌نام دوره پاکسازی ققنوس در تلگرام"
               >
                 دریافت اطلاعات و ثبت‌نام از طریق تلگرام
               </a>
 
-              <div class="note">
+              <p class="cleansing-action-note">
                 برای اطلاع از شرایط شرکت و هزینه دوره، با پشتیبان ققنوس در
                 ارتباط باش.
-              </div>
+              </p>
             </div>
-          </div>
+          </section>
         </div>
 
         <div class="cta-row">
@@ -1213,12 +1406,12 @@
           trackDownload("EVENT_BAZAAR_DOWNLOAD");
         });
 
-        const iosCourseTelegramBtn = document.getElementById(
-          "iosCourseTelegramBtn",
+        const cleansingCourseTelegramBtn = document.getElementById(
+          "cleansingCourseTelegramBtn",
         );
 
-        iosCourseTelegramBtn?.addEventListener("click", function () {
-          trackDownload("EVENT_IOS_COURSE_TELEGRAM");
+        cleansingCourseTelegramBtn?.addEventListener("click", function () {
+          trackDownload("EVENT_CLEANSING_COURSE_TELEGRAM");
         });
       });
     </script>
