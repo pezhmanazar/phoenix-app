@@ -1871,6 +1871,274 @@
           text-align: center;
         }
       }
+
+      /* ===== Paksazi Payment Section ===== */
+
+      .paksazi-payment {
+        width: 100%;
+        max-width: 650px;
+        margin: 28px auto 0;
+        text-align: right;
+      }
+
+      /* Price */
+      .paksazi-payment-price {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 26px 20px;
+        margin-bottom: 26px;
+        border-radius: 22px;
+        background: linear-gradient(
+          145deg,
+          rgba(212, 175, 55, 0.14),
+          rgba(233, 138, 21, 0.045)
+        );
+        border: 1px solid rgba(212, 175, 55, 0.32);
+        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.12);
+        text-align: center;
+      }
+
+      .paksazi-payment-price > span {
+        color: rgba(232, 236, 241, 0.78);
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .paksazi-payment-price strong {
+        display: block;
+        color: #f3d57d;
+        font-size: clamp(32px, 5vw, 44px);
+        font-weight: 900;
+        line-height: 1.5;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .paksazi-payment-price small {
+        font-size: 17px;
+        font-weight: 700;
+        color: rgba(232, 236, 241, 0.85);
+      }
+
+      /* Steps */
+      .paksazi-payment-step {
+        display: flex;
+        align-items: flex-start;
+        gap: 13px;
+        margin: 24px 0 14px;
+        text-align: right;
+      }
+
+      .paksazi-payment-number {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 12px;
+        background: linear-gradient(135deg, var(--gold), var(--orange));
+        color: #101419;
+        font-size: 17px;
+        font-weight: 900;
+      }
+
+      .paksazi-payment-step > div {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .paksazi-payment-step h3 {
+        margin: 0 0 5px;
+        color: var(--text);
+        font-size: 16px;
+        font-weight: 900;
+        line-height: 1.7;
+      }
+
+      .paksazi-payment-step p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 2;
+        max-width: none;
+      }
+
+      /* Bank Card */
+      .paksazi-bank-card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 13px;
+        width: 100%;
+        padding: 28px 20px;
+        border-radius: 22px;
+        border: 1px solid rgba(212, 175, 55, 0.28);
+        background:
+          radial-gradient(
+            circle at 85% 10%,
+            rgba(212, 175, 55, 0.15),
+            transparent 45%
+          ),
+          linear-gradient(
+            135deg,
+            rgba(28, 34, 42, 0.98),
+            rgba(13, 17, 23, 0.98)
+          );
+        box-shadow:
+          0 20px 50px rgba(0, 0, 0, 0.25),
+          inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        overflow: hidden;
+        text-align: center;
+      }
+
+      .paksazi-bank-card::before {
+        content: "";
+        position: absolute;
+        width: 220px;
+        height: 220px;
+        top: -130px;
+        left: -75px;
+        border-radius: 50%;
+        border: 1px solid rgba(212, 175, 55, 0.13);
+        pointer-events: none;
+      }
+
+      .paksazi-bank-label {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--muted);
+      }
+
+      .paksazi-card-number {
+        direction: ltr;
+        unicode-bidi: isolate;
+        display: block;
+        max-width: 100%;
+        font-family: "Anjoman", sans-serif;
+        font-size: clamp(20px, 4.5vw, 30px);
+        font-weight: 900;
+        letter-spacing: 1.5px;
+        color: #f3d57d;
+        line-height: 1.6;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .paksazi-card-owner {
+        color: rgba(232, 236, 241, 0.88);
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      #copyPaksaziCard {
+        position: relative;
+        z-index: 1;
+        font-family: inherit;
+        min-width: 165px;
+        padding: 11px 20px;
+        margin-top: 4px;
+      }
+
+      #paksaziCopyMessage {
+        display: block;
+        min-height: 18px;
+        font-size: 12px;
+        font-weight: 700;
+        color: #9be7a1;
+        text-align: center;
+      }
+
+      /* Telegram CTA */
+      #paksaziTelegramBtn {
+        display: flex;
+        width: 100%;
+        max-width: 650px;
+        min-height: 52px;
+        margin: 18px auto 26px;
+        padding: 14px 20px;
+        font-size: 14px;
+        text-align: center;
+        white-space: normal;
+        line-height: 1.8;
+      }
+
+      /* Payment Notice */
+      .paksazi-payment-notice {
+        margin: 20px 0 0 !important;
+        padding: 15px 18px;
+        border-radius: 15px;
+        background: rgba(255, 255, 255, 0.035);
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        color: var(--muted) !important;
+        font-size: 12px !important;
+        line-height: 2 !important;
+        text-align: right;
+        max-width: none !important;
+      }
+
+      /* Mobile */
+      @media (max-width: 600px) {
+        .paksazi-payment {
+          margin-top: 22px;
+        }
+
+        .paksazi-payment-price {
+          padding: 22px 14px;
+          margin-bottom: 22px;
+          border-radius: 18px;
+        }
+
+        .paksazi-payment-price strong {
+          font-size: 35px;
+        }
+
+        .paksazi-payment-step {
+          gap: 10px;
+          margin: 22px 0 12px;
+        }
+
+        .paksazi-payment-number {
+          width: 32px;
+          height: 32px;
+          min-width: 32px;
+          border-radius: 10px;
+          font-size: 15px;
+        }
+
+        .paksazi-payment-step h3 {
+          font-size: 14px;
+        }
+
+        .paksazi-bank-card {
+          padding: 24px 10px;
+          gap: 12px;
+          border-radius: 18px;
+        }
+
+        .paksazi-card-number {
+          font-size: clamp(16px, 4.7vw, 23px);
+          letter-spacing: 0.4px;
+        }
+
+        .paksazi-card-owner {
+          font-size: 13px;
+        }
+
+        #paksaziTelegramBtn {
+          font-size: 13px;
+          padding: 14px 12px;
+          margin-bottom: 24px;
+        }
+
+        .paksazi-payment-notice {
+          padding: 13px;
+          font-size: 11px !important;
+        }
+      }
     </style>
   </head>
   <body>
@@ -2195,8 +2463,10 @@
           <details>
             <summary>هزینه و شرایط دریافت دوره چقدره؟</summary>
             <p>
-              برای دریافت قیمت فعلی، جزئیات دسترسی و شرایط شرکت، از طریق دکمه
-              پایین صفحه با پشتیبانی ققنوس در تلگرام ارتباط بگیر.
+              هزینه دریافت دوره کامل ۱۱روزه پاکسازی ققنوس ۳۹۹٬۰۰۰ تومانه. برای
+              ثبت‌نام، مبلغ دوره رو به شماره کارت درج‌شده در انتهای صفحه واریز
+              کن و تصویر رسید رو برای پشتیبانی تلگرام بفرست. پس از بررسی و تأیید
+              پرداخت، اطلاعات دسترسی به دوره برات ارسال می‌شه.
             </p>
           </details>
           <details>
@@ -2212,26 +2482,101 @@
 
       <section class="paksazi-section" id="enroll">
         <div class="paksazi-final reveal">
-          <h2>برای شروع مسیر پاکسازی آماده‌ای؟</h2>
+          <span class="paksazi-eyebrow">ثبت‌نام دوره پاکسازی ققنوس</span>
+
+          <h2 style="margin-top: 18px">
+            آماده‌ای مسیر بازسازی خودت رو شروع کنی؟
+          </h2>
+
           <p>
-            اگر امکان استفاده از اپلیکیشن ققنوس رو نداری و می‌خوای با دوره
-            ۱۱روزه آشنا بشی، شرایط دریافت و هزینه فعلی رو از پشتیبانی بپرس.
-            پرسیدن اطلاعات به معنی ثبت‌نام نیست.
+            حالا که با دوره ۱۱روزه پاکسازی آشنا شدی، می‌تونی با انجام مراحل زیر
+            ثبت‌نام کنی و به محتوای دوره دسترسی پیدا کنی.
           </p>
-          <a
-            class="btn btn-primary btn-hero-pulse"
-            id="paksaziTelegramBtn"
-            href="https://t.me/qoqnoos_admin1"
-            target="_blank"
-            rel="noopener noreferrer"
-            >دریافت اطلاعات و شرایط دوره در تلگرام ←</a
-          >
-          <div class="paksazi-actions">
-            <a class="btn btn-ghost" href="/download.html"
-              >بازگشت به دانلود اپلیکیشن</a
+
+          <div class="paksazi-payment">
+            <div class="paksazi-payment-price">
+              <span>هزینه ثبت‌نام و دریافت دوره کامل</span>
+              <strong>۳۹۹٬۰۰۰ <small>تومان</small></strong>
+            </div>
+
+            <div class="paksazi-payment-step">
+              <span class="paksazi-payment-number">۱</span>
+              <div>
+                <h3>واریز هزینه دوره</h3>
+                <p>مبلغ ۳۹۹٬۰۰۰ تومان رو به شماره کارت زیر واریز کن.</p>
+              </div>
+            </div>
+
+            <div class="paksazi-bank-card">
+              <span class="paksazi-bank-label"> شماره کارت جهت واریز </span>
+
+              <strong class="paksazi-card-number" dir="ltr"
+                >6219 8619 0430 6528</strong
+              >
+
+              <span class="paksazi-card-owner"> به نام مسعود احمدی آذر </span>
+
+              <button
+                type="button"
+                class="btn btn-ghost"
+                id="copyPaksaziCard"
+                data-card="6219861904306528"
+              >
+                کپی شماره کارت
+              </button>
+
+              <span
+                id="paksaziCopyMessage"
+                role="status"
+                aria-live="polite"
+              ></span>
+            </div>
+
+            <div class="paksazi-payment-step">
+              <span class="paksazi-payment-number">۲</span>
+              <div>
+                <h3>ارسال رسید پرداخت</h3>
+                <p>
+                  بعد از واریز، تصویر رسید پرداخت رو از طریق دکمه زیر برای
+                  پشتیبان ققنوس در تلگرام بفرست.
+                </p>
+              </div>
+            </div>
+
+            <a
+              class="btn btn-primary btn-hero-pulse"
+              id="paksaziTelegramBtn"
+              href="https://t.me/qoqnoos_admin1"
+              target="_blank"
+              rel="noopener noreferrer"
             >
+              ارسال رسید پرداخت به پشتیبان تلگرام
+            </a>
+
+            <div class="paksazi-payment-step">
+              <span class="paksazi-payment-number">۳</span>
+              <div>
+                <h3>دریافت دسترسی دوره</h3>
+                <p>
+                  پس از بررسی و تأیید پرداخت توسط پشتیبانی، اطلاعات دسترسی به
+                  محتوای دوره در تلگرام برات ارسال می‌شه.
+                </p>
+              </div>
+            </div>
+
+            <p class="paksazi-payment-notice">
+              لطفاً قبل از واریز، نام صاحب کارت و شماره کارت رو با اطلاعات همین
+              صفحه تطبیق بده. ارسال رسید به‌تنهایی به معنی تأیید پرداخت نیست.
+            </p>
+          </div>
+
+          <div class="paksazi-actions">
+            <a class="btn btn-ghost" href="/download.html">
+              بازگشت به دانلود اپلیکیشن
+            </a>
           </div>
         </div>
+
         <p class="paksazi-disclaimer">
           این دوره یک برنامه آموزشی و کمک‌درمانی است و جایگزین روان‌درمانی،
           تشخیص یا مراقبت حرفه‌ای سلامت روان نیست. اگر با بحران شدید روانی یا
@@ -2414,6 +2759,84 @@
               window.trackDownload("EVENT_PAKSAZI_TELEGRAM_CLICK");
           } catch (e) {}
         });
+
+      /* ===== Copy Paksazi Card Number ===== */
+      (function () {
+        const copyButton = document.getElementById("copyPaksaziCard");
+        const copyMessage = document.getElementById("paksaziCopyMessage");
+
+        if (!copyButton || !copyMessage) return;
+
+        const cardNumber = copyButton.dataset.card;
+        let messageTimer;
+
+        function showMessage(message, success) {
+          clearTimeout(messageTimer);
+
+          copyMessage.textContent = message;
+          copyMessage.style.color = success ? "#9be7a1" : "#f3cc69";
+
+          if (success) {
+            copyButton.textContent = "شماره کارت کپی شد ✓";
+          }
+
+          messageTimer = setTimeout(function () {
+            copyMessage.textContent = "";
+            copyButton.textContent = "کپی شماره کارت";
+          }, 3000);
+        }
+
+        function fallbackCopy(text) {
+          const textarea = document.createElement("textarea");
+
+          textarea.value = text;
+          textarea.setAttribute("readonly", "");
+          textarea.style.position = "fixed";
+          textarea.style.opacity = "0";
+          textarea.style.left = "-9999px";
+
+          document.body.appendChild(textarea);
+
+          textarea.focus();
+          textarea.select();
+
+          let copied = false;
+
+          try {
+            copied = document.execCommand("copy");
+          } catch (error) {
+            copied = false;
+          }
+
+          textarea.remove();
+
+          return copied;
+        }
+
+        copyButton.addEventListener("click", async function () {
+          let copied = false;
+
+          try {
+            if (navigator.clipboard && window.isSecureContext) {
+              await navigator.clipboard.writeText(cardNumber);
+              copied = true;
+            } else {
+              copied = fallbackCopy(cardNumber);
+            }
+          } catch (error) {
+            copied = fallbackCopy(cardNumber);
+          }
+
+          if (copied) {
+            showMessage("شماره کارت با موفقیت کپی شد.", true);
+          } else {
+            showMessage(
+              "کپی خودکار انجام نشد؛ لطفاً شماره کارت رو دستی کپی کنید.",
+              false,
+            );
+          }
+        });
+      })();
     </script>
   </body>
 </html>
