@@ -2272,6 +2272,34 @@
           display: none !important;
         }
       }
+      /* Registered users counter */
+      .users-stats-box {
+        text-align: center;
+        padding: 32px 20px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.025);
+      }
+
+      .users-stats-label {
+        font-size: 15px;
+        font-weight: 700;
+        margin-bottom: 12px;
+      }
+
+      .users-stats-number {
+        font-size: clamp(42px, 7vw, 70px);
+        font-weight: 900;
+        line-height: 1.3;
+        color: #f4a340;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .users-stats-description {
+        margin: 8px 0 0;
+        font-size: 13px;
+        opacity: 0.7;
+      }
     </style>
   </head>
 
@@ -2848,6 +2876,18 @@
           >
             مشاهده تجربه‌های بیشتر
           </button>
+        </div>
+      </section>
+
+      <section class="section" id="users-stats">
+        <div class="container">
+          <div class="users-stats-box">
+            <div class="users-stats-label">همراهان ققنوس</div>
+
+            <div class="users-stats-number" id="registered-users-count">—</div>
+
+            <p class="users-stats-description">حساب کاربری ثبت‌شده در ققنوس</p>
+          </div>
         </div>
       </section>
 
@@ -3758,6 +3798,108 @@
             ? "مشاهده تجربه‌های بیشتر"
             : "نمایش تعداد کمتر";
         });
+      })();
+    </script>
+    <script>
+      (() => {
+        const counter = document.getElementById("registered-users-count");
+        const section = document.getElementById("users-stats");
+
+        if (!counter || !section) return;
+
+        let totalUsers = null;
+        let animationStarted = false;
+        let isVisible = false;
+
+        const formatNumber = (number) =>
+          Math.round(number).toLocaleString("fa-IR");
+
+        const reducedMotion = window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        ).matches;
+
+        function animateCounter(target) {
+          if (animationStarted) return;
+          animationStarted = true;
+
+          if (reducedMotion || target === 0) {
+            counter.textContent = formatNumber(target);
+            return;
+          }
+
+          const duration = 2000;
+          let startTime = null;
+
+          function update(timestamp) {
+            if (startTime === null) startTime = timestamp;
+
+            const progress = Math.min((timestamp - startTime) / duration, 1);
+
+            // Ease-out: شروع سریع و پایان نرم
+            const easedProgress = 1 - Math.pow(1 - progress, 3);
+
+            counter.textContent = formatNumber(target * easedProgress);
+
+            if (progress < 1) {
+              requestAnimationFrame(update);
+            } else {
+              counter.textContent = formatNumber(target);
+            }
+          }
+
+          counter.textContent = formatNumber(0);
+          requestAnimationFrame(update);
+        }
+
+        function startWhenReady() {
+          if (isVisible && totalUsers !== null) {
+            animateCounter(totalUsers);
+          }
+        }
+
+        // شروع انیمیشن هنگام ورود بخش به صفحه
+        const observer = new IntersectionObserver(
+          (entries) => {
+            if (entries[0].isIntersecting) {
+              isVisible = true;
+              startWhenReady();
+              observer.disconnect();
+            }
+          },
+          {
+            threshold: 0.35,
+          },
+        );
+
+        observer.observe(section);
+
+        // دریافت تعداد واقعی کاربران از بک‌اند
+        fetch("/api/public/stats", {
+          cache: "no-store",
+        })
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error("Unable to load user count");
+            }
+
+            return response.json();
+          })
+          .then((data) => {
+            if (
+              typeof data.totalUsers !== "number" ||
+              !Number.isSafeInteger(data.totalUsers) ||
+              data.totalUsers < 0
+            ) {
+              throw new Error("Invalid user count");
+            }
+
+            totalUsers = data.totalUsers;
+            startWhenReady();
+          })
+          .catch((error) => {
+            console.error("Users counter error:", error);
+            counter.textContent = "—";
+          });
       })();
     </script>
   </body>
