@@ -2176,6 +2176,90 @@
           line-height: 2.1;
         }
       }
+
+      /* STORIES SECTION */
+      .stories-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 28px;
+      }
+
+      .story-card {
+        min-width: 0;
+        padding: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.035);
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .story-card[hidden] {
+        display: none !important;
+      }
+
+      .story-feature {
+        display: inline-block;
+        padding: 5px 12px;
+        border-radius: 999px;
+        background: rgba(255, 184, 77, 0.1);
+        color: #ffb84d;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .story-card h3 {
+        margin: 0;
+        font-size: 16px;
+        line-height: 1.8;
+      }
+
+      .story-card p {
+        margin: 0;
+        color: var(--muted, #aaa);
+        font-size: 13px;
+        line-height: 2.15;
+      }
+
+      .stories-actions {
+        display: flex;
+        justify-content: center;
+        margin-top: 24px;
+      }
+
+      @media (max-width: 900px) {
+        .stories-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 600px) {
+        .stories-grid {
+          grid-template-columns: 1fr;
+          gap: 12px;
+          margin-top: 20px;
+        }
+
+        .story-card {
+          padding: 19px;
+          border-radius: 15px;
+        }
+
+        .story-card h3 {
+          font-size: 14px;
+        }
+
+        .story-card p {
+          font-size: 12.5px;
+        }
+
+        .stories-actions .btn {
+          width: 100%;
+        }
+      }
     </style>
   </head>
 
@@ -2611,6 +2695,147 @@
           <a class="btn btn-primary" href="/download.html">
             دانلود اپلیکیشن ققنوس
           </a>
+        </div>
+      </section>
+
+      <!-- BREAKUP JOURNEY STORIES -->
+      <section class="section" id="stories">
+        <div class="section-title reveal">
+          <h2>روایت‌هایی از مسیر عبور از جدایی</h2>
+          <p>
+            روایت‌ کاربران از موقعیت‌های رایج بعد از جدایی و راه‌هایی که ققنوس
+            برای کمک در این موقعیت‌ها ارائه کرده.
+          </p>
+        </div>
+
+        <div class="stories-grid">
+          <article class="story-card reveal">
+            <span class="story-feature">پلکان</span>
+            <h3>وقتی نمی‌دونستم از کجا شروع کنم</h3>
+            <p>
+              بعد از جدایی، هر روز صبح با یه عالمه فکر و سؤال بیدار می‌شدم. همه
+              بهم می‌گفتن روی خودت کار کن، ولی واقعاً نمی‌دونستم چطوری. چیزی که
+              توی پلکان ققنوس برام جالب بود اینه که لازم نیست خودم حدس بزنم
+              امروز باید چیکار کنم. هر روز یه قدم مشخص دارم و همین باعث شده کمتر
+              احساس سردرگمی کنم.
+            </p>
+          </article>
+
+          <article class="story-card reveal">
+            <span class="story-feature">پناهگاه</span>
+            <h3>برای لحظه‌هایی که دلتنگی شدید می‌شه</h3>
+            <p>
+              مشکل من بیشتر شب‌ها بود. یه‌دفعه دلتنگی می‌اومد سراغم و فقط
+              می‌خواستم بهش پیام بدم. پناهگاه ققنوس برای من یه جور مکث شد. قبل
+              از اینکه از روی احساس کاری کنم، چند دقیقه به خودم فرصت می‌دم. هنوز
+              دلتنگ می‌شم، ولی دیگه همیشه مجبور نیستم همون لحظه واکنش نشون بدم.
+            </p>
+          </article>
+
+          <article class="story-card reveal">
+            <span class="story-feature">مشعل</span>
+            <h3>وقتی فقط خاطره‌های خوب رو می‌دیدم</h3>
+            <p>
+              هر بار که یادش می‌افتادم، انگار تمام اتفاق‌های بد رابطه از ذهنم
+              پاک می‌شد. فقط روزهای خوب رو می‌دیدم و با خودم می‌گفتم شاید اشتباه
+              کردم که جدا شدم. بخش مشعل باعث شد بیشتر به واقعیت رابطه فکر کنم،
+              نه فقط به خاطره‌هایی که دلم می‌خواست بهشون برگردم.
+            </p>
+          </article>
+
+          <article class="story-card reveal">
+            <span class="story-feature">پناه</span>
+            <h3>وقتی نیاز داشتم حرف بزنم</h3>
+            <p>
+              بعد از یه مدت دیگه روم نمی‌شد با دوستام درباره جدایی حرف بزنم.
+              احساس می‌کردم همه از شنیدن حرف‌های تکراری من خسته شدن. چیزی که از
+              بخش پناه می‌خواستم، یه فضای امن برای مطرح‌کردن چیزهایی بود که توی
+              ذهنم می‌گذشت. همین که بتونم احساساتم رو بیان کنم و برای قدم بعدی
+              راهنمایی بگیرم، برام ارزشمنده.
+            </p>
+          </article>
+
+          <article class="story-card reveal">
+            <span class="story-feature">پلکان</span>
+            <h3>وقتی چند روز حوصله هیچ کاری رو نداشتم</h3>
+            <p>
+              من از اون آدم‌هایی‌ام که وقتی یه روز از برنامه عقب می‌افتم، کلاً
+              بی‌خیالش می‌شم. بعد از جدایی هم بعضی روزها واقعاً انرژی هیچ کاری
+              رو نداشتم. خوبیش این بود که توی پلکان ققنوس مجبور نبودم از اول
+              شروع کنم. چند روز فاصله افتاد، ولی برگشتم و از همون جایی که مونده
+              بودم ادامه دادم.
+            </p>
+          </article>
+
+          <article class="story-card reveal">
+            <span class="story-feature">پناهگاه</span>
+            <h3>بعد از دیدن عکسش در اینستاگرام</h3>
+            <p>
+              یه عکس جدید ازش دیدم و تمام حالم به‌هم ریخت. تا چند دقیقه فقط
+              صفحه‌ش رو بالا و پایین می‌کردم و می‌خواستم دوباره همه‌چیز رو چک
+              کنم. اون لحظه یاد تمرین‌های پناهگاه افتادم. قرار نبود با یه تمرین
+              حالم عالی بشه، ولی کمکم کرد از اون حالت عجولانه کمی فاصله بگیرم.
+            </p>
+          </article>
+
+          <article class="story-card story-extra" hidden>
+            <span class="story-feature">مشعل</span>
+            <h3>وقتی خودم رو مقصر همه‌چیز می‌دونستم</h3>
+            <p>
+              بعد از تموم‌شدن رابطه مدام با خودم می‌گفتم اگه فلان حرف رو نزده
+              بودم یا بیشتر تلاش کرده بودم، شاید هنوز با هم بودیم. با استفاده از
+              مشعل کم‌کم شروع کردم سهم خودم و طرف مقابلم رو جداگانه ببینم. هنوز
+              سؤال‌های زیادی دارم، ولی کمتر همه مسئولیت رابطه رو گردن خودم
+              می‌ندازم.
+            </p>
+          </article>
+
+          <article class="story-card story-extra" hidden>
+            <span class="story-feature">پناه</span>
+            <h3>وقتی بین برگشتن و ادامه‌دادن گیر کرده بودم</h3>
+            <p>
+              چند بار رابطه‌مون تموم شد و دوباره برگشتیم. این بار هم نمی‌دونستم
+              باید منتظرش بمونم یا واقعاً تمومش کنم. چیزی که توی پناه برام مهم
+              بود این بود که بتونم درباره شرایط خودم سؤال بپرسم، نه اینکه فقط یه
+              توصیه کلی مثل فراموشش کن بشنوم. همین کمک کرد با دقت بیشتری به
+              تصمیمم فکر کنم.
+            </p>
+          </article>
+
+          <article class="story-card story-extra" hidden>
+            <span class="story-feature">پلکان و مشعل</span>
+            <h3>وقتی فکر می‌کردم بدون اون آینده‌ای ندارم</h3>
+            <p>
+              اوایل جدایی، تمام برنامه‌هایی که برای آینده داشتم به اون رابطه وصل
+              بود. حتی نمی‌تونستم تصور کنم دوباره برای خودم هدفی داشته باشم.
+              پلکان باعث شد روی کارهای کوچیک روزانه تمرکز کنم و مشعل هم کمک کرد
+              نگاه دقیق‌تری به گذشته داشته باشم. هنوز راه دارم، ولی آینده دیگه
+              برام کاملاً خالی نیست.
+            </p>
+          </article>
+
+          <article class="story-card story-extra" hidden>
+            <span class="story-feature">پناهگاه و پناه</span>
+            <h3>وقتی خشم و دلتنگی با هم می‌اومدن</h3>
+            <p>
+              بعضی وقت‌ها ازش عصبانی بودم و چند دقیقه بعد دلم براش تنگ می‌شد.
+              این تغییر احساسات واقعاً خسته‌کننده بود. پناهگاه رو برای لحظه‌هایی
+              استفاده می‌کردم که احساساتم شدید می‌شدن و پناه رو برای وقت‌هایی که
+              می‌خواستم درباره اتفاقی که افتاده بیشتر حرف بزنم. این دو بخش برای
+              من دو کاربرد متفاوت داشتن.
+            </p>
+          </article>
+        </div>
+
+        <div class="stories-actions">
+          <button
+            class="btn btn-ghost"
+            id="stories-toggle"
+            type="button"
+            aria-expanded="false"
+          >
+            مشاهده تجربه‌های بیشتر
+          </button>
         </div>
       </section>
 
@@ -3495,6 +3720,28 @@
 
         items.forEach(function (el) {
           observer.observe(el);
+        });
+      })();
+    </script>
+
+    <script>
+      (() => {
+        const button = document.getElementById("stories-toggle");
+        const extraStories = document.querySelectorAll("#stories .story-extra");
+
+        if (!button || !extraStories.length) return;
+
+        button.addEventListener("click", () => {
+          const expanded = button.getAttribute("aria-expanded") === "true";
+
+          extraStories.forEach((story) => {
+            story.hidden = expanded;
+          });
+
+          button.setAttribute("aria-expanded", String(!expanded));
+          button.textContent = expanded
+            ? "مشاهده تجربه‌های بیشتر"
+            : "نمایش تعداد کمتر";
         });
       })();
     </script>
