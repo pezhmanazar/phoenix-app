@@ -835,7 +835,7 @@
         height: auto;
 
         max-width: min(520px, 100%);
-        max-height: calc(100vh - 120px);
+        max-height: calc(100dvh - 245px);
 
         object-fit: contain;
 
@@ -2019,7 +2019,7 @@
       .screenshot-intro {
         text-align: center;
         max-width: 680px;
-        margin: 0 auto 26px;
+        margin: 38px auto 26px;
         padding: 0 16px;
       }
 
@@ -2045,6 +2045,45 @@
 
         .screenshot-intro p {
           font-size: 13px;
+        }
+      }
+
+      /* Screenshot gallery - final spacing fixes */
+
+      .screenshot-lightbox-slide {
+        padding-bottom: 145px;
+      }
+
+      .screenshot-lightbox-slide img {
+        max-height: calc(100dvh - 245px);
+      }
+
+      .screenshot-lightbox-caption {
+        bottom: 20px;
+        width: min(520px, calc(100% - 36px));
+      }
+
+      @media (max-width: 900px) {
+        .screenshot-lightbox-slide {
+          padding: 76px 18px 155px;
+        }
+
+        .screenshot-lightbox-slide img {
+          max-height: calc(100dvh - 250px);
+        }
+
+        .screenshot-lightbox-caption {
+          bottom: max(18px, env(safe-area-inset-bottom));
+        }
+      }
+
+      @media (max-height: 650px) {
+        .screenshot-lightbox-slide img {
+          max-height: calc(100dvh - 205px);
+        }
+
+        .screenshot-lightbox-caption {
+          padding: 8px 14px;
         }
       }
     </style>
