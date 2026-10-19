@@ -2223,6 +2223,12 @@
         font-size: 13px;
         line-height: 2.15;
       }
+      #stories-toggle {
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+      }
 
       .stories-actions {
         display: flex;
@@ -2258,6 +2264,12 @@
 
         .stories-actions .btn {
           width: 100%;
+        }
+      }
+      /* Show only 3 stories initially on mobile */
+      @media (max-width: 600px) {
+        #stories:not(.stories-expanded) .story-card:nth-child(n + 4) {
+          display: none !important;
         }
       }
     </style>
@@ -3726,13 +3738,16 @@
 
     <script>
       (() => {
+        const section = document.getElementById("stories");
         const button = document.getElementById("stories-toggle");
         const extraStories = document.querySelectorAll("#stories .story-extra");
 
-        if (!button || !extraStories.length) return;
+        if (!section || !button || !extraStories.length) return;
 
         button.addEventListener("click", () => {
           const expanded = button.getAttribute("aria-expanded") === "true";
+
+          section.classList.toggle("stories-expanded", !expanded);
 
           extraStories.forEach((story) => {
             story.hidden = expanded;
