@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <title>اپلیکیشن ققنوس | بازسازی بعد از شکست عشقی</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="ققنوس، اپلیکیشن تخصصی عبور از جدایی عاطفی؛ با برنامه روزانه، تمرین‌های روان‌شناختی و ابزارهای کاربردی برای مدیریت دلتنگی، وابستگی و بازسازی زندگی بعد از شکست عشقی."
+    />
+    <link rel="canonical" href="https://qoqnoos.app/" />
 
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="/static/img/favicon.png" />
@@ -3871,7 +3876,23 @@
           },
         );
 
-        observer.observe(section);
+        if ("IntersectionObserver" in window) {
+          const observer = new IntersectionObserver(
+            (entries) => {
+              if (entries[0].isIntersecting) {
+                isVisible = true;
+                startWhenReady();
+                observer.disconnect();
+              }
+            },
+            { threshold: 0.35 },
+          );
+
+          observer.observe(section);
+        } else {
+          isVisible = true;
+          startWhenReady();
+        }
 
         // دریافت تعداد واقعی کاربران از بک‌اند
         fetch("/api/public/stats", {
