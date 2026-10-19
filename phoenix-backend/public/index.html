@@ -932,6 +932,59 @@
         transform: translateY(-50%) scale(0.94);
       }
 
+      .screenshot-lightbox-caption {
+        position: absolute;
+        bottom: 18px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 20;
+        width: min(520px, calc(100% - 36px));
+        padding: 12px 20px;
+        text-align: center;
+        direction: rtl;
+        background: rgba(12, 15, 20, 0.94);
+        border: 1px solid rgba(212, 175, 55, 0.25);
+        border-radius: 16px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+        pointer-events: none;
+      }
+
+      .screenshot-caption-counter {
+        display: block;
+        color: #d4af37;
+        font-size: 11px;
+        margin-bottom: 5px;
+      }
+
+      .screenshot-lightbox-caption h3 {
+        color: #fff;
+        font-size: 16px;
+        font-weight: 800;
+        margin: 0 0 5px;
+      }
+
+      .screenshot-lightbox-caption p {
+        color: #b9b9c2;
+        font-size: 12px;
+        line-height: 1.8;
+        margin: 0;
+      }
+
+      @media (max-width: 900px) {
+        .screenshot-lightbox-caption {
+          bottom: max(8px, env(safe-area-inset-bottom));
+          padding: 9px 14px;
+        }
+
+        .screenshot-lightbox-caption h3 {
+          font-size: 14px;
+        }
+
+        .screenshot-lightbox-caption p {
+          font-size: 11px;
+        }
+      }
+
       body.lightbox-open {
         overflow: hidden;
       }
@@ -1962,6 +2015,38 @@
           justify-content: center;
         }
       }
+
+      .screenshot-intro {
+        text-align: center;
+        max-width: 680px;
+        margin: 0 auto 26px;
+        padding: 0 16px;
+      }
+
+      .screenshot-intro h2 {
+        color: #e9c778;
+        font-size: clamp(22px, 3vw, 30px);
+        font-weight: 800;
+        line-height: 1.5;
+        margin: 0 0 10px;
+      }
+
+      .screenshot-intro p {
+        color: #b9b9c2;
+        font-size: 14px;
+        line-height: 2;
+        margin: 0;
+      }
+
+      @media (max-width: 600px) {
+        .screenshot-intro {
+          margin-bottom: 18px;
+        }
+
+        .screenshot-intro p {
+          font-size: 13px;
+        }
+      }
     </style>
   </head>
 
@@ -2318,6 +2403,14 @@
         </div>
       </section>
 
+      <div class="screenshot-intro">
+        <h2>ققنوس رو از نزدیک ببین</h2>
+        <p>
+          این‌ها تصاویر واقعی محیط اپلیکیشن ققنوس هستن. روی هر تصویر بزن تا
+          بزرگ‌تر ببینیش و با بخش‌های مختلف اپ آشنا بشی.
+        </p>
+      </div>
+
       <!-- SCREENSHOTS -->
       <section class="section" id="screenshots">
         <div class="screenshots-row">
@@ -2636,51 +2729,65 @@
           <div class="screenshot-lightbox-slide">
             <img
               src="/static/img/screenshots/01.webp"
-              alt="نمای اپلیکیشن ققنوس - تصویر ۱"
+              alt="پلکان؛ مسیر روزانه بازسازی عاطفی در ققنوس"
             />
           </div>
 
           <div class="screenshot-lightbox-slide">
             <img
               src="/static/img/screenshots/02.webp"
-              alt="نمای اپلیکیشن ققنوس - تصویر ۲"
+              alt="پناهگاه؛ راهکارهای لحظه‌های سخت بعد از جدایی"
             />
           </div>
 
           <div class="screenshot-lightbox-slide">
             <img
               src="/static/img/screenshots/03.webp"
-              alt="نمای اپلیکیشن ققنوس - تصویر ۳"
+              alt="مشعل؛ آموزش‌های مفید روان‌شناختی"
             />
           </div>
 
           <div class="screenshot-lightbox-slide">
             <img
               src="/static/img/screenshots/04.webp"
-              alt="نمای اپلیکیشن ققنوس - تصویر ۴"
+              alt="پناه؛ پشتیبانی روان‌شناختی و فنی ققنوس"
             />
           </div>
 
           <div class="screenshot-lightbox-slide">
             <img
               src="/static/img/screenshots/05.webp"
-              alt="نمای اپلیکیشن ققنوس - تصویر ۵"
+              alt="روزنگار؛ برنامه‌ریزی فعالیت‌های روزانه"
             />
           </div>
 
           <div class="screenshot-lightbox-slide">
             <img
               src="/static/img/screenshots/06.webp"
-              alt="نمای اپلیکیشن ققنوس - تصویر ۶"
+              alt="تالار افتخارات؛ مدال‌ها و دستاوردهای مسیر ققنوس"
             />
           </div>
 
           <div class="screenshot-lightbox-slide">
             <img
               src="/static/img/screenshots/07.webp"
-              alt="نمای اپلیکیشن ققنوس - تصویر ۷"
+              alt="پروفایل؛ مدیریت حساب و مشاهده پیشرفت"
             />
           </div>
+        </div>
+
+        <div
+          class="screenshot-lightbox-caption"
+          id="screenshotLightboxCaption"
+          aria-live="polite"
+        >
+          <span class="screenshot-caption-counter" id="screenshotCaptionCounter"
+            >۱ از ۷</span
+          >
+          <h3 id="screenshotCaptionTitle">پلکان؛ قدم‌به‌قدم به سمت بازسازی</h3>
+          <p id="screenshotCaptionDescription">
+            یک مسیر روزانه و ساختارمند برای عبور از جدایی و بازسازی عاطفی.
+          </p>
         </div>
 
         <button
@@ -2765,6 +2872,70 @@
         if (!originalSlides.length) return;
 
         const total = originalSlides.length;
+
+        const screenshotDetails = [
+          {
+            title: "پلکان؛ قدم‌به‌قدم به سمت بازسازی",
+            description:
+              "یک مسیر روزانه و ساختارمند برای عبور از جدایی و بازسازی عاطفی.",
+          },
+          {
+            title: "پناهگاه؛ برای لحظه‌هایی که حالت خوب نیست",
+            description:
+              "راهکارهای کاربردی برای مواجهه با دلتنگی، افکار مزاحم و میل به برقراری دوباره ارتباط.",
+          },
+          {
+            title: "مشعل؛ شناخت عمیق‌تر رابطه و خودت",
+            description:
+              "آموزش‌های صوتی روان‌شناختی برای شناخت الگوهای رابطه، وابستگی عاطفی و مرزهای سالم.",
+          },
+          {
+            title: "پناه؛ وقتی به همراهی نیاز داری",
+            description:
+              "دسترسی به پشتیبانی روان‌شناختی برای کاربران پرو و پشتیبانی فنی برای همه کاربران.",
+          },
+          {
+            title: "روزنگار؛ دوباره به روزهات نظم بده",
+            description:
+              "برنامه‌ریزی فعالیت‌های روزانه و پیگیری کارهایی که برای خودت انجام می‌دی.",
+          },
+          {
+            title: "تالار افتخارات؛ پیشرفتت رو ببین",
+            description:
+              "دستاوردها و مدال‌هایی که در طول مسیر ققنوس به دست میاری.",
+          },
+          {
+            title: "پروفایل؛ مسیرت در یک نگاه",
+            description:
+              "مشاهده روزهای تکمیل‌شده، پیشرفت و مدیریت حساب کاربری.",
+          },
+        ];
+
+        const captionCounter = document.getElementById(
+          "screenshotCaptionCounter",
+        );
+        const captionTitle = document.getElementById("screenshotCaptionTitle");
+        const captionDescription = document.getElementById(
+          "screenshotCaptionDescription",
+        );
+
+        function updateScreenshotCaption() {
+          const detail = screenshotDetails[currentIndex];
+          if (!detail) return;
+
+          const persianNumber = new Intl.NumberFormat("fa-IR");
+
+          if (captionCounter) {
+            captionCounter.textContent =
+              persianNumber.format(currentIndex + 1) +
+              " از " +
+              persianNumber.format(total);
+          }
+
+          if (captionTitle) captionTitle.textContent = detail.title;
+          if (captionDescription)
+            captionDescription.textContent = detail.description;
+        }
 
         // یک کپی از آخر در ابتدای ریل
         const firstClone = originalSlides[0].cloneNode(true);
@@ -2860,6 +3031,7 @@
           // clone سمت چپ → برو بی‌صدا روی آخرین تصویر واقعی
           if (position === 0) {
             currentIndex = total - 1;
+            updateScreenshotCaption();
 
             requestAnimationFrame(function () {
               jumpToPhysical(total);
@@ -2871,6 +3043,7 @@
           // clone سمت راست → برو بی‌صدا روی اولین تصویر واقعی
           if (position === total + 1) {
             currentIndex = 0;
+            updateScreenshotCaption();
 
             requestAnimationFrame(function () {
               jumpToPhysical(1);
@@ -2880,10 +3053,12 @@
           }
 
           currentIndex = position - 1;
+          updateScreenshotCaption();
         }
 
         function openLightbox(index) {
           currentIndex = index;
+          updateScreenshotCaption();
 
           lightbox.classList.add("open");
           lightbox.setAttribute("aria-hidden", "false");
