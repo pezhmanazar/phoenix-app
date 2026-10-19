@@ -2161,10 +2161,10 @@
 
       .paksazi-telegram-username {
         display: flex;
-        flex-wrap: wrap;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 12px;
+        gap: 10px;
       }
 
       .paksazi-telegram-username > span {
@@ -2195,12 +2195,15 @@
       @media (max-width: 600px) {
         .paksazi-telegram-username {
           flex-direction: column;
+          align-items: center;
           gap: 10px;
         }
 
         #copyPaksaziTelegram {
-          width: 100%;
-          max-width: 250px;
+          width: auto;
+          max-width: none;
+          padding: 8px 18px;
+          font-size: 12px;
         }
       }
     </style>
