@@ -2139,6 +2139,70 @@
           font-size: 11px !important;
         }
       }
+
+      /* ===== Telegram Username Copy ===== */
+
+      .paksazi-telegram-fallback {
+        margin: -8px auto 24px;
+        padding: 17px 16px;
+        border-radius: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        background: rgba(255, 255, 255, 0.025);
+        text-align: center;
+      }
+
+      .paksazi-telegram-fallback p {
+        margin: 0 0 14px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 2;
+        max-width: none;
+      }
+
+      .paksazi-telegram-username {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+      }
+
+      .paksazi-telegram-username > span {
+        color: #f3d57d;
+        font-size: 16px;
+        font-weight: 800;
+        direction: ltr;
+        unicode-bidi: isolate;
+      }
+
+      #copyPaksaziTelegram {
+        font-family: inherit;
+        padding: 10px 17px;
+        font-weight: 800;
+        border-color: rgba(212, 175, 55, 0.28);
+      }
+
+      #paksaziTelegramCopyMessage {
+        display: block;
+        min-height: 18px;
+        margin-top: 10px;
+        color: #9be7a1;
+        font-size: 12px;
+        font-weight: 700;
+        text-align: center;
+      }
+
+      @media (max-width: 600px) {
+        .paksazi-telegram-username {
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        #copyPaksaziTelegram {
+          width: 100%;
+          max-width: 250px;
+        }
+      }
     </style>
   </head>
   <body>
@@ -2549,6 +2613,33 @@
               ارسال رسید پرداخت به پشتیبان تلگرام
             </a>
 
+            <!-- Telegram support username fallback -->
+            <div class="paksazi-telegram-fallback">
+              <p>
+                اگه با دکمه بالا نتونستی وارد تلگرام بشی، آیدی پشتیبانی رو کپی
+                کن و داخل تلگرام جست‌وجو کن.
+              </p>
+
+              <div class="paksazi-telegram-username">
+                <span dir="ltr">@qoqnoos_admin1</span>
+
+                <button
+                  type="button"
+                  class="btn btn-ghost"
+                  id="copyPaksaziTelegram"
+                  data-username="@qoqnoos_admin1"
+                >
+                  کپی آیدی پشتیبانی
+                </button>
+              </div>
+
+              <span
+                id="paksaziTelegramCopyMessage"
+                role="status"
+                aria-live="polite"
+              ></span>
+            </div>
+
             <div class="paksazi-payment-step">
               <span class="paksazi-payment-number">۳</span>
               <div>
@@ -2831,6 +2922,82 @@
               false,
             );
           }
+        });
+      })();
+
+      /* ===== Copy Telegram Support Username ===== */
+      (function () {
+        const copyButton = document.getElementById("copyPaksaziTelegram");
+
+        const copyMessage = document.getElementById(
+          "paksaziTelegramCopyMessage",
+        );
+
+        if (!copyButton || !copyMessage) return;
+
+        const username = copyButton.dataset.username;
+        const originalText = copyButton.textContent.trim();
+
+        let resetTimer;
+
+        function fallbackCopy(text) {
+          const textarea = document.createElement("textarea");
+
+          textarea.value = text;
+          textarea.setAttribute("readonly", "");
+          textarea.style.position = "fixed";
+          textarea.style.opacity = "0";
+          textarea.style.left = "-9999px";
+
+          document.body.appendChild(textarea);
+
+          textarea.focus();
+          textarea.select();
+
+          let copied = false;
+
+          try {
+            copied = document.execCommand("copy");
+          } catch (error) {
+            copied = false;
+          }
+
+          textarea.remove();
+
+          return copied;
+        }
+
+        copyButton.addEventListener("click", async function () {
+          let copied = false;
+
+          try {
+            if (navigator.clipboard && window.isSecureContext) {
+              await navigator.clipboard.writeText(username);
+              copied = true;
+            } else {
+              copied = fallbackCopy(username);
+            }
+          } catch (error) {
+            copied = fallbackCopy(username);
+          }
+
+          clearTimeout(resetTimer);
+
+          if (copied) {
+            copyButton.textContent = "آیدی کپی شد ✓";
+            copyMessage.textContent =
+              "آیدی کپی شد؛ حالا داخل پیام‌های ذخیره شده تلگرامت واردش کن و بعد روش کلیک کن.";
+            copyMessage.style.color = "#9be7a1";
+          } else {
+            copyMessage.textContent =
+              "کپی خودکار انجام نشد؛ آیدی رو دستی کپی کن.";
+            copyMessage.style.color = "#f3cc69";
+          }
+
+          resetTimer = setTimeout(function () {
+            copyButton.textContent = originalText;
+            copyMessage.textContent = "";
+          }, 3500);
         });
       })();
     </script>
