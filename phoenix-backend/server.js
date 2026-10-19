@@ -11,6 +11,7 @@ import path from "path";
 import { PrismaClient } from "@prisma/client";
 import crypto from "crypto";
 import adminAuth from "./middleware/adminAuth.js";
+import achievementsRouter from "./routes/achievements.js";
 import adminRouter from "./routes/admin.js";
 import announcementsRouter from "./routes/announcements.js";
 import authRouter from "./routes/auth.js"; // 🔹 روتر جدید احراز هویت / OTP
@@ -20,7 +21,6 @@ import payRouter from "./routes/pay.js"; // 🔹 روتر پرداخت / زری�
 import payBazaarRouter from "./routes/payBazaar.js"; // ✅ روتر پرداخت بازار (جدید)
 import paymentsRouter from "./routes/payments.js";
 import pelekanRouter from "./routes/pelekan.js";
-import achievementsRouter from "./routes/achievements.js";
 import pelekanReviewRoutes from "./routes/pelekanReview.js";
 import publicRouter from "./routes/public.js"; // فقط routeهای عمومی غیرتیکت (فعلاً AI / utility)
 import testNotificationsRouter from "./routes/testNotifications.js";
@@ -494,6 +494,25 @@ app.use("/api/pay", payRouter);
 // 🔹 پرداخت / بازار
 
 app.use("/api/pay-bazaar", payBazaarRouter);
+
+// Public statistics: registered users count
+app.get("/api/public/stats", async (_req, res) => {
+  try {
+    const totalUsers = await prisma.user.count();
+
+    res.set("Cache-Control", "public, max-age=60");
+
+    return res.json({
+      totalUsers,
+    });
+  } catch (error) {
+    console.error("Public stats error:", error);
+
+    return res.status(500).json({
+      error: "Unable to load public statistics",
+    });
+  }
+});
 
 // تمام مسیرهای عمومی
 app.use("/api/public", publicRouter);
