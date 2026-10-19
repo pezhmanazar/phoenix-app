@@ -1589,6 +1589,371 @@
           display: none;
         }
       }
+
+      /* ===== Phoenix: Mobile Hero Optimization ===== */
+
+      @media (max-width: 600px) {
+        /* کاهش فاصله بالای بخش اصلی */
+        .hero {
+          padding-top: 20px;
+          padding-bottom: 16px;
+        }
+
+        /* بهینه‌سازی قاب تصویر */
+        .hero-visual {
+          padding: 7px;
+          margin-bottom: 12px;
+          border-radius: 22px;
+        }
+
+        .hero-visual img {
+          border-radius: 16px;
+        }
+
+        .hero-visual::after {
+          inset: 7px;
+          border-radius: 16px;
+        }
+
+        /* فاصله بین کارت‌های اصلی */
+        .hero-grid {
+          gap: 12px;
+        }
+
+        /* کارت معرفی ققنوس */
+        .hero-card {
+          padding: 20px 16px;
+          border-radius: 20px;
+        }
+
+        /* متن کوتاه بالای تیتر */
+        .hero-card .kicker {
+          font-size: 12px;
+          line-height: 1.8;
+        }
+
+        /* تیتر اصلی */
+        .hero h1 {
+          font-size: clamp(24px, 6.5vw, 28px);
+          line-height: 1.45;
+          margin: 8px 0 10px;
+          letter-spacing: -0.2px;
+        }
+
+        /* توضیح زیر تیتر */
+        .hero-card p {
+          font-size: 13px;
+          line-height: 1.9;
+        }
+
+        /* دکمه دانلود */
+        .hero-actions {
+          margin-top: 16px;
+          gap: 8px;
+        }
+
+        .hero-card .hero-actions .btn-primary {
+          width: 100%;
+          max-width: 100%;
+          min-height: 48px;
+          padding: 12px 14px;
+          font-size: 13px;
+          line-height: 1.7;
+          text-align: center;
+          white-space: normal;
+        }
+
+        /* کارت سه ستون اصلی */
+        .side-card {
+          padding: 18px 14px;
+          border-radius: 20px;
+        }
+
+        .feature-stack {
+          margin-top: 12px;
+        }
+
+        .feature-mini {
+          padding: 11px;
+        }
+      }
+
+      /* احترام به تنظیمات کاهش حرکت کاربر */
+      @media (prefers-reduced-motion: reduce) {
+        .btn-hero-pulse::after {
+          animation: none;
+        }
+      }
+
+      /* ===== How Phoenix Works ===== */
+
+      .how-section {
+        padding-top: 24px;
+      }
+
+      .how-intro {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 2;
+        margin: 0 0 18px;
+        max-width: 780px;
+      }
+
+      .how-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .how-card {
+        position: relative;
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+        padding: 22px;
+        border-radius: 22px;
+
+        background: linear-gradient(
+          145deg,
+          rgba(212, 175, 55, 0.065),
+          rgba(255, 255, 255, 0.025)
+        );
+
+        border: 1px solid rgba(212, 175, 55, 0.13);
+        overflow: hidden;
+      }
+
+      .how-number {
+        flex: 0 0 46px;
+        width: 46px;
+        height: 46px;
+        border-radius: 15px;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        background: linear-gradient(135deg, var(--gold), var(--orange));
+
+        color: #101419;
+        font-size: 19px;
+        font-weight: 900;
+      }
+
+      .how-content {
+        min-width: 0;
+      }
+
+      .how-content h3 {
+        margin: 2px 0 8px;
+        color: var(--text);
+        font-size: 16px;
+        font-weight: 900;
+      }
+
+      .how-content p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 2;
+      }
+
+      .how-bottom {
+        margin-top: 18px;
+        padding: 22px;
+        border-radius: 22px;
+        text-align: center;
+
+        background: linear-gradient(
+          135deg,
+          rgba(212, 175, 55, 0.09),
+          rgba(233, 138, 21, 0.035)
+        );
+
+        border: 1px solid rgba(212, 175, 55, 0.14);
+      }
+
+      .how-bottom p {
+        margin: 0 0 16px;
+        color: var(--text);
+        font-size: 14px;
+        line-height: 1.9;
+      }
+
+      @media (max-width: 700px) {
+        .how-section {
+          padding-top: 16px;
+        }
+
+        .how-intro {
+          font-size: 13px;
+          line-height: 1.9;
+        }
+
+        .how-grid {
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+
+        .how-card {
+          padding: 16px 14px;
+          gap: 12px;
+          border-radius: 18px;
+        }
+
+        .how-number {
+          flex-basis: 40px;
+          width: 40px;
+          height: 40px;
+          border-radius: 12px;
+          font-size: 17px;
+        }
+
+        .how-content h3 {
+          font-size: 14px;
+          margin-bottom: 5px;
+        }
+
+        .how-content p {
+          font-size: 12px;
+          line-height: 1.9;
+        }
+
+        .how-bottom {
+          padding: 18px 14px;
+        }
+
+        .how-bottom .btn {
+          width: 100%;
+          white-space: normal;
+          text-align: center;
+        }
+      }
+
+      /* ===== Phoenix Founder Section ===== */
+
+      .founder-section {
+        padding: 34px 0 28px;
+      }
+
+      .founder-card {
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr);
+        align-items: center;
+        gap: 32px;
+        padding: 30px;
+        border: 1px solid rgba(212, 175, 55, 0.22);
+        border-radius: 26px;
+        background: linear-gradient(
+          135deg,
+          rgba(212, 175, 55, 0.08),
+          rgba(255, 255, 255, 0.025) 55%,
+          rgba(233, 138, 21, 0.035)
+        );
+        box-shadow: 0 20px 55px rgba(0, 0, 0, 0.2);
+      }
+
+      .founder-photo {
+        position: relative;
+        width: 100%;
+        max-width: 280px;
+        aspect-ratio: 1 / 1;
+        margin: 0 auto;
+        overflow: hidden;
+        border-radius: 22px;
+        border: 1px solid rgba(212, 175, 55, 0.28);
+        background: #15191f;
+      }
+
+      .founder-photo img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center;
+      }
+
+      .founder-label {
+        display: inline-block;
+        color: var(--gold);
+        font-size: 13px;
+        font-weight: 800;
+        margin-bottom: 10px;
+      }
+
+      .founder-content h2 {
+        margin: 0 0 8px;
+        color: var(--text);
+        font-size: 26px;
+        font-weight: 900;
+      }
+
+      .founder-role {
+        color: rgba(232, 236, 241, 0.9);
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1.9;
+        margin-bottom: 16px;
+      }
+
+      .founder-description {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 2.1;
+        margin: 0 0 18px;
+      }
+
+      .founder-specialties {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .founder-specialties span {
+        padding: 8px 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(212, 175, 55, 0.18);
+        background: rgba(212, 175, 55, 0.055);
+        color: rgba(232, 236, 241, 0.9);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
+      @media (max-width: 700px) {
+        .founder-section {
+          padding: 24px 0 18px;
+        }
+
+        .founder-card {
+          grid-template-columns: 1fr;
+          gap: 20px;
+          padding: 20px 16px;
+          border-radius: 22px;
+        }
+
+        .founder-photo {
+          max-width: 260px;
+          border-radius: 20px;
+        }
+
+        .founder-content {
+          text-align: center;
+        }
+
+        .founder-content h2 {
+          font-size: 23px;
+        }
+
+        .founder-description {
+          font-size: 13px;
+          line-height: 2;
+          text-align: right;
+        }
+
+        .founder-specialties {
+          justify-content: center;
+        }
+      }
     </style>
   </head>
 
@@ -1698,25 +2063,21 @@
 
         <div class="hero-grid">
           <div class="hero-card reveal">
-            <div class="kicker">مسیر علمی، ساختارمند و روزمحور</div>
-            <h1>
-              بازسازی کامل بعد از شکست عشقی و جدایی همراه با عبور کامل از رابطه
-              قبلی
-            </h1>
+            <div class="kicker">همراه تو در روزهای سخت بعد از جدایی</div>
+
+            <h1>بعد از جدایی، دوباره خودت رو پیدا کن.</h1>
+
             <p>
-              ققنوس یک اپلیکیشن کمک‌درمانیه که بر پایه روان‌شناسی و نوروساینس
-              طراحی شده تا به تو کمک کنه از وابستگی، نشخوار فکری و وسوسه‌ی برگشت
-              بعد از جدایی عبور کنی و دوباره خودت رو بسازی.
+              ققنوس یک مسیر روزانه و ساختارمند برای مدیریت دلتنگی، نشخوار فکری و
+              وابستگی عاطفی بعد از جداییه؛ با آموزش‌های روان‌شناختی، تمرین‌های
+              عملی و ابزارهایی برای لحظه‌هایی که بیشتر از همیشه به کمک نیاز
+              داری.
             </p>
 
             <div class="hero-actions">
-              <a class="btn btn-primary btn-hero-pulse" href="/download.html"
-                >شروع بازسازی و دانلود</a
-              >
-              <!-- ✅ می‌برد به سکشن جدید بعد از inside -->
-              <a class="btn btn-ghost" href="#diff"
-                >تفاوت ققنوس با تراپی و دوره آموزشی</a
-              >
+              <a class="btn btn-primary btn-hero-pulse" href="/download.html">
+                شروع مسیر بازسازی و دانلود ققنوس
+              </a>
             </div>
           </div>
 
@@ -1783,6 +2144,77 @@
               >
             </div>
           </div>
+        </div>
+      </section>
+
+      <!-- HOW PHOENIX WORKS -->
+      <section class="section how-section" id="how-it-works">
+        <div class="section-title reveal">
+          <h2>ققنوس چطور کار می‌کنه؟</h2>
+          <p>از سردرگمی بعد از جدایی تا برداشتن قدم‌های مشخص</p>
+        </div>
+
+        <div class="how-intro reveal">
+          قرار نیست از همون روز اول همه‌چیز رو تغییر بدی. ققنوس کمک می‌کنه بدونی
+          از کجا شروع کنی، امروز چه کاری انجام بدی و در لحظه‌های سخت از چه
+          ابزارهایی کمک بگیری.
+        </div>
+
+        <div class="how-grid">
+          <div class="how-card reveal">
+            <div class="how-number">۱</div>
+            <div class="how-content">
+              <h3>ققنوس رو نصب کن</h3>
+              <p>
+                اپلیکیشن رو روی دستگاهت نصب کن و با بخش‌ها و امکانات مسیر
+                بازسازی آشنا شو.
+              </p>
+            </div>
+          </div>
+
+          <div class="how-card reveal reveal-delay-08">
+            <div class="how-number">۲</div>
+            <div class="how-content">
+              <h3>مسیر روزانه‌ات رو شروع کن</h3>
+              <p>
+                در «پلکان»، قدم‌به‌قدم با آموزش‌ها و تمرین‌های روزانه پیش برو؛
+                بدون اینکه مجبور باشی همه مسیر رو یک‌باره طی کنی.
+              </p>
+            </div>
+          </div>
+
+          <div class="how-card reveal reveal-delay-16">
+            <div class="how-number">۳</div>
+            <div class="how-content">
+              <h3>برای لحظه‌های سخت آماده باش</h3>
+              <p>
+                وقتی دلتنگی، اضطراب یا وسوسه تماس سراغت میاد، از تکنیک‌های
+                «پناهگاه» برای مدیریت بهتر اون لحظه کمک بگیر.
+              </p>
+            </div>
+          </div>
+
+          <div class="how-card reveal reveal-delay-24">
+            <div class="how-number">۴</div>
+            <div class="how-content">
+              <h3>شناخت عمیق‌تری از خودت بساز</h3>
+              <p>
+                با محتواهای «مشعل» الگوهای فکری و رفتاری خودت رو بهتر بشناس و
+                برای ساختن رابطه‌های سالم‌تر تلاش کن.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="how-bottom reveal">
+          <p>
+            قرار نیست این مسیر رو یک‌شبه طی کنی؛ مهم اینه که برای قدم بعدی، تنها
+            به حدس و آزمون‌وخطا متکی نباشی.
+          </p>
+
+          <a class="btn btn-primary" href="/download.html">
+            شروع مسیر با ققنوس
+          </a>
         </div>
       </section>
 
@@ -2009,6 +2441,48 @@
         <div class="hero-actions hero-actions-tight">
           <a class="btn btn-primary" href="/download.html">دانلود اپلیکیشن</a>
           <a class="btn btn-ghost" href="/terms.html">قوانین استفاده</a>
+        </div>
+      </section>
+
+      <!-- FOUNDER -->
+      <section class="section founder-section" id="founder">
+        <div class="founder-card reveal">
+          <div class="founder-photo">
+            <img
+              src="/static/img/founder.webp"
+              alt="پژمان آذر، روان‌شناس بالینی و بنیان‌گذار ققنوس"
+              width="600"
+              height="600"
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+
+          <div class="founder-content">
+            <span class="founder-label"> آشنایی با بنیان‌گذار ققنوس </span>
+
+            <h2>پژمان آذر</h2>
+
+            <div class="founder-role">
+              روان‌شناس بالینی | بنیان‌گذار و طراح ققنوس
+            </div>
+
+            <p class="founder-description">
+              ققنوس با هدف کمک به افرادی شکل گرفته که پس از شکست عشقی و جدایی،
+              با دلتنگی، وابستگی عاطفی و آشفتگی‌های ذهنی روبه‌رو هستند. در طراحی
+              این اپلیکیشن تلاش کردم دانش روان‌شناسی بالینی و رویکردهای علمی را
+              به آموزش‌ها، تمرین‌ها و ابزارهایی کاربردی تبدیل کنم تا افراد
+              بتوانند مسیر بازسازی عاطفی خود را آگاهانه‌تر و قدم‌به‌قدم طی کنند.
+            </p>
+
+            <div class="founder-specialties">
+              <span>روان‌شناسی بالینی</span>
+              <span>درمان شناختی‌رفتاری (CBT)</span>
+              <span>طرحواره‌درمانی</span>
+              <span>سوگ عاطفی و زخم جدایی</span>
+              <span>پژوهشگر</span>
+            </div>
+          </div>
         </div>
       </section>
     </main>
