@@ -2086,6 +2086,96 @@
           padding: 8px 14px;
         }
       }
+
+      /* FAQ SECTION */
+      .faq-list {
+        max-width: 850px;
+        margin: 30px auto 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .faq-item {
+        background: var(--card, rgba(255, 255, 255, 0.04));
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        overflow: hidden;
+        transition: border-color 0.25s ease;
+      }
+
+      .faq-item[open] {
+        border-color: rgba(255, 184, 77, 0.4);
+      }
+
+      .faq-item summary {
+        position: relative;
+        padding: 20px 52px 20px 22px;
+        cursor: pointer;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.9;
+        list-style: none;
+      }
+
+      .faq-item summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .faq-item summary::after {
+        content: "+";
+        position: absolute;
+        right: 20px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 24px;
+        font-weight: 400;
+        color: #ffb84d;
+      }
+
+      .faq-item[open] summary::after {
+        content: "−";
+      }
+
+      .faq-answer {
+        padding: 0 22px 22px;
+        color: var(--muted, #aaa);
+        font-size: 14px;
+        line-height: 2.2;
+      }
+
+      .faq-answer a {
+        color: #ffb84d;
+        text-decoration: underline;
+        text-underline-offset: 4px;
+      }
+
+      @media (max-width: 600px) {
+        .faq-list {
+          margin-top: 22px;
+          gap: 10px;
+        }
+
+        .faq-item {
+          border-radius: 13px;
+        }
+
+        .faq-item summary {
+          padding: 16px 44px 16px 15px;
+          font-size: 13px;
+        }
+
+        .faq-item summary::after {
+          right: 15px;
+          font-size: 21px;
+        }
+
+        .faq-answer {
+          padding: 0 15px 18px;
+          font-size: 12.5px;
+          line-height: 2.1;
+        }
+      }
     </style>
   </head>
 
@@ -2587,6 +2677,95 @@
         <div class="hero-actions hero-actions-tight">
           <a class="btn btn-primary" href="/download.html">دانلود اپلیکیشن</a>
           <a class="btn btn-ghost" href="/terms.html">قوانین استفاده</a>
+        </div>
+      </section>
+
+      <!-- FAQ -->
+      <section class="section" id="faq">
+        <div class="section-title reveal">
+          <h2>سؤالات متداول درباره ققنوس</h2>
+          <p>پاسخ به سؤال‌هایی که ممکنه قبل از شروع مسیرت داشته باشی.</p>
+        </div>
+
+        <div class="faq-list">
+          <details class="faq-item reveal">
+            <summary>ققنوس برای چه کسانی مناسبه؟</summary>
+            <div class="faq-answer">
+              ققنوس برای افرادی طراحی شده که بعد از جدایی عاطفی یا شکست عشقی، با
+              دلتنگی، وابستگی، نشخوار فکری یا دشواری در بازگشت به زندگی روزمره
+              روبه‌رو هستن و می‌خوان قدم‌به‌قدم برای بهترشدن حالشون تلاش کنن.
+            </div>
+          </details>
+
+          <details class="faq-item reveal">
+            <summary>ققنوس چطور به من کمک می‌کنه؟</summary>
+            <div class="faq-answer">
+              ققنوس با برنامه روزانه، تمرین‌های کاربردی، مراقبه‌ها و ابزارهای
+              مدیریت لحظات سخت، کمکت می‌کنه به‌جای سردرگمی، هر روز اقدامات مشخصی
+              برای مراقبت از خودت و بازسازی زندگی عاطفی‌ات داشته باشی.
+            </div>
+          </details>
+
+          <details class="faq-item reveal">
+            <summary>آیا ققنوس جایگزین روان‌درمانیه؟</summary>
+            <div class="faq-answer">
+              خیر. ققنوس یک ابزار خودیاری و حمایت روان‌شناختیه و جایگزین
+              روان‌درمانی، تشخیص یا درمان تخصصی نیست. اگه مشکلات روانی شدید یا
+              مداومی داری، مراجعه به متخصص سلامت روان اهمیت داره.
+            </div>
+          </details>
+
+          <details class="faq-item reveal">
+            <summary>چقدر طول می‌کشه تا حالم بهتر بشه؟</summary>
+            <div class="faq-answer">
+              زمان بهبود برای هر فرد متفاوته و به شرایط رابطه، شدت وابستگی و
+              عوامل فردی بستگی داره. ققنوس زمان مشخصی برای بهبود تضمین نمی‌کنه،
+              اما کمک می‌کنه با تمرین‌ها و اقدامات منظم، مسیر بازسازی رو
+              هدفمندتر دنبال کنی.
+            </div>
+          </details>
+
+          <details class="faq-item reveal">
+            <summary>آیا استفاده از ققنوس رایگانه؟</summary>
+            <div class="faq-answer">
+              بله، می‌تونی بدون خرید اشتراک، آزمون‌های اولیه ققنوس رو انجام بدی
+              و تحلیل نتایجشون رو دریافت کنی. این آزمون‌ها بهت کمک می‌کنن میزان
+              آسیب عاطفی بعد از جدایی رو بهتر متوجه بشی، رابطه گذشته‌ات رو
+              بازسنجی کنی و نشانه‌های آسیب‌زا بودن رابطه و احتمال بازسازی اون رو
+              بر اساس پاسخ‌هات بررسی کنی. برای استفاده از برنامه روزانه بازسازی
+              و سایر امکانات اشتراکی، باید اشتراک تهیه کنی.
+            </div>
+          </details>
+
+          <details class="faq-item reveal">
+            <summary>چطور می‌تونم ققنوس رو نصب کنم؟</summary>
+            <div class="faq-answer">
+              کافیه وارد
+              <a href="/download.html">صفحه دانلود ققنوس</a>
+              بشی و روش نصب یا دسترسی مناسب دستگاهت رو انتخاب کنی.
+            </div>
+          </details>
+
+          <details class="faq-item reveal">
+            <summary>می‌تونم با متخصص ارتباط داشته باشم؟</summary>
+            <div class="faq-answer">
+              بله، ققنوس امکان ارتباط با متخصص شکست عاطفی رو فراهم کرده تا در
+              طول مسیر بازسازی بتونی راهنمایی بیشتری دریافت کنی. شرایط دسترسی به
+              این خدمات به امکانات و نوع اشتراک فعال تو بستگی داره.
+            </div>
+          </details>
+
+          <details class="faq-item reveal">
+            <summary>
+              اگه چند روز از برنامه عقب بیفتم، باید از اول شروع کنم؟
+            </summary>
+            <div class="faq-answer">
+              نه. ققنوس پیشرفتت رو حفظ می‌کنه و هر زمان که آماده باشی، می‌تونی
+              از همون مرحله‌ای که متوقف شدی ادامه بدی. قرار نیست برای بهترشدن به
+              خودت فشار بیاری؛ مهم اینه که مسیر بازسازی رو با سرعت مناسب خودت
+              ادامه بدی.
+            </div>
+          </details>
         </div>
       </section>
 
