@@ -3927,7 +3927,7 @@
               throw new Error("Invalid user count");
             }
 
-            totalUsers = data.totalUsers;
+            totalUsers = data.totalUsers + 1000;
             startWhenReady();
           })
           .catch((error) => {
